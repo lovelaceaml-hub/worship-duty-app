@@ -11,4 +11,4 @@ window.FIREBASE_CONFIG = {
 };
 
 // Web Push certificate key pair from Firebase console → Project settings → Cloud Messaging → Web configuration
-window.FCM_VAPID_KEY = '';
+window.FCM_VAPID_KEY = 'BNzc9Ma8hhqLex7180RU36gu1-oowMsHQazkDX1oAjgQp99fe9rOURrUR5cDU4RTpi3x4ZxYFgSuPxQcMziPezU';
