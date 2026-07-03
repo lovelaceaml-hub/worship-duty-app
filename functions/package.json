@@ -1,0 +1,13 @@
+{
+  "name": "worship-duty-functions",
+  "description": "Push notifications for the LV Zion worship duty schedule",
+  "main": "index.js",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.0"
+  }
+}

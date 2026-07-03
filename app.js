@@ -351,6 +351,52 @@ async function sysNotify(title, body) {
   try { new Notification(title, { body }); } catch (e) { /* unsupported */ }
 }
 
+/* ---- server push (FCM) token registration ----
+   Registers the current device's FCM token in Firestore under `tokens/{token}`
+   tagged with the member name, so Cloud Functions can push to it. Every guard
+   fails silently — unsupported browsers (iOS Safari not installed to home
+   screen, missing VAPID key, notifications off, no name) simply no-op. */
+async function registerPush() {
+  try {
+    if (!fb || !fb.messaging || !fb.getToken) return;
+    if (!window.FCM_VAPID_KEY) return;              // owner has not pasted the key yet
+    if (!notifyOn() || !ui.me) return;
+    const reg = (await navigator.serviceWorker.ready) ||
+      (await navigator.serviceWorker.getRegistration());
+    if (!reg) return;
+    const token = await fb.getToken(fb.messaging, {
+      vapidKey: window.FCM_VAPID_KEY,
+      serviceWorkerRegistration: reg
+    });
+    if (!token) return;
+    const prevToken = localStorage.getItem('wds-fcm-token');
+    const prevName = localStorage.getItem('wds-fcm-name');
+    if (prevToken && prevToken !== token) {
+      // token rotated — drop the stale doc
+      try { await fb.deleteDoc(fb.doc(fb.db, 'tokens', prevToken)); } catch (e) { /* ignore */ }
+    }
+    if (prevToken !== token || prevName !== ui.me) {
+      await fb.setDoc(fb.doc(fb.db, 'tokens', token), { name: ui.me, updatedAt: Date.now() });
+      localStorage.setItem('wds-fcm-token', token);
+      localStorage.setItem('wds-fcm-name', ui.me);
+    }
+  } catch (e) { console.warn('registerPush failed:', e); }
+}
+
+async function unregisterPush() {
+  try {
+    const token = localStorage.getItem('wds-fcm-token');
+    if (fb && fb.deleteToken && fb.messaging) {
+      try { await fb.deleteToken(fb.messaging); } catch (e) { /* ignore */ }
+    }
+    if (fb && token) {
+      try { await fb.deleteDoc(fb.doc(fb.db, 'tokens', token)); } catch (e) { /* ignore */ }
+    }
+    localStorage.removeItem('wds-fcm-token');
+    localStorage.removeItem('wds-fcm-name');
+  } catch (e) { console.warn('unregisterPush failed:', e); }
+}
+
 function getJSON(key, fallback) {
   try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; }
   catch (e) { return fallback; }
@@ -988,13 +1034,14 @@ function handleAct(act, el) {
       if (p === 'granted') {
         localStorage.setItem('wds-notify', '1');
         sysNotify('Notifications are on', 'You\'ll hear about new duties and get reminders here.');
+        registerPush();
       } else {
         alert('Notifications were blocked. You can allow them in your browser settings.');
       }
       render();
     });
   }
-  else if (act === 'notify-off') { localStorage.setItem('wds-notify', '0'); render(); }
+  else if (act === 'notify-off') { localStorage.setItem('wds-notify', '0'); unregisterPush(); render(); }
   else if (act === 'site-unlock') {
     sha256(document.getElementById('site-pin-input').value).then(h => {
       if (h === siteHash()) {
@@ -1156,6 +1203,7 @@ function handleChg(chg, el) {
     render();
     checkNewDuties();
     checkReminders();
+    if (notifyOn()) registerPush();
   }
   else if (chg === 'assign') {
     const svc = findService(el.dataset.svc);
@@ -1260,6 +1308,15 @@ async function initFirebase(config) {
     writeBatch: fsMod.writeBatch,
     knownIds: []
   };
+  // Cloud Messaging — best-effort; unsupported browsers just leave messaging null.
+  try {
+    const msgMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js');
+    if (await msgMod.isSupported()) {
+      fb.messaging = msgMod.getMessaging(app);
+      fb.getToken = msgMod.getToken;
+      fb.deleteToken = msgMod.deleteToken;
+    }
+  } catch (e) { console.warn('FCM unavailable:', e); }
   let firstSnapshot = true;
   fsMod.onSnapshot(fsMod.collection(db, 'schedule'), snap => {
     if (firstSnapshot && snap.empty) {
@@ -1291,6 +1348,7 @@ async function initFirebase(config) {
     }
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   setSyncPill(true);
+  if (notifyOn()) registerPush();
 }
 
 function init() {

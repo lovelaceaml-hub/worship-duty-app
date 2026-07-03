@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /schedule/{doc} { allow read, write: if true; }
+    match /app/{doc} { allow read, write: if true; }
+    match /tokens/{token} { allow read, write: if true; }
+    // 'sent' markers are functions-only (Admin SDK bypasses these rules):
+    match /sent/{doc} { allow read, write: if false; }
+  }
+}
