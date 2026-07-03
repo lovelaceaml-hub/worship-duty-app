@@ -807,7 +807,7 @@ function renderManage() {
 function renderSiteLock() {
   return '<div class="card lock-box">' +
     '<div class="lock-title">This schedule is private</div>' +
-    '<p class="hint">Enter the 4-digit passcode shared with the congregation.</p>' +
+    '<p class="hint">Enter the 4-digit passcode.</p>' +
     '<form class="add-row" data-act="site-unlock">' +
     '<input type="password" id="site-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" required>' +
     '<button class="primary" type="submit">Enter</button></form>' +
