@@ -1,0 +1,11 @@
+{
+  "name": "LV Zion Worship Duty Schedule",
+  "short_name": "Worship Duties",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f4f2ee",
+  "theme_color": "#f4f2ee",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

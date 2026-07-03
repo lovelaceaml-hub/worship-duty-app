@@ -1,0 +1,11 @@
+// Firebase project: LV Zion Duties (lv-zion-duties)
+// This config is public app identification, not a secret — it is safe to ship.
+
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAdOJ8cETHUqcyEbBSPbV6FnVn76ASB504",
+  authDomain: "lv-zion-duties.firebaseapp.com",
+  projectId: "lv-zion-duties",
+  storageBucket: "lv-zion-duties.firebasestorage.app",
+  messagingSenderId: "246214644879",
+  appId: "1:246214644879:web:2e5ee80c532b57872c8cfa"
+};
