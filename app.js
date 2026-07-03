@@ -25,7 +25,8 @@ const FEATURES = [
   { id: 'whoElse',        label: '"Who else is serving?"',    desc: 'My Duties can expand the full lineup for each service.', def: true },
   { id: 'choirSong',      label: 'Choir song on services',    desc: 'Show the choir song line on each service card.', def: true },
   { id: 'pastServices',   label: 'Past services',             desc: 'Allow browsing services that already happened.', def: true },
-  { id: 'emptyDuties',    label: 'Show unassigned duties',    desc: 'The schedule shows every duty slot, even ones without a name yet.', def: false }
+  { id: 'emptyDuties',    label: 'Show unassigned duties',    desc: 'The schedule shows every duty slot, even ones without a name yet.', def: false },
+  { id: 'conflictWarnings', label: 'Double-duty warnings',    desc: 'Show a notice when one person has two duties in the same service.', def: true }
 ];
 
 function feat(id) {
@@ -79,6 +80,36 @@ function svcDateTime(svc) {
 }
 function dutyCategory(duty) {
   return CATEGORIES.find(c => c.duties.indexOf(duty) !== -1) || CATEGORIES[0];
+}
+
+/* ================= double-duty conflicts ================= */
+
+const ALL_DUTIES_ORDER = CATEGORIES.reduce((out, cat) => out.concat(cat.duties), []);
+
+function sortDuties(duties) {
+  return duties.slice().sort((a, b) => ALL_DUTIES_ORDER.indexOf(a) - ALL_DUTIES_ORDER.indexOf(b));
+}
+function sameDuties(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((d, i) => d === b[i]);
+}
+/* Every member appearing in 2+ duties of this service, with their duty list (stable order) */
+function conflictsFor(svc) {
+  const byMember = {};
+  const assignments = svc.assignments || {};
+  Object.keys(assignments).forEach(duty => {
+    const name = assignments[duty];
+    if (!name) return;
+    (byMember[name] || (byMember[name] = [])).push(duty);
+  });
+  return Object.keys(byMember)
+    .filter(name => byMember[name].length >= 2)
+    .map(name => ({ name, duties: sortDuties(byMember[name]) }));
+}
+/* conflictsFor minus ones already acknowledged (conflictOk) with a matching duty list */
+function activeConflicts(svc) {
+  const ok = svc.conflictOk || {};
+  return conflictsFor(svc).filter(c => !sameDuties(ok[c.name], c.duties));
 }
 
 /* ================= state ================= */
@@ -319,6 +350,7 @@ function render() {
 }
 
 function renderBanners() {
+  if (feat('siteLock') && !siteUnlocked()) { document.getElementById('banners').innerHTML = ''; return; }
   document.getElementById('banners').innerHTML = ui.banners.map((b, i) =>
     '<div class="banner' + (b.alert ? ' alert' : '') + '"><span>' + esc(b.txt) + '</span>' +
     '<button class="x" data-act="dismiss-banner" data-i="' + i + '">✕</button></div>'
@@ -348,12 +380,22 @@ function renderCatRows(svc, showEmpty) {
   return html;
 }
 
+/* Read-only conflict notes shown on public/my-duties cards */
+function renderConflictNotes(svc) {
+  if (!feat('conflictWarnings')) return '';
+  return activeConflicts(svc).map(c =>
+    '<div class="conflict-note"><span class="dot-c" style="background:var(--warn)"></span>' +
+    esc(c.name) + ' has ' + c.duties.length + ' duties this service</div>'
+  ).join('');
+}
+
 function renderServiceCard(svc) {
   return '<div class="card">' +
     '<div class="card-head"><span class="svc-title">' + esc(svc.worship) + ' <small>· ' + esc(svc.service) + '</small></span>' +
     '<span class="time">' + fmtTime(svc.time) + '</span></div>' +
     (feat('choirSong') && svc.choirSong ? '<div class="choir-song">Choir · ' + esc(svc.choirSong) + '</div>' : '') +
     renderCatRows(svc, false) +
+    renderConflictNotes(svc) +
     '</div>';
 }
 
@@ -435,7 +477,7 @@ function renderMy() {
       (feat('whoElse')
         ? '<button class="linkish" data-act="expand" data-id="' + key + '">' +
           (ui.expanded[key] ? 'Hide the others serving' : 'Who else is serving?') + '</button>' +
-          (ui.expanded[key] ? '<div class="duty-expand">' + renderCatRows(d.svc, false) + '</div>' : '')
+          (ui.expanded[key] ? '<div class="duty-expand">' + renderCatRows(d.svc, false) + renderConflictNotes(d.svc) + '</div>' : '')
         : '') +
       '</div>';
   });
@@ -517,10 +559,33 @@ function renderFeatures() {
 
 function memberSelect(svc, duty) {
   const cur = (svc.assignments || {})[duty] || '';
-  return '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '">' +
+  const conflicted = feat('conflictWarnings') && cur && activeConflicts(svc).some(c => c.name === cur);
+  return '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '"' +
+    (conflicted ? ' class="conflict"' : '') + '>' +
     '<option value="">—</option>' +
     state.members.map(m => '<option value="' + esc(m) + '"' + (m === cur ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
     '</select>';
+}
+
+/* Conflict notes for Manage cards. `expanded` controls whether OK/undo actions & muted "marked OK" lines show. */
+function renderManageConflicts(svc, expanded) {
+  if (!feat('conflictWarnings')) return '';
+  const id = svcId(svc);
+  const ok = svc.conflictOk || {};
+  let html = '';
+  activeConflicts(svc).forEach(c => {
+    html += '<div class="conflict-note"><span class="dot-c" style="background:var(--warn)"></span>' +
+      esc(c.name) + ' has ' + c.duties.length + ' duties this service' +
+      (expanded ? ' <button class="linkish" data-act="conflict-ok" data-svc="' + id + '" data-name="' + esc(c.name) + '">Mark as OK</button>' : '') +
+      '</div>';
+  });
+  if (expanded) {
+    conflictsFor(svc).filter(c => sameDuties(ok[c.name], c.duties)).forEach(c => {
+      html += '<div class="conflict-note ok">' + esc(c.name) + ' has ' + c.duties.length + ' duties (marked OK) ' +
+        '<button class="linkish" data-act="conflict-unok" data-svc="' + id + '" data-name="' + esc(c.name) + '">show warning again</button></div>';
+    });
+  }
+  return html;
 }
 
 function renderManageServices() {
@@ -560,9 +625,11 @@ function renderManageServices() {
           cat.duties.map(duty => '<span class="lab">' + esc(duty) + '</span>' + memberSelect(svc, duty)).join('') +
           '</div>';
       });
+      html += renderManageConflicts(svc, true);
       html += '<div style="text-align:right;margin-top:12px"><button class="danger-link" data-act="del-service" data-svc="' + id + '">Delete this service</button></div>';
     } else {
       html += renderCatRows(svc, false);
+      html += renderManageConflicts(svc, false);
     }
     html += '</div>';
   });
@@ -746,6 +813,29 @@ function handleAct(act, el) {
       if (ui.me === name) { ui.me = ''; localStorage.removeItem('wds-me'); }
       afterDataChange();
     }
+  }
+  else if (act === 'conflict-ok') {
+    const svc = findService(el.dataset.svc);
+    if (!svc) return;
+    const c = conflictsFor(svc).find(x => x.name === el.dataset.name);
+    if (!c) return;
+    if (!svc.conflictOk) svc.conflictOk = {};
+    // prune stale entries that no longer match a current conflict, keep documents tidy
+    const current = conflictsFor(svc);
+    Object.keys(svc.conflictOk).forEach(name => {
+      const match = current.find(x => x.name === name);
+      if (!match || !sameDuties(svc.conflictOk[name], match.duties)) delete svc.conflictOk[name];
+    });
+    svc.conflictOk[el.dataset.name] = c.duties;
+    persistService(svc);
+    afterDataChange();
+  }
+  else if (act === 'conflict-unok') {
+    const svc = findService(el.dataset.svc);
+    if (!svc || !svc.conflictOk) return;
+    delete svc.conflictOk[el.dataset.name];
+    persistService(svc);
+    afterDataChange();
   }
   else if (act === 'export') {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
