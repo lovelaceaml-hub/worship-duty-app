@@ -13,9 +13,11 @@ const CATEGORIES = [
 const SERVICE_LABELS = ['Morning', 'Afternoon', 'Evening', 'Early Morning', 'Commemoration'];
 const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
 const DATA_KEY = 'wds-data-v2';
+const DEFAULT_SITE_HASH = '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b'; // SHA-256 of '2217'
 
 /* Feature toggles — managed live in Manage → Features, synced to every device */
 const FEATURES = [
+  { id: 'siteLock',       label: 'Site passcode',             desc: 'Everyone must enter the 4-digit passcode before the app opens on a new device.', def: true },
   { id: 'editorLock',     label: 'Editor passcode',           desc: 'Require the passcode before anyone can open Manage and edit the schedule.', def: true },
   { id: 'notifications',  label: 'New-duty alerts',           desc: 'Members are alerted when a duty is added for them.', def: true },
   { id: 'reminders',      label: 'Day-before reminders',      desc: 'Members are reminded within 24 hours of each duty.', def: true },
@@ -37,6 +39,9 @@ async function sha256(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
 }
+
+function siteHash() { return (state.settings && state.settings.sitePinHash) || DEFAULT_SITE_HASH; }
+function siteUnlocked() { return localStorage.getItem('wds-site-unlock') === siteHash(); }
 
 /* ================= helpers ================= */
 
@@ -90,6 +95,7 @@ const ui = {
   showPast: false,
   banners: [],
   pinError: '',
+  sitePinError: '',
   rebaseline: false
 };
 
@@ -287,6 +293,17 @@ function downloadICS() {
 /* ================= rendering ================= */
 
 function render() {
+  const nav = document.querySelector('nav.tabs');
+  if (feat('siteLock') && !siteUnlocked()) {
+    nav.classList.toggle('hidden', true);
+    document.getElementById('banners').innerHTML = '';
+    document.getElementById('view').innerHTML = renderSiteLock();
+    const input = document.getElementById('site-pin-input');
+    if (input) input.focus();
+    return;
+  }
+  nav.classList.toggle('hidden', false);
+
   document.querySelectorAll('nav.tabs button').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === ui.tab);
   });
@@ -443,6 +460,17 @@ function renderManage() {
   return html;
 }
 
+function renderSiteLock() {
+  return '<div class="card lock-box">' +
+    '<div class="lock-title">This schedule is private</div>' +
+    '<p class="hint">Enter the 4-digit passcode shared with the congregation.</p>' +
+    '<form class="add-row" data-act="site-unlock">' +
+    '<input type="password" id="site-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" required>' +
+    '<button class="primary" type="submit">Enter</button></form>' +
+    (ui.sitePinError ? '<p class="pin-error">' + esc(ui.sitePinError) + '</p>' : '') +
+    '</div>';
+}
+
 function renderUnlock() {
   return '<div class="card lock-box">' +
     '<div class="lock-title">Editing is locked</div>' +
@@ -478,6 +506,11 @@ function renderFeatures() {
   html += '<div class="card"><div class="f-label">Change the editor passcode</div>' +
     '<form class="add-row" style="margin-top:12px" data-act="change-pin">' +
     '<input type="password" id="pin-change" placeholder="New passcode" autocomplete="off" required>' +
+    '<button class="ghost" type="submit">Change</button></form></div>';
+  html += '<div class="card"><div class="f-label">Change the site passcode</div>' +
+    '<div class="f-desc">The 4-digit code everyone enters to open the app.</div>' +
+    '<form class="add-row" style="margin-top:12px" data-act="change-site-pin">' +
+    '<input type="password" id="site-pin-change" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="New passcode" autocomplete="off" required>' +
     '<button class="ghost" type="submit">Change</button></form></div>';
   return html;
 }
@@ -602,6 +635,28 @@ function handleAct(act, el) {
     });
   }
   else if (act === 'notify-off') { localStorage.setItem('wds-notify', '0'); render(); }
+  else if (act === 'site-unlock') {
+    sha256(document.getElementById('site-pin-input').value).then(h => {
+      if (h === siteHash()) {
+        localStorage.setItem('wds-site-unlock', h);
+        ui.sitePinError = '';
+      } else {
+        ui.sitePinError = 'That passcode is not right.';
+      }
+      render();
+    });
+  }
+  else if (act === 'change-site-pin') {
+    const v = document.getElementById('site-pin-change').value;
+    if (!/^\d{4}$/.test(v)) { alert('Use exactly 4 digits.'); return; }
+    sha256(v).then(h => {
+      state.settings.sitePinHash = h;
+      localStorage.setItem('wds-site-unlock', h);
+      persistSettings();
+      render();
+      alert('Site passcode changed. Everyone else will need the new one the next time they open the app.');
+    });
+  }
   else if (act === 'unlock') {
     sha256(document.getElementById('pin-input').value).then(h => {
       if (h === state.settings.pinHash) {
@@ -713,7 +768,7 @@ function handleChg(chg, el) {
   if (chg === 'me') {
     ui.me = el.value;
     localStorage.setItem('wds-me', ui.me);
-    seenInitialized = false;
+    ui.rebaseline = true;
     render();
     checkNewDuties();
     checkReminders();
