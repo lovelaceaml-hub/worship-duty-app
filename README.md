@@ -2,63 +2,91 @@
 
 A simple web app for the congregation to see worship duty assignments.
 All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026,
-74 services, 45 members).
+74 services, 45 members), and now also syncs live from Anthony's Google Sheet.
+
+**Start here if you manage this app:** [docs/PLAYBOOK.md](docs/PLAYBOOK.md) —
+step-by-step instructions for entering the schedule, passcodes, notifications,
+deploying, and troubleshooting, plus how to delegate further development to AI.
 
 ## The three screens
 
 - **Schedule** — every upcoming service with all assigned duties, grouped by day.
 - **My Duties** — a member picks their name once and sees only their duties,
-  can expand "Who else is serving?", turn on notifications, and download their
-  duties to their phone calendar (with built-in reminders).
-- **Manage** — for editors (protected by a passcode): add/edit services,
-  assign people with dropdowns, manage the member list, toggle features
-  on/off for everyone, back up or reset the data.
+  can expand "Who else is serving?", turn on notifications (real push, see
+  below), and download their duties to their phone calendar (with built-in
+  reminders).
+- **Manage** — for editors (protected by a separate passcode): add/edit
+  services, assign people with dropdowns, manage the member list, toggle
+  features on/off for everyone, sync from the Google Sheet, back up or reset
+  the data.
 
-Full documentation lives in `docs/`: [HANDOFF.md](docs/HANDOFF.md)
+The whole app is also gated by a site-wide passcode before any of the three
+screens are shown (see docs/PLAYBOOK.md for both passcodes and how to change
+them).
+
+Full documentation lives in `docs/`: [PLAYBOOK.md](docs/PLAYBOOK.md)
+(day-to-day operation + AI delegation briefs), [HANDOFF.md](docs/HANDOFF.md)
 (architecture + runbook), [DESIGN.md](docs/DESIGN.md) (design system),
-[FEATURES.md](docs/FEATURES.md) (feature toggles + passcode).
+[FEATURES.md](docs/FEATURES.md) (feature toggles + passcodes).
 
 ## Live sync — DONE (2026-07-03)
 
 The shared database is set up and working:
 
-- Firebase project **LV Zion Duties** (`lv-zion-duties`), free Spark plan,
-  created under alovelace144@gmail.com.
+- Firebase project **LV Zion Duties** (`lv-zion-duties`), on the Blaze
+  (pay-as-you-go) plan — upgraded 2026-07-03 to support Cloud Functions for
+  push notifications; effectively $0/month at this scale.
 - Firestore database created (nam5/US), seeded with the full schedule.
-- Security rules allow read/write on the `schedule` and `app` collections
-  only, with no expiry. Note: anyone who has the app can edit the schedule —
-  simple on purpose. Firebase Authentication can be added later if needed.
-- `firebase-config.js` already contains the real config.
+- Security rules (`firestore.rules`, now in the repo) allow open read/write
+  on `schedule/*`, `app/*`, and `tokens/*`; the `sent/*` collection (used
+  internally to dedupe reminders) is locked to the Admin SDK only. Anyone
+  who has the app can still edit the schedule directly if they bypass the
+  UI — simple on purpose; see docs/HANDOFF.md's Known limitations.
+- `firebase-config.js` contains the real Firebase config and the Web Push
+  (VAPID) key.
 
 ## The app is LIVE
 
 **Share this link with members: https://lv-zion-duties.web.app**
 
 Deployed to Firebase Hosting on 2026-07-03. On a phone, members can use
-"Add to Home Screen" to install it like an app.
+"Add to Home Screen" to install it like an app (required for push
+notifications to work on iPhone while the app is closed).
 
-To publish future changes to the app files, run in this folder:
+To publish future changes, run in this folder:
 
-    npx firebase-tools deploy --only hosting
+    npx firebase-tools deploy
+
+This deploys hosting + Firestore rules + Cloud Functions together. Add
+`--only hosting` if you only changed app files and not rules/functions.
 
 (Schedule edits do NOT need a re-deploy — they sync live through the
-database. Re-deploying is only for changes to the app itself.)
+database, or via the Google Sheet sync. Re-deploying is only for changes to
+the app's code.)
 
 ## Notifications — what to expect
 
-- **New-duty alerts and day-before reminders** appear as system notifications
-  when the app is open, and catch up the moment a member opens the app.
-  On a phone, "Add to Home Screen" makes it behave like a real app.
-- **Guaranteed reminders even with the app closed:** each member should tap
-  "Add my duties to my calendar" — the phone's own calendar then reminds
-  them 1 day and 2 hours before each duty, no internet needed.
-- True push notifications while the app is closed require a notification
-  server (Firebase Cloud Messaging + a Cloud Function); can be added later.
+- **Real push notifications**, sent from the server (Firebase Cloud
+  Messaging + Cloud Functions), fire even when a member's browser tab is
+  closed: "New duty assigned to you" when an assignment changes, and a
+  "Duty reminder" within 24 hours of each duty.
+- A member turns these on once, from My Duties → "Turn on notifications,"
+  after picking their name.
+- **iPhone note:** push while the app is closed requires the site to be
+  added to the Home Screen first (Share → Add to Home Screen), iOS 16.4+.
+- **Guaranteed reminders with zero app dependency:** each member can also
+  tap "Add my duties to my calendar" — the phone's own calendar then
+  reminds them 1 day and 2 hours before each duty, no internet needed.
 
 ## Files
 
 - `index.html` — the app shell and styles
 - `app.js` — all app logic
 - `seed-data.js` — the schedule imported from the Excel file
-- `firebase-config.js` — paste your Firebase config here for live sync
-- `sw.js`, `manifest.json`, `icon.svg` — make it installable on phones
+- `firebase-config.js` — Firebase config + Web Push (VAPID) key for live sync
+  and push notifications
+- `firestore.rules` — Firestore security rules (deployed alongside hosting)
+- `functions/` — Cloud Functions for push notifications (`onScheduleWrite`,
+  `dutyReminders`)
+- `sw.js`, `manifest.json`, `icon.svg` — make it installable on phones and
+  receive background push
