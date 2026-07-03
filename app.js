@@ -116,6 +116,20 @@ function activeConflicts(svc) {
   return conflictsFor(svc).filter(c => !sameDuties(ok[c.name], c.duties));
 }
 
+/* Small inline badge shown next to a name that holds 2+ duties in this service.
+   Red = needs review; amber = an editor marked it OK. */
+function conflictBadge(svc, member) {
+  if (!feat('conflictWarnings') || !member) return '';
+  if (activeConflicts(svc).some(c => c.name === member)) {
+    return '<span class="warn-badge" title="Has 2+ duties this service">!</span>';
+  }
+  const ok = svc.conflictOk || {};
+  if (conflictsFor(svc).some(c => c.name === member && sameDuties(ok[c.name], c.duties))) {
+    return '<span class="warn-badge ok" title="Double duty marked OK by an editor">!</span>';
+  }
+  return '';
+}
+
 /* ================= google sheet sync — pure parsers ================= */
 
 /* Minimal RFC-4180-ish CSV parser. Handles quoted fields, embedded commas,
@@ -668,7 +682,7 @@ function renderCatRows(svc, showEmpty) {
       .map(duty => {
         const m = (svc.assignments || {})[duty];
         return '<div class="duty-row"><div class="dname">' + esc(duty) + '</div>' +
-          (m ? pillFor(m) : '<span style="color:var(--muted);font-style:italic;font-size:13px">—</span>') + '</div>';
+          (m ? pillFor(m) + conflictBadge(svc, m) : '<span style="color:var(--muted);font-style:italic;font-size:13px">—</span>') + '</div>';
       });
     if (rows.length) {
       html += '<div class="cat-label"><span class="dot-c" style="background:' + cat.color + '"></span>' +
@@ -678,22 +692,12 @@ function renderCatRows(svc, showEmpty) {
   return html;
 }
 
-/* Read-only conflict notes shown on public/my-duties cards */
-function renderConflictNotes(svc) {
-  if (!feat('conflictWarnings')) return '';
-  return activeConflicts(svc).map(c =>
-    '<div class="conflict-note"><span class="dot-c" style="background:var(--warn)"></span>' +
-    esc(c.name) + ' has ' + c.duties.length + ' duties this service</div>'
-  ).join('');
-}
-
 function renderServiceCard(svc) {
   return '<div class="card">' +
     '<div class="card-head"><span class="svc-title">' + esc(svc.worship) + ' <small>· ' + esc(svc.service) + '</small></span>' +
     '<span class="time">' + fmtTime(svc.time) + '</span></div>' +
     (feat('choirSong') && svc.choirSong ? '<div class="choir-song">Choir · ' + esc(svc.choirSong) + '</div>' : '') +
     renderCatRows(svc, false) +
-    renderConflictNotes(svc) +
     '</div>';
 }
 
@@ -775,7 +779,7 @@ function renderMy() {
       (feat('whoElse')
         ? '<button class="linkish" data-act="expand" data-id="' + key + '">' +
           (ui.expanded[key] ? 'Hide the others serving' : 'Who else is serving?') + '</button>' +
-          (ui.expanded[key] ? '<div class="duty-expand">' + renderCatRows(d.svc, false) + renderConflictNotes(d.svc) + '</div>' : '')
+          (ui.expanded[key] ? '<div class="duty-expand">' + renderCatRows(d.svc, false) + '</div>' : '')
         : '') +
       '</div>';
   });
@@ -927,7 +931,6 @@ function renderManageServices() {
       html += '<div style="text-align:right;margin-top:12px"><button class="danger-link" data-act="del-service" data-svc="' + id + '">Delete this service</button></div>';
     } else {
       html += renderCatRows(svc, false);
-      html += renderManageConflicts(svc, false);
     }
     html += '</div>';
   });
