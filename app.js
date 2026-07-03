@@ -14,6 +14,7 @@ const SERVICE_LABELS = ['Morning', 'Afternoon', 'Evening', 'Early Morning', 'Com
 const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
 const DATA_KEY = 'wds-data-v2';
 const DEFAULT_SITE_HASH = '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b'; // SHA-256 of '2217'
+const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv';
 
 /* Feature toggles — managed live in Manage → Features, synced to every device */
 const FEATURES = [
@@ -26,7 +27,8 @@ const FEATURES = [
   { id: 'choirSong',      label: 'Choir song on services',    desc: 'Show the choir song line on each service card.', def: true },
   { id: 'pastServices',   label: 'Past services',             desc: 'Allow browsing services that already happened.', def: true },
   { id: 'emptyDuties',    label: 'Show unassigned duties',    desc: 'The schedule shows every duty slot, even ones without a name yet.', def: false },
-  { id: 'conflictWarnings', label: 'Double-duty warnings',    desc: 'Show a notice when one person has two duties in the same service.', def: true }
+  { id: 'conflictWarnings', label: 'Double-duty warnings',    desc: 'Show a notice when one person has two duties in the same service.', def: true },
+  { id: 'sheetSync',      label: 'Google Sheet sync',        desc: 'Pull schedule updates from the published Google Sheet automatically.', def: true }
 ];
 
 function feat(id) {
@@ -43,6 +45,8 @@ async function sha256(s) {
 
 function siteHash() { return (state.settings && state.settings.sitePinHash) || DEFAULT_SITE_HASH; }
 function siteUnlocked() { return localStorage.getItem('wds-site-unlock') === siteHash(); }
+
+function sheetUrl() { return (state.settings && state.settings.sheetUrl) || DEFAULT_SHEET_URL; }
 
 /* ================= helpers ================= */
 
@@ -112,6 +116,139 @@ function activeConflicts(svc) {
   return conflictsFor(svc).filter(c => !sameDuties(ok[c.name], c.duties));
 }
 
+/* ================= google sheet sync — pure parsers ================= */
+
+/* Minimal RFC-4180-ish CSV parser. Handles quoted fields, embedded commas,
+   escaped quotes (""), and CRLF/LF line endings. Returns array of row arrays. */
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  const s = String(text == null ? '' : text);
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && s[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      rows.push(row); row = [];
+    } else {
+      field += c;
+    }
+  }
+  // flush trailing field/row if the file did not end with a newline
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+/* Set of every duty name the app knows, built from CATEGORIES. */
+function validDutySet() {
+  const set = {};
+  CATEGORIES.forEach(cat => cat.duties.forEach(duty => { set[duty] = true; }));
+  return set;
+}
+
+const SHEET_MONTHS = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+};
+
+/* Parse a sheet date like "Sat, May 02" (no year). Returns { month, day } or null. */
+function parseSheetDate(raw) {
+  if (!raw) return null;
+  const cleaned = String(raw).replace(/^[a-z]+,?\s*/i, '').trim(); // drop weekday prefix
+  const m = cleaned.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
+  if (!m) return null;
+  const mon = SHEET_MONTHS[m[1].slice(0, 3).toLowerCase()];
+  if (mon == null) return null;
+  const day = parseInt(m[2], 10);
+  if (!(day >= 1 && day <= 31)) return null;
+  return { month: mon, day: day };
+}
+
+/* Infer the year for a month/day so the resulting date is closest to `today`.
+   Tries today's year -1, +0, +1 and picks the smallest absolute distance. */
+function inferYearISO(month, day, today) {
+  const base = today || new Date();
+  const y0 = base.getFullYear();
+  const nowT = base.getTime();
+  let best = null, bestDiff = Infinity;
+  [y0 - 1, y0, y0 + 1].forEach(y => {
+    const d = new Date(y, month, day, 12, 0, 0);
+    const diff = Math.abs(d.getTime() - nowT);
+    if (diff < bestDiff) { bestDiff = diff; best = d; }
+  });
+  return best.getFullYear() + '-' + pad(best.getMonth() + 1) + '-' + pad(best.getDate());
+}
+
+/* Parse a 12-hour time like "9:00 AM" into 24-hour "HH:MM". Returns '' if unparseable. */
+function parseSheetTime(raw) {
+  if (!raw) return '';
+  const m = String(raw).trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp])[Mm]?$/);
+  if (!m) return '';
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const pm = m[3].toLowerCase() === 'p';
+  if (h === 12) h = 0;
+  if (pm) h += 12;
+  return pad(h) + ':' + min;
+}
+
+/* Turn parsed CSV rows into service objects.
+   Returns { services, members, warnings }. Pure — no window/document/state. */
+function sheetRowsToServices(rows, today) {
+  const result = { services: [], members: [], warnings: [] };
+  if (!rows || !rows.length) return result;
+  const header = rows[0].map(h => String(h == null ? '' : h).trim().toLowerCase());
+  const col = name => header.indexOf(name);
+  const iDate = col('date'), iService = col('service'), iWorship = col('worship');
+  const iTime = col('time'), iDuty = col('duty'), iMember = col('member');
+  if (iDate < 0 || iService < 0 || iDuty < 0 || iMember < 0) {
+    result.warnings.push('Sheet is missing required columns (Date, Service, Duty, Member).');
+    return result;
+  }
+  const valid = validDutySet();
+  const byKey = {}; // date + '|' + serviceLabel -> service object
+  const membersSeen = {};
+  const unknownDuties = {};
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const cell = i => (i >= 0 && i < row.length ? String(row[i] == null ? '' : row[i]).trim() : '');
+    const rawDate = cell(iDate), serviceLabel = cell(iService);
+    const duty = cell(iDuty), member = cell(iMember);
+    if (!rawDate || !serviceLabel || !duty || !member) continue;
+    const md = parseSheetDate(rawDate);
+    if (!md) continue;
+    const iso = inferYearISO(md.month, md.day, today);
+    if (!valid[duty]) {
+      if (!unknownDuties[duty]) { unknownDuties[duty] = true; result.warnings.push('Unknown duty in sheet: "' + duty + '"'); }
+      continue;
+    }
+    const key = iso + '|' + serviceLabel;
+    let svc = byKey[key];
+    if (!svc) {
+      svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {} };
+      byKey[key] = svc;
+      result.services.push(svc);
+    }
+    svc.assignments[duty] = member;
+    membersSeen[member] = true;
+  }
+  result.members = Object.keys(membersSeen).sort();
+  return result;
+}
+
 /* ================= state ================= */
 
 let state = { members: [], services: [], settings: { features: {}, pinHash: '' } };
@@ -127,7 +264,8 @@ const ui = {
   banners: [],
   pinError: '',
   sitePinError: '',
-  rebaseline: false
+  rebaseline: false,
+  syncing: false
 };
 
 function seedState() {
@@ -288,6 +426,120 @@ function afterDataChange() {
   render();
   checkNewDuties();
   checkReminders();
+}
+
+/* ================= google sheet sync — engine ================= */
+
+const SHEET_SYNC_MIN_MS = 5 * 60 * 1000; // auto-sync throttle window
+
+/* Merge a parsed sheet result into state, field-by-field so unchanged
+   services trigger zero Firestore writes. Returns { added, updated }. */
+function mergeSheetServices(services) {
+  let added = 0, updated = 0;
+  services.forEach(sheetSvc => {
+    const existing = findService(svcId(sheetSvc));
+    if (!existing) {
+      const fresh = {
+        date: sheetSvc.date,
+        time: sheetSvc.time || '',
+        service: sheetSvc.service,
+        worship: sheetSvc.worship || '',
+        choirSong: '',
+        assignments: Object.assign({}, sheetSvc.assignments)
+      };
+      state.services.push(fresh);
+      persistService(fresh);
+      added++;
+      return;
+    }
+    let changed = false;
+    if (sheetSvc.time && existing.time !== sheetSvc.time) { existing.time = sheetSvc.time; changed = true; }
+    if (sheetSvc.worship && existing.worship !== sheetSvc.worship) { existing.worship = sheetSvc.worship; changed = true; }
+    if (!existing.assignments) existing.assignments = {};
+    // Only touch duties the sheet mentions — Media Booth etc. are preserved.
+    Object.keys(sheetSvc.assignments).forEach(duty => {
+      if (existing.assignments[duty] !== sheetSvc.assignments[duty]) {
+        existing.assignments[duty] = sheetSvc.assignments[duty];
+        changed = true;
+      }
+    });
+    if (changed) { persistService(existing); updated++; }
+  });
+  return { added: added, updated: updated };
+}
+
+async function syncFromSheet(manual) {
+  if (!feat('sheetSync')) { if (manual) alert('Google Sheet sync is turned off in Manage → Features.'); return; }
+  const url = sheetUrl();
+  if (!url) { if (manual) alert('No sheet link is set. Add one in Manage → Data & Sync.'); return; }
+  if (!manual) {
+    const last = Number(localStorage.getItem('wds-sheet-sync-at') || 0);
+    if (Date.now() - last < SHEET_SYNC_MIN_MS) return; // throttled
+  }
+  localStorage.setItem('wds-sheet-sync-at', String(Date.now()));
+
+  if (manual) { ui.syncing = true; render(); }
+  let text;
+  try {
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    text = await resp.text();
+  } catch (e) {
+    ui.syncing = false;
+    if (manual) { render(); alert('Could not reach the Google Sheet. Check the link and your connection, then try again.'); }
+    else console.warn('Sheet sync failed:', e);
+    return;
+  }
+
+  const parsed = sheetRowsToServices(parseCSV(text), new Date());
+  const merge = mergeSheetServices(parsed.services);
+
+  // add any new members the sheet introduced
+  let addedMembers = 0;
+  parsed.members.forEach(name => {
+    if (state.members.indexOf(name) === -1) { state.members.push(name); addedMembers++; }
+  });
+  if (addedMembers) { state.members.sort(); persistMembers(); }
+
+  localStorage.setItem('wds-sheet-sync-result', JSON.stringify({
+    t: Date.now(), added: merge.added, updated: merge.updated, members: addedMembers,
+    warnings: parsed.warnings.length, warningMsgs: parsed.warnings.slice(0, 6)
+  }));
+
+  ui.syncing = false;
+  afterDataChange();
+
+  if (manual) {
+    const total = merge.added + merge.updated + addedMembers;
+    let msg;
+    if (!total) {
+      msg = 'Everything already matches the sheet.';
+    } else {
+      const parts = [];
+      if (merge.added) parts.push(merge.added + ' service' + (merge.added > 1 ? 's' : '') + ' added');
+      if (merge.updated) parts.push(merge.updated + ' service' + (merge.updated > 1 ? 's' : '') + ' updated');
+      if (addedMembers) parts.push(addedMembers + ' new ' + (addedMembers > 1 ? 'people' : 'person'));
+      msg = 'Synced from the sheet: ' + parts.join(', ') + '.';
+    }
+    if (parsed.warnings.length) msg += '\n\n' + parsed.warnings.length + ' row type(s) were skipped (unknown duties).';
+    alert(msg);
+  }
+}
+
+/* Run an automatic sync at most once per page load. */
+let sheetSyncTried = false;
+function autoSyncOnce() {
+  if (sheetSyncTried) return;
+  sheetSyncTried = true;
+  syncFromSheet(false);
+}
+/* Firebase mode: run shortly after the first schedule snapshot arrives so we
+   diff against real data, not empty state. Guarded to fire once. */
+let sheetSyncScheduled = false;
+function scheduleSyncSoon() {
+  if (sheetSyncScheduled) return;
+  sheetSyncScheduled = true;
+  setTimeout(autoSyncOnce, 1500);
 }
 
 /* ================= calendar export ================= */
@@ -652,6 +904,47 @@ function renderManagePeople() {
   return html;
 }
 
+function renderSheetCard() {
+  if (!fb) return ''; // only meaningful when live sync is on
+  const res = getJSON('wds-sheet-sync-result', null);
+  let status = 'Not synced yet on this device.';
+  if (res && res.t) {
+    const when = new Date(res.t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    let detail;
+    if (res.added || res.updated) {
+      const parts = [];
+      if (res.added) parts.push(res.added + ' added');
+      if (res.updated) parts.push(res.updated + ' updated');
+      detail = parts.join(', ') + ' service' + ((res.added + res.updated) > 1 ? 's' : '');
+    } else {
+      detail = 'everything matched';
+    }
+    status = 'Last checked ' + when + ' — ' + esc(detail);
+  }
+
+  let html = '<div class="card">' +
+    '<div class="f-label">Google Sheet</div>' +
+    '<div class="sync-status">' + esc(status) + '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+    '<button class="ghost" data-act="sheet-sync"' + (ui.syncing ? ' disabled' : '') + '>' +
+    (ui.syncing ? 'Syncing…' : 'Sync now') + '</button></div>' +
+    '<input type="text" data-chg="sheet-url" value="' + esc(sheetUrl()) + '" style="width:100%;margin-top:10px" ' +
+    'placeholder="Published-CSV link of the schedule sheet">' +
+    '<div class="hint" style="margin:6px 2px 0">Published-CSV link of the schedule sheet (File → Share → Publish to web → CSV).</div>' +
+    '<div class="hint" style="margin:8px 2px 0">The sheet is the source of truth for the duties it lists. Media Booth, choir songs, and extra services added here are kept.</div>';
+
+  const msgs = (res && res.warningMsgs) || [];
+  if (msgs.length) {
+    html += '<div class="sync-status" style="margin-top:8px">Skipped from the sheet:</div>' +
+      '<ul class="sync-warnings">' +
+      msgs.slice(0, 3).map(w => '<li>' + esc(w) + '</li>').join('') +
+      (msgs.length > 3 ? '<li>+' + (res.warnings - 3) + ' more</li>' : '') +
+      '</ul>';
+  }
+  html += '</div>';
+  return html;
+}
+
 function renderManageData() {
   let syncCard;
   if (fb) {
@@ -664,7 +957,7 @@ function renderManageData() {
       '<code class="cfg">window.FIREBASE_CONFIG = { apiKey: "...", authDomain: "...", projectId: "...", ... };</code>' +
       '<p style="margin-top:10px">4. Put the app folder on any free host (e.g. Netlify Drop) and share the link. This device\'s schedule uploads itself automatically the first time.</p></div>';
   }
-  return '<div class="data-actions">' + syncCard +
+  return '<div class="data-actions">' + syncCard + renderSheetCard() +
     '<div class="card"><p>Back up the schedule, or move it between devices by hand.</p>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
     '<button class="ghost" data-act="export">Export backup file</button>' +
@@ -845,6 +1138,7 @@ function handleAct(act, el) {
     a.click();
     URL.revokeObjectURL(a.href);
   }
+  else if (act === 'sheet-sync') { syncFromSheet(true); }
   else if (act === 'reset') {
     if (confirm('Replace ALL current data with the original spreadsheet schedule?')) {
       state = seedState();
@@ -902,6 +1196,11 @@ function handleChg(chg, el) {
   else if (chg === 'feature') {
     if (!state.settings.features) state.settings.features = {};
     state.settings.features[el.dataset.id] = el.checked;
+    persistSettings();
+    render();
+  }
+  else if (chg === 'sheet-url') {
+    state.settings.sheetUrl = el.value.trim();
     persistSettings();
     render();
   }
@@ -969,12 +1268,14 @@ async function initFirebase(config) {
       state = loadLocal() || seedState();
       persistAll();
       afterDataChange();
+      scheduleSyncSoon();
       return;
     }
     firstSnapshot = false;
     state.services = snap.docs.map(d => d.data());
     fb.knownIds = snap.docs.map(d => d.id);
     afterDataChange();
+    scheduleSyncSoon(); // auto-pull from the sheet once, shortly after real data lands
   }, err => {
     addBanner('Could not connect to the shared database (' + err.code + '). Showing this device\'s copy.', true);
     if (!state.services.length) { state = loadLocal() || seedState(); render(); }
@@ -1006,6 +1307,7 @@ function init() {
     saveLocal();
     setSyncPill(false);
     afterDataChange();
+    autoSyncOnce();
   }
   setInterval(checkReminders, 10 * 60 * 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
