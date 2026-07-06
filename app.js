@@ -47,7 +47,8 @@ const FEATURES = [
   { id: 'pastServices',   label: 'Past services',             desc: 'Allow browsing services that already happened.', def: true },
   { id: 'emptyDuties',    label: 'Show unassigned duties',    desc: 'The schedule shows every duty slot, even ones without a name yet.', def: false },
   { id: 'conflictWarnings', label: 'Double-duty warnings',    desc: 'Show a notice when one person has two duties in the same service.', def: true },
-  { id: 'sheetSync',      label: 'Google Sheet sync',        desc: 'Pull schedule updates from the published Google Sheet automatically.', def: true }
+  { id: 'sheetSync',      label: 'Google Sheet sync',        desc: 'Pull schedule updates from the published Google Sheet automatically.', def: true },
+  { id: 'changeRequests', label: 'Change requests',          desc: 'Members can request schedule changes from My Duties; the scheduler is notified.', def: true }
 ];
 
 function feat(id) {
@@ -97,6 +98,12 @@ function dateBadge(iso) {
 }
 function svcId(svc) {
   return svc.date + '_' + svc.service.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+}
+function slugify(s) {
+  return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+function requestId(svcIdVal, duty, createdAt) {
+  return svcIdVal + '_' + slugify(duty) + '_' + createdAt;
 }
 function svcDateTime(svc) {
   return new Date(svc.date + 'T' + (svc.time || '12:00') + ':00');
@@ -289,7 +296,7 @@ function sheetRowsToServices(rows, today) {
 
 /* ================= state ================= */
 
-let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {} };
+let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
 let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
 let settingsLoaded = false; // true once shared settings arrived (or local mode)
 
@@ -307,7 +314,8 @@ const ui = {
   pinError: '',
   sitePinError: '',
   rebaseline: false,
-  syncing: false
+  syncing: false,
+  reqForm: null // { key, note } — in-progress "request a change" draft, survives re-render
 };
 
 function seedState() {
@@ -315,7 +323,8 @@ function seedState() {
     members: window.SEED_DATA.members,
     services: window.SEED_DATA.services,
     settings: { features: {}, pinHash: '' },
-    departments: DEPARTMENTS_SEED
+    departments: DEPARTMENTS_SEED,
+    requests: []
   }));
 }
 function saveLocal() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); }
@@ -325,6 +334,7 @@ function loadLocal() {
     if (obj && Array.isArray(obj.members) && Array.isArray(obj.services)) {
       if (!obj.settings) obj.settings = { features: {}, pinHash: '' };
       if (!obj.departments) obj.departments = {};
+      if (!Array.isArray(obj.requests)) obj.requests = [];
       return obj;
     }
   } catch (e) { /* ignore */ }
@@ -351,6 +361,18 @@ function persistSettings() {
 function persistDepartments() {
   if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments });
   else saveLocal();
+}
+function persistRequest(req) {
+  if (fb) fb.setDoc(fb.doc(fb.db, 'requests', req.id), req);
+  else saveLocal();
+}
+function resolveRequest(id, status) {
+  const req = state.requests.find(r => r.id === id);
+  if (!req) return;
+  req.status = status;
+  req.resolvedAt = Date.now();
+  req.resolvedBy = ui.me || 'editor';
+  persistRequest(req);
 }
 function persistAll() {
   if (!fb) { saveLocal(); return; }
@@ -703,6 +725,8 @@ function render() {
   const unread = Number(localStorage.getItem('wds-unread-' + ui.me) || 0);
   const tabMy = document.getElementById('tab-my');
   tabMy.innerHTML = 'My Duties' + (unread > 0 && ui.tab !== 'my' ? '<span class="dot"></span>' : '');
+  const tabManage = document.getElementById('tab-manage');
+  tabManage.innerHTML = 'Manage' + (pendingRequestsCount() > 0 && ui.tab !== 'manage' ? '<span class="dot"></span>' : '');
 
   const view = document.getElementById('view');
   if (ui.tab === 'schedule') view.innerHTML = renderSchedule();
@@ -837,7 +861,7 @@ function renderMy() {
   }
 
   const duties = dutiesFor(ui.me);
-  if (!duties.length) return html + '<div class="empty">You have no duties coming up.</div>';
+  if (!duties.length) return html + renderYourRequests();
 
   html += '<p class="hint">You have <b>' + duties.length + '</b> upcoming dut' + (duties.length > 1 ? 'ies' : 'y') + '.</p>';
   duties.forEach(d => {
@@ -853,9 +877,59 @@ function renderMy() {
           (ui.expanded[key] ? 'Hide the others serving' : 'Who else is serving?') + '</button>' +
           (ui.expanded[key] ? '<div class="duty-expand">' + renderCatRows(d.svc, false) + '</div>' : '')
         : '') +
+      renderRequestChange(d, key) +
       '</div>';
   });
+  html += renderYourRequests();
   return html;
+}
+
+/* Pending request (if any) by `name` for this exact svc + duty */
+function findPendingRequest(svcIdVal, duty, name) {
+  return state.requests.find(r => r.svcId === svcIdVal && r.duty === duty && r.name === name && r.status === 'pending');
+}
+
+/* "Request change" affordance under a duty card in My Duties: either a muted
+   "pending" tag, the inline note form, or the linkish button to open it. */
+function renderRequestChange(d, key) {
+  if (!feat('changeRequests') || !ui.me) return '';
+  const id = svcId(d.svc);
+  const pending = findPendingRequest(id, d.duty, ui.me);
+  if (pending) return '<div class="req-pending-tag">Request pending</div>';
+  if (ui.reqForm && ui.reqForm.key === key) {
+    return '<div class="req-form">' +
+      '<textarea data-chg="req-note" data-key="' + esc(key) + '" placeholder="Why do you need a change? (optional)">' +
+      esc(ui.reqForm.note || '') + '</textarea>' +
+      '<div class="req-actions">' +
+      '<button class="primary" data-act="req-submit" data-key="' + esc(key) + '" data-svc="' + esc(id) + '" data-duty="' + esc(d.duty) + '">Submit</button>' +
+      '<button class="ghost" data-act="req-cancel">Cancel</button>' +
+      '</div></div>';
+  }
+  return '<button class="linkish" data-act="req-open" data-key="' + esc(key) + '">Request change</button>';
+}
+
+function statusChip(status) {
+  const label = status.charAt(0).toUpperCase() + status.slice(1);
+  return '<span class="status-chip ' + esc(status) + '">' + esc(label) + '</span>';
+}
+
+/* "Your requests" card in My Duties — newest first, last ~6, only if any exist for ui.me. */
+function renderYourRequests() {
+  if (!ui.me) return '';
+  const mine = state.requests.filter(r => r.name === ui.me).slice().sort((a, b) => b.createdAt - a.createdAt);
+  if (!mine.length) return '';
+  return '<div class="card req-card"><b style="font-size:13.5px">Your requests</b>' +
+    mine.slice(0, 6).map(r =>
+      '<div class="req-item">' +
+      '<div class="req-head"><span class="req-when">' + esc(r.duty) + ' — ' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) + '</span>' +
+      statusChip(r.status) + '</div>' +
+      (r.note ? '<div class="req-note">' + esc(r.note) + '</div>' : '') +
+      '</div>').join('') +
+    '</div>';
+}
+
+function pendingRequestsCount() {
+  return state.requests.filter(r => r.status === 'pending').length;
 }
 
 function renderManage() {
@@ -864,12 +938,14 @@ function renderManage() {
     if (!pin) return renderCreatePin();
     if (localStorage.getItem('wds-unlock') !== pin) return renderUnlock();
   }
-  const subs = [['services', 'Services'], ['people', 'People'], ['features', 'Features'], ['data', 'Data & Sync']];
+  const pendingCount = pendingRequestsCount();
+  const subs = [['services', 'Services'], ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')], ['people', 'People'], ['features', 'Features'], ['data', 'Data & Sync']];
   let html = '<div class="subnav">' + subs.map(s =>
     '<button data-act="sub" data-sub="' + s[0] + '"' + (ui.sub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>').join('') +
     (feat('editorLock') ? '<button class="lock-btn" data-act="lock-now">Lock</button>' : '') +
     '</div>';
   if (ui.sub === 'services') html += renderManageServices();
+  else if (ui.sub === 'requests') html += renderManageRequests();
   else if (ui.sub === 'people') html += renderManagePeople();
   else if (ui.sub === 'features') html += renderFeatures();
   else html += renderManageData();
@@ -928,6 +1004,12 @@ function renderFeatures() {
     '<form class="add-row" style="margin-top:12px" data-act="change-site-pin">' +
     '<input type="password" id="site-pin-change" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="New passcode" autocomplete="off" required>' +
     '<button class="ghost" type="submit">Change</button></form></div>';
+  html += '<div class="card"><div class="f-label">Scheduler</div>' +
+    '<div class="f-desc">Who receives a notification when a member submits a change request.</div>' +
+    '<select data-chg="scheduler-name" style="margin-top:10px">' +
+    '<option value="">— None —</option>' +
+    state.members.map(m => '<option value="' + esc(m) + '"' + (m === (state.settings.schedulerName || '') ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+    '</select></div>';
   return html;
 }
 
@@ -962,6 +1044,54 @@ function renderManageConflicts(svc, expanded) {
       html += '<div class="conflict-note ok">' + esc(c.name) + ' has ' + c.duties.length + ' duties (marked OK) ' +
         '<button class="linkish" data-act="conflict-unok" data-svc="' + id + '" data-name="' + esc(c.name) + '">show warning again</button></div>';
     });
+  }
+  return html;
+}
+
+function reqSubmittedAt(r) {
+  return new Date(r.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function renderManageRequests() {
+  const all = state.requests.slice().sort((a, b) => b.createdAt - a.createdAt);
+  const pending = all.filter(r => r.status === 'pending');
+  const resolved = all.filter(r => r.status !== 'pending');
+
+  let html = '<p class="hint">Members can request a schedule change from My Duties. Approving here does not edit the schedule — ' +
+    'open the service in <b>Services</b> to make the actual change.</p>';
+
+  if (!pending.length) {
+    html += '<div class="empty">No pending requests.</div>';
+  } else {
+    pending.forEach(r => {
+      html += '<div class="card">' +
+        '<div class="req-head"><span class="req-when">' + esc(r.name) + ' — ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
+        '<div class="req-note" style="margin-top:2px">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) + '</div>' +
+        (r.note ? '<div class="req-note">' + esc(r.note) + '</div>' : '') +
+        '<div class="req-meta">Submitted ' + esc(reqSubmittedAt(r)) + '</div>' +
+        '<div class="req-actions-row">' +
+        '<button class="primary" data-act="req-approve" data-id="' + esc(r.id) + '">Approve</button>' +
+        '<button class="danger-link" data-act="req-decline" data-id="' + esc(r.id) + '">Decline</button>' +
+        '<button class="ghost" data-act="req-open-service" data-svc="' + esc(r.svcId) + '">Open service</button>' +
+        '</div></div>';
+    });
+  }
+
+  if (resolved.length) {
+    const open = ui.expanded['req-resolved'];
+    html += '<button class="linkish" data-act="expand" data-id="req-resolved">' +
+      (open ? 'Hide resolved requests' : 'Show ' + Math.min(resolved.length, 10) + ' resolved request' + (resolved.length > 1 ? 's' : '')) +
+      '</button>';
+    if (open) {
+      resolved.slice(0, 10).forEach(r => {
+        const when = r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+        html += '<div class="req-item">' +
+          '<div class="req-head"><span class="req-when">' + esc(r.name) + ' — ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
+          '<div class="req-meta">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) +
+          (when ? ' · resolved ' + esc(when) + (r.resolvedBy ? ' by ' + esc(r.resolvedBy) : '') : '') + '</div>' +
+          '</div>';
+      });
+    }
   }
   return html;
 }
@@ -1352,6 +1482,48 @@ function handleAct(act, el) {
       touchedServices.length + ' service' + (touchedServices.length === 1 ? '' : 's') + ' updated.');
     afterDataChange();
   }
+  else if (act === 'req-open') {
+    ui.reqForm = { key: el.dataset.key, note: '' };
+    render();
+  }
+  else if (act === 'req-cancel') {
+    ui.reqForm = null;
+    render();
+  }
+  else if (act === 'req-submit') {
+    const svc = findService(el.dataset.svc);
+    if (!svc) return;
+    const createdAt = Date.now();
+    const req = {
+      id: requestId(el.dataset.svc, el.dataset.duty, createdAt),
+      name: ui.me,
+      svcId: el.dataset.svc,
+      date: svc.date,
+      service: svc.service,
+      worship: svc.worship,
+      duty: el.dataset.duty,
+      note: (ui.reqForm && ui.reqForm.note) || '',
+      status: 'pending',
+      createdAt
+    };
+    state.requests.push(req);
+    ui.reqForm = null;
+    persistRequest(req);
+    afterDataChange();
+  }
+  else if (act === 'req-approve') {
+    resolveRequest(el.dataset.id, 'approved');
+    afterDataChange();
+  }
+  else if (act === 'req-decline') {
+    resolveRequest(el.dataset.id, 'declined');
+    afterDataChange();
+  }
+  else if (act === 'req-open-service') {
+    ui.sub = 'services';
+    ui.expanded['m:' + el.dataset.svc] = true;
+    render();
+  }
 }
 
 function handleChg(chg, el) {
@@ -1428,6 +1600,16 @@ function handleChg(chg, el) {
     persistSettings();
     render();
   }
+  else if (chg === 'req-note') {
+    if (ui.reqForm && ui.reqForm.key === el.dataset.key) ui.reqForm.note = el.value;
+    // no render(): keeps focus in the textarea while typing; snapshot re-renders
+    // elsewhere already restore this value from ui.reqForm.
+  }
+  else if (chg === 'scheduler-name') {
+    state.settings.schedulerName = el.value;
+    persistSettings();
+    render();
+  }
   else if (chg === 'sheet-url') {
     state.settings.sheetUrl = el.value.trim();
     persistSettings();
@@ -1466,6 +1648,13 @@ document.addEventListener('submit', e => {
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-chg]');
   if (el) handleChg(el.dataset.chg, el);
+});
+/* Live-capture the change-request note as the member types, so a Firestore
+   snapshot re-render mid-typing (see afterDataChange) can't lose the draft —
+   'change' alone only fires on blur. */
+document.addEventListener('input', e => {
+  const el = e.target.closest('[data-chg="req-note"]');
+  if (el) handleChg('req-note', el);
 });
 
 /* ================= startup ================= */
@@ -1536,6 +1725,10 @@ async function initFirebase(config) {
     } else {
       state.departments = map;
     }
+    render();
+  }, () => { /* connection errors are surfaced by the schedule listener */ });
+  fsMod.onSnapshot(fsMod.collection(db, 'requests'), snap => {
+    state.requests = snap.docs.map(d => d.data());
     render();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   setSyncPill(true);

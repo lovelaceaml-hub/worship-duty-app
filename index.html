@@ -242,6 +242,32 @@
   .alert-item:last-child { border-bottom: none; }
   .alert-item .t { color: var(--faint); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+  /* ---------- change requests ---------- */
+  .req-pending-tag { font-size: 12px; color: var(--muted); font-style: italic; }
+  .req-form { margin-top: 10px; border-top: 1px solid var(--hairline); padding-top: 10px; }
+  .req-form textarea {
+    width: 100%; min-height: 64px; padding: 10px 12px; resize: vertical;
+    border: 1px solid var(--line); border-radius: 13px; font-size: 15px; font-family: var(--sans);
+    background: var(--glass-strong); color: var(--ink); outline: none;
+  }
+  .req-form textarea:focus { border-color: rgba(59,91,219,0.5); box-shadow: 0 0 0 3px rgba(59,91,219,0.14); }
+  .req-form .req-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .status-chip {
+    display: inline-flex; align-items: center; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em; padding: 3px 10px; border-radius: 999px;
+  }
+  .status-chip.pending { background: rgba(173,106,18,0.14); color: var(--warn); }
+  .status-chip.approved { background: rgba(18,133,95,0.14); color: var(--ok); }
+  .status-chip.declined { background: rgba(209,51,43,0.12); color: var(--danger); }
+  .req-item { padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+  .req-item:last-child { border-bottom: none; }
+  .req-item .req-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .req-item .req-when { font-size: 13px; font-weight: 600; }
+  .req-item .req-note { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .req-item .req-meta { font-size: 11px; color: var(--faint); margin-top: 3px; }
+  .req-card .req-item { display: flex; flex-direction: column; }
+  .req-actions-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
   /* ---------- manage ---------- */
   .subnav { display: flex; gap: 6px; margin: 18px 0; flex-wrap: wrap; align-items: center; }
   .subnav button {
@@ -341,7 +367,7 @@
   <nav class="tabs">
     <button data-act="tab" data-tab="schedule">Schedule</button>
     <button data-act="tab" data-tab="my" id="tab-my">My Duties</button>
-    <button data-act="tab" data-tab="manage">Manage</button>
+    <button data-act="tab" data-tab="manage" id="tab-manage">Manage</button>
   </nav>
 
   <div id="banners"></div>
