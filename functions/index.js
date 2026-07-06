@@ -1,7 +1,8 @@
 'use strict';
 
-const { onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const logger = require('firebase-functions/logger');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -148,3 +149,45 @@ function laStartMs(dateIso, time) {
   const offset = asLA - asUTC;
   return asUTC - offset;
 }
+
+/* ---- 3. schedule-change request created: notify the scheduler ---- */
+exports.onRequestCreated = onDocumentCreated(
+  { document: 'requests/{id}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap || !snap.exists) return;
+    const req = snap.data() || {};
+
+    const settingsSnap = await db.collection('app').doc('settings').get();
+    const schedulerName = (settingsSnap.exists && settingsSnap.data().schedulerName) || '';
+    if (!schedulerName) {
+      logger.info('onRequestCreated: no schedulerName configured, skipping notify');
+      return;
+    }
+
+    const body = req.name + ' requests a change: ' + req.duty + ' — ' +
+      fmtDate(req.date) + ' ' + req.service +
+      (req.note ? ' · "' + req.note + '"' : '');
+
+    if (req.name === schedulerName) {
+      logger.info('onRequestCreated: requester is the scheduler, skipping self-notify', { id: event.params.id });
+      return;
+    }
+
+    await sendToNames([schedulerName], 'Schedule change requested', () => body);
+  });
+
+/* ---- 4. schedule-change request resolved: notify the requester ---- */
+exports.onRequestResolved = onDocumentUpdated(
+  { document: 'requests/{id}', region: REGION },
+  async (event) => {
+    const before = event.data && event.data.before;
+    const after = event.data && event.data.after;
+    if (!before || !before.exists || !after || !after.exists) return;
+    const beforeData = before.data() || {};
+    const afterData = after.data() || {};
+    if (!(beforeData.status === 'pending' && afterData.status !== beforeData.status)) return;
+
+    const body = afterData.duty + ' — ' + fmtDate(afterData.date) + ' ' + afterData.service;
+    await sendToNames([afterData.name], 'Schedule change ' + afterData.status, () => body);
+  });

@@ -12,9 +12,28 @@ const CATEGORIES = [
 ];
 const SERVICE_LABELS = ['Morning', 'Afternoon', 'Evening', 'Early Morning', 'Commemoration'];
 const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
+
+/* Seed data for state.departments (categoryName -> member names), used only
+   the first time app/departments is missing/empty in Firestore (or local mode). */
+const DEPARTMENTS_SEED = {
+  'Worship': ['B. Anthony', 'B. Brent', 'B. Davidson', 'B. Giomar', 'B. James', 'B. Jason', 'B. Jordan', 'D. Aaron', 'D. Caleb', 'D. Chloe', 'D. Chris', 'D. Danielle', 'D. Kenya', 'D. Roza', 'E. Simon', 'M. Chad', 'S. Adrienne', 'S. Martha', 'S. Paola', 'S. Skye'],
+  'Usher Sisters': ['D. Chloe', 'D. Danielle', 'D. Kenya', 'D. Roza', 'S. Adrienne', 'S. Estefany', 'S. Hana', 'S. Lisa', 'S. Melissa', 'S. Paola', 'S. Skye', 'S. Taylor'],
+  'Usher Brothers': ['B. Alex', 'B. Anthony', 'B. Clyde', 'B. Davidson', 'B. Delvin', 'B. Drew', 'B. Dustin', 'B. Giomar', 'B. Irvin', 'B. James S', 'B. Jordan', 'D. Chris'],
+  'Lobby': ['S. Adrienne', 'S. Anessa', 'S. Bridgette', 'S. Ivonne', 'S. Leslie', 'S. Lupita', 'S. Mercie', 'S. Nichol', 'S. Paola'],
+  'Translation': ['B. Irvin', 'B. Jason', 'D. Roza', 'S. Elena', 'S. Elisa', 'S. Leslie', 'S. Martha', 'S. Monica C', 'S. Monica S', 'S. Paola'],
+  'Media': []
+};
 const DATA_KEY = 'wds-data-v2';
 const DEFAULT_SITE_HASH = '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b'; // SHA-256 of '2217'
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv';
+
+/* One-time name cleanup after the sheet's Raw Data tab was tidied up —
+   maps old variant spellings to their canonical form. See 'unify-names'. */
+const NAME_UNIFY_MAP = {
+  'B. Anthony L': 'B. Anthony', 'D. Chris K': 'D. Chris', 'D. Chris Kane': 'D. Chris',
+  'B. James D': 'B. James', 'B. Jason S': 'B. Jason', 'S. Martha B': 'S. Martha',
+  'S. Monica Salazar': 'S. Monica S', 'M.Chad': 'M. Chad', 'B. Gio': 'B. Giomar'
+};
 
 /* Feature toggles — managed live in Manage → Features, synced to every device */
 const FEATURES = [
@@ -270,7 +289,7 @@ function sheetRowsToServices(rows, today) {
 
 /* ================= state ================= */
 
-let state = { members: [], services: [], settings: { features: {}, pinHash: '' } };
+let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {} };
 let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
 let settingsLoaded = false; // true once shared settings arrived (or local mode)
 
@@ -291,7 +310,8 @@ function seedState() {
   return JSON.parse(JSON.stringify({
     members: window.SEED_DATA.members,
     services: window.SEED_DATA.services,
-    settings: { features: {}, pinHash: '' }
+    settings: { features: {}, pinHash: '' },
+    departments: DEPARTMENTS_SEED
   }));
 }
 function saveLocal() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); }
@@ -300,6 +320,7 @@ function loadLocal() {
     const obj = JSON.parse(localStorage.getItem(DATA_KEY));
     if (obj && Array.isArray(obj.members) && Array.isArray(obj.services)) {
       if (!obj.settings) obj.settings = { features: {}, pinHash: '' };
+      if (!obj.departments) obj.departments = {};
       return obj;
     }
   } catch (e) { /* ignore */ }
@@ -323,6 +344,10 @@ function persistSettings() {
   if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'settings'), state.settings);
   else saveLocal();
 }
+function persistDepartments() {
+  if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments });
+  else saveLocal();
+}
 function persistAll() {
   if (!fb) { saveLocal(); return; }
   const batch = fb.writeBatch(fb.db);
@@ -335,6 +360,7 @@ function persistAll() {
   (fb.knownIds || []).forEach(id => { if (!keep[id]) batch.delete(fb.doc(fb.db, 'schedule', id)); });
   batch.set(fb.doc(fb.db, 'app', 'members'), { list: state.members });
   batch.set(fb.doc(fb.db, 'app', 'settings'), state.settings);
+  batch.set(fb.doc(fb.db, 'app', 'departments'), { map: state.departments });
   batch.commit();
 }
 
@@ -498,9 +524,20 @@ function afterDataChange() {
 const SHEET_SYNC_MIN_MS = 5 * 60 * 1000; // auto-sync throttle window
 
 /* Merge a parsed sheet result into state, field-by-field so unchanged
-   services trigger zero Firestore writes. Returns { added, updated }. */
+   services trigger zero Firestore writes. Returns { added, updated }.
+   Also grows department rosters: any (duty, member) pair seen adds member
+   to that duty's category roster if not already present (covers brand-new
+   names and existing names appearing in a category for the first time). */
 function mergeSheetServices(services) {
   let added = 0, updated = 0;
+  let deptsChanged = false;
+  const addToDept = (duty, member) => {
+    if (!member) return;
+    const cat = dutyCategory(duty).name;
+    if (!state.departments) state.departments = {};
+    const roster = state.departments[cat] || (state.departments[cat] = []);
+    if (roster.indexOf(member) === -1) { roster.push(member); roster.sort(); deptsChanged = true; }
+  };
   services.forEach(sheetSvc => {
     const existing = findService(svcId(sheetSvc));
     if (!existing) {
@@ -514,6 +551,7 @@ function mergeSheetServices(services) {
       };
       state.services.push(fresh);
       persistService(fresh);
+      Object.keys(fresh.assignments).forEach(duty => addToDept(duty, fresh.assignments[duty]));
       added++;
       return;
     }
@@ -524,6 +562,7 @@ function mergeSheetServices(services) {
     if (!existing.assignments) existing.assignments = {};
     // Only touch duties the sheet mentions — Media Booth etc. are preserved.
     Object.keys(sheetSvc.assignments).forEach(duty => {
+      addToDept(duty, sheetSvc.assignments[duty]);
       if (existing.assignments[duty] !== sheetSvc.assignments[duty]) {
         existing.assignments[duty] = sheetSvc.assignments[duty];
         changed = true;
@@ -531,6 +570,7 @@ function mergeSheetServices(services) {
     });
     if (changed) { persistService(existing); updated++; }
   });
+  if (deptsChanged) persistDepartments();
   return { added: added, updated: updated };
 }
 
@@ -868,10 +908,14 @@ function renderFeatures() {
 function memberSelect(svc, duty) {
   const cur = (svc.assignments || {})[duty] || '';
   const conflicted = feat('conflictWarnings') && cur && activeConflicts(svc).some(c => c.name === cur);
+  const cat = dutyCategory(duty);
+  const roster = (state.departments || {})[cat.name] || [];
+  let options = roster.length ? roster : state.members;
+  if (cur && options.indexOf(cur) === -1) options = [cur].concat(options);
   return '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '"' +
     (conflicted ? ' class="conflict"' : '') + '>' +
     '<option value="">—</option>' +
-    state.members.map(m => '<option value="' + esc(m) + '"' + (m === cur ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+    options.map(m => '<option value="' + esc(m) + '"' + (m === cur ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
     '</select>';
 }
 
@@ -947,13 +991,23 @@ function renderManagePeople() {
   let html = '<form class="add-row" data-act="add-member">' +
     '<input type="text" id="member-name" required placeholder="New person\'s name (e.g. B. David)">' +
     '<button class="primary" type="submit">Add</button></form>' +
-    '<p class="hint">Type on a name to fix it — the change applies to every duty automatically.</p>';
+    '<p class="hint">Type on a name to fix it — the change applies to every duty automatically. ' +
+    'Check the departments below to control which duty pickers each person shows up in.</p>';
   state.members.forEach(m => {
     const n = dutiesFor(m).length;
-    html += '<div class="list-row">' +
+    html += '<div class="list-row" style="flex-wrap:wrap">' +
       '<input type="text" value="' + esc(m) + '" data-chg="member-name" data-old="' + esc(m) + '" style="flex:1">' +
       '<span class="count">' + n + ' upcoming</span>' +
       '<button class="danger-link" data-act="del-member" data-name="' + esc(m) + '">Remove</button>' +
+      '<div style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;margin-top:2px">' +
+      CATEGORIES.map(cat => {
+        const checked = ((state.departments || {})[cat.name] || []).indexOf(m) !== -1;
+        return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)">' +
+          '<input type="checkbox" data-chg="member-cat" data-name="' + esc(m) + '" data-cat="' + esc(cat.name) + '"' +
+          (checked ? ' checked' : '') + '>' +
+          '<span class="dot-c" style="background:' + cat.color + '"></span>' + esc(cat.name) + '</label>';
+      }).join('') +
+      '</div>' +
       '</div>';
   });
   return html;
@@ -1021,10 +1075,46 @@ function renderManageData() {
     '</div></div>' +
     '<div class="card"><p>Reload the original schedule from the spreadsheet (May – July 2026). This overwrites all current data' + (fb ? ' for everyone' : '') + '.</p>' +
     '<button class="danger-link" data-act="reset">Reset to spreadsheet data</button></div>' +
+    '<div class="card"><p>One-time cleanup after the sheet\'s Raw Data tab was tidied up — merges leftover name variants (e.g. "B. Anthony L") into their current spelling everywhere.</p>' +
+    '<button class="ghost" data-act="unify-names">Unify member names</button></div>' +
     '</div>';
 }
 
 /* ================= actions ================= */
+
+/* Applies NAME_UNIFY_MAP (or a compatible map) to state.members and every
+   service's assignments/conflictOk. Pure w.r.t. persistence — caller persists
+   whatever comes back touched. Returns { membersChanged, membersMerged, touchedServices }. */
+function applyNameMap(map) {
+  const canon = n => (map[n] || n);
+  const membersMerged = state.members.filter(m => map[m]).length;
+  const membersChanged = membersMerged > 0;
+  if (membersChanged) {
+    const seen = {};
+    state.members = state.members.map(canon).filter(m => (seen[m] ? false : (seen[m] = true)));
+    state.members.sort();
+  }
+  const touchedServices = [];
+  state.services.forEach(svc => {
+    let touched = false;
+    const assignments = svc.assignments || {};
+    Object.keys(assignments).forEach(duty => {
+      const old = assignments[duty], now = canon(old);
+      if (now !== old) { assignments[duty] = now; touched = true; }
+    });
+    const ok = svc.conflictOk || {};
+    const merged = {};
+    Object.keys(ok).forEach(name => {
+      const now = canon(name);
+      if (now !== name) touched = true;
+      const dutyList = merged[now] ? merged[now].concat(ok[name]) : ok[name];
+      const seenDuty = {};
+      merged[now] = dutyList.filter(d => (seenDuty[d] ? false : (seenDuty[d] = true)));
+    });
+    if (touched) { svc.conflictOk = merged; touchedServices.push(svc); }
+  });
+  return { membersChanged, membersMerged, touchedServices };
+}
 
 function findService(id) { return state.services.find(s => svcId(s) === id); }
 
@@ -1157,8 +1247,15 @@ function handleAct(act, el) {
           if (svc.assignments[duty] === name) { delete svc.assignments[duty]; touched.push(svc); }
         });
       });
+      let deptsChanged = false;
+      Object.keys(state.departments || {}).forEach(cat => {
+        const roster = state.departments[cat];
+        const idx = roster.indexOf(name);
+        if (idx !== -1) { roster.splice(idx, 1); deptsChanged = true; }
+      });
       persistMembers();
       touched.forEach(persistService);
+      if (deptsChanged) persistDepartments();
       if (ui.me === name) { ui.me = ''; localStorage.removeItem('wds-me'); }
       afterDataChange();
     }
@@ -1201,6 +1298,32 @@ function handleAct(act, el) {
       persistAll();
       afterDataChange();
     }
+  }
+  else if (act === 'unify-names') {
+    if (!confirm('Merge leftover name variants (e.g. "B. Anthony L" → "B. Anthony") across members and all services?')) return;
+    const { membersChanged, membersMerged, touchedServices } = applyNameMap(NAME_UNIFY_MAP);
+    if (membersChanged) persistMembers();
+    touchedServices.forEach(persistService);
+    const canon = NAME_UNIFY_MAP[ui.me];
+    if (canon) {
+      ['wds-alerts-', 'wds-seen-', 'wds-unread-'].forEach(prefix => {
+        const oldKey = prefix + ui.me, newKey = prefix + canon;
+        if (prefix === 'wds-unread-') {
+          const merged = Math.max(Number(localStorage.getItem(oldKey) || 0), Number(localStorage.getItem(newKey) || 0));
+          localStorage.setItem(newKey, String(merged));
+        } else {
+          const oldVal = getJSON(oldKey, []), newVal = getJSON(newKey, []);
+          localStorage.setItem(newKey, JSON.stringify(newVal.concat(oldVal)));
+        }
+        localStorage.removeItem(oldKey);
+      });
+      ui.me = canon;
+      localStorage.setItem('wds-me', canon);
+      registerPush();
+    }
+    alert('Unified names: ' + membersMerged + ' member' + (membersMerged === 1 ? '' : 's') + ' merged, ' +
+      touchedServices.length + ' service' + (touchedServices.length === 1 ? '' : 's') + ' updated.');
+    afterDataChange();
   }
 }
 
@@ -1245,10 +1368,32 @@ function handleChg(chg, el) {
         if (svc.assignments[duty] === oldName) { svc.assignments[duty] = newName; touched.push(svc); }
       });
     });
+    let deptsChanged = false;
+    Object.keys(state.departments || {}).forEach(cat => {
+      const roster = state.departments[cat];
+      const idx = roster.indexOf(oldName);
+      if (idx === -1) return;
+      roster.splice(idx, 1);
+      if (roster.indexOf(newName) === -1) roster.push(newName);
+      roster.sort();
+      deptsChanged = true;
+    });
     if (ui.me === oldName) { ui.me = newName; localStorage.setItem('wds-me', newName); }
     persistMembers();
     touched.forEach(persistService);
+    if (deptsChanged) persistDepartments();
     afterDataChange();
+  }
+  else if (chg === 'member-cat') {
+    const name = el.dataset.name, cat = el.dataset.cat;
+    if (!state.departments) state.departments = {};
+    const roster = state.departments[cat] || (state.departments[cat] = []);
+    const idx = roster.indexOf(name);
+    if (el.checked) { if (idx === -1) roster.push(name); }
+    else if (idx !== -1) roster.splice(idx, 1);
+    roster.sort();
+    persistDepartments();
+    render();
   }
   else if (chg === 'feature') {
     if (!state.settings.features) state.settings.features = {};
@@ -1355,6 +1500,16 @@ async function initFirebase(config) {
       state.settings = Object.assign({ features: {}, pinHash: '' }, snap.data());
       render();
     }
+  }, () => { /* connection errors are surfaced by the schedule listener */ });
+  fsMod.onSnapshot(fsMod.doc(db, 'app', 'departments'), snap => {
+    const map = snap.exists() ? (snap.data().map || {}) : null;
+    if (!map || !Object.keys(map).length) {
+      state.departments = DEPARTMENTS_SEED;
+      persistDepartments();
+    } else {
+      state.departments = map;
+    }
+    render();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   setSyncPill(true);
   if (notifyOn()) registerPush();
