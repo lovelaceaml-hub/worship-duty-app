@@ -3,6 +3,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /schedule/{doc} { allow read, write: if true; }
     match /app/{doc} { allow read, write: if true; }
+    // New Song Selection app (new-song-app repo, hosted at lv-zion-songs):
+    match /songStats/{doc} { allow read, write: if true; }
+    match /setlists/{doc} { allow read, write: if true; }
     match /tokens/{token} { allow read, write: if true; }
     // 'sent' markers are functions-only (Admin SDK bypasses these rules):
     match /sent/{doc} { allow read, write: if false; }
