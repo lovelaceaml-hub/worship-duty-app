@@ -297,6 +297,10 @@ const ui = {
   tab: 'schedule',
   sub: 'services',
   me: localStorage.getItem('wds-me') || '',
+  deptFilter: (function () {
+    const v = localStorage.getItem('wds-dept') || 'All';
+    return v === 'All' || CATEGORIES.some(c => c.name === v) ? v : 'All';
+  })(),
   expanded: {},
   showPast: false,
   banners: [],
@@ -720,9 +724,10 @@ function pillFor(member) {
   return '<span class="pill' + (mine ? ' me' : '') + '">' + esc(member) + (mine ? ' (You)' : '') + '</span>';
 }
 
-function renderCatRows(svc, showEmpty) {
+function renderCatRows(svc, showEmpty, only) {
   let html = '';
   CATEGORIES.forEach(cat => {
+    if (only && cat.name !== only) return;
     const rows = cat.duties
       .filter(duty => showEmpty || feat('emptyDuties') || (svc.assignments || {})[duty])
       .map(duty => {
@@ -738,39 +743,60 @@ function renderCatRows(svc, showEmpty) {
   return html;
 }
 
-function renderServiceCard(svc) {
+/* Does svc have at least one filled assignment in the given category? */
+function categoryHasAssignments(svc, catName) {
+  const cat = CATEGORIES.find(c => c.name === catName);
+  if (!cat) return false;
+  const assignments = svc.assignments || {};
+  return cat.duties.some(duty => !!assignments[duty]);
+}
+
+function renderServiceCard(svc, deptFilter) {
   return '<div class="card">' +
     '<div class="card-head"><span class="svc-title">' + esc(svc.worship) + ' <small>· ' + esc(svc.service) + '</small></span>' +
     '<span class="time">' + fmtTime(svc.time) + '</span></div>' +
-    (feat('choirSong') && svc.choirSong ? '<div class="choir-song">Choir · ' + esc(svc.choirSong) + '</div>' : '') +
-    renderCatRows(svc, false) +
+    (feat('choirSong') && svc.choirSong && (!deptFilter || deptFilter === 'All' || deptFilter === 'Worship') ? '<div class="choir-song">Choir · ' + esc(svc.choirSong) + '</div>' : '') +
+    renderCatRows(svc, false, deptFilter && deptFilter !== 'All' ? deptFilter : undefined) +
     '</div>';
 }
 
-function renderServiceList(list) {
+function renderServiceList(list, deptFilter) {
   let html = '', lastDate = '';
+  let pendingHead = '';
   list.forEach(svc => {
     if (svc.date !== lastDate) {
       lastDate = svc.date;
       const badge = dateBadge(svc.date);
-      html += '<div class="date-head"><span class="day">' + esc(fmtDate(svc.date)) + '</span>' +
+      pendingHead = '<div class="date-head"><span class="day">' + esc(fmtDate(svc.date)) + '</span>' +
         (badge ? '<span class="badge">' + badge + '</span>' : '') + '</div>';
     }
-    html += renderServiceCard(svc);
+    if (deptFilter && deptFilter !== 'All' && !categoryHasAssignments(svc, deptFilter)) return;
+    if (pendingHead) { html += pendingHead; pendingHead = ''; }
+    html += renderServiceCard(svc, deptFilter);
   });
   return html;
 }
 
+function renderDeptChips() {
+  const items = [{ name: 'All', color: null }].concat(CATEGORIES);
+  return '<div class="subnav chips">' + items.map(c =>
+    '<button data-act="dept-filter" data-val="' + esc(c.name) + '"' +
+    (ui.deptFilter === c.name ? ' class="active"' : '') + '>' +
+    (c.color ? '<span class="dot-c" style="background:' + c.color + '"></span>' : '') +
+    esc(c.name) + '</button>').join('') + '</div>';
+}
+
 function renderSchedule() {
-  let html = '';
+  let html = renderDeptChips();
+  const filter = ui.deptFilter;
   const up = upcomingServices();
   if (!up.length) html += '<div class="empty">No upcoming services yet.<br>Add them in the <b>Manage</b> tab.</div>';
-  else html += renderServiceList(up);
+  else html += renderServiceList(up, filter);
   const past = feat('pastServices') ? pastServices() : [];
   if (past.length) {
     html += '<div style="text-align:center"><button class="linkish" data-act="toggle-past">' +
       (ui.showPast ? 'Hide past services' : 'Show ' + past.length + ' past services') + '</button></div>';
-    if (ui.showPast) html += renderServiceList(past.slice().reverse());
+    if (ui.showPast) html += renderServiceList(past.slice().reverse(), filter);
   }
   return html;
 }
@@ -1125,6 +1151,7 @@ function handleAct(act, el) {
     render();
   }
   else if (act === 'sub') { ui.sub = el.dataset.sub; render(); }
+  else if (act === 'dept-filter') { ui.deptFilter = el.dataset.val; localStorage.setItem('wds-dept', ui.deptFilter); render(); }
   else if (act === 'dismiss-banner') { ui.banners.splice(Number(el.dataset.i), 1); renderBanners(); }
   else if (act === 'toggle-past') { ui.showPast = !ui.showPast; render(); }
   else if (act === 'expand') { ui.expanded[el.dataset.id] = !ui.expanded[el.dataset.id]; render(); }
