@@ -299,6 +299,7 @@ function sheetRowsToServices(rows, today) {
 let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
 let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
 let settingsLoaded = false; // true once shared settings arrived (or local mode)
+let departmentsLoaded = false; // true once the departments doc arrived (or local mode)
 
 const ui = {
   tab: 'schedule',
@@ -558,7 +559,7 @@ function mergeSheetServices(services) {
   let added = 0, updated = 0;
   let deptsChanged = false;
   const addToDept = (duty, member) => {
-    if (!member) return;
+    if (!member || !departmentsLoaded) return;
     const cat = dutyCategory(duty).name;
     if (!state.departments) state.departments = {};
     const roster = state.departments[cat] || (state.departments[cat] = []);
@@ -1725,6 +1726,7 @@ async function initFirebase(config) {
     } else {
       state.departments = map;
     }
+    departmentsLoaded = true;
     render();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   fsMod.onSnapshot(fsMod.collection(db, 'requests'), snap => {
@@ -1741,11 +1743,13 @@ function init() {
     initFirebase(window.FIREBASE_CONFIG).catch(() => {
       addBanner('Firebase config is invalid — running on this device only.', true);
       state = loadLocal() || seedState();
+      departmentsLoaded = true;
       setSyncPill(false);
       afterDataChange();
     });
   } else {
     state = loadLocal() || seedState();
+    departmentsLoaded = true;
     saveLocal();
     setSyncPill(false);
     afterDataChange();

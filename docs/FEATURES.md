@@ -13,11 +13,12 @@ no deploy needed.
 | Day-before reminders | ON | Members are reminded within 24 hours of each duty (push notification, plus in-app while the app is open). |
 | Add-to-calendar button | ON | The .ics download on My Duties (phone-calendar reminders). |
 | "Who else is serving?" | ON | The expander on each duty card showing the full service lineup. |
-| Choir song on services | ON | The italic choir-song line on service cards. |
+| Choir song on services | ON | The choir-song line on service cards. |
 | Past services | ON | The "Show past services" link on the Schedule tab. |
 | Show unassigned duties | OFF | Schedule shows every duty slot even without a name (useful when planning gaps, noisy otherwise). |
 | Double-duty warnings | ON | Shows a notice when one person has two or more duties in the same service; editors can "Mark as OK" per service in Manage. |
 | Google Sheet sync | ON | Automatically pulls schedule updates from the published Google Sheet (auto on app open, throttled, plus a "Sync now" button in Manage → Data & Sync). |
+| Change requests | ON | Members can request a schedule change from their duty cards on My Duties; the scheduler (chosen in Manage → Features → Scheduler) gets a push notification, and requests are reviewed in Manage → Requests. Approving a request does not edit the schedule itself. |
 
 ## How it works / adding a new toggle
 
