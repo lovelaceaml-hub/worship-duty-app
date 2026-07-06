@@ -80,16 +80,25 @@ members' devices.
 - **Semantics:** the sheet is the source of truth only for the duties it
   lists. `mergeSheetServices()` in app.js does a per-duty upsert — it never
   touches a duty slot the sheet's row doesn't mention, so Media Booth
-  assignments, choir songs, and manually-added/extra services survive every
-  sync. New member names appearing in the sheet's Member column are added to
+  assignments and manually-added/extra services survive every sync. New
+  member names appearing in the sheet's Member column are added to
   `app/members` automatically. A duty name the app doesn't recognize is
   skipped and surfaced as a warning (not silently dropped, not a crash).
-- **Sheet column contract** (see `sheetRowsToServices()` in app.js): header
-  row with Month, Date, Service, Worship, Time, Category, Duty, Member.
-  Category is read but ignored (duty category is derived from the `CATEGORIES`
-  constant by duty name). Date format like `Sat, May 02` — weekday prefix
-  optional, no year; the year is inferred (`inferYearISO()`) as whichever of
-  last/this/next year lands closest to today. Time is 12-hour, e.g. `9:00 AM`.
+- **Choir Song rows:** a row with Duty exactly `Choir Song` is special-cased
+  in `sheetRowsToServices()` — its Member column holds a song title, which is
+  written to that service's `choirSong` field (never added to
+  `app/members`, never treated as a duty assignment, never triggers an
+  unknown-duty warning). `mergeSheetServices()` only overwrites an existing
+  service's `choirSong` when the sheet's value is non-empty and different,
+  matching the per-duty upsert semantics above.
+- **Sheet column contract** (see `sheetRowsToServices()` in app.js): the
+  published sheet's **"Raw Data"** tab (formerly "Data List" — same
+  published-CSV URL/gid, just renamed), header row with Month, Date,
+  Service, Worship, Time, Category, Duty, Member. Category is read but
+  ignored (duty category is derived from the `CATEGORIES` constant by duty
+  name). Date format like `Sat, May 02` — weekday prefix optional, no year;
+  the year is inferred (`inferYearISO()`) as whichever of last/this/next
+  year lands closest to today. Time is 12-hour, e.g. `9:00 AM`.
 
 ## Passcodes (site + editor)
 

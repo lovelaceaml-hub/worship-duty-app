@@ -245,16 +245,21 @@ function sheetRowsToServices(rows, today) {
     const md = parseSheetDate(rawDate);
     if (!md) continue;
     const iso = inferYearISO(md.month, md.day, today);
-    if (!valid[duty]) {
+    const isChoirSong = duty === 'Choir Song';
+    if (!isChoirSong && !valid[duty]) {
       if (!unknownDuties[duty]) { unknownDuties[duty] = true; result.warnings.push('Unknown duty in sheet: "' + duty + '"'); }
       continue;
     }
     const key = iso + '|' + serviceLabel;
     let svc = byKey[key];
     if (!svc) {
-      svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {} };
+      svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {}, choirSong: '' };
       byKey[key] = svc;
       result.services.push(svc);
+    }
+    if (isChoirSong) {
+      svc.choirSong = member;
+      continue;
     }
     svc.assignments[duty] = member;
     membersSeen[member] = true;
@@ -504,7 +509,7 @@ function mergeSheetServices(services) {
         time: sheetSvc.time || '',
         service: sheetSvc.service,
         worship: sheetSvc.worship || '',
-        choirSong: '',
+        choirSong: sheetSvc.choirSong || '',
         assignments: Object.assign({}, sheetSvc.assignments)
       };
       state.services.push(fresh);
@@ -515,6 +520,7 @@ function mergeSheetServices(services) {
     let changed = false;
     if (sheetSvc.time && existing.time !== sheetSvc.time) { existing.time = sheetSvc.time; changed = true; }
     if (sheetSvc.worship && existing.worship !== sheetSvc.worship) { existing.worship = sheetSvc.worship; changed = true; }
+    if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong) { existing.choirSong = sheetSvc.choirSong; changed = true; }
     if (!existing.assignments) existing.assignments = {};
     // Only touch duties the sheet mentions — Media Booth etc. are preserved.
     Object.keys(sheetSvc.assignments).forEach(duty => {

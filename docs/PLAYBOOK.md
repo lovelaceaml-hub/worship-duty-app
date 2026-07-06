@@ -22,8 +22,9 @@ system, see [DESIGN.md](DESIGN.md). For the full toggle list, see
 ### 1. Entering the schedule
 
 **The Google Sheet is the normal way to enter the schedule.** Keep editing
-the same Google Sheet the congregation always used. The app pulls from it
-automatically:
+the same Google Sheet the congregation always used, on the **"Raw Data"**
+tab (formerly called "Data List" — the published CSV link/gid didn't
+change, only the tab's name). The app pulls from it automatically:
 
 - Every time anyone opens the app (throttled to once per 5 minutes per
   device, so it doesn't hammer the sheet).
@@ -31,19 +32,23 @@ automatically:
 
 What syncs from the sheet, per row: Month, Date, Service, Worship, Time,
 Duty, Member (the Category column is ignored — the app derives category from
-the duty name itself). See the exact column contract in Brief 4 below if you
-ever need to rebuild the sheet.
+the duty name itself). A row with Duty exactly `Choir Song` is handled
+specially: its Member column holds a **song title**, not a person, and syncs
+into that service's choir-song line — it's never added to the People list.
+See the exact column contract in Brief 4 below if you ever need to rebuild
+the sheet.
 
 What the sheet sync does and does not touch:
 
 - It **only changes duties the sheet actually lists**. If a service in the
   sheet doesn't mention "Media Booth #1," the app leaves whatever is already
-  assigned there alone.
-- **Media Booth assignments, choir songs, and any extra/manual services you
-  added directly in Manage are preserved** — the sheet can't overwrite what
-  it doesn't know about.
+  assigned there alone. The same applies to the choir song line: it only
+  updates when the sheet has a non-empty `Choir Song` row for that service.
+- **Media Booth assignments and any extra/manual services you added
+  directly in Manage are preserved** — the sheet can't overwrite what it
+  doesn't know about.
 - New names in the Member column are **added to the People list**
-  automatically.
+  automatically (song titles from `Choir Song` rows never are).
 - A duty name in the sheet that the app doesn't recognize is **skipped and
   reported as a warning** (visible on the Data & Sync card) — it will not
   silently disappear or crash the sync.
@@ -439,7 +444,9 @@ inferred by `inferYearISO()` to be whichever of last/this/next year is
 closest to today). Time format is 12-hour, e.g. "9:00 AM" (parsed by
 `parseSheetTime`). Duty must exactly match one of the duty names in the
 CATEGORIES constant near the top of app.js, or the row is skipped with a
-warning.
+warning — except Duty `Choir Song`, which is a special case: its Member
+column holds a song title and is written to that service's `choirSong`
+field, never treated as a person. The sheet tab is named "Raw Data."
 
 Task: make it easy for Anthony (non-developer) to roll over to a new
 season when the congregation replaces the old sheet/tab with a new one.
