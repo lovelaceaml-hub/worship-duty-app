@@ -1,2 +1,6 @@
 functions/node_modules/
+node_modules/
 .firebase/
+.env*
+*.log
+.DS_Store

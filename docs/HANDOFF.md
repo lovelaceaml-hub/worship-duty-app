@@ -200,6 +200,47 @@ descriptions and defaults).
   — Firestore data, Functions logs, and billing/budget all live here (see
   `docs/PLAYBOOK.md` section 8 for the map).
 
+## Coordinator Planning view + shared name map + feeds (added 2026-07-06)
+
+Four additions in one pass; all live in existing files except two new
+function libs.
+
+**Shared name map (`app/nameMap`).** The `NAME_UNIFY_MAP` constant in
+`app.js` is now only the seed/fallback for a Firestore doc `app/nameMap`
+(`{ map: { variant: canonical } }`). This app seeds the doc on first load
+and uses the merged map (`unifiedNameMap()`) for the Manage → Data & Sync
+"Unify member names" action; the song app subscribes to the same doc, so
+one edit fixes name variants everywhere. Edit the doc (or the tab UI of
+whichever tool grows one) rather than the constant.
+
+**Manage → Planning (Coordinator Planning View).** New sub-tab
+(`renderManagePlanning` in `app.js`): every upcoming double-duty conflict
+with one-tap substitute buttons (`suggestSubs` — same department, not
+already serving that service, lightest 4-week + upcoming load first, then
+longest since last served); unfilled slots for the next 4 weeks (skips
+fully-empty, not-yet-planned services); and the whole-roster workload
+table (`workloadStats` — rolling 4/8-week windows, upcoming, year total,
+last/next served). The substitute buttons write through the normal
+`persistService` path, so FCM new-duty alerts fire as usual.
+
+**Per-member .ics feed (`functions/ics-lib.js`, `exports.ics`).**
+`/ics/<member name>` (hosting rewrite → `ics` function) returns a
+subscribable VCALENDAR of that member's duties, past 30 days onward, with
+the same event format and -24h/-2h alarms as the in-app download. Name-map
+aware: variant spellings resolve to the same feed. No auth — the schedule
+is already world-readable under the open rules (see Known limitations 1).
+
+**Scheduled Sheet → Firestore sync (`functions/sheet-lib.js`,
+`exports.scheduledSheetSync`).** The Google Sheet is the source of truth
+(other coordinators edit it). The app's pull-on-open sync still exists;
+this function runs the identical parse + merge every 2 hours server-side
+so reminders, the song app, and .ics feeds stay fresh when nobody opens
+the app. `sheet-lib.js` is a line-for-line port of the app's pure parsers —
+**if you change parsing rules in `app.js`, mirror them there.** Merge
+policy is unchanged: only duties the sheet mentions are touched; in-app
+edits to other duties survive. First deploy of these functions will prompt
+to enable Cloud Scheduler (expected, Blaze plan required — already on it).
+
 ## Known limitations
 
 1. Open database rules — anyone with the link who bypasses the UI could
@@ -235,7 +276,7 @@ See `docs/PLAYBOOK.md` Part 2 for these as full, ready-to-paste briefs:
 | `firebase-config.js` | Real Firebase web config + Web Push (VAPID) key (public identifiers) |
 | `firebase.json` / `.firebaserc` | Deploy config for hosting + Firestore rules + Cloud Functions |
 | `firestore.rules` | Firestore security rules, deployed alongside hosting |
-| `functions/` | Cloud Functions source (`index.js`) for push notifications, `package.json` |
+| `functions/` | Cloud Functions source: `index.js` (push notifications, `ics` feed, `scheduledSheetSync`), `ics-lib.js` + `sheet-lib.js` (pure, node-testable logic), `package.json` |
 | `manifest.json`, `sw.js`, `icon.svg` | PWA install + background push notifications |
 | `docs/` | `PLAYBOOK.md` (operate + delegate), this handoff, design system, feature registry |
 

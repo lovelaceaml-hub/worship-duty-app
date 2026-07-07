@@ -2,7 +2,10 @@
 
 const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onRequest } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
+const sheetLib = require('./sheet-lib');
+const icsLib = require('./ics-lib');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -190,4 +193,78 @@ exports.onRequestResolved = onDocumentUpdated(
 
     const body = afterData.duty + ' — ' + fmtDate(afterData.date) + ' ' + afterData.service;
     await sendToNames([afterData.name], 'Schedule change ' + afterData.status, () => body);
+  });
+
+/* ---- 5. per-member .ics calendar feed ----
+   Served through a hosting rewrite as /ics/<member name>. Subscribe once in
+   Apple/Google Calendar and duty changes flow in automatically (calendars
+   re-fetch every few hours). Note: schedule data is already world-readable
+   via the open Firestore rules, so this endpoint exposes nothing new. */
+exports.ics = onRequest({ region: REGION }, async (req, res) => {
+  const member = decodeURIComponent(req.path.replace(/^\/(ics\/)?/, '')).trim();
+  if (!member) {
+    res.status(400).type('text/plain').send('Usage: /ics/<member name>, e.g. /ics/B.%20Anthony');
+    return;
+  }
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const [schedSnap, mapSnap] = await Promise.all([
+    db.collection('schedule').where('date', '>=', since).get(),
+    db.collection('app').doc('nameMap').get()
+  ]);
+  const services = schedSnap.docs.map(d => d.data() || {});
+  const nameMap = (mapSnap.exists && mapSnap.data().map) || {};
+  const body = icsLib.buildIcsForMember(services, member, nameMap);
+  res.set('Cache-Control', 'public, max-age=300');
+  res.type('text/calendar; charset=utf-8').send(body);
+});
+
+/* ---- 6. scheduled Sheet -> Firestore sync ----
+   The Google Sheet is the source of truth (other coordinators edit it); the
+   app already pulls the published CSV, but only when someone opens it. This
+   runs the same parse+merge server-side every 2 hours so Firestore (and
+   therefore push reminders, the song app, and the .ics feeds) stays fresh
+   even if nobody opens the app. Same merge policy as the app: only duties
+   the sheet mentions are touched, in-app-only edits are preserved. */
+exports.scheduledSheetSync = onSchedule(
+  { schedule: 'every 2 hours', timeZone: TZ, region: REGION },
+  async () => {
+    const settingsSnap = await db.collection('app').doc('settings').get();
+    const url = (settingsSnap.exists && settingsSnap.data().sheetUrl) || sheetLib.DEFAULT_SHEET_URL;
+
+    const resp = await fetch(url, { redirect: 'follow' });
+    if (!resp.ok) {
+      logger.error('scheduledSheetSync: sheet fetch failed', { status: resp.status });
+      return;
+    }
+    const text = await resp.text();
+    const parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(text), new Date());
+    if (parsed.warnings.length) logger.warn('scheduledSheetSync: parse warnings', { warnings: parsed.warnings });
+    if (!parsed.services.length) {
+      logger.warn('scheduledSheetSync: sheet parsed to zero services — leaving Firestore untouched');
+      return;
+    }
+
+    const existingSnap = await db.collection('schedule').get();
+    const existingById = {};
+    existingSnap.forEach(d => { existingById[d.id] = d.data() || {}; });
+
+    const plan = sheetLib.planMerge(parsed.services, existingById);
+    const batch = db.batch();
+    plan.creates.forEach(c => batch.set(db.collection('schedule').doc(c.id), c.svc));
+    plan.updates.forEach(u => batch.set(db.collection('schedule').doc(u.id), u.patch, { merge: true }));
+
+    // grow the members list with any new names from the sheet
+    const membersSnap = await db.collection('app').doc('members').get();
+    const members = (membersSnap.exists && membersSnap.data().list) || [];
+    const newMembers = parsed.members.filter(m => members.indexOf(m) === -1);
+    if (newMembers.length) {
+      batch.set(db.collection('app').doc('members'), { list: members.concat(newMembers).sort() });
+    }
+
+    if (plan.creates.length || plan.updates.length || newMembers.length) {
+      await batch.commit();
+    }
+    logger.info('scheduledSheetSync: done', {
+      added: plan.creates.length, updated: plan.updates.length, newMembers: newMembers.length
+    });
   });

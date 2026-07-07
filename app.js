@@ -27,13 +27,19 @@ const DATA_KEY = 'wds-data-v2';
 const DEFAULT_SITE_HASH = '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b'; // SHA-256 of '2217'
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv';
 
-/* One-time name cleanup after the sheet's Raw Data tab was tidied up —
-   maps old variant spellings to their canonical form. See 'unify-names'. */
+/* Name cleanup after the sheet's Raw Data tab was tidied up — maps old
+   variant spellings to their canonical form. See 'unify-names'. This constant
+   is the seed/fallback for the shared Firestore doc app/nameMap, which both
+   this app and the song app read so canonicalization stays consistent. */
 const NAME_UNIFY_MAP = {
   'B. Anthony L': 'B. Anthony', 'D. Chris K': 'D. Chris', 'D. Chris Kane': 'D. Chris',
   'B. James D': 'B. James', 'B. Jason S': 'B. Jason', 'S. Martha B': 'S. Martha',
   'S. Monica Salazar': 'S. Monica S', 'M.Chad': 'M. Chad', 'B. Gio': 'B. Giomar'
 };
+
+/* Live copy of app/nameMap; null until the snapshot arrives (or in local mode). */
+let sharedNameMap = null;
+function unifiedNameMap() { return Object.assign({}, NAME_UNIFY_MAP, sharedNameMap || {}); }
 
 /* Feature toggles — managed live in Manage → Features, synced to every device */
 const FEATURES = [
@@ -154,6 +160,59 @@ function conflictBadge(svc, member) {
     return '<span class="warn-badge ok" title="Double duty marked OK by an editor">!</span>';
   }
   return '';
+}
+
+/* ================= coordinator planning (workload + subs) ================= */
+
+function weeksAgoISO(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n * 7);
+  return toISO(d);
+}
+
+/* Per-member duty counts across the whole schedule: rolling 4/8-week windows,
+   upcoming load, year total, last served and next duty dates. */
+function workloadStats() {
+  const t = todayISO(), w4 = weeksAgoISO(4), w8 = weeksAgoISO(8);
+  const stats = {};
+  const ensure = m => stats[m] || (stats[m] = { past4: 0, past8: 0, upcoming: 0, total: 0, last: '', next: '' });
+  (state.members || []).forEach(ensure);
+  (state.services || []).forEach(svc => {
+    Object.keys(svc.assignments || {}).forEach(duty => {
+      const m = svc.assignments[duty];
+      if (!m) return;
+      const s = ensure(m);
+      s.total++;
+      if (svc.date < t) {
+        if (svc.date >= w8) s.past8++;
+        if (svc.date >= w4) s.past4++;
+        if (svc.date > s.last) s.last = svc.date;
+      } else {
+        s.upcoming++;
+        if (!s.next || svc.date < s.next) s.next = svc.date;
+      }
+    });
+  });
+  return stats;
+}
+
+/* Best substitutes for a duty in a service: same department, not already
+   serving that service, lightest recent+upcoming load first, then longest
+   since last served. */
+function suggestSubs(svc, duty, excludeName, stats) {
+  const cat = dutyCategory(duty);
+  let roster = (state.departments || {})[cat.name] || [];
+  if (!roster.length) roster = state.members;
+  const busy = {};
+  Object.keys(svc.assignments || {}).forEach(d => { if (svc.assignments[d]) busy[svc.assignments[d]] = true; });
+  return roster
+    .filter(m => m !== excludeName && !busy[m])
+    .map(m => ({ m, s: stats[m] || { past4: 0, upcoming: 0, last: '' } }))
+    .sort((a, b) =>
+      (a.s.upcoming + a.s.past4) - (b.s.upcoming + b.s.past4) ||
+      (a.s.last === b.s.last ? 0 : (a.s.last < b.s.last ? -1 : 1)))
+    .slice(0, 3)
+    .map(x => x.m);
 }
 
 /* ================= google sheet sync — pure parsers ================= */
@@ -362,6 +421,9 @@ function persistSettings() {
 function persistDepartments() {
   if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments });
   else saveLocal();
+}
+function persistNameMap(map) {
+  if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'nameMap'), { map: map });
 }
 function persistRequest(req) {
   if (fb) fb.setDoc(fb.doc(fb.db, 'requests', req.id), req);
@@ -940,12 +1002,13 @@ function renderManage() {
     if (localStorage.getItem('wds-unlock') !== pin) return renderUnlock();
   }
   const pendingCount = pendingRequestsCount();
-  const subs = [['services', 'Services'], ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')], ['people', 'People'], ['features', 'Features'], ['data', 'Data & Sync']];
+  const subs = [['services', 'Services'], ['planning', 'Planning'], ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')], ['people', 'People'], ['features', 'Features'], ['data', 'Data & Sync']];
   let html = '<div class="subnav">' + subs.map(s =>
     '<button data-act="sub" data-sub="' + s[0] + '"' + (ui.sub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>').join('') +
     (feat('editorLock') ? '<button class="lock-btn" data-act="lock-now">Lock</button>' : '') +
     '</div>';
   if (ui.sub === 'services') html += renderManageServices();
+  else if (ui.sub === 'planning') html += renderManagePlanning();
   else if (ui.sub === 'requests') html += renderManageRequests();
   else if (ui.sub === 'people') html += renderManagePeople();
   else if (ui.sub === 'features') html += renderFeatures();
@@ -1011,6 +1074,74 @@ function renderFeatures() {
     '<option value="">— None —</option>' +
     state.members.map(m => '<option value="' + esc(m) + '"' + (m === (state.settings.schedulerName || '') ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
     '</select></div>';
+  return html;
+}
+
+/* Coordinator Planning View: every upcoming double-duty conflict with
+   one-tap substitutes, unfilled slots for the next 4 weeks, and the
+   whole-roster workload table. */
+function renderManagePlanning() {
+  const t = todayISO();
+  const stats = workloadStats();
+  const upcoming = state.services
+    .filter(s => s.date >= t)
+    .sort((a, b) => a.date.localeCompare(b.date) || SERVICE_LABELS.indexOf(a.service) - SERVICE_LABELS.indexOf(b.service));
+
+  /* --- conflicts, with suggested subs --- */
+  let confHtml = '';
+  upcoming.forEach(svc => {
+    activeConflicts(svc).forEach(c => {
+      confHtml += '<div class="plan-conflict"><div class="plan-when"><b>' + esc(c.name) + '</b> — ' +
+        esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) +
+        ' <span class="plan-duties">(' + c.duties.map(esc).join(' + ') + ')</span></div>';
+      c.duties.forEach(duty => {
+        const subs = suggestSubs(svc, duty, c.name, stats);
+        confHtml += '<div class="plan-suggest"><span class="lab">' + esc(duty) + ' →</span> ' +
+          (subs.length
+            ? subs.map(m => '<button class="ghost mini" data-act="plan-assign" data-svc="' + svcId(svc) +
+                '" data-duty="' + esc(duty) + '" data-name="' + esc(m) + '">' + esc(m) + '</button>').join(' ')
+            : '<span class="plan-duties">no free member in this department</span>') +
+          '</div>';
+      });
+      confHtml += '</div>';
+    });
+  });
+  let html = '<div class="card"><div class="f-label">Double-duty conflicts — upcoming</div>' +
+    '<div class="f-desc">Tap a name to hand that duty to them. Already-acknowledged doubles (marked OK) are not listed.</div>' +
+    (confHtml || '<p class="hint" style="margin-top:12px">No unresolved double-bookings. 🎉</p>') + '</div>';
+
+  /* --- unfilled slots, next 28 days --- */
+  const horizon = (() => { const d = new Date(); d.setDate(d.getDate() + 28); return toISO(d); })();
+  let gapHtml = '';
+  upcoming.filter(s => s.date <= horizon).forEach(svc => {
+    const a = svc.assignments || {};
+    const missing = ALL_DUTIES_ORDER.filter(d => !a[d]);
+    if (missing.length && missing.length < ALL_DUTIES_ORDER.length) { // skip fully-empty (not yet planned) services
+      gapHtml += '<div class="plan-suggest"><span class="lab">' + esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) + '</span> ' +
+        '<span class="plan-duties">' + missing.length + ' unfilled: ' + missing.map(esc).join(', ') + '</span></div>';
+    }
+  });
+  html += '<div class="card"><div class="f-label">Unfilled duties — next 4 weeks</div>' +
+    (gapHtml || '<p class="hint" style="margin-top:12px">Every planned service is fully staffed.</p>') + '</div>';
+
+  /* --- workload table --- */
+  const rows = Object.keys(stats)
+    .map(m => ({ m, s: stats[m] }))
+    .filter(r => r.s.total > 0 || state.members.indexOf(r.m) !== -1)
+    .sort((a, b) => (b.s.past8 + b.s.upcoming) - (a.s.past8 + a.s.upcoming) || a.m.localeCompare(b.m));
+  html += '<div class="card"><div class="f-label">Workload — who is carrying what</div>' +
+    '<div class="f-desc">Duty counts. Sorted heaviest first (last 8 weeks + upcoming).</div>' +
+    '<div class="plan-scroll"><table class="plan-table"><tr>' +
+    '<th>Member</th><th>4 wk</th><th>8 wk</th><th>Upcoming</th><th>Year</th><th>Last served</th><th>Next</th></tr>' +
+    rows.map(r => {
+      const s = r.s;
+      const flag = s.upcoming === 0 ? ' <span class="warn-badge" title="Nothing upcoming">·</span>' : '';
+      return '<tr' + (s.past8 + s.upcoming === 0 ? ' class="plan-idle"' : '') + '><td>' + esc(r.m) + flag + '</td>' +
+        '<td>' + s.past4 + '</td><td>' + s.past8 + '</td><td>' + s.upcoming + '</td><td>' + s.total + '</td>' +
+        '<td>' + (s.last ? esc(fmtDate(s.last)) : '—') + '</td>' +
+        '<td>' + (s.next ? esc(fmtDate(s.next)) : '—') + '</td></tr>';
+    }).join('') +
+    '</table></div></div>';
   return html;
 }
 
@@ -1441,6 +1572,14 @@ function handleAct(act, el) {
     persistService(svc);
     afterDataChange();
   }
+  else if (act === 'plan-assign') {
+    const svc = findService(el.dataset.svc);
+    if (!svc) return;
+    if (!svc.assignments) svc.assignments = {};
+    svc.assignments[el.dataset.duty] = el.dataset.name;
+    persistService(svc);
+    afterDataChange();
+  }
   else if (act === 'export') {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -1459,10 +1598,10 @@ function handleAct(act, el) {
   }
   else if (act === 'unify-names') {
     if (!confirm('Merge leftover name variants (e.g. "B. Anthony L" → "B. Anthony") across members and all services?')) return;
-    const { membersChanged, membersMerged, touchedServices } = applyNameMap(NAME_UNIFY_MAP);
+    const { membersChanged, membersMerged, touchedServices } = applyNameMap(unifiedNameMap());
     if (membersChanged) persistMembers();
     touchedServices.forEach(persistService);
-    const canon = NAME_UNIFY_MAP[ui.me];
+    const canon = unifiedNameMap()[ui.me];
     if (canon) {
       ['wds-alerts-', 'wds-seen-', 'wds-unread-'].forEach(prefix => {
         const oldKey = prefix + ui.me, newKey = prefix + canon;
@@ -1728,6 +1867,16 @@ async function initFirebase(config) {
     }
     departmentsLoaded = true;
     render();
+  }, () => { /* connection errors are surfaced by the schedule listener */ });
+  fsMod.onSnapshot(fsMod.doc(db, 'app', 'nameMap'), snap => {
+    const map = snap.exists() ? (snap.data().map || {}) : null;
+    if (!map || !Object.keys(map).length) {
+      // brand-new doc: seed it once from the built-in map
+      sharedNameMap = NAME_UNIFY_MAP;
+      persistNameMap(NAME_UNIFY_MAP);
+    } else {
+      sharedNameMap = map;
+    }
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   fsMod.onSnapshot(fsMod.collection(db, 'requests'), snap => {
     state.requests = snap.docs.map(d => d.data());
