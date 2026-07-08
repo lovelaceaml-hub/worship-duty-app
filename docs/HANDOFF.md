@@ -118,13 +118,14 @@ members' devices.
 Two independent passcodes, both SHA-256-hashed, never stored in plain text:
 
 - **Site passcode** — gates the entire app when the `siteLock` feature is
-  on. Hash lives in `app/settings.sitePinHash` (default hash in app.js is
-  for `2217`). A device that unlocks stores the hash in
+  on. Hash lives in `app/settings.sitePinHash` (app.js holds only a fallback
+  hash for a brand-new device; the live code is not recorded here — ask the
+  coordinator). A device that unlocks stores the hash in
   `localStorage['wds-site-unlock']`; changing the passcode (Manage →
   Features → "Change the site passcode") relocks every other device.
 - **Editor passcode** — gates only the Manage tab when the `editorLock`
-  feature is on. Hash lives in `app/settings.pinHash` (initial passcode set
-  2026-07-03: `2026`). A device that unlocks stores the hash in
+  feature is on. Hash lives in `app/settings.pinHash` (the live code is not
+  recorded here — ask the coordinator). A device that unlocks stores the hash in
   `localStorage['wds-unlock']`; changing the passcode (Manage → Features →
   "Change the editor passcode") relocks every other device. "Lock" button
   relocks the current device only.
@@ -132,11 +133,47 @@ Two independent passcodes, both SHA-256-hashed, never stored in plain text:
   (`sitePinHash` or `pinHash`) on the `app/settings` document in the
   Firestore console — the app treats it as never-set and lets the next
   visitor create a new one. Full steps in `docs/PLAYBOOK.md`.
-- Honest security note: both are a strong deterrent for members, not bank
-  security. The database rules are open (`allow read, write: if true` on
-  `schedule/*`, `app/*`, `tokens/*` — the app has no login), so a technical
-  person could bypass the UI entirely. If that ever matters, add Firebase
-  Authentication + per-role rules (see `docs/PLAYBOOK.md` Brief 1).
+- Honest security note: the passcodes are a member-facing deterrent, not the
+  real security boundary. As of the Level 1 hardening below, *writes* now
+  require an authenticated (anonymous) session at the Firestore-rules layer,
+  so a technical person can no longer wipe/tamper the data by bypassing the
+  UI. Reads remain open (the schedule/roster are shared and the `.ics` feed
+  reads them); true read privacy would need real member accounts (Level 2/3).
+
+## Security hardening — Level 1 (anonymous auth + App Check + gated writes)
+
+Closes the "anyone on the internet can wipe the database" risk while staying
+invisible to members (no login). Three things changed in code:
+`initFirebase()` in `app.js` signs in anonymously and (optionally) starts App
+Check; `firestore.rules` now requires `request.auth != null` for writes to
+`schedule/app/tokens/requests`; the leaked passcodes were scrubbed from docs.
+
+**One-time Firebase console setup (owner does this — cannot be automated):**
+1. **Authentication → Sign-in method → Anonymous → Enable.**
+2. **App Check** (optional but recommended): register the web app with a
+   reCAPTCHA v3 provider, then paste the reCAPTCHA **site key** into
+   `window.RECAPTCHA_SITE_KEY` in `firebase-config.js`. Leave it `''` to skip.
+   Do **not** turn on Firestore App Check *enforcement* yet — it is
+   project-wide and would block the song app until it also ships App Check.
+
+**Deploy ORDER matters** (reads stay open, so viewing never breaks, but a
+wrong order breaks *writes*):
+1. Enable Anonymous auth (step 1 above) **first**.
+2. Deploy the updated client so devices start signing in:
+   `npx firebase-tools deploy --only hosting`.
+3. **Then** deploy the gated rules: `npx firebase-tools deploy --only firestore:rules`.
+If the rules go out before anonymous auth is enabled + the new client is live,
+writes (editor saves, sheet sync) will be rejected until you finish the order.
+
+**Shared-project caveat:** `firestore.rules` also governs the song app
+(`songStats`/`setlists`, hosted `lv-zion-songs`). Those stay open here; before
+gating them or enabling App Check enforcement, ship the same anonymous-auth +
+App-Check integration in the song app. Verify the song app only *reads*
+`app/nameMap` (it does today) before relying on the `app/*` write gate.
+
+**Verified:** `firestore.rules` passes a `@firebase/rules-unit-testing`
+emulator suite (15/15) — unauth writes denied on worship collections, authed
+writes allowed, `songStats`/`setlists` still open, `sent` denied for all.
 
 ## Feature toggles (added 2026-07-03, expanded same day)
 

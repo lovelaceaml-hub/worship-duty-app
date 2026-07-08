@@ -24,7 +24,10 @@ const DEPARTMENTS_SEED = {
   'Media': []
 };
 const DATA_KEY = 'wds-data-v2';
-const DEFAULT_SITE_HASH = '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b'; // SHA-256 of '2217'
+// Fallback site-passcode hash, used only on a brand-new device before app/
+// settings.sitePinHash is set. The live code is managed in Manage → Features
+// and its plaintext is intentionally not recorded here (see docs).
+const DEFAULT_SITE_HASH = '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b';
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv';
 
 /* Name cleanup after the sheet's Raw Data tab was tidied up — maps old
@@ -1898,6 +1901,32 @@ async function initFirebase(config) {
   const appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
   const fsMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
   const app = appMod.initializeApp(config);
+
+  // App Check — attests requests come from the real app. Activates only once a
+  // reCAPTCHA v3 site key is configured (window.RECAPTCHA_SITE_KEY); until then
+  // it's a no-op so the app keeps working during rollout. Must run right after
+  // initializeApp, before any other Firebase service makes a request. NOTE: do
+  // NOT turn on Firestore App Check *enforcement* in the console until the song
+  // app (shared project) also ships this — enforcement is project-wide.
+  if (window.RECAPTCHA_SITE_KEY) {
+    try {
+      const acMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js');
+      acMod.initializeAppCheck(app, {
+        provider: new acMod.ReCaptchaV3Provider(window.RECAPTCHA_SITE_KEY),
+        isTokenAutoRefreshEnabled: true
+      });
+    } catch (e) { console.warn('App Check init failed:', e); }
+  }
+
+  // Anonymous auth — an invisible sign-in so the Firestore write rules can
+  // require an authenticated context without adding any login UI for members.
+  // Reads stay open, so if this fails (e.g. Anonymous auth not yet enabled in
+  // the console) the app still shows data; only writes would be rejected.
+  try {
+    const authMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    await authMod.signInAnonymously(authMod.getAuth(app));
+  } catch (e) { console.warn('Anonymous sign-in failed:', e); }
+
   const db = fsMod.getFirestore(app);
   fb = {
     db,

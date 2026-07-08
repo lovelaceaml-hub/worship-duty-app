@@ -62,12 +62,13 @@ expand it → assign people or edit the choir song line.
 
 There are two independent passcodes:
 
-| Passcode | Purpose | Initial value | Where it's stored |
+| Passcode | Purpose | Value | Where it's stored |
 |---|---|---|---|
-| **Site passcode** | Gates the entire app — nobody sees anything until they enter it once per device | `2217` | `app/settings.sitePinHash` (Firestore) |
-| **Editor passcode** | Gates only the Manage tab | `2026` | `app/settings.pinHash` (Firestore) |
+| **Site passcode** | Gates the entire app — nobody sees anything until they enter it once per device | ask the coordinator | `app/settings.sitePinHash` (Firestore) |
+| **Editor passcode** | Gates only the Manage tab | ask the coordinator | `app/settings.pinHash` (Firestore) |
 
-Both are stored as SHA-256 hashes, never as plain text.
+Both are stored as SHA-256 hashes, never as plain text. The live codes are not
+written down in this repo — the coordinator shares them directly.
 
 **To change the site passcode:** Manage → Features → "Change the site
 passcode." This instantly relocks every other device — everyone will need
