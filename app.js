@@ -1039,8 +1039,11 @@ function renderMy() {
       if (si > 0) html += '<div class="svc-sep"></div>'; // divider between services on the same day
       html += '<div class="what">' + fmtTime(svc.time) + ' · ' + esc(svc.worship) + ' · ' + esc(svc.service) + '</div>';
       se.duties.forEach(d => {
-        html += '<div class="role"><span class="dot-c" style="background:' + d.cat.color + '"></span>' + esc(d.duty) + '</div>' +
-          renderRequestChange(d, se.id + ':' + d.duty);
+        const key = se.id + ':' + d.duty;
+        html += '<div class="role"><span class="dot-c" style="background:' + d.cat.color + '"></span>' +
+          '<span class="rname">' + esc(d.duty) + '</span>' +
+          requestChangeTrigger(d, key) + '</div>' +
+          requestChangeForm(d, key);
       });
       if (feat('whoElse')) {
         const wkey = se.id + ':who';
@@ -1060,23 +1063,30 @@ function findPendingRequest(svcIdVal, duty, name) {
   return state.requests.find(r => r.svcId === svcIdVal && r.duty === duty && r.name === name && r.status === 'pending');
 }
 
-/* "Request change" affordance under a duty card in My Duties: either a muted
-   "pending" tag, the inline note form, or the linkish button to open it. */
-function renderRequestChange(d, key) {
+/* Compact "Request change" affordance that sits at the end of the duty's role
+   line: a small "Pending" tag if a request is already open, nothing while the
+   note form is showing (the form below carries its own Cancel), else a small
+   link to open the form. Pairs with requestChangeForm() rendered under the row. */
+function requestChangeTrigger(d, key) {
   if (!feat('changeRequests') || !ui.me) return '';
+  if (findPendingRequest(svcId(d.svc), d.duty, ui.me)) return '<span class="req-pending-tag">Pending</span>';
+  if (ui.reqForm && ui.reqForm.key === key) return '';
+  return '<button class="linkish req-change" data-act="req-open" data-key="' + esc(key) + '">Request change</button>';
+}
+
+/* The note form for a change request, rendered full-width below the role line
+   (only for the duty whose trigger was opened). */
+function requestChangeForm(d, key) {
+  if (!feat('changeRequests') || !ui.me) return '';
+  if (!(ui.reqForm && ui.reqForm.key === key)) return '';
   const id = svcId(d.svc);
-  const pending = findPendingRequest(id, d.duty, ui.me);
-  if (pending) return '<div class="req-pending-tag">Request pending</div>';
-  if (ui.reqForm && ui.reqForm.key === key) {
-    return '<div class="req-form">' +
-      '<textarea data-chg="req-note" data-key="' + esc(key) + '" placeholder="Why do you need a change? (optional)">' +
-      esc(ui.reqForm.note || '') + '</textarea>' +
-      '<div class="req-actions">' +
-      '<button class="primary" data-act="req-submit" data-key="' + esc(key) + '" data-svc="' + esc(id) + '" data-duty="' + esc(d.duty) + '">Submit</button>' +
-      '<button class="ghost" data-act="req-cancel">Cancel</button>' +
-      '</div></div>';
-  }
-  return '<button class="linkish" data-act="req-open" data-key="' + esc(key) + '">Request change</button>';
+  return '<div class="req-form">' +
+    '<textarea data-chg="req-note" data-key="' + esc(key) + '" placeholder="Why do you need a change? (optional)">' +
+    esc(ui.reqForm.note || '') + '</textarea>' +
+    '<div class="req-actions">' +
+    '<button class="primary" data-act="req-submit" data-key="' + esc(key) + '" data-svc="' + esc(id) + '" data-duty="' + esc(d.duty) + '">Submit</button>' +
+    '<button class="ghost" data-act="req-cancel">Cancel</button>' +
+    '</div></div>';
 }
 
 function statusChip(status) {
