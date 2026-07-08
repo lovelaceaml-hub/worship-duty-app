@@ -84,6 +84,19 @@ members' devices.
   member names appearing in the sheet's Member column are added to
   `app/members` automatically. A duty name the app doesn't recognize is
   skipped and surfaced as a warning (not silently dropped, not a crash).
+- **Clearing a duty:** a duty row whose **Member cell is blank** (Date/
+  Service/Duty still filled in) now explicitly clears that slot — the old
+  name is removed on the next sync. **Limitation:** *deleting* the row
+  entirely does **not** clear the slot (an absent row is indistinguishable
+  from "the sheet doesn't manage this duty", and clearing on absence would
+  wipe in-app-only assignments the app deliberately preserves). To take
+  someone off a duty via the sheet, blank the Member cell rather than delete
+  the row — or clear it in Manage.
+- **Name unification:** both the in-app sync and the every-2-hours server
+  sync (`scheduledSheetSync`) now canonicalize sheet names through
+  `app/nameMap` before merging, so variant spellings (e.g. `B. Gio` →
+  `B. Giomar`) can't be re-introduced by the sheet and break push / `.ics`
+  targeting keyed on the canonical name.
 - **Choir Song rows:** a row with Duty exactly `Choir Song` is special-cased
   in `sheetRowsToServices()` — its Member column holds a song title, which is
   written to that service's `choirSong` field (never added to

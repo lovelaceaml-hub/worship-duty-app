@@ -326,7 +326,10 @@ function sheetRowsToServices(rows, today) {
     const cell = i => (i >= 0 && i < row.length ? String(row[i] == null ? '' : row[i]).trim() : '');
     const rawDate = cell(iDate), serviceLabel = cell(iService);
     const duty = cell(iDuty), member = cell(iMember);
-    if (!rawDate || !serviceLabel || !duty || !member) continue;
+    // A blank Member cell in an otherwise-valid duty row is an explicit
+    // "clear this duty" (mergeSheetServices writes '' over the old name).
+    // Date/Service/Duty are still required; a *deleted* row leaves the slot.
+    if (!rawDate || !serviceLabel || !duty) continue;
     const md = parseSheetDate(rawDate);
     if (!md) continue;
     const iso = inferYearISO(md.month, md.day, today);
@@ -343,11 +346,11 @@ function sheetRowsToServices(rows, today) {
       result.services.push(svc);
     }
     if (isChoirSong) {
-      svc.choirSong = member;
+      if (member) svc.choirSong = member; // never clear the song on a blank cell
       continue;
     }
-    svc.assignments[duty] = member;
-    membersSeen[member] = true;
+    svc.assignments[duty] = member; // '' explicitly clears the slot
+    if (member) membersSeen[member] = true;
   }
   result.members = Object.keys(membersSeen).sort();
   return result;
@@ -359,6 +362,7 @@ let state = { members: [], services: [], settings: { features: {}, pinHash: '' }
 let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
 let settingsLoaded = false; // true once shared settings arrived (or local mode)
 let departmentsLoaded = false; // true once the departments doc arrived (or local mode)
+let membersLoaded = false; // true once the members doc arrived (or local mode)
 
 const ui = {
   tab: 'schedule',
@@ -439,18 +443,24 @@ function resolveRequest(id, status) {
 }
 function persistAll() {
   if (!fb) { saveLocal(); return; }
-  const batch = fb.writeBatch(fb.db);
+  // Collect every write as a thunk, then commit in chunks — a full seed or a
+  // large import can exceed Firestore's 500-op single-batch cap.
+  const ops = [];
   const keep = {};
   state.services.forEach(svc => {
     const id = svcId(svc);
     keep[id] = true;
-    batch.set(fb.doc(fb.db, 'schedule', id), svc);
+    ops.push(b => b.set(fb.doc(fb.db, 'schedule', id), svc));
   });
-  (fb.knownIds || []).forEach(id => { if (!keep[id]) batch.delete(fb.doc(fb.db, 'schedule', id)); });
-  batch.set(fb.doc(fb.db, 'app', 'members'), { list: state.members });
-  batch.set(fb.doc(fb.db, 'app', 'settings'), state.settings);
-  batch.set(fb.doc(fb.db, 'app', 'departments'), { map: state.departments });
-  batch.commit();
+  (fb.knownIds || []).forEach(id => { if (!keep[id]) ops.push(b => b.delete(fb.doc(fb.db, 'schedule', id))); });
+  ops.push(b => b.set(fb.doc(fb.db, 'app', 'members'), { list: state.members }));
+  ops.push(b => b.set(fb.doc(fb.db, 'app', 'settings'), state.settings));
+  ops.push(b => b.set(fb.doc(fb.db, 'app', 'departments'), { map: state.departments }));
+  for (let i = 0; i < ops.length; i += 450) {
+    const batch = fb.writeBatch(fb.db);
+    ops.slice(i, i + 450).forEach(fn => fn(batch));
+    batch.commit();
+  }
 }
 
 /* ================= sorting / filtering ================= */
@@ -475,6 +485,14 @@ function dutiesFor(member, list) {
 
 function notifyGranted() { return 'Notification' in window && Notification.permission === 'granted'; }
 function notifyOn() { return notifyGranted() && localStorage.getItem('wds-notify') === '1'; }
+
+/* True when this device has a live FCM token registered, so the Cloud Functions
+   already deliver new-duty/reminder pushes to it. When true we suppress the
+   client-side sysNotify for those events to avoid a duplicate (double-buzz);
+   local-only mode and browsers without FCM fall back to the client notification. */
+function serverPushActive() {
+  return !!(fb && fb.messaging && localStorage.getItem('wds-fcm-token'));
+}
 
 async function sysNotify(title, body) {
   if (!notifyOn()) return;
@@ -562,7 +580,7 @@ function checkNewDuties() {
     fresh.forEach(k => {
       const d = current[k];
       alerts.unshift({ t: Date.now(), txt: 'New duty: ' + dutyLabel(d) });
-      sysNotify('New duty assigned to you', dutyLabel(d));
+      if (!serverPushActive()) sysNotify('New duty assigned to you', dutyLabel(d));
     });
     localStorage.setItem('wds-alerts-' + ui.me, JSON.stringify(alerts.slice(0, 30)));
     if (ui.tab !== 'my') {
@@ -586,7 +604,7 @@ function checkReminders() {
     if (when > now && when - now < 24 * 3600 * 1000 && !reminded[key]) {
       reminded[key] = now;
       changed = true;
-      sysNotify('Duty reminder', dutyLabel(d));
+      if (!serverPushActive()) sysNotify('Duty reminder', dutyLabel(d));
       addBanner('Reminder: ' + dutyLabel(d), false);
     }
   });
@@ -687,6 +705,16 @@ async function syncFromSheet(manual) {
   }
 
   const parsed = sheetRowsToServices(parseCSV(text), new Date());
+  // Canonicalize sheet names before merging so the sheet can't re-introduce
+  // variant spellings the app has already unified (keeps push + .ics targeting
+  // aligned with the canonical name). Blank '' clears pass through unchanged.
+  const nameMap = unifiedNameMap();
+  const canon = n => (n && nameMap[n]) || n;
+  parsed.services.forEach(svc => {
+    const a = svc.assignments || {};
+    Object.keys(a).forEach(duty => { a[duty] = canon(a[duty]); });
+  });
+  parsed.members = Array.from(new Set(parsed.members.map(canon))).sort();
   const merge = mergeSheetServices(parsed.services);
 
   // add any new members the sheet introduced
@@ -723,8 +751,17 @@ async function syncFromSheet(manual) {
 
 /* Run an automatic sync at most once per page load. */
 let sheetSyncTried = false;
+let autoSyncWaits = 0;
 function autoSyncOnce() {
   if (sheetSyncTried) return;
+  // Roster auto-add (mergeSheetServices → addToDept) needs the members and
+  // departments docs; if the sync fired before they land, new names silently
+  // miss their department. Wait for both (bounded ~10s so we never stall).
+  if (fb && !(membersLoaded && departmentsLoaded) && autoSyncWaits < 20) {
+    autoSyncWaits++;
+    setTimeout(autoSyncOnce, 500);
+    return;
+  }
   sheetSyncTried = true;
   syncFromSheet(false);
 }
@@ -739,18 +776,39 @@ function scheduleSyncSoon() {
 
 /* ================= calendar export ================= */
 
-function icsEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,'); }
+function icsEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,'); }
+
+/* A UTC timestamp as YYYYMMDDTHHMMSSZ, for DTSTAMP. */
+function icsStamp(d) {
+  const p = n => (n < 10 ? '0' : '') + n;
+  return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + 'T' +
+    p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + 'Z';
+}
+
+/* VTIMEZONE for America/Los_Angeles — anchors event times to Pacific wall-clock
+   (matching push reminders) instead of floating to the subscriber's timezone. */
+const LA_VTIMEZONE = [
+  'BEGIN:VTIMEZONE', 'TZID:America/Los_Angeles',
+  'BEGIN:DAYLIGHT', 'TZOFFSETFROM:-0800', 'TZOFFSETTO:-0700', 'TZNAME:PDT',
+  'DTSTART:19700308T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU', 'END:DAYLIGHT',
+  'BEGIN:STANDARD', 'TZOFFSETFROM:-0700', 'TZOFFSETTO:-0800', 'TZNAME:PST',
+  'DTSTART:19701101T020000', 'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU', 'END:STANDARD',
+  'END:VTIMEZONE'
+];
 
 function downloadICS() {
   const duties = dutiesFor(ui.me);
   if (!duties.length) { alert('No upcoming duties to add.'); return; }
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//LV Zion//Worship Duties//EN'];
+  const stamp = icsStamp(new Date());
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//LV Zion//Worship Duties//EN',
+    'X-WR-TIMEZONE:America/Los_Angeles'].concat(LA_VTIMEZONE);
   duties.forEach(d => {
     const dt = d.svc.date.replace(/-/g, '') + 'T' + (d.svc.time || '12:00').replace(':', '') + '00';
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + svcId(d.svc) + '-' + d.duty.replace(/[^a-zA-Z0-9]/g, '') + '@lvzion',
-      'DTSTART:' + dt,
+      'DTSTAMP:' + stamp,
+      'DTSTART;TZID=America/Los_Angeles:' + dt,
       'DURATION:PT1H30M',
       'SUMMARY:' + icsEscape(d.duty + ' (' + d.svc.worship + ' ' + d.svc.service + ')'),
       'DESCRIPTION:' + icsEscape('Worship duty: ' + d.duty),
@@ -792,17 +850,39 @@ function render() {
   tabManage.innerHTML = 'Manage' + (pendingRequestsCount() > 0 && ui.tab !== 'manage' ? '<span class="dot"></span>' : '');
 
   const view = document.getElementById('view');
-  if (ui.tab === 'schedule') view.innerHTML = renderSchedule();
-  else if (ui.tab === 'my') view.innerHTML = renderMy();
-  else view.innerHTML = renderManage();
+  // A background Firestore snapshot calls render(); replacing innerHTML would
+  // wipe whatever the editor is typing (service field, member name, sheet URL,
+  // change-request note) and drop focus. Skip the view refresh while a text
+  // input inside #view is focused — the next render() after they blur catches up.
+  if (!viewHasFocusedInput(view)) {
+    if (ui.tab === 'schedule') view.innerHTML = renderSchedule();
+    else if (ui.tab === 'my') view.innerHTML = renderMy();
+    else view.innerHTML = renderManage();
+  }
   renderBanners();
+}
+
+/* Placeholder shown between page load and the first Firestore snapshot, so the
+   screen isn't blank (or a misleading "no services" empty state) while data loads. */
+function renderLoading() {
+  const view = document.getElementById('view');
+  if (view) view.innerHTML = '<div class="empty">Loading schedule…</div>';
+}
+
+function viewHasFocusedInput(view) {
+  const a = document.activeElement;
+  if (!a || !view || !view.contains(a)) return false;
+  if (a.tagName === 'TEXTAREA') return true;
+  if (a.tagName !== 'INPUT') return false;
+  const t = (a.getAttribute('type') || 'text').toLowerCase();
+  return ['text', 'search', 'url', 'password', 'number', 'email', 'tel', 'date', 'time'].indexOf(t) !== -1;
 }
 
 function renderBanners() {
   if (feat('siteLock') && !siteUnlocked()) { document.getElementById('banners').innerHTML = ''; return; }
   document.getElementById('banners').innerHTML = ui.banners.map((b, i) =>
     '<div class="banner' + (b.alert ? ' alert' : '') + '"><span>' + esc(b.txt) + '</span>' +
-    '<button class="x" data-act="dismiss-banner" data-i="' + i + '">✕</button></div>'
+    '<button class="x" data-act="dismiss-banner" data-i="' + i + '" aria-label="Dismiss">✕</button></div>'
   ).join('');
 }
 
@@ -924,7 +1004,11 @@ function renderMy() {
   }
 
   const duties = dutiesFor(ui.me);
-  if (!duties.length) return html + renderYourRequests();
+  if (!duties.length) {
+    html += '<div class="empty">You have no upcoming duties right now. ' +
+      'You\'ll see them here — and be notified — as soon as one is assigned to you.</div>';
+    return html + renderYourRequests();
+  }
 
   html += '<p class="hint">You have <b>' + duties.length + '</b> upcoming dut' + (duties.length > 1 ? 'ies' : 'y') + '.</p>';
   duties.forEach(d => {
@@ -1021,7 +1105,7 @@ function renderSiteLock() {
     '<div class="lock-title">This schedule is private</div>' +
     '<p class="hint">Enter the 4-digit passcode.</p>' +
     '<form class="add-row" data-act="site-unlock">' +
-    '<input type="password" id="site-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" required>' +
+    '<input type="password" id="site-pin-input" aria-label="Site passcode" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" required>' +
     '<button class="primary" type="submit">Enter</button></form>' +
     (ui.sitePinError ? '<p class="pin-error">' + esc(ui.sitePinError) + '</p>' : '') +
     '</div>';
@@ -1032,7 +1116,7 @@ function renderUnlock() {
     '<div class="lock-title">Editing is locked</div>' +
     '<p class="hint">Enter the editor passcode to manage the schedule. Viewing never needs a passcode.</p>' +
     '<form class="add-row" data-act="unlock">' +
-    '<input type="password" id="pin-input" placeholder="Passcode" autocomplete="off" required>' +
+    '<input type="password" id="pin-input" aria-label="Editor passcode" placeholder="Passcode" autocomplete="off" required>' +
     '<button class="primary" type="submit">Unlock</button></form>' +
     (ui.pinError ? '<p class="pin-error">' + esc(ui.pinError) + '</p>' : '') +
     '</div>';
@@ -1043,8 +1127,8 @@ function renderCreatePin() {
     '<div class="lock-title">Create the editor passcode</div>' +
     '<p class="hint">No passcode exists yet. Whoever sets it first becomes the editor — afterwards it is required to open Manage on any device.</p>' +
     '<form class="add-row" data-act="set-pin">' +
-    '<input type="password" id="pin-new" placeholder="New passcode" autocomplete="off" required>' +
-    '<input type="password" id="pin-confirm" placeholder="Repeat it" autocomplete="off" required>' +
+    '<input type="password" id="pin-new" aria-label="New editor passcode" placeholder="New passcode" autocomplete="off" required>' +
+    '<input type="password" id="pin-confirm" aria-label="Repeat new editor passcode" placeholder="Repeat it" autocomplete="off" required>' +
     '<button class="primary" type="submit">Set passcode</button></form>' +
     (ui.pinError ? '<p class="pin-error">' + esc(ui.pinError) + '</p>' : '') +
     '</div>';
@@ -1056,17 +1140,17 @@ function renderFeatures() {
     html += '<div class="card feature-row">' +
       '<div><div class="f-label">' + esc(f.label) + '</div><div class="f-desc">' + esc(f.desc) + '</div></div>' +
       '<label class="switch"><input type="checkbox" data-chg="feature" data-id="' + f.id + '"' +
-      (feat(f.id) ? ' checked' : '') + '><span class="track"></span></label>' +
+      ' aria-label="' + esc(f.label) + '"' + (feat(f.id) ? ' checked' : '') + '><span class="track"></span></label>' +
       '</div>';
   });
   html += '<div class="card"><div class="f-label">Change the editor passcode</div>' +
     '<form class="add-row" style="margin-top:12px" data-act="change-pin">' +
-    '<input type="password" id="pin-change" placeholder="New passcode" autocomplete="off" required>' +
+    '<input type="password" id="pin-change" aria-label="New editor passcode" placeholder="New passcode" autocomplete="off" required>' +
     '<button class="ghost" type="submit">Change</button></form></div>';
   html += '<div class="card"><div class="f-label">Change the site passcode</div>' +
     '<div class="f-desc">The 4-digit code everyone enters to open the app.</div>' +
     '<form class="add-row" style="margin-top:12px" data-act="change-site-pin">' +
-    '<input type="password" id="site-pin-change" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="New passcode" autocomplete="off" required>' +
+    '<input type="password" id="site-pin-change" aria-label="New site passcode" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="New passcode" autocomplete="off" required>' +
     '<button class="ghost" type="submit">Change</button></form></div>';
   html += '<div class="card"><div class="f-label">Scheduler</div>' +
     '<div class="f-desc">Who receives a notification when a member submits a change request.</div>' +
@@ -1249,9 +1333,9 @@ function renderManageServices() {
     const id = svcId(svc);
     const open = ui.expanded['m:' + id];
     html += '<div class="card">' +
-      '<div class="card-head" style="cursor:pointer" data-act="expand" data-id="m:' + id + '">' +
+      '<button type="button" class="card-head" data-act="expand" data-id="m:' + id + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
       '<span class="svc-title">' + esc(svc.worship) + ' <small>· ' + esc(svc.service) + '</small></span>' +
-      '<span class="time">' + fmtTime(svc.time) + ' ' + (open ? '▲' : '▼') + '</span></div>';
+      '<span class="time">' + fmtTime(svc.time) + ' ' + (open ? '▲' : '▼') + '</span></button>';
     if (open) {
       html += '<div class="edit-grid">' +
         '<span class="lab">Date</span><input type="date" value="' + esc(svc.date) + '" data-chg="svc-field" data-svc="' + id + '" data-field="date">' +
@@ -1763,6 +1847,11 @@ function handleChg(chg, el) {
       try {
         const obj = JSON.parse(reader.result);
         if (obj && Array.isArray(obj.members) && Array.isArray(obj.services)) {
+          // Backfill sections an older/partial backup may omit, so persistAll()
+          // never writes { map: undefined } etc. into Firestore (mirrors loadLocal).
+          if (!obj.settings) obj.settings = { features: {}, pinHash: '' };
+          if (!obj.departments) obj.departments = {};
+          if (!Array.isArray(obj.requests)) obj.requests = [];
           state = obj;
           persistAll();
           afterDataChange();
@@ -1834,6 +1923,7 @@ async function initFirebase(config) {
       // brand-new database: upload the spreadsheet schedule once
       state = loadLocal() || seedState();
       persistAll();
+      setSyncPill(true); // data is now flowing — safe to claim "Live sync on"
       afterDataChange();
       scheduleSyncSoon();
       return;
@@ -1841,6 +1931,7 @@ async function initFirebase(config) {
     firstSnapshot = false;
     state.services = snap.docs.map(d => d.data());
     fb.knownIds = snap.docs.map(d => d.id);
+    setSyncPill(true); // data has landed — flip the pill to live now, not before
     afterDataChange();
     scheduleSyncSoon(); // auto-pull from the sheet once, shortly after real data lands
   }, err => {
@@ -1849,7 +1940,9 @@ async function initFirebase(config) {
     setSyncPill(false);
   });
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'members'), snap => {
-    if (snap.exists()) { state.members = snap.data().list || []; render(); }
+    if (snap.exists()) state.members = snap.data().list || [];
+    membersLoaded = true;
+    render();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'settings'), snap => {
     if (snap.exists()) {
@@ -1882,23 +1975,25 @@ async function initFirebase(config) {
     state.requests = snap.docs.map(d => d.data());
     render();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
-  setSyncPill(true);
   if (notifyOn()) registerPush();
 }
 
 function init() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (window.FIREBASE_CONFIG) {
+    renderLoading();
     initFirebase(window.FIREBASE_CONFIG).catch(() => {
       addBanner('Firebase config is invalid — running on this device only.', true);
       state = loadLocal() || seedState();
       departmentsLoaded = true;
+      membersLoaded = true;
       setSyncPill(false);
       afterDataChange();
     });
   } else {
     state = loadLocal() || seedState();
     departmentsLoaded = true;
+    membersLoaded = true;
     saveLocal();
     setSyncPill(false);
     afterDataChange();

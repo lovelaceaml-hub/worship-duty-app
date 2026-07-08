@@ -33,22 +33,31 @@ function bodyFor(duty, svc) {
     fmtDate(svc.date) + ' at ' + fmtTime(svc.time);
 }
 
-/* ---- shared send helper: names -> tokens -> data-only multicast ----
+/* ---- shared send helpers: names -> tokens -> data-only multicast ----
    Prunes token docs FCM reports as invalid/unregistered on any send. */
-async function sendToNames(names, title, bodyFn) {
-  const wanted = new Set(names.filter(Boolean));
-  if (!wanted.size) return;
+
+/* Load every token doc once as [{ token, name }]. Callers that send in a loop
+   (dutyReminders) load this a single time instead of re-scanning per recipient. */
+async function loadTokenTargets() {
   const snap = await db.collection('tokens').get();
   const targets = []; // { token, name }
   snap.forEach(d => {
     const data = d.data();
-    if (data && wanted.has(data.name)) targets.push({ token: d.id, name: data.name });
+    if (data && data.name) targets.push({ token: d.id, name: data.name });
   });
-  if (!targets.length) return;
+  return targets;
+}
+
+/* Send title/body to every already-loaded target whose name is in `names`. */
+async function sendToTargets(targets, names, title, bodyFn) {
+  const wanted = new Set(names.filter(Boolean));
+  if (!wanted.size) return;
+  const picked = targets.filter(t => wanted.has(t.name));
+  if (!picked.length) return;
   // Bodies can differ per recipient, so batch tokens by identical body and
   // send one data-only multicast per distinct body.
   const byBody = {};
-  targets.forEach(t => {
+  picked.forEach(t => {
     const body = bodyFn(t.name);
     (byBody[body] || (byBody[body] = [])).push(t.token);
   });
@@ -74,15 +83,26 @@ async function sendToNames(names, title, bodyFn) {
     db.collection('tokens').doc(tok).delete().catch(() => {})));
 }
 
+/* One-shot convenience for callers that send once (loads tokens then sends). */
+async function sendToNames(names, title, bodyFn) {
+  const wanted = new Set(names.filter(Boolean));
+  if (!wanted.size) return;
+  await sendToTargets(await loadTokenTargets(), names, title, bodyFn);
+}
+
 /* ---- 1. new-duty alerts ---- */
 exports.onScheduleWrite = onDocumentWritten(
   { document: 'schedule/{id}', region: REGION },
   async (event) => {
     const after = event.data && event.data.after;
     if (!after || !after.exists) return; // deleted — nothing to alert
+    // Brand-new service doc (initial seed, bulk import, or a fresh sheet-created
+    // service): every assignment would read as "new", fanning a mass push out to
+    // everyone at once. Skip — members still get the in-app badge and the
+    // day-before reminder. Only alert on edits to an existing service.
+    if (!(event.data.before && event.data.before.exists)) return;
     const svc = after.data() || {};
-    const before = event.data.before && event.data.before.exists
-      ? event.data.before.data() : {};
+    const before = event.data.before.data() || {};
     const beforeA = (before && before.assignments) || {};
     const afterA = svc.assignments || {};
     // for each duty whose member CHANGED to a new non-empty name
@@ -106,6 +126,10 @@ exports.dutyReminders = onSchedule(
     const cutoff = yesterday.toISOString().slice(0, 10); // date >= today-1
     const snap = await db.collection('schedule').where('date', '>=', cutoff).get();
 
+    // Load every token once for the whole run instead of re-scanning the
+    // collection per assigned duty (reads were services × duties × tokens).
+    const tokenTargets = await loadTokenTargets();
+
     for (const d of snap.docs) {
       const svc = d.data() || {};
       if (!svc.date) continue;
@@ -122,8 +146,14 @@ exports.dutyReminders = onSchedule(
         const marker = db.collection('sent').doc(markerId);
         const existing = await marker.get();
         if (existing.exists) continue;
-        await sendToNames([name], 'Duty reminder', () => bodyFor(duty, svc));
+        // Mark BEFORE sending: a crash between send and mark would otherwise
+        // re-send next hour. We accept a rare missed reminder over a double one.
         await marker.set({ t: now });
+        try {
+          await sendToTargets(tokenTargets, [name], 'Duty reminder', () => bodyFor(duty, svc));
+        } catch (e) {
+          logger.error('dutyReminders: send failed', { markerId, error: String(e) });
+        }
       }
     }
     // prune markers older than 7 days
@@ -244,25 +274,39 @@ exports.scheduledSheetSync = onSchedule(
       return;
     }
 
+    // Canonicalize sheet names before merging so the sync can't re-introduce
+    // variant spellings the app has already unified (which would silently
+    // misdirect push and .ics feeds keyed on the canonical name). Blank ''
+    // clears (see sheet-lib) pass through unchanged.
+    const nameMapSnap = await db.collection('app').doc('nameMap').get();
+    const nameMap = (nameMapSnap.exists && nameMapSnap.data().map) || {};
+    parsed.services.forEach(svc => {
+      const a = svc.assignments || {};
+      Object.keys(a).forEach(duty => { a[duty] = icsLib.canonName(a[duty], nameMap); });
+    });
+    parsed.members = Array.from(new Set(parsed.members.map(m => icsLib.canonName(m, nameMap)))).sort();
+
     const existingSnap = await db.collection('schedule').get();
     const existingById = {};
     existingSnap.forEach(d => { existingById[d.id] = d.data() || {}; });
 
     const plan = sheetLib.planMerge(parsed.services, existingById);
-    const batch = db.batch();
-    plan.creates.forEach(c => batch.set(db.collection('schedule').doc(c.id), c.svc));
-    plan.updates.forEach(u => batch.set(db.collection('schedule').doc(u.id), u.patch, { merge: true }));
 
     // grow the members list with any new names from the sheet
     const membersSnap = await db.collection('app').doc('members').get();
     const members = (membersSnap.exists && membersSnap.data().list) || [];
-    const newMembers = parsed.members.filter(m => members.indexOf(m) === -1);
-    if (newMembers.length) {
-      batch.set(db.collection('app').doc('members'), { list: members.concat(newMembers).sort() });
-    }
+    const newMembers = parsed.members.filter(m => m && members.indexOf(m) === -1);
 
+    // Use a BulkWriter so a large import can't blow past Firestore's 500-op
+    // single-batch cap (it auto-chunks and throttles under the hood).
     if (plan.creates.length || plan.updates.length || newMembers.length) {
-      await batch.commit();
+      const writer = db.bulkWriter();
+      plan.creates.forEach(c => writer.set(db.collection('schedule').doc(c.id), c.svc));
+      plan.updates.forEach(u => writer.set(db.collection('schedule').doc(u.id), u.patch, { merge: true }));
+      if (newMembers.length) {
+        writer.set(db.collection('app').doc('members'), { list: members.concat(newMembers).sort() });
+      }
+      await writer.close();
     }
     logger.info('scheduledSheetSync: done', {
       added: plan.creates.length, updated: plan.updates.length, newMembers: newMembers.length
