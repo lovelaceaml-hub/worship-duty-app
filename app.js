@@ -1014,21 +1014,42 @@ function renderMy() {
   }
 
   html += '<p class="hint">You have <b>' + duties.length + '</b> upcoming dut' + (duties.length > 1 ? 'ies' : 'y') + '.</p>';
+
+  // Group a member's duties by day (and, within a day, by service) so every
+  // duty on the same date shares one card. `dutiesFor` already returns them in
+  // date → time → category order, so first-seen order here is the display order.
+  const days = [];
+  const dayIndex = {};
   duties.forEach(d => {
-    const key = svcId(d.svc) + ':' + d.duty;
-    const badge = dateBadge(d.svc.date);
-    html += '<div class="card duty-card" style="--edge:' + d.cat.color + '">' +
-      '<div class="when">' + esc(fmtDate(d.svc.date)) + ' · ' + fmtTime(d.svc.time) +
-      (badge ? ' · <b style="color:var(--accent)">' + badge + '</b>' : '') + '</div>' +
-      '<div class="what">' + esc(d.svc.worship) + ' · ' + esc(d.svc.service) + '</div>' +
-      '<div class="role"><span class="dot-c" style="background:' + d.cat.color + '"></span>' + esc(d.duty) + '</div>' +
-      (feat('whoElse')
-        ? '<button class="linkish" data-act="expand" data-id="' + key + '">' +
-          (ui.expanded[key] ? 'Hide the others serving' : 'Who else is serving?') + '</button>' +
-          (ui.expanded[key] ? '<div class="duty-expand">' + renderCatRows(d.svc, false) + '</div>' : '')
-        : '') +
-      renderRequestChange(d, key) +
-      '</div>';
+    let day = dayIndex[d.svc.date];
+    if (!day) { day = dayIndex[d.svc.date] = { date: d.svc.date, edge: d.cat.color, services: [], svcIndex: {} }; days.push(day); }
+    const sid = svcId(d.svc);
+    let se = day.svcIndex[sid];
+    if (!se) { se = day.svcIndex[sid] = { svc: d.svc, id: sid, duties: [] }; day.services.push(se); }
+    se.duties.push(d);
+  });
+
+  days.forEach(day => {
+    const badge = dateBadge(day.date);
+    html += '<div class="card duty-card" style="--edge:' + day.edge + '">' +
+      '<div class="when">' + esc(fmtDate(day.date)) +
+      (badge ? ' · <b style="color:var(--accent)">' + badge + '</b>' : '') + '</div>';
+    day.services.forEach((se, si) => {
+      const svc = se.svc;
+      if (si > 0) html += '<div class="svc-sep"></div>'; // divider between services on the same day
+      html += '<div class="what">' + fmtTime(svc.time) + ' · ' + esc(svc.worship) + ' · ' + esc(svc.service) + '</div>';
+      se.duties.forEach(d => {
+        html += '<div class="role"><span class="dot-c" style="background:' + d.cat.color + '"></span>' + esc(d.duty) + '</div>' +
+          renderRequestChange(d, se.id + ':' + d.duty);
+      });
+      if (feat('whoElse')) {
+        const wkey = se.id + ':who';
+        html += '<div class="who-else"><button class="linkish" data-act="expand" data-id="' + wkey + '">' +
+          (ui.expanded[wkey] ? 'Hide the others serving' : 'Who else is serving?') + '</button></div>' +
+          (ui.expanded[wkey] ? '<div class="duty-expand">' + renderCatRows(svc, false) + '</div>' : '');
+      }
+    });
+    html += '</div>';
   });
   html += renderYourRequests();
   return html;
