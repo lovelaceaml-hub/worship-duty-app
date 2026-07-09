@@ -130,7 +130,10 @@ function sheetRowsToServices(rows, today) {
     const cell = i => (i >= 0 && i < row.length ? String(row[i] == null ? '' : row[i]).trim() : '');
     const rawDate = cell(iDate), serviceLabel = cell(iService);
     const duty = cell(iDuty), member = cell(iMember);
-    if (!rawDate || !serviceLabel || !duty || !member) continue;
+    // A blank Member cell in an otherwise-valid duty row is an explicit
+    // "clear this duty" (planMerge writes '' over the old name). Date/Service/
+    // Duty are still required. A *deleted* row leaves the slot untouched.
+    if (!rawDate || !serviceLabel || !duty) continue;
     const md = parseSheetDate(rawDate);
     if (!md) continue;
     const iso = inferYearISO(md.month, md.day, today);
@@ -147,11 +150,11 @@ function sheetRowsToServices(rows, today) {
       result.services.push(svc);
     }
     if (isChoirSong) {
-      svc.choirSong = member;
+      if (member) svc.choirSong = member; // never clear the song on a blank cell
       continue;
     }
-    svc.assignments[duty] = member;
-    membersSeen[member] = true;
+    svc.assignments[duty] = member; // '' explicitly clears the slot
+    if (member) membersSeen[member] = true;
   }
   result.members = Object.keys(membersSeen).sort();
   return result;

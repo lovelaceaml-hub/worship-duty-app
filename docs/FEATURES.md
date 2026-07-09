@@ -36,8 +36,8 @@ The registry is the `FEATURES` array at the top of `app.js`:
 ## Editor passcode notes
 
 - Stored as a SHA-256 hash in `app/settings.pinHash`; never in plain text.
-- Initial passcode set on 2026-07-03: `2026`. Change it in Manage →
-  Features → "Change the editor passcode".
+- The current passcode is not printed here — ask the coordinator. Change it in
+  Manage → Features → "Change the editor passcode".
 - Changing it instantly relocks every other device.
 - Lost passcode: delete the `pinHash` field on the `app/settings` document
   in the Firestore console — the app will offer to create a new one.
@@ -50,8 +50,8 @@ The registry is the `FEATURES` array at the top of `app.js`:
 - Stored as a SHA-256 hash in `app/settings.sitePinHash`; never in plain
   text. A device that unlocks caches the hash in
   `localStorage['wds-site-unlock']`.
-- Initial passcode set on 2026-07-03: `2217`. Change it in Manage →
-  Features → "Change the site passcode".
+- The current passcode is not printed here — ask the coordinator. Change it in
+  Manage → Features → "Change the site passcode".
 - Changing it instantly relocks every other device — everyone re-enters
   the new passcode the next time they open the app.
 - Lost passcode: delete the `sitePinHash` field on the `app/settings`
