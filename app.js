@@ -53,6 +53,7 @@ const FEATURES = [
   { id: 'calendarExport', label: 'Add-to-calendar button',    desc: 'Members can download their duties to their phone calendar with built-in reminders.', def: true },
   { id: 'whoElse',        label: '"Who else is serving?"',    desc: 'My Duties can expand the full lineup for each service.', def: true },
   { id: 'choirSong',      label: 'Choir song on services',    desc: 'Show the choir song line on each service card.', def: true },
+  { id: 'songPicker',     label: 'Presider song picker',      desc: 'Presiders get a button in My Duties to plan the songs for their service.', def: true },
   { id: 'pastServices',   label: 'Past services',             desc: 'Allow browsing services that already happened.', def: true },
   { id: 'emptyDuties',    label: 'Show unassigned duties',    desc: 'The schedule shows every duty slot, even ones without a name yet.', def: false },
   { id: 'conflictWarnings', label: 'Double-duty warnings',    desc: 'Show a notice when one person has two duties in the same service.', def: true },
@@ -382,7 +383,8 @@ const ui = {
   sitePinError: '',
   rebaseline: false,
   syncing: false,
-  reqForm: null // { key, note } — in-progress "request a change" draft, survives re-render
+  reqForm: null, // { key, note } — in-progress "request a change" draft, survives re-render
+  songSvc: null // svcId deep-link target for the song picker (ui.tab === 'songs')
 };
 
 function seedState() {
@@ -844,7 +846,8 @@ function render() {
   nav.classList.toggle('hidden', false);
 
   document.querySelectorAll('nav.tabs button').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === ui.tab);
+    // The songs view has no tab of its own — it's a sub-screen of My Duties.
+    b.classList.toggle('active', b.dataset.tab === ui.tab || (ui.tab === 'songs' && b.dataset.tab === 'my'));
   });
   const unread = Number(localStorage.getItem('wds-unread-' + ui.me) || 0);
   const tabMy = document.getElementById('tab-my');
@@ -860,6 +863,7 @@ function render() {
   if (!viewHasFocusedInput(view)) {
     if (ui.tab === 'schedule') view.innerHTML = renderSchedule();
     else if (ui.tab === 'my') view.innerHTML = renderMy();
+    else if (ui.tab === 'songs') renderSongs(view);
     else view.innerHTML = renderManage();
   }
   renderBanners();
@@ -1029,6 +1033,14 @@ function renderMy() {
     se.duties.push(d);
   });
 
+  // Presider song picker — a role-conditional door into the song-selection
+  // screen (ported from the old song app). Only presiders ever see it.
+  if (feat('songPicker') && duties.some(d => d.duty === 'Presider')) {
+    const first = duties.find(d => d.duty === 'Presider');
+    html += '<div class="notify-box"><button class="primary" data-act="open-songs" data-svc="' + esc(svcId(first.svc)) + '">Plan songs for your service</button></div>' +
+      '<p class="hint">You\'re presiding soon — pick the songs for your service here. Each Presider duty below also has its own button.</p>';
+  }
+
   days.forEach(day => {
     const badge = dateBadge(day.date);
     html += '<div class="card duty-card" style="--edge:' + day.edge + '">' +
@@ -1042,6 +1054,9 @@ function renderMy() {
         const key = se.id + ':' + d.duty;
         html += '<div class="role"><span class="dot-c" style="background:' + d.cat.color + '"></span>' +
           '<span class="rname">' + esc(d.duty) + '</span>' +
+          (feat('songPicker') && d.duty === 'Presider'
+            ? '<button class="linkish" data-act="open-songs" data-svc="' + esc(se.id) + '">Pick songs</button>'
+            : '') +
           requestChangeTrigger(d, key) + '</div>' +
           requestChangeForm(d, key);
       });
@@ -1056,6 +1071,53 @@ function renderMy() {
   });
   html += renderYourRequests();
   return html;
+}
+
+/* ================= songs view (presider song picker) ================= */
+
+/* The song-selection screen is the old stand-alone song app, ported to an ES
+   module (song-app.js) that renders into #song-root. It's loaded lazily on
+   first open — most members never preside, so they never pay for it. */
+let songApp = null;      // the imported module, once loaded
+let songAppLoading = null; // in-flight import promise
+
+function loadSongApp() {
+  if (songApp) return Promise.resolve(songApp);
+  if (!songAppLoading) {
+    songAppLoading = import('./song-app.js')
+      .then(m => { songApp = m; return m; })
+      .catch(e => { songAppLoading = null; throw e; });
+  }
+  return songAppLoading;
+}
+
+function songCtx() {
+  const nameMap = unifiedNameMap();
+  const svc = ui.songSvc ? state.services.find(s => svcId(s) === ui.songSvc) : null;
+  return {
+    fb,
+    me: nameMap[ui.me] || ui.me,
+    nameMap,
+    // Deep-link hint: the service whose Presider button was tapped (if any).
+    service: svc ? { date: svc.date, worship: svc.worship, service: svc.service, time: svc.time } : null,
+    onBack: () => { ui.tab = 'my'; render(); }
+  };
+}
+
+function renderSongs(view) {
+  if (!document.getElementById('song-root')) {
+    view.innerHTML =
+      '<div class="song-head"><button class="ghost" data-act="close-songs">← My Duties</button></div>' +
+      '<div id="song-root"><div class="empty">Loading the song planner…</div></div>';
+  }
+  loadSongApp().then(m => {
+    const root = document.getElementById('song-root');
+    if (root && ui.tab === 'songs') m.mount(root, songCtx());
+  }).catch(e => {
+    console.warn('song-app failed to load:', e);
+    const root = document.getElementById('song-root');
+    if (root) root.innerHTML = '<div class="empty">The song planner could not load. Check your connection and try again.</div>';
+  });
 }
 
 /* Pending request (if any) by `name` for this exact svc + duty */
@@ -1546,6 +1608,8 @@ function handleAct(act, el) {
     render();
   }
   else if (act === 'sub') { ui.sub = el.dataset.sub; render(); }
+  else if (act === 'open-songs') { ui.songSvc = el.dataset.svc || null; ui.tab = 'songs'; render(); }
+  else if (act === 'close-songs') { ui.tab = 'my'; ui.songSvc = null; render(); }
   else if (act === 'dept-filter') { ui.deptFilter = el.dataset.val; localStorage.setItem('wds-dept', ui.deptFilter); render(); }
   else if (act === 'dismiss-banner') { ui.banners.splice(Number(el.dataset.i), 1); renderBanners(); }
   else if (act === 'toggle-past') { ui.showPast = !ui.showPast; render(); }
@@ -1981,6 +2045,13 @@ async function initFirebase(config) {
     setDoc: fsMod.setDoc,
     deleteDoc: fsMod.deleteDoc,
     writeBatch: fsMod.writeBatch,
+    // Extras for the song module (song-app.js) — it shares this app's single
+    // Firebase instance and anonymous auth instead of initializing its own.
+    collection: fsMod.collection,
+    onSnapshot: fsMod.onSnapshot,
+    getDoc: fsMod.getDoc,
+    getDocs: fsMod.getDocs,
+    updateDoc: fsMod.updateDoc,
     knownIds: []
   };
   // Cloud Messaging — best-effort; unsupported browsers just leave messaging null.
