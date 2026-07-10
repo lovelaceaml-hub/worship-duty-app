@@ -1488,9 +1488,13 @@ function renderManageData() {
 
 /* ================= actions ================= */
 
-/* Applies NAME_UNIFY_MAP (or a compatible map) to state.members and every
-   service's assignments/conflictOk. Pure w.r.t. persistence — caller persists
-   whatever comes back touched. Returns { membersChanged, membersMerged, touchedServices }. */
+/* Applies NAME_UNIFY_MAP (or a compatible map) to state.members, every
+   service's assignments/conflictOk, and every department roster (rosters are
+   keyed by member name too, and are what duty dropdowns actually read from —
+   see memberSelect — so they must stay in sync or old spellings keep showing
+   up there even after members/services are unified).
+   Pure w.r.t. persistence — caller persists whatever comes back touched.
+   Returns { membersChanged, membersMerged, touchedServices, departmentsChanged }. */
 function applyNameMap(map) {
   const canon = n => (map[n] || n);
   const membersMerged = state.members.filter(m => map[m]).length;
@@ -1519,7 +1523,18 @@ function applyNameMap(map) {
     });
     if (touched) { svc.conflictOk = merged; touchedServices.push(svc); }
   });
-  return { membersChanged, membersMerged, touchedServices };
+  let departmentsChanged = false;
+  Object.keys(state.departments || {}).forEach(cat => {
+    const roster = state.departments[cat] || [];
+    const seen = {};
+    const merged = roster.map(canon).filter(m => (seen[m] ? false : (seen[m] = true)));
+    merged.sort();
+    if (merged.length !== roster.length || merged.some((m, i) => m !== roster[i])) {
+      state.departments[cat] = merged;
+      departmentsChanged = true;
+    }
+  });
+  return { membersChanged, membersMerged, touchedServices, departmentsChanged };
 }
 
 function findService(id) { return state.services.find(s => svcId(s) === id); }
@@ -1716,9 +1731,10 @@ function handleAct(act, el) {
   }
   else if (act === 'unify-names') {
     if (!confirm('Merge leftover name variants (e.g. "B. Anthony L" → "B. Anthony") across members and all services?')) return;
-    const { membersChanged, membersMerged, touchedServices } = applyNameMap(unifiedNameMap());
+    const { membersChanged, membersMerged, touchedServices, departmentsChanged } = applyNameMap(unifiedNameMap());
     if (membersChanged) persistMembers();
     touchedServices.forEach(persistService);
+    if (departmentsChanged) persistDepartments();
     const canon = unifiedNameMap()[ui.me];
     if (canon) {
       ['wds-alerts-', 'wds-seen-', 'wds-unread-'].forEach(prefix => {
