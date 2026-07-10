@@ -2,7 +2,7 @@
   "hosting": {
     "site": "lv-zion-duties",
     "public": ".",
-    "ignore": ["firebase.json", "**/.*", "README.md", "docs/**", "functions/**"],
+    "ignore": ["firebase.json", "**/.*", "**/.*/**", "README.md", "docs/**", "functions/**"],
     "rewrites": [
       { "source": "/ics/**", "function": "ics" }
     ]
