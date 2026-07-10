@@ -231,7 +231,7 @@ exports.onRequestResolved = onDocumentUpdated(
    re-fetch every few hours). Note: schedule data is already world-readable
    via the open Firestore rules, so this endpoint exposes nothing new. */
 exports.ics = onRequest({ region: REGION }, async (req, res) => {
-  const member = decodeURIComponent(req.path.replace(/^\/(ics\/)?/, '')).trim();
+  const member = decodeURIComponent(req.path.replace(/^\/(ics\/)?/, '')).replace(/[\r\n]/g, '').trim();
   if (!member) {
     res.status(400).type('text/plain').send('Usage: /ics/<member name>, e.g. /ics/B.%20Anthony');
     return;
@@ -261,12 +261,18 @@ exports.scheduledSheetSync = onSchedule(
     const settingsSnap = await db.collection('app').doc('settings').get();
     const url = (settingsSnap.exists && settingsSnap.data().sheetUrl) || sheetLib.DEFAULT_SHEET_URL;
 
-    const resp = await fetch(url, { redirect: 'follow' });
-    if (!resp.ok) {
-      logger.error('scheduledSheetSync: sheet fetch failed', { status: resp.status });
+    let text;
+    try {
+      const resp = await fetch(url, { redirect: 'follow' });
+      if (!resp.ok) {
+        logger.error('scheduledSheetSync: sheet fetch failed', { status: resp.status });
+        return;
+      }
+      text = await resp.text();
+    } catch (e) {
+      logger.error('scheduledSheetSync: sheet fetch threw', { error: String(e) });
       return;
     }
-    const text = await resp.text();
     const parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(text), new Date());
     if (parsed.warnings.length) logger.warn('scheduledSheetSync: parse warnings', { warnings: parsed.warnings });
     if (!parsed.services.length) {

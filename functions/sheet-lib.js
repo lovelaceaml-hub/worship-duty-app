@@ -20,9 +20,11 @@ const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0P
 
 function pad(n) { return (n < 10 ? '0' : '') + n; }
 
-/* Same id scheme as the app's svcId(): date + '_' + lowercased service label. */
+/* Same id scheme as the app's svcId() (app.js): date + '_' + service label
+   with every non-alphanumeric run collapsed to '-'. MUST match app.js exactly
+   or the browser and this function compute different doc ids for one service. */
 function svcId(svc) {
-  return svc.date + '_' + String(svc.service || '').toLowerCase().replace(/\s+/g, '-');
+  return svc.date + '_' + String(svc.service || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
 function dutyCategory(duty) {
@@ -129,7 +131,10 @@ function sheetRowsToServices(rows, today) {
     const row = rows[r];
     const cell = i => (i >= 0 && i < row.length ? String(row[i] == null ? '' : row[i]).trim() : '');
     const rawDate = cell(iDate), serviceLabel = cell(iService);
-    const duty = cell(iDuty), member = cell(iMember);
+    const duty = cell(iDuty);
+    // Sanitize the member name from the multi-editor sheet: strip control
+    // chars (incl. CR/LF that could inject into the .ics feed) and cap length.
+    const member = cell(iMember).replace(/[\x00-\x1f\x7f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
     // A blank Member cell in an otherwise-valid duty row is an explicit
     // "clear this duty" (planMerge writes '' over the old name). Date/Service/
     // Duty are still required. A *deleted* row leaves the slot untouched.

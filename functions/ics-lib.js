@@ -34,8 +34,9 @@ const LA_VTIMEZONE = [
   'END:VTIMEZONE'
 ];
 
+/* MUST match app.js svcId() exactly (non-alphanumeric runs → '-'). */
 function svcId(svc) {
-  return svc.date + '_' + String(svc.service || '').toLowerCase().replace(/\s+/g, '-');
+  return svc.date + '_' + String(svc.service || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
 /* Canonical spelling via the shared app/nameMap doc ({variant: canonical}). */

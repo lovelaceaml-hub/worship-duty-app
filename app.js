@@ -1229,18 +1229,39 @@ function renderManagePlanning() {
     (confHtml || '<p class="hint" style="margin-top:12px">No unresolved double-bookings. 🎉</p>') + '</div>';
 
   /* --- unfilled slots, next 28 days --- */
+  /* A service only "expects" the duties that comparable services actually
+     staff. Expected = duties filled in >=50% of PLANNED services of the same
+     worship|service type. This avoids flagging roles a service never uses
+     (e.g. Media/Translation on a weekday), which previously marked every
+     service "unfilled". Fully-empty (not-yet-planned) services are skipped —
+     that's a different signal than a partially-planned service with a gap. */
+  const expFilled = {}, expCount = {};
+  (state.services || []).forEach(s => {
+    const assigned = Object.keys(s.assignments || {}).filter(d => s.assignments[d]);
+    if (!assigned.length) return;
+    const key = (s.worship || '') + '|' + (s.service || '');
+    expCount[key] = (expCount[key] || 0) + 1;
+    const f = expFilled[key] || (expFilled[key] = {});
+    assigned.forEach(d => { f[d] = (f[d] || 0) + 1; });
+  });
+  const expectedDuties = svc => {
+    const key = (svc.worship || '') + '|' + (svc.service || '');
+    const f = expFilled[key] || {}, n = expCount[key] || 0;
+    return n ? ALL_DUTIES_ORDER.filter(d => (f[d] || 0) * 2 >= n) : [];
+  };
   const horizon = (() => { const d = new Date(); d.setDate(d.getDate() + 28); return toISO(d); })();
   let gapHtml = '';
   upcoming.filter(s => s.date <= horizon).forEach(svc => {
     const a = svc.assignments || {};
-    const missing = ALL_DUTIES_ORDER.filter(d => !a[d]);
-    if (missing.length && missing.length < ALL_DUTIES_ORDER.length) { // skip fully-empty (not yet planned) services
+    if (!Object.keys(a).some(d => a[d])) return; // not yet planned — different signal
+    const missing = expectedDuties(svc).filter(d => !a[d]);
+    if (missing.length) {
       gapHtml += '<div class="plan-suggest"><span class="lab">' + esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) + '</span> ' +
         '<span class="plan-duties">' + missing.length + ' unfilled: ' + missing.map(esc).join(', ') + '</span></div>';
     }
   });
   html += '<div class="card"><div class="f-label">Unfilled duties — next 4 weeks</div>' +
-    (gapHtml || '<p class="hint" style="margin-top:12px">Every planned service is fully staffed.</p>') + '</div>';
+    (gapHtml || '<p class="hint" style="margin-top:12px">Every planned service has its usual duties filled.</p>') + '</div>';
 
   /* --- workload table --- */
   const rows = Object.keys(stats)
@@ -1709,7 +1730,14 @@ function handleAct(act, el) {
     const svc = findService(el.dataset.svc);
     if (!svc) return;
     if (!svc.assignments) svc.assignments = {};
-    svc.assignments[el.dataset.duty] = el.dataset.name;
+    const name = el.dataset.name, duty = el.dataset.duty;
+    // Guard against a fast double-tap creating a fresh double-booking: refuse
+    // if this person already holds another duty in the same service.
+    if (Object.keys(svc.assignments).some(d => d !== duty && svc.assignments[d] === name)) {
+      alert(name + ' is already serving in this service — pick a different person.');
+      return;
+    }
+    svc.assignments[duty] = name;
     persistService(svc);
     afterDataChange();
   }
