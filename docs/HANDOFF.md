@@ -291,6 +291,51 @@ policy is unchanged: only duties the sheet mentions are touched; in-app
 edits to other duties survive. First deploy of these functions will prompt
 to enable Cloud Scheduler (expected, Blaze plan required — already on it).
 
+## Presider song picker (merged in 2026-07-10)
+
+The former standalone **New Song Selection** app is now a sub-view of this
+app instead of a separate site. One app, one Firebase project, one login.
+
+- **Entry point.** On **My Duties**, a member with an upcoming **Presider**
+  duty sees a "Plan songs for your service" button (and a "Pick songs" link
+  on each Presider role line). Gated by the `songPicker` feature toggle
+  (Manage → Features). Tapping sets `ui.tab = 'songs'` and `ui.songSvc` to
+  the tapped service; there is **no 4th nav tab** — My Duties stays
+  highlighted and the song screen is a sub-view with a "← My Duties" back bar.
+- **How it loads.** `renderSongs()` (in `app.js`) lazily `import()`s
+  `song-app.js` (an ES module, cached after first load — members who never
+  preside never download it) and calls `mount(rootEl, ctx)`, where `ctx`
+  carries the shared Firebase handle, the signed-in member name, the merged
+  name map, the tapped service (deep-link), and an `onBack` callback.
+- **The four new files** (all deploy with the app; only `docs/**` and
+  `functions/**` are ignored):
+  - `song-app.js` — the ported song UI (Library / Builder / Services /
+    Insights / runsheet). Uses **`data-song-act` / `data-song-chg`** (never
+    `data-act`) and attaches its own listeners to `#song-root`, so the host's
+    document-level delegation never sees it. Renders only into `#song-root`.
+  - `song-lib.js` — the pure, correctness-critical sung-history logic
+    (`applySung`, `serviceIdFor`, `applyUndo`, `applyBackfill`, …), exported
+    for both the browser (`window.SongLib`) and Node (`module.exports`).
+    **This is the single source of truth shared with the Signal ingest
+    daemon** — do not fork it. `serviceIdFor`'s slug scheme defines the
+    `setlists/{id}` doc ids and must not change.
+  - `song-seed.js` — the 509-song catalog (`window.SONG_SEED`).
+  - `song-app.css` — the song UI's styles, every rule scoped under
+    `#song-root` so nothing leaks into the host UI.
+- **New Firestore collections** (reads open, same as the rest of the app):
+  `setlists/{serviceId}` (one per planned/sung service) and
+  `songStats/{songId}` (append-only sung history + cached counts). Plus
+  `app/songSettings` (the song editor PIN) and `app/presiders`.
+- **Signal ingest.** The background pipeline in `~/tools/song-ingest` reads
+  the church Signal group for song picks and applies them through this same
+  `song-lib.js` (its `config.json` points `appJsPath` → `song-lib.js` and
+  `seedJsPath` → `song-seed.js`). Any fix to `song-lib.js` applies to both
+  the in-app button and the Signal pipeline automatically.
+- **Old app retired.** `lv-zion-songs.web.app` (the standalone site) now
+  redirects here; the original standalone source lives in the `new-song-app`
+  repo's git history.
+- Full merge write-up and the porting contract: `docs/MERGE-HANDOFF.md`.
+
 ## Known limitations
 
 1. Open database rules — anyone with the link who bypasses the UI could
@@ -328,7 +373,11 @@ See `docs/PLAYBOOK.md` Part 2 for these as full, ready-to-paste briefs:
 | `firestore.rules` | Firestore security rules, deployed alongside hosting |
 | `functions/` | Cloud Functions source: `index.js` (push notifications, `ics` feed, `scheduledSheetSync`), `ics-lib.js` + `sheet-lib.js` (pure, node-testable logic), `package.json` |
 | `manifest.json`, `sw.js`, `icon.svg` | PWA install + background push notifications |
-| `docs/` | `PLAYBOOK.md` (operate + delegate), this handoff, design system, feature registry |
+| `song-app.js` | Presider song picker UI (ES module, lazy-loaded, mounts into `#song-root`) — see "Presider song picker" |
+| `song-lib.js` | Pure sung-history logic shared with the Signal ingest daemon (`window.SongLib` / `module.exports`) |
+| `song-seed.js` | 509-song catalog (`window.SONG_SEED`) |
+| `song-app.css` | Song picker styles, all scoped under `#song-root` |
+| `docs/` | `PLAYBOOK.md` (operate + delegate), this handoff, design system, feature registry, `MERGE-HANDOFF.md` |
 
 ## localStorage key inventory (per device)
 
@@ -347,3 +396,6 @@ See `docs/PLAYBOOK.md` Part 2 for these as full, ready-to-paste briefs:
 | `wds-reminded` | De-dupe map for the in-app 24h reminder |
 | `wds-sheet-sync-at` | Timestamp of the last sheet sync attempt (throttle) |
 | `wds-sheet-sync-result` | Last sheet sync outcome, shown on the Data & Sync card |
+| `nss-editor-unlock` | Song picker: cached song-editor-PIN hash once this device unlocks song editing |
+| `nss-help-dismissed` | Song picker: the first-run help banner was dismissed |
+| `nss-data-v1` | Song picker: local-only fallback copy of song state (no-Firebase mode) |

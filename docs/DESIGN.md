@@ -98,3 +98,7 @@ they stay crisp on glass.
    region — `--muted` targets ≥4.5:1; when in doubt use `--ink`.
 5. New surfaces reuse `--glass` / `--glass-strong` and the `--specular` edge;
    never invent new whites.
+6. The presider song picker (`song-app.css`) reuses these exact tokens but
+   scopes **every** rule under `#song-root` so its styles never leak into the
+   host UI (and vice-versa). Add new song-picker styles there, scoped the same
+   way — never in `index.html`'s global block.

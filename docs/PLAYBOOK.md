@@ -188,12 +188,18 @@ npx firebase-tools deploy
 ```
 
 This deploys hosting + Firestore rules + Cloud Functions together. If you
-only changed app files (`index.html`, `app.js`, etc.) and not
-`firestore.rules` or anything in `functions/`, you can save time with:
+only changed app files (`index.html`, `app.js`, the `song-*.js`/`song-app.css`
+song-picker files, etc.) and not `firestore.rules` or anything in
+`functions/`, you can save time with:
 
 ```
 npx firebase-tools deploy --only hosting
 ```
+
+Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
+`song-seed.js`, `song-app.css`) deploy with hosting automatically. If you edit
+`song-lib.js`, also restart/relink nothing — the Signal ingest daemon in
+`~/tools/song-ingest` reads it directly from this folder on its next run.
 
 If npm cache errors appear, prefix the command:
 
@@ -209,7 +215,7 @@ Project console: https://console.firebase.google.com/project/lv-zion-duties
 
 | Where | What you'll find |
 |---|---|
-| **Firestore Database → Data** | Live look at `schedule/*` (one doc per service), `app/members`, `app/settings` (both passcode hashes and the sheet URL live here), `tokens/*` (one per device registered for push), `sent/*` (internal reminder de-dupe markers — safe to ignore) |
+| **Firestore Database → Data** | Live look at `schedule/*` (one doc per service), `app/members`, `app/settings` (both passcode hashes and the sheet URL live here), `tokens/*` (one per device registered for push), `sent/*` (internal reminder de-dupe markers — safe to ignore). Song picker adds `setlists/*` (one per planned/sung service), `songStats/*` (per-song sung history), `app/songSettings` (song editor PIN), `app/presiders`. |
 | **Functions** | The two Cloud Functions (`onScheduleWrite`, `dutyReminders`) — logs here if a push doesn't arrive |
 | **Project settings → Cloud Messaging** | The Web Push (VAPID) key pasted into `firebase-config.js` |
 | **Usage and billing** | Confirm the project is on the Blaze (pay-as-you-go) plan — required for Cloud Functions. Effectively $0/month at this congregation's scale, but see the to-do below. |

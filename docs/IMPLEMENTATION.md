@@ -60,6 +60,10 @@ Two operating modes, decided once at startup in `init()` (bottom of
 | `tokens/{fcmToken}` | `{ name: memberName, updatedAt: epoch-ms }` | One doc per device registered for push, keyed by the device's FCM token itself. Written client-side by `registerPush()`. Dead tokens are pruned by Cloud Functions on send failure. |
 | `sent/{markerId}` | `{ t: epoch-ms }` | Internal de-dupe markers for `dutyReminders`, e.g. `svcId_duty-slug_name-slug`. Auto-pruned after 7 days. Not client-readable (`allow read, write: if false`; only the Admin SDK, which bypasses rules, can touch it). |
 | `requests/{svcId_dutySlug_createdAt}` | `{ id, name, svcId, date, service, worship, duty, note, status: 'pending'\|'approved'\|'declined', createdAt: epoch-ms, resolvedAt?, resolvedBy? }` | One doc per change request — see §3.4. |
+| `setlists/{serviceId}` | `{ id, date, worshipType, serviceLabel, presider, notes, songs: string[], status: 'planned'\|'sung', sungAt, updatedAt, updatedBy, glorySong?, thanksSong?, source? }` | Song picker (§3.5). `serviceId` uses `song-lib.js` `serviceIdFor()` (`date_service-slug`, matching the schedule's slug). `source` is `'schedule'`/`'signal'`/`'manual'`. |
+| `songStats/{songId}` | `{ songId, timesSung, lastSung: 'YYYY-MM-DD', history: [{date, service, by, markedAt, backfilled?}] }` | Song picker. `history` is the append-only source of truth; `timesSung`/`lastSung` are recomputed caches. Absence of a doc = 0×/Never. |
+| `app/songSettings` | `{ editorPinHash: string }` | Song picker's separate editor PIN (SHA-256 hex), distinct from the app's site/editor passcodes. |
+| `app/presiders` | `{ names: string[] }` | Managed presider list for the song picker's Builder. |
 
 ### 2.3 Cloud Functions (`functions/index.js`, Node 20, region `us-central1`)
 
@@ -269,6 +273,50 @@ are separate codebases with separate copies of the same member list:
   `onRequestCreated` Cloud Function when a request comes in (skipped if
   they request their own change). The requester is notified back by
   `onRequestResolved` when the scheduler approves or declines.
+
+### 3.5 Presider song picker (merged from new-song-app, 2026-07-10)
+
+The former standalone New Song Selection app is now a lazily-loaded sub-view.
+Gated by the `songPicker` feature toggle.
+
+- **Host wiring (`app.js`).** `renderMy()` shows a "Plan songs for your
+  service" button when `feat('songPicker')` and the member has an upcoming
+  Presider duty. `open-songs`/`close-songs` actions flip `ui.tab` between
+  `'my'` and `'songs'` (`ui.songSvc` holds the deep-link target). `render()`
+  dispatches `ui.tab === 'songs'` to `renderSongs()`, which lazy-`import()`s
+  `song-app.js` (cached) and calls `mount(#song-root, songCtx())`. The host's
+  `initFirebase()` `fb` handle exposes the extra Firestore functions the
+  module needs (`collection`, `onSnapshot`, `getDoc`, `getDocs`, `updateDoc`,
+  `runTransaction`, `arrayUnion`, `arrayRemove`).
+- **Isolation (the three rules that keep it from fighting the host).**
+  1. All song markup uses `data-song-act` / `data-song-chg`; listeners are
+     attached to `#song-root`, so the host's document-level `data-act`
+     delegation never matches song elements (verified: 0 `data-act` nodes
+     render inside `#song-root`).
+  2. `song-app.css` scopes every rule under `#song-root`; the module renders
+     only into that element.
+  3. The host's `viewHasFocusedInput(#view)` guard already covers
+     `#song-root` (it is nested in `#view`), and the module's own `render()`
+     repeats the check (`rootHasFocusedInput()`) so a background Firestore
+     snapshot can't wipe a half-typed song field.
+- **Shared pure logic (`song-lib.js`).** `applySung`, `applyUndo`,
+  `applyBackfill`, `serviceIdFor`, `recompute`, etc. — exported to the browser
+  as `window.SongLib` and under Node as `module.exports`. `song-app.js`
+  consumes `window.SongLib`; the Signal ingest daemon `require()`s the same
+  file. Mark-as-sung/undo run inside a Firestore `runTransaction` so two
+  presiders marking setlists that share a song can't clobber each other's
+  `history` array.
+- **Deep-link.** `songCtx()` passes `{ fb, me, nameMap, service, onBack }`.
+  On first mount, if `service` is set, the module opens that service's setlist
+  in the Builder (creating the `setlists` doc if absent, tagged
+  `source: 'schedule'`).
+- **Signal ingest.** `~/tools/song-ingest/config.json` points `appJsPath` →
+  `worship-duty-app/song-lib.js` and `seedJsPath` → `song-seed.js`. Verified
+  in a dry-run to produce byte-identical intended writes vs the old
+  `new-song-app/app.js`.
+- **Retirement.** `new-song-app/index.html` is now a redirect to
+  `lv-zion-duties.web.app`; its old site `lv-zion-songs.web.app` redirects
+  too. Original standalone source is in the `new-song-app` repo's git history.
 
 ## 4. How to implement / deploy from scratch
 
