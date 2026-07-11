@@ -1,5 +1,17 @@
 # Song-app merge — handoff
 
+> **✅ COMPLETED 2026-07-10.** The merge is finished, verified, and live.
+> `song-lib.js`, `song-seed.js`, `song-app.js`, and `song-app.css` were
+> created and wired into `index.html`; the port was verified end-to-end
+> (pure-logic contract identical to the old app, full UI smoke test,
+> re-render safety, and an ingest dry-run producing byte-identical writes).
+> Both repos' merge branches were merged to `main`. The combined app is
+> deployed at **https://lv-zion-duties.web.app**, the Signal ingest daemon
+> now loads `worship-duty-app/song-lib.js` + `song-seed.js` (config repointed
+> in `~/tools/song-ingest`), and the old standalone site
+> **lv-zion-songs.web.app** now redirects here. The rest of this document is
+> kept for reference on how the pieces fit together.
+
 Status as of 2026-07-10. A cloud session did the half of this work that
 didn't need the new-song-app source (which lives only on the Mac at
 `/Users/anthony/Projects/new-song-app`); this document is everything a

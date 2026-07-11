@@ -50,6 +50,46 @@ connection later on.
 
 ---
 
+## Planning songs (for presiders)
+
+The song-planning tool that used to be a separate app now lives right inside
+this one. You'll only see it if you're assigned as a **Presider** for an
+upcoming service.
+
+1. On **My Duties**, when you have an upcoming Presider service, a button
+   appears: **"Plan songs for your service."** (Each Presider role line also
+   has a smaller **"Pick songs"** link.) Tap it.
+2. This opens the song planner. It already knows which service you tapped and
+   opens straight to its setlist.
+3. Use the **Library** to search the full song catalog and tap the round
+   **+** next to a song to add it. Tap again to add it a second time. A blue
+   ring means the song hasn't been sung recently; a grey ring means it has.
+4. Swipe left/right on the song list to move between groups of 100 songs, or
+   use the little arrows and dots.
+5. Set the **Glory song** and (on Sabbath mornings) the **Thanks song** using
+   the *Choose* buttons — these are shown in the order of worship but aren't
+   counted in the setlist's total time.
+6. **Home** inside the planner shows your upcoming services; **Services**
+   shows everyone's; **Insights** shows which songs are overdue to be sung.
+7. On the day of the service, a card's button becomes **Runsheet** — a big,
+   easy-to-read order of worship for glancing at during the service.
+8. After the service, open **Services** and tap **Mark as sung** so the song
+   counts stay accurate. The first time anyone does an editor action, the app
+   asks you to create a short **editor PIN** — this protects marking songs
+   sung, undo, and backfill.
+9. Tap **"← My Duties"** at the top any time to go back to the rest of the app.
+
+Song picks that presiders post in the church Signal group are still read
+automatically and added here — nothing about that changed.
+
+*If you had the old song app saved to your phone, its icon now sends you
+straight to this combined app.*
+
+If you're the scheduler and ever want to hide this feature, turn off
+**"Presider song picker"** under **Manage → Features**.
+
+---
+
 ## The Schedule tab
 
 Tap **Schedule** to see every upcoming service for everyone, grouped by day.
