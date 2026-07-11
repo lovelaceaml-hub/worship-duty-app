@@ -281,8 +281,14 @@ Gated by the `songPicker` feature toggle.
 
 - **Host wiring (`app.js`).** `renderMy()` shows a "Plan songs for your
   service" button when `feat('songPicker')` and the member has an upcoming
-  Presider duty. `open-songs`/`close-songs` actions flip `ui.tab` between
-  `'my'` and `'songs'` (`ui.songSvc` holds the deep-link target). `render()`
+  Presider duty; the same rule shows the **Presider** nav tab
+  (`#tab-presider`, `data-tab="songs"`), toggled in `render()`, which also
+  kicks a viewer off the songs screen if they stop qualifying.
+  `open-songs`/`close-songs` actions flip `ui.tab` between
+  `'my'` and `'songs'` (`ui.songSvc` holds the deep-link target; `ui.songNav`
+  is a one-shot flag marking explicit taps — consumed by `songCtx()` as
+  `ctx.nav`, which tells `mount()` to navigate: setlist if a service was
+  tapped, Home from the tab; background re-mounts don't navigate). `render()`
   dispatches `ui.tab === 'songs'` to `renderSongs()`, which lazy-`import()`s
   `song-app.js` (cached) and calls `mount(#song-root, songCtx())`. The host's
   `initFirebase()` `fb` handle exposes the extra Firestore functions the

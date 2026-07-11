@@ -296,17 +296,27 @@ to enable Cloud Scheduler (expected, Blaze plan required — already on it).
 The former standalone **New Song Selection** app is now a sub-view of this
 app instead of a separate site. One app, one Firebase project, one login.
 
-- **Entry point.** On **My Duties**, a member with an upcoming **Presider**
-  duty sees a "Plan songs for your service" button (and a "Pick songs" link
-  on each Presider role line). Gated by the `songPicker` feature toggle
-  (Manage → Features). Tapping sets `ui.tab = 'songs'` and `ui.songSvc` to
-  the tapped service; there is **no 4th nav tab** — My Duties stays
-  highlighted and the song screen is a sub-view with a "← My Duties" back bar.
+- **Entry points.** A member with an upcoming **Presider** duty gets (1) a
+  **Presider** nav tab (`#tab-presider`, `data-tab="songs"`) between My
+  Duties and Manage that opens the planner's Home view (`ui.songSvc = null`),
+  and (2) on **My Duties**, a "Plan songs for your service" button plus a
+  "Pick songs" link on each Presider role line, which set `ui.songSvc` to
+  the tapped service (deep-link to its setlist). All gated by the
+  `songPicker` feature toggle (Manage → Features). `render()` computes
+  `isPresider` each pass — it shows/hides the tab and kicks a viewer off the
+  songs screen if they stop qualifying (name switch, schedule edit, toggle
+  off). The song screen keeps its "← My Duties" back bar.
 - **How it loads.** `renderSongs()` (in `app.js`) lazily `import()`s
   `song-app.js` (an ES module, cached after first load — members who never
   preside never download it) and calls `mount(rootEl, ctx)`, where `ctx`
   carries the shared Firebase handle, the signed-in member name, the merged
-  name map, the tapped service (deep-link), and an `onBack` callback.
+  name map, the tapped service (deep-link), an `onBack` callback, and `nav` —
+  a one-shot flag (from `ui.songNav`, consumed in `songCtx()`) that is true
+  only on the render caused by an explicit tap (Presider tab or a "Pick
+  songs" button). `mount()` navigates only when `ctx.nav` is true: to that
+  service's setlist if `ctx.service` is set, else to the planner's Home.
+  Background re-mounts from live-sync renders pass `nav: false` and leave
+  the presider's current view alone.
 - **The four new files** (all deploy with the app; only `docs/**` and
   `functions/**` are ignored):
   - `song-app.js` — the ported song UI (Library / Builder / Services /

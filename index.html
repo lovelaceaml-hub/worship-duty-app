@@ -127,6 +127,7 @@
     box-shadow: 0 0 0 2px rgba(255,255,255,0.7);
   }
   nav.tabs.hidden { display: none; }
+  nav.tabs button.hidden { display: none; }
 
   /* ---------- shared surfaces ---------- */
   .card {
@@ -371,8 +372,12 @@
       backdrop-filter: saturate(180%) blur(34px); -webkit-backdrop-filter: saturate(180%) blur(34px);
       box-shadow: var(--shadow-bar), var(--specular);
     }
-    nav.tabs button { padding: 11px 4px; font-size: 15px; }
+    nav.tabs button { padding: 11px 4px; font-size: 15px; white-space: nowrap; }
     nav.tabs button .dot { top: 8px; right: 18px; }
+  }
+  /* Very narrow phones: four tabs ("Presider" included) still fit on one line. */
+  @media (max-width: 379px) {
+    nav.tabs button { font-size: 13px; }
   }
 
   /* Song picker sub-view: the "← My Duties" back-button row above #song-root. */
@@ -392,6 +397,7 @@
   <nav class="tabs">
     <button data-act="tab" data-tab="schedule">Schedule</button>
     <button data-act="tab" data-tab="my" id="tab-my">My Duties</button>
+    <button data-act="tab" data-tab="songs" id="tab-presider" class="hidden">Presider</button>
     <button data-act="tab" data-tab="manage" id="tab-manage">Manage</button>
   </nav>
 

@@ -73,6 +73,9 @@ mount(rootEl, ctx)
 //   nameMap,   // the merged variant→canonical name map
 //   service,   // deep-link hint: { date, worship, service, time } of the tapped
 //              //   Presider duty, or null (map to a setlist id with serviceIdFor)
+//   nav,       // one-shot: true only on the mount caused by an explicit tap
+//              //   (Presider tab → Home, "Pick songs" → that setlist);
+//              //   false on background re-mounts, which must not navigate
 //   onBack     // call to return to My Duties
 // }
 ```

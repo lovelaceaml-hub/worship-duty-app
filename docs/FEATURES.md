@@ -19,7 +19,7 @@ no deploy needed.
 | Double-duty warnings | ON | Shows a notice when one person has two or more duties in the same service; editors can "Mark as OK" per service in Manage. |
 | Google Sheet sync | ON | Automatically pulls schedule updates from the published Google Sheet (auto on app open, throttled, plus a "Sync now" button in Manage → Data & Sync). |
 | Change requests | ON | Members can request a schedule change from their duty cards on My Duties; the scheduler (chosen in Manage → Features → Scheduler) gets a push notification, and requests are reviewed in Manage → Requests. Approving a request does not edit the schedule itself. |
-| Presider song picker | ON | Presiders get a "Plan songs for your service" button on My Duties that opens the merged song-selection screen (Library / Builder / Services / Insights) inside this app. Turning it OFF hides the button and the "Pick songs" links. See `docs/HANDOFF.md` → "Presider song picker". |
+| Presider song picker | ON | Presiders get a **Presider** tab in the bottom bar plus a "Plan songs for your service" button on My Duties, both opening the merged song-selection screen (Home / Library / Services / Insights) inside this app. Turning it OFF hides the tab, the button, and the "Pick songs" links. See `docs/HANDOFF.md` → "Presider song picker". |
 
 ## How it works / adding a new toggle
 

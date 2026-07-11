@@ -88,7 +88,6 @@ let fb = null;     // host Firebase handle (ctx.fb) or null in local mode
 let _catalogLoaded = false;
 let _subscribed = false;
 let _rootWired = false;
-let _deepLinked = false;
 
 const state = {
   songs: [], songById: {}, stats: {}, setlists: {}, settings: {},
@@ -1763,14 +1762,22 @@ export function mount(rootEl, context) {
   }
   if (!_rootWired) { wireRoot(); _rootWired = true; }
 
-  // Deep-link: on first mount, open the tapped Presider service in the Builder.
-  if (!_deepLinked && ctx.service && ctx.service.date && ctx.service.service) {
-    _deepLinked = true;
-    const svc = ctx.service;
-    const id = serviceIdFor(svc.date, svc.service);
-    if (!state.setlists[id]) ensureSetlist(svc.date, svc.worship || WORSHIP_TYPES[0], svc.service, 'schedule');
-    state.ui.currentSetlist = id;
-    state.ui.tab = 'library';
+  // Explicit navigation from the host (ctx.nav is a one-shot flag): a tapped
+  // "Pick songs" button opens that service's setlist; the Presider tab (no
+  // service) opens Home. Background re-mounts from live sync arrive with
+  // nav: false and must leave whatever view the presider is on untouched.
+  if (ctx.nav) {
+    state.ui.runsheet = null;
+    state.ui.pickSlot = null;
+    if (ctx.service && ctx.service.date && ctx.service.service) {
+      const svc = ctx.service;
+      const id = serviceIdFor(svc.date, svc.service);
+      if (!state.setlists[id]) ensureSetlist(svc.date, svc.worship || WORSHIP_TYPES[0], svc.service, 'schedule');
+      state.ui.currentSetlist = id;
+      state.ui.tab = 'library';
+    } else {
+      state.ui.tab = 'home';
+    }
   }
 
   render();

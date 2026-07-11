@@ -20,10 +20,12 @@ deploying, and troubleshooting, plus how to delegate further development to AI.
   features on/off for everyone, sync from the Google Sheet, back up or reset
   the data.
 
-**Presiders** also get a **"Plan songs for your service"** button on My Duties
-that opens the song-selection screen (Library / Builder / Services / Insights)
-right inside this app. This was the separate "New Song Selection" app, merged
-in on 2026-07-10 — see [docs/HANDOFF.md](docs/HANDOFF.md) → "Presider song
+**Presiders** also see a fourth tab, **Presider**, between My Duties and
+Manage. It opens the song-selection screen (Home / Library / Services /
+Insights) right inside this app; the **"Plan songs for your service"** button
+and per-duty **"Pick songs"** links on My Duties jump straight to a specific
+service's setlist. This was the separate "New Song Selection" app, merged in
+on 2026-07-10 — see [docs/HANDOFF.md](docs/HANDOFF.md) → "Presider song
 picker" and [docs/MERGE-HANDOFF.md](docs/MERGE-HANDOFF.md).
 
 The whole app is also gated by a site-wide passcode before any of the three

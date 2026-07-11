@@ -53,7 +53,7 @@ const FEATURES = [
   { id: 'calendarExport', label: 'Add-to-calendar button',    desc: 'Members can download their duties to their phone calendar with built-in reminders.', def: true },
   { id: 'whoElse',        label: '"Who else is serving?"',    desc: 'My Duties can expand the full lineup for each service.', def: true },
   { id: 'choirSong',      label: 'Choir song on services',    desc: 'Show the choir song line on each service card.', def: true },
-  { id: 'songPicker',     label: 'Presider song picker',      desc: 'Presiders get a button in My Duties to plan the songs for their service.', def: true },
+  { id: 'songPicker',     label: 'Presider song picker',      desc: 'Presiders get a Presider tab and buttons in My Duties to plan the songs for their service.', def: true },
   { id: 'pastServices',   label: 'Past services',             desc: 'Allow browsing services that already happened.', def: true },
   { id: 'emptyDuties',    label: 'Show unassigned duties',    desc: 'The schedule shows every duty slot, even ones without a name yet.', def: false },
   { id: 'conflictWarnings', label: 'Double-duty warnings',    desc: 'Show a notice when one person has two duties in the same service.', def: true },
@@ -384,7 +384,8 @@ const ui = {
   rebaseline: false,
   syncing: false,
   reqForm: null, // { key, note } — in-progress "request a change" draft, survives re-render
-  songSvc: null // svcId deep-link target for the song picker (ui.tab === 'songs')
+  songSvc: null, // svcId deep-link target for the song picker (ui.tab === 'songs')
+  songNav: false // one-shot: this render is an explicit navigation into the song picker (tab or button), not a background re-mount
 };
 
 function seedState() {
@@ -845,9 +846,16 @@ function render() {
   }
   nav.classList.toggle('hidden', false);
 
+  // The Presider tab only exists for people with an upcoming Presider duty —
+  // same rule as the "Plan songs" button in My Duties. If the viewer stops
+  // qualifying while on the songs screen (name switch, schedule edit, feature
+  // toggle), kick them back to My Duties.
+  const isPresider = feat('songPicker') && !!ui.me && dutiesFor(ui.me).some(d => d.duty === 'Presider');
+  document.getElementById('tab-presider').classList.toggle('hidden', !isPresider);
+  if (ui.tab === 'songs' && !isPresider) { ui.tab = 'my'; ui.songSvc = null; ui.songNav = false; }
+
   document.querySelectorAll('nav.tabs button').forEach(b => {
-    // The songs view has no tab of its own — it's a sub-screen of My Duties.
-    b.classList.toggle('active', b.dataset.tab === ui.tab || (ui.tab === 'songs' && b.dataset.tab === 'my'));
+    b.classList.toggle('active', b.dataset.tab === ui.tab);
   });
   const unread = Number(localStorage.getItem('wds-unread-' + ui.me) || 0);
   const tabMy = document.getElementById('tab-my');
@@ -1094,13 +1102,20 @@ function loadSongApp() {
 function songCtx() {
   const nameMap = unifiedNameMap();
   const svc = ui.songSvc ? state.services.find(s => svcId(s) === ui.songSvc) : null;
+  // Consume the one-shot navigation flag: only the render triggered by the
+  // Presider tab / "Pick songs" tap navigates the planner; background
+  // re-mounts (live sync) must not yank the presider off whatever view
+  // they're using.
+  const nav = ui.songNav;
+  ui.songNav = false;
   return {
     fb,
     me: nameMap[ui.me] || ui.me,
     nameMap,
+    nav,
     // Deep-link hint: the service whose Presider button was tapped (if any).
     service: svc ? { date: svc.date, worship: svc.worship, service: svc.service, time: svc.time } : null,
-    onBack: () => { ui.tab = 'my'; render(); }
+    onBack: () => { ui.tab = 'my'; ui.songSvc = null; render(); }
   };
 }
 
@@ -1626,10 +1641,13 @@ function handleAct(act, el) {
   if (act === 'tab') {
     ui.tab = el.dataset.tab;
     if (ui.tab === 'my') localStorage.setItem('wds-unread-' + ui.me, '0');
+    // The Presider tab always opens the song planner on its Home view,
+    // never a setlist left over from an earlier "Pick songs" deep link.
+    if (ui.tab === 'songs') { ui.songSvc = null; ui.songNav = true; }
     render();
   }
   else if (act === 'sub') { ui.sub = el.dataset.sub; render(); }
-  else if (act === 'open-songs') { ui.songSvc = el.dataset.svc || null; ui.tab = 'songs'; render(); }
+  else if (act === 'open-songs') { ui.songSvc = el.dataset.svc || null; ui.songNav = true; ui.tab = 'songs'; render(); }
   else if (act === 'close-songs') { ui.tab = 'my'; ui.songSvc = null; render(); }
   else if (act === 'dept-filter') { ui.deptFilter = el.dataset.val; localStorage.setItem('wds-dept', ui.deptFilter); render(); }
   else if (act === 'dismiss-banner') { ui.banners.splice(Number(el.dataset.i), 1); renderBanners(); }
