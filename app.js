@@ -2080,6 +2080,9 @@ async function initFirebase(config) {
     getDoc: fsMod.getDoc,
     getDocs: fsMod.getDocs,
     updateDoc: fsMod.updateDoc,
+    runTransaction: fsMod.runTransaction,
+    arrayUnion: fsMod.arrayUnion,
+    arrayRemove: fsMod.arrayRemove,
     knownIds: []
   };
   // Cloud Messaging — best-effort; unsupported browsers just leave messaging null.

@@ -374,7 +374,12 @@
     nav.tabs button { padding: 11px 4px; font-size: 15px; }
     nav.tabs button .dot { top: 8px; right: 18px; }
   }
+
+  /* Song picker sub-view: the "← My Duties" back-button row above #song-root. */
+  .song-head { margin: 14px 0 2px; }
+  .song-head .ghost { padding: 8px 16px; font-size: 14px; }
 </style>
+<link rel="stylesheet" href="song-app.css">
 </head>
 <body>
 <div class="wrap">
@@ -394,6 +399,8 @@
   <main id="view"></main>
 </div>
 <script src="seed-data.js"></script>
+<script src="song-seed.js"></script>
+<script src="song-lib.js"></script>
 <script src="firebase-config.js"></script>
 <script type="module" src="app.js"></script>
 </body>
