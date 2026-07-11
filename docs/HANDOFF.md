@@ -319,7 +319,7 @@ app instead of a separate site. One app, one Firebase project, one login.
   the presider's current view alone.
 - **The four new files** (all deploy with the app; only `docs/**` and
   `functions/**` are ignored):
-  - `song-app.js` — the ported song UI (Library / Builder / Services /
+  - `song-app.js` — the ported song UI (Home / Library / Services /
     Insights / runsheet). Uses **`data-song-act` / `data-song-chg`** (never
     `data-act`) and attaches its own listeners to `#song-root`, so the host's
     document-level delegation never sees it. Renders only into `#song-root`.
