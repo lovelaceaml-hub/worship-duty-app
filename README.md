@@ -4,6 +4,20 @@ A simple web app for the congregation to see worship duty assignments.
 All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026,
 74 services, 45 members), and now also syncs live from Anthony's Google Sheet.
 
+## Quick links
+
+- **Website:** https://lv-zion-duties.web.app — share this link with members
+- **Status:** Live
+- **Docs:**
+  - [Playbook](docs/PLAYBOOK.md) — day-to-day operation and AI-delegation guide
+  - [User Guide](docs/USER-GUIDE.md) — simple guide to using the app
+  - [Handoff](docs/HANDOFF.md) — architecture reference document
+  - [Merge Handoff](docs/MERGE-HANDOFF.md) — record of the completed song-app merge
+  - [Design](docs/DESIGN.md) — the app's Liquid Glass design system
+  - [Features](docs/FEATURES.md) — list of feature toggles and defaults
+  - [Implementation](docs/IMPLEMENTATION.md) — deep technical guide for extending the app
+  - [All documents →](docs/)
+
 **Start here if you manage this app:** [docs/PLAYBOOK.md](docs/PLAYBOOK.md) —
 step-by-step instructions for entering the schedule, passcodes, notifications,
 deploying, and troubleshooting, plus how to delegate further development to AI.
