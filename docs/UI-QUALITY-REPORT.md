@@ -5,7 +5,7 @@
 - **App / version / date:** LV Zion Worship Service, WATV-inspired rebuild, 2026-07-18
 - **Tester:** Codex automated and manual browser review
 - **Browser and device / viewport:** Chromium at 1440×1000 and mobile Chromium at 360×800
-- **Primary journey evidence:** `npm run test:ui`; screenshots and JSON are written to `/tmp/worship-duty-ui-evidence` for local inspection only, because the live schedule contains personal congregation assignments that must not enter Git
+- **Primary journey evidence:** `npm run test:ui` against local preview and `UI_BASE_URL=https://lv-zion-duties.web.app npm run test:ui` after release; screenshots and JSON are written to `/tmp/worship-duty-ui-evidence` for local inspection only, because the live schedule contains personal congregation assignments that must not enter Git
 
 ## Quality gate
 
