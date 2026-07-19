@@ -10,9 +10,9 @@ features and the Google Sheet pipeline in full.
 
 ## 1. What this is
 
-The **LV Zion Worship Duty Schedule** — a real-time web app a congregation
+The **LV Zion Worship Service** app — a real-time web app a congregation
 uses to see and manage worship service duty assignments (ushers, media
-booth, translation, lobby desk, etc.).
+booth, translation, lobby desk, etc.) and for presiders to plan songs.
 
 - **Live URL:** https://lv-zion-duties.web.app
 - **Firebase project:** `lv-zion-duties` (Blaze/pay-as-you-go plan, region
@@ -24,6 +24,9 @@ booth, translation, lobby desk, etc.).
 - Firestore is the shared database; Cloud Functions handle push
   notifications; a published Google Sheet is the normal way the schedule
   gets entered.
+- The July 2026 interface uses the WATV-inspired service design documented
+  in `docs/DESIGN.md`; all shared tokens live in `index.html`, while every
+  song-specific selector remains scoped under `#song-root` in `song-app.css`.
 
 ## 2. Architecture
 

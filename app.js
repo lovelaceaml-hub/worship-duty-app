@@ -1638,7 +1638,13 @@ function applyNameMap(map) {
 function findService(id) { return state.services.find(s => svcId(s) === id); }
 
 function handleAct(act, el) {
-  if (act === 'tab') {
+  if (act === 'home') {
+    ui.tab = 'schedule';
+    ui.songSvc = null;
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  else if (act === 'tab') {
     ui.tab = el.dataset.tab;
     if (ui.tab === 'my') localStorage.setItem('wds-unread-' + ui.me, '0');
     // The Presider tab always opens the song planner on its Home view,

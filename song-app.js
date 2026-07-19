@@ -804,7 +804,8 @@ function renderSongRow(song) {
     qadd = '<button class="qadd' + (count ? ' in' : '') + (seen ? ' seen' : '') + '" ' +
       'data-song-act="quick-add" data-id="' + esc(song.id) + '" aria-label="Add to setlist">+' + badge + '</button>';
   }
-  let html = '<div class="song-row' + (expanded ? ' open' : '') + '" data-song-act="toggle-song" data-id="' + esc(song.id) + '">' +
+  let html = '<div class="song-row' + (expanded ? ' open' : '') + '" data-song-act="toggle-song" data-id="' + esc(song.id) + '" ' +
+    'role="button" tabindex="0" aria-expanded="' + (expanded ? 'true' : 'false') + '">' +
     '<span class="num">' + esc(dispNumber(song)) + '</span>' +
     '<span class="dot-c" title="' + esc(song.category) + '" style="background:' + catColor(song.category) + '"></span>' +
     '<span class="s-main"><span class="s-title">' + esc(song.title) + '</span>' +
@@ -870,7 +871,8 @@ function renderBuilder() {
       const svcOpts = '<option value="">— Choose your service —</option>' +
         mine.map(e => '<option value="' + esc(serviceIdFor(e.date, e.service)) + '">' +
           esc(fmtDate(e.date)) + ' · ' + esc(e.worship || '') + ' · ' + esc(e.service) + '</option>').join('');
-      html += '<select id="b-service" data-song-chg="b-service">' + svcOpts + '</select>' +
+      html += '<label class="sr-only" for="b-service">Choose your service</label>' +
+        '<select id="b-service" data-song-chg="b-service">' + svcOpts + '</select>' +
         '<p class="hint">Pick one of your scheduled services, then add songs from the Library below.</p>';
     } else {
       html += '<p class="hint">You have no upcoming services on the schedule.</p>';
@@ -879,9 +881,9 @@ function renderBuilder() {
       const worshipOpts = WORSHIP_TYPES.map(w => '<option>' + esc(w) + '</option>').join('');
       const labelOpts = SERVICE_LABELS.map(l => '<option>' + esc(l) + '</option>').join('');
       html += '<div class="svc-grid" style="margin-top:10px">' +
-        '<input type="date" id="b-date" value="' + esc(todayISO()) + '">' +
-        '<select id="b-worship">' + worshipOpts + '</select>' +
-        '<select id="b-label">' + labelOpts + '</select></div>' +
+        '<input type="date" id="b-date" aria-label="Service date" value="' + esc(todayISO()) + '">' +
+        '<select id="b-worship" aria-label="Worship type">' + worshipOpts + '</select>' +
+        '<select id="b-label" aria-label="Service time label">' + labelOpts + '</select></div>' +
         '<button class="primary" data-song-act="start-setlist">Start this setlist</button>';
     } else {
       html += '<button class="linkish" data-song-act="manual-service" style="margin-top:4px">Build for another date&hellip;</button>';
@@ -1603,7 +1605,7 @@ function wireRoot() {
   root.addEventListener('keydown', e => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const el = e.target.closest('[data-song-act][role="button"]');
-    if (!el) return;
+    if (!el || e.target !== el) return;
     e.preventDefault();
     handleAct(el.dataset.songAct, el);
   });

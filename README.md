@@ -1,4 +1,4 @@
-# LV Zion · Worship Duty Schedule
+# LV Zion Worship Service
 
 A simple web app for the congregation to see worship duty assignments.
 All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026,
@@ -9,11 +9,14 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 - **Website:** https://lv-zion-duties.web.app — share this link with members
 - **Status:** Live
 - **Docs:**
+  - [User Manual](docs/USER-MANUAL.md) — how members and presiders use the app
+  - [Setup Guide](docs/SETUP-GUIDE.md) — how to run, restore, and publish it
+  - [Creation Guide](docs/CREATION-GUIDE.md) — how the combined app is built
   - [Playbook](docs/PLAYBOOK.md) — day-to-day operation and AI-delegation guide
   - [User Guide](docs/USER-GUIDE.md) — simple guide to using the app
   - [Handoff](docs/HANDOFF.md) — architecture reference document
   - [Merge Handoff](docs/MERGE-HANDOFF.md) — record of the completed song-app merge
-  - [Design](docs/DESIGN.md) — the app's Liquid Glass design system
+  - [Design](docs/DESIGN.md) — the WATV-inspired service design system
   - [Features](docs/FEATURES.md) — list of feature toggles and defaults
   - [Implementation](docs/IMPLEMENTATION.md) — deep technical guide for extending the app
   - [All documents →](docs/)
@@ -75,12 +78,12 @@ Deployed to Firebase Hosting on 2026-07-03. On a phone, members can use
 "Add to Home Screen" to install it like an app (required for push
 notifications to work on iPhone while the app is closed).
 
-To publish future changes, run in this folder:
+To publish visual or app-file changes, run in this folder:
 
-    npx firebase-tools deploy
+    npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only hosting
 
-This deploys hosting + Firestore rules + Cloud Functions together. Add
-`--only hosting` if you only changed app files and not rules/functions.
+This safely deploys Hosting only. Deploy Firestore rules or Cloud Functions
+only when those files intentionally changed and were separately reviewed.
 
 (Schedule edits do NOT need a re-deploy — they sync live through the
 database, or via the Google Sheet sync. Re-deploying is only for changes to

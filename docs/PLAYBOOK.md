@@ -184,7 +184,7 @@ Only needed when the app's code changes (not for schedule edits — those sync
 live through Firestore with no deploy). From the app folder:
 
 ```
-npx firebase-tools deploy
+npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy
 ```
 
 This deploys hosting + Firestore rules + Cloud Functions together. If you
@@ -193,7 +193,7 @@ song-picker files, etc.) and not `firestore.rules` or anything in
 `functions/`, you can save time with:
 
 ```
-npx firebase-tools deploy --only hosting
+npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only hosting
 ```
 
 Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
@@ -201,13 +201,8 @@ Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
 `song-lib.js`, also restart/relink nothing — the Signal ingest daemon in
 `~/tools/song-ingest` reads it directly from this folder on its next run.
 
-If npm cache errors appear, prefix the command:
-
-```
-npm_config_cache=/tmp/npmcache npx firebase-tools deploy
-```
-
-The CLI is already authenticated on Anthony's Mac.
+Always use the `/tmp/npm-cache` prefix on Anthony's Mac. The CLI is already
+authenticated.
 
 ### 8. The Firebase console map
 
@@ -308,7 +303,7 @@ real Firebase Authentication + rules-based security model. Requirements:
   reads the tokens collection with the Admin SDK, which bypasses rules,
   so that should be unaffected either way).
 - No emoji, no religious/cross imagery anywhere in the UI (see
-  docs/DESIGN.md rules). Any new UI must reuse the existing Liquid Glass
+  docs/DESIGN.md rules). Any new UI must reuse the WATV-inspired service
   design tokens in index.html's <style> block, not invent new colors or
   surfaces.
 - Update docs/HANDOFF.md (Architecture, Known limitations) and
@@ -348,7 +343,7 @@ reachable from the existing Schedule tab (e.g. a view toggle at the top
   the list view shows.
 - Print view: a `@media print` stylesheet (or a dedicated print
   button that opens a print-optimized layout) that produces a clean,
-  readable printed schedule — no glass/blur effects, no navigation
+  readable printed schedule — no navigation
   chrome, good use of a printed page, in monochrome-friendly styling.
 - Add this as a new feature toggle in the FEATURES array in app.js
   (follow the existing pattern — id, label, desc, def) if you judge it
@@ -357,10 +352,10 @@ reachable from the existing Schedule tab (e.g. a view toggle at the top
   emptyDuties, conflictWarnings, choirSong) — the month/print views should
   honor the same toggles the list view does, not bypass them.
 - Follow docs/DESIGN.md exactly for any new UI in the normal (non-print)
-  view: Apple system font stack only, the existing Liquid Glass tokens
-  (--glass, --accent, --r-lg, etc.) already defined in index.html's
-  <style> block, no emoji, no religious/cross imagery, accent tint used
-  sparingly.
+  view: the existing WATV-inspired tokens (`--brand-blue`, `--surface`,
+  `--accent`, `--r-lg`, etc.) already defined in index.html's `<style>`
+  block, no emoji, no religious/cross imagery, and alert rose used only
+  for alerts.
 - No new build step, no framework, no external libraries — plain
   JS/CSS/HTML consistent with the rest of app.js and index.html.
 
@@ -409,8 +404,8 @@ Requirements:
   e.g. `swaps/{id}`) and add matching rules to firestore.rules following
   the existing style (open read/write is the current baseline — decide
   whether swap requests need tighter rules and document the decision).
-- No emoji, no religious/cross imagery; reuse the existing Liquid Glass
-  design tokens and component patterns (cards, pills, ghost/primary
+- No emoji, no religious/cross imagery; reuse the existing WATV-inspired
+  design tokens and component patterns (cards, status labels, ghost/primary
   buttons) from index.html's <style> block — don't invent new visual
   language.
 - Add a feature toggle (`dutySwap` or similar) in the FEATURES array in
@@ -491,24 +486,19 @@ what you tested.
 
 ```
 Context: This is a static web app (no build step) for a congregation's
-worship duty schedule, in /Users/anthony/New/worship-duty-app. Read
-docs/DESIGN.md carefully first — it documents the current "Liquid Glass
-(iOS)" design system, which is explicitly light-theme-only today. All
-styles live in the single <style> block in index.html; app.js contains
-no styling and should stay that way. The design tokens (canvas washes,
---ink, --muted, --faint, --line/--hairline, --accent/--accent-2,
---glass/--glass-strong/--glass-border, --specular, --blur, --shadow,
-radii) are defined in :root in index.html.
+worship duty schedule, in /Users/anthony/Projects/worship-duty-app. Read
+docs/DESIGN.md carefully first — it documents the current WATV-inspired
+service design, which is light-theme-only today. Shared design tokens are
+defined in `:root` in index.html; song-specific rules remain scoped in
+song-app.css.
 
-Task: add a `prefers-color-scheme: dark` variant of the Liquid Glass
-system — an automatic dark mode that follows the device/browser setting
+Task: add a `prefers-color-scheme: dark` variant of the WATV-inspired
+service system — an automatic dark mode that follows the device/browser setting
 (no manual toggle needed, unless you judge one is also warranted —
 document your choice).
 Requirements:
-- Keep the same Liquid Glass concept (frosted glass surfaces over a
-  soft washed canvas, specular top-edge highlight, iOS system tint) but
-  with a dark canvas and adjusted glass opacities so surfaces still read
-  as "frosted glass," not flat dark cards.
+- Keep the same official, orderly, calm concept: crisp service records,
+  strong borders, restrained WATV blue, and rose only for alerts.
 - Maintain the contrast rules from docs/DESIGN.md: `--muted`-equivalent
   text must stay at ≥4.5:1 against the busiest wash region in dark mode
   too.
@@ -520,9 +510,9 @@ Requirements:
   rather than changing how app.js sets them.
 - Same rules apply as the light theme: no emoji, no cross/religious
   imagery, accent tint sparingly (~3x per screen).
-- Everything lives in the `<style>` block in index.html, using a
-  `@media (prefers-color-scheme: dark)` block (or CSS custom property
-  overrides scoped to it) — do not touch app.js.
+- Shared overrides live in the `<style>` block in index.html using a
+  `@media (prefers-color-scheme: dark)` block. Scoped song overrides live
+  in song-app.css. Do not add styling to app.js.
 
 Update docs/DESIGN.md to document the dark-mode tokens alongside the
 existing light-theme table, following its existing structure (add a
@@ -531,7 +521,7 @@ existing light-theme table, following its existing structure (add a
 Verification: use the browser preview tools to emulate
 prefers-color-scheme: dark (or your OS dark mode) against the deployed
 or local app, screenshot both the Schedule and My Duties tabs, and
-confirm text contrast and glass legibility hold up. Deploy with
+confirm text contrast and service-record legibility hold up. Deploy with
 `npx firebase-tools deploy --only hosting` and re-verify on the live
 site. Report what you tested.
 ```

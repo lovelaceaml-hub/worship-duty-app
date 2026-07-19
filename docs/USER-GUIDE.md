@@ -1,4 +1,4 @@
-# Welcome to the LV Zion Worship Duty Schedule
+# Welcome to LV Zion Worship Service
 
 A simple guide to using the app — no technical background needed.
 

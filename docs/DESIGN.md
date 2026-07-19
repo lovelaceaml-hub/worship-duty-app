@@ -1,104 +1,45 @@
-# Design System — Liquid Glass (iOS)
+# Design Direction — WATV Service Coordination
 
-Restyled 2026-07-03 from the earlier "Warm Glass" editorial look to a full
-iPhone / Apple **Liquid Glass** iOS aesthetic, **light theme only**. Brief:
-must read as a native iOS app, not a generic white-card web page; strictly no
-emoji and no cross / church / religious imagery (WMSCOG doctrine); the accent
-tint appears sparingly. This is a pure restyle — `app.js` is untouched; every
-style lives in the single `<style>` block in `index.html`.
+## Approved direction
 
-## Concept
+- **Three adjectives:** official, orderly, calm.
+- **Visual motif:** a precise WATV-blue rule that anchors clean white service records.
+- **Why it supports the audience:** members can immediately distinguish the schedule, their own assignments, and the presider song workspace without decorative UI competing with service information.
+- **Reference:** [WATV official website](https://watv.org/home/) and its blue symbol asset, inspected July 18, 2026. The observed symbol blue `#2383C6` was sampled from WATV's published PNG; the rose `#DA0F47` was observed in WATV's current home stylesheet. This app uses the color language only; it does not copy the WATV layout or logo and does not claim official WATV endorsement.
 
-A cool, light canvas washed with four soft blue/cyan/violet radial sources,
-with deep frosted-glass surfaces floating above it. Lower fill opacity plus
-strong backdrop blur + saturation and a specular top-edge highlight make the
-surfaces read as Apple "liquid glass," catching light rather than sitting as
-opaque cards. Typography is the full Apple system stack — no web fonts — with
-an iOS large-title / body / footnote / section-label rhythm. One system-blue
-tint (a blue-leaning indigo) carries attention and appears at most ~3× per
-screen. On phones the tab bar becomes a floating glass bottom bar like a
-native app; on desktop it stays a sticky top pill bar.
+## Directions considered
 
-## Tokens (all in `index.html` `:root`)
+1. **Official, orderly, calm — Service record.** White records, WATV blue rules, restrained corners, strong information hierarchy. Selected because it feels institutional while remaining easy on a phone.
+2. **Warm, editorial, reflective — Weekly bulletin.** Warm paper surfaces, larger serif headings, and section dividers. Not selected because dense editing and song-library screens became less efficient.
+3. **Focused, compact, operational — Control board.** Denser tables, dark navy navigation, and dashboard metrics. Not selected because it favored coordinators over ordinary members.
 
-| Token | Value | Use |
-|---|---|---|
-| canvas | `#eef1f7` + 4 fixed cool radial washes (blue `rgba(99,126,234,.16)`, steel `rgba(126,158,232,.13)`, cyan `rgba(120,196,214,.11)`, violet `rgba(158,148,224,.09)`) | body background (`background-attachment: fixed`) |
-| `--ink` | `#1c1c1e` (iOS label) | primary text |
-| `--muted` | `#52525b` | secondary text (≥4.5:1 on glass) |
-| `--faint` | `#6b6b73` | tertiary / footnote / section labels |
-| `--line` / `--hairline` | `rgba(60,60,67,.18)` / `.12` | separators (iOS-style) |
-| `--accent` / `--accent-2` | `#3b5bdb` / `#4f6ef2` | iOS system tint (blue-leaning indigo) |
-| `--accent-grad` | `linear-gradient(180deg,#4f6ef2,#3b5bdb)` | filled tint fills |
-| `--danger` / `--ok` / `--warn` | `#d1332b` / `#12855f` / `#ad6a12` | semantic |
-| `--glass` | `linear-gradient(155deg, #fff .62 → .30)` | card fill (lower opacity than before) |
-| `--glass-strong` | `rgba(255,255,255,.68)` | pills, inputs, active tab, list rows |
-| `--glass-border` | `rgba(255,255,255,.55)` | light-catching 1px border |
-| `--specular` | `inset 0 1px 0 rgba(255,255,255,.60)` | specular top edge on every glass surface |
-| `--blur` / `--blur-lite` | `saturate(180%) blur(30px)` / `saturate(160%) blur(18px)` | backdrop filters |
-| `--shadow` / `--shadow-soft` / `--shadow-bar` | see `:root` | elevation |
-| radii | `--r-lg` 26px cards, `--r-md` 16px small surfaces, 999px capsules | continuous-feel corners |
+## Hierarchy and content
 
-## Typography
+- **Schedule:** the next service date and assignments are dominant.
+- **My Duties:** name selection and the next assigned duty are dominant.
+- **Presider:** the service being planned and its song set are dominant.
+- **Manage:** the selected management section and safe edit action are dominant.
+- **Navigation:** top section tabs on desktop; persistent bottom tabs on phones; swiping remains an optional shortcut.
+- **Motion:** one short entrance transition and immediate control feedback; all animation is removed when reduced motion is requested.
+- **Imagery:** none. The interface uses no cross, church-building, or religious imagery and no emoji.
 
-- Font: **Apple system stack only** — `-apple-system, BlinkMacSystemFont,
-  "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial,
-  sans-serif`. No Google Fonts, no serif. The old Fraunces `<link>` tags and
-  `--serif` token were removed.
-- **Large-title header:** h1 32px / weight 700 / tracking −0.021em.
-- **Body / primary content:** 17px, line-height 1.47 (inputs, banners, duty
-  rows, buttons, links).
-- **Footnote:** 13px (hints, captions, times, sync status, descriptions).
-- **Section labels:** 11px, weight 600, uppercase, letter-spacing 0.06em,
-  `--faint` (`.cat-label`, `.cat-edit-label`, header eyebrow).
-- Times / counts use `font-variant-numeric: tabular-nums`.
+## Tokens
 
-## Category colors (dots)
+| Token group | Decision |
+| --- | --- |
+| Color | WATV-observed blue `#2383C6`; accessible derived deep blue `#075F96`; derived heading blue `#174A6B`; WATV-site rose `#DA0F47` only for alerts; canvas `#F3F6F8`; white surfaces |
+| Typography | Avenir Next when available, then Segoe UI/Roboto/system sans; compact labels and clear service headings |
+| Spacing | 4/8/12/16/20/28 rhythm; 44px minimum interactive controls |
+| Radius | 14px cards, 7–10px controls; no capsule-heavy styling |
+| Elevation | subtle cool-blue shadows; borders carry most structure |
+| Motion | 220ms entrance; reduced-motion override |
 
-Worship `#4338ca` · Usher Sisters `#be185d` · Usher Brothers `#0369a1` ·
-Lobby `#b45309` · Translation `#047857` · Media `#6d28d9`.
-(Values live in seed data; `app.js` sets them inline on `.dot-c` and via
-`--edge` on `.duty-card`.) Dots get a `0 0 0 3px rgba(255,255,255,.6)` halo so
-they stay crisp on glass.
+## Components and responsive behavior
 
-## Components
-
-- **Tabs — split behavior:**
-  - *Desktop (>640px):* sticky glass **top pill bar** (blur 30px + sat 180%,
-    specular edge). Active tab = `--glass-strong` capsule, label in accent tint.
-  - *Phone (≤640px):* `nav.tabs` becomes `position: fixed` — a **floating
-    glass bottom bar** inset from the edges (left/right 16px, bottom
-    `12px + env(safe-area-inset-bottom)`), z-index 100, stronger blur. `.wrap`
-    gets `padding-bottom: 96px + safe-area` so content never hides behind it.
-    The unread `.dot` stays anchored inside the middle button.
-  - `nav.tabs.hidden { display:none }` still hides the bar on the passcode lock.
-- **Cards:** `.card` — `--glass` fill, 1px light border, 26px radius, specular
-  highlight. Tab content fades/rises in (`@keyframes rise`, 0.35s).
-- **Grouped-list feel:** `.card-head`, `.duty-expand`, `.alert-item` use
-  hairline separators; `.list-row` is a glass row with its own specular edge.
-- **Duty cards:** 4px colored edge via the `--edge` custom property.
-- **Buttons:** iOS tinted capsules (999px). `primary` = filled accent gradient
-  with inner highlight; `ghost` = glass capsule with accent-tinted label;
-  `ghost.on` flips to `--ok`.
-- **"You" pill / Today badge:** filled accent capsules with a specular inset.
-- **Switches:** exact iOS proportions — 51×31 track, 27px knob, 20px travel;
-  off = `rgba(120,120,128,.32)`, on = solid `--accent`.
-- **Inputs / selects:** glass fill, 13px radius, accent focus ring; restyled
-  globally so `.add-row`, `.edit-grid`, `.list-row` and the sheet-sync
-  `width:100%` input all inherit.
-- **Lock screen:** centered glass card, 22px bold system title.
-
-## Rules
-
-1. No emoji anywhere in the product UI.
-2. No cross, church-building, or religious iconography (`icon.svg` is abstract
-   translucent circles on the accent gradient).
-3. The accent tint appears at most ~3 times per screen.
-4. Every text-on-glass combination must stay legible over the busiest wash
-   region — `--muted` targets ≥4.5:1; when in doubt use `--ink`.
-5. New surfaces reuse `--glass` / `--glass-strong` and the `--specular` edge;
-   never invent new whites.
-6. The presider song picker (`song-app.css`) reuses these exact tokens but
-   scopes **every** rule under `#song-root` so its styles never leak into the
-   host UI (and vice-versa). Add new song-picker styles there, scoped the same
-   way — never in `index.html`'s global block.
+- White bordered cards replace translucent glass.
+- Blue active rules identify the current tab without relying on color alone; the active panel also changes background and text weight.
+- Status labels use text plus color. Alerts use a rose border and pale rose surface.
+- Inputs have visible labels, strong borders, and a 3px focus ring.
+- Phone navigation stays fixed at the bottom with safe-area spacing; desktop navigation stays at the top.
+- The header returns to Schedule by click, Enter, or Space.
+- Song controls inherit the same tokens but remain scoped under `#song-root`.

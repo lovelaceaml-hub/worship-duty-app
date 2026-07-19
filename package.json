@@ -1,0 +1,11 @@
+{
+  "name": "lv-zion-worship-duty-app",
+  "private": true,
+  "scripts": {
+    "test:ui": "node tests/ui-qa.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "playwright": "^1.61.1"
+  }
+}

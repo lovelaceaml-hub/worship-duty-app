@@ -1,4 +1,4 @@
-# LV Zion Worship Duty Schedule — Handoff Document
+# LV Zion Worship Service — Handoff Document
 
 Last updated: 2026-07-03. Owner: Anthony (alovelace144@gmail.com).
 
@@ -369,7 +369,8 @@ See `docs/PLAYBOOK.md` Part 2 for these as full, ready-to-paste briefs:
 - Duty-swap requests between members, using the existing push
   infrastructure (Brief 3).
 - New-season import tooling (Brief 4).
-- Automatic dark mode for the Liquid Glass design system (Brief 5).
+- Optional automatic dark mode that preserves the WATV-inspired service
+  design and contrast rules (Brief 5).
 
 ## File map
 
