@@ -2,7 +2,18 @@
   "hosting": {
     "site": "lv-zion-duties",
     "public": ".",
-    "ignore": ["firebase.json", "**/.*", "**/.*/**", "README.md", "docs/**", "functions/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/.*/**",
+      "README.md",
+      "docs/**",
+      "functions/**",
+      "node_modules/**",
+      "package.json",
+      "package-lock.json",
+      "tests/**"
+    ],
     "headers": [
       { "source": "/", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
       { "source": "**/index.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
