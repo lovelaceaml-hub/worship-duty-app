@@ -873,6 +873,7 @@ function render() {
     else if (ui.tab === 'my') view.innerHTML = renderMy();
     else if (ui.tab === 'songs') renderSongs(view);
     else view.innerHTML = renderManage();
+    pulse('tab_' + ui.tab); // counts once per device per day — see pulse()
   }
   renderBanners();
 }
@@ -2060,6 +2061,51 @@ function setSyncPill(live) {
   pill.classList.toggle('live', !!live);
 }
 
+/* ---- Pulse: the smallest honest answer to "does anyone open this?" ----
+   Writes ONE document per day, `pulse/{YYYY-MM-DD}`, holding plain counters.
+
+   It stores no device id, no name, no free text — nothing that identifies a
+   person. Each device counts itself at most once per event per day, using a
+   localStorage note that never leaves the phone, so the number means
+   "devices that did this today", not "taps".
+
+   Why this exists: as of July 2026 not one of the church apps had any
+   measurement at all, so "is the worship schedule read by fifty people or by
+   nobody?" was unanswerable — a busy app and a dead one looked identical. */
+const pulseInFlight = new Set(); // stops a double-count before the write resolves
+
+function pulse(event) {
+  if (!fb || !fb.increment) return;
+  try {
+    const day = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
+    const key = 'wd-pulse-' + day;
+    const seen = (localStorage.getItem(key) || '').split(',').filter(Boolean);
+    if (seen.includes(event) || pulseInFlight.has(event)) return; // counted already
+    pulseInFlight.add(event);
+
+    fb.setDoc(
+      fb.doc(fb.db, 'pulse', day),
+      { date: day, [event]: fb.increment(1) },
+      { merge: true }
+    ).then(() => {
+      // Only remember it once the write actually landed. Marking it earlier
+      // meant a rejected write (offline, rules not yet deployed, quota) made
+      // this device stop counting for the rest of the day, silently.
+      const now = (localStorage.getItem(key) || '').split(',').filter(Boolean);
+      if (!now.includes(event)) {
+        now.push(event);
+        localStorage.setItem(key, now.join(','));
+      }
+      for (let i = localStorage.length - 1; i >= 0; i--) { // keep only today's note
+        const k = localStorage.key(i);
+        if (k && k.startsWith('wd-pulse-') && k !== key) localStorage.removeItem(k);
+      }
+    }).catch(() => {
+      pulseInFlight.delete(event);                  // let a later attempt retry
+    });
+  } catch (e) { /* private mode, quota, clock — all non-fatal */ }
+}
+
 async function initFirebase(config) {
   const appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
   const fsMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
@@ -2107,8 +2153,10 @@ async function initFirebase(config) {
     runTransaction: fsMod.runTransaction,
     arrayUnion: fsMod.arrayUnion,
     arrayRemove: fsMod.arrayRemove,
+    increment: fsMod.increment,
     knownIds: []
   };
+  pulse('opens');
   // Cloud Messaging — best-effort; unsupported browsers just leave messaging null.
   try {
     const msgMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js');

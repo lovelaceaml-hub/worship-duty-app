@@ -7,11 +7,16 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 ## Quick links
 
 - **Website:** https://lv-zion-duties.web.app — share this link with members
-- **Status:** Live
+- **Status:** Live. **26 July 2026: member writes were broken and are now fixed** — Firebase
+  Authentication had never been switched on for this project, so the rules (which require a
+  signed-in session) were rejecting every duty reminder, swap request and Manage edit. See
+  [Usage Counter](docs/USAGE-COUNTER.md). A privacy-safe daily usage counter was added at the
+  same time, so "does anyone open this?" is finally answerable.
 - **Docs:**
   - [User Manual](docs/USER-MANUAL.md) — how members and presiders use the app
   - [Setup Guide](docs/SETUP-GUIDE.md) — how to run, restore, and publish it
   - [Creation Guide](docs/CREATION-GUIDE.md) — how the combined app is built
+  - [Usage Counter](docs/USAGE-COUNTER.md) — what gets counted, and the sign-in bug it found
   - [Playbook](docs/PLAYBOOK.md) — day-to-day operation and AI-delegation guide
   - [User Guide](docs/USER-GUIDE.md) — simple guide to using the app
   - [Handoff](docs/HANDOFF.md) — architecture reference document
