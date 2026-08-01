@@ -6,6 +6,9 @@
   "engines": {
     "node": "20"
   },
+  "scripts": {
+    "test": "node --test test/public-schedule.test.js"
+  },
   "dependencies": {
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^6.1.0"

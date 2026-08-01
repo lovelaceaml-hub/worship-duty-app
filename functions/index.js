@@ -6,6 +6,7 @@ const { onRequest } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const sheetLib = require('./sheet-lib');
 const icsLib = require('./ics-lib');
+const { publicScheduleService } = require('./public-schedule');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -14,6 +15,17 @@ initializeApp();
 const db = getFirestore();
 const REGION = 'us-central1';
 const TZ = 'America/Los_Angeles';
+
+function dateInTimeZone(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
 
 /* ---- body formatting (kept close to the app's dutyLabel) ---- */
 function fmtDate(iso) {
@@ -248,7 +260,25 @@ exports.ics = onRequest({ region: REGION }, async (req, res) => {
   res.type('text/calendar; charset=utf-8').send(body);
 });
 
-/* ---- 6. scheduled Sheet -> Firestore sync ----
+/* ---- 6. read-only public schedule projection ----
+   LV Zion's temporary public release fetches this server-to-server. It cannot
+   read app settings, members, requests, tokens, or any other Firestore data. */
+exports.publicSchedule = onRequest({ region: REGION }, async (_req, res) => {
+  const today = dateInTimeZone(new Date());
+  const snapshot = await db.collection('schedule')
+    .where('date', '>=', today)
+    .orderBy('date')
+    .limit(260)
+    .get();
+  const services = snapshot.docs
+    .map(document => publicScheduleService(document.data()))
+    .filter(Boolean);
+  res.set('Cache-Control', 'public, max-age=60, s-maxage=60');
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.json({ version: 1, generatedAt: new Date().toISOString(), services });
+});
+
+/* ---- 7. scheduled Sheet -> Firestore sync ----
    The Google Sheet is the source of truth (other coordinators edit it); the
    app already pulls the published CSV, but only when someone opens it. This
    runs the same parse+merge server-side every 2 hours so Firestore (and

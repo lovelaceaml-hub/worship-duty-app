@@ -70,6 +70,14 @@ Two operating modes, decided once at startup in `init()` (bottom of
 
 ### 2.3 Cloud Functions (`functions/index.js`, Node 20, region `us-central1`)
 
+The `publicSchedule` HTTP function is a deliberately narrow read-only
+projection used by the temporary public LV Zion landing site. It reads future
+`schedule` services with the Admin SDK and returns only the fields shown on
+this app's Schedule tab: date, time, worship/service labels, and duty
+assignments. It never returns member lists, app settings, requests, FCM tokens,
+or document IDs, and it makes no writes. The LV Zion app renders this
+projection on its server rather than loading this full Firebase app.
+
 All four share `sendToNames(names, title, bodyFn)`, which looks up FCM
 tokens for the given member names in `tokens`, batches recipients by
 identical notification body, sends one data-only multicast per batch via
