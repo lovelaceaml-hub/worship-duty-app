@@ -187,6 +187,8 @@ descriptions and defaults).
 
 - Toggle `conflictWarnings` (default on). `conflictsFor()`/`activeConflicts()`
   in app.js compute, per service, which members are assigned 2+ duties.
+- A single prayer duty paired with a single usher duty is intentional and is
+  excluded from the warning. Other duplicate pairs remain visible.
 - Shown as a warning line on service cards everywhere (Schedule, My Duties,
   Manage).
 - In Manage's expanded service view, editors can "Mark as OK," which writes

@@ -102,6 +102,9 @@ convenience, see Brief 1 below (Firebase Auth + locked-down rules).
 When the toggle **Double-duty warnings** is on (default), any service where
 one person is assigned two or more duties shows a warning line on that
 service's card — visible to everyone, on Schedule, My Duties, and Manage.
+The app treats one prayer duty plus one usher duty as intentional, so that
+pair does not show a warning. Other duplicate pairs still do: two usher
+duties, two prayer duties, or a prayer/usher duty combined with another role.
 
 Sometimes double-booking is intentional (small congregation, trusted
 volunteer covering two roles). To silence a specific one:

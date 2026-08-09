@@ -133,7 +133,28 @@ function sameDuties(a, b) {
   if (!a || !b || a.length !== b.length) return false;
   return a.every((d, i) => d === b[i]);
 }
-/* Every member appearing in 2+ duties of this service, with their duty list (stable order) */
+function isPrayerDuty(duty) {
+  return dutyCategory(duty).name === 'Worship' && /prayer/i.test(duty);
+}
+function isUsherDuty(duty) {
+  const category = dutyCategory(duty).name;
+  return category === 'Usher Sisters' || category === 'Usher Brothers';
+}
+/* Prayer + usher is an intentional pairing. Other duplicate pairs remain
+   warnings: two usher duties, two prayer duties, or either with another role. */
+function hasNonExemptPair(duties) {
+  for (let i = 0; i < duties.length; i++) {
+    for (let j = i + 1; j < duties.length; j++) {
+      const prayerUsherPair =
+        (isPrayerDuty(duties[i]) && isUsherDuty(duties[j])) ||
+        (isUsherDuty(duties[i]) && isPrayerDuty(duties[j]));
+      if (!prayerUsherPair) return true;
+    }
+  }
+  return false;
+}
+/* Every member appearing in 2+ duties of this service, with their duty list (stable order).
+   A single prayer + usher pairing is intentionally omitted from the conflicts. */
 function conflictsFor(svc) {
   const byMember = {};
   const assignments = svc.assignments || {};
@@ -143,7 +164,7 @@ function conflictsFor(svc) {
     (byMember[name] || (byMember[name] = [])).push(duty);
   });
   return Object.keys(byMember)
-    .filter(name => byMember[name].length >= 2)
+    .filter(name => byMember[name].length >= 2 && hasNonExemptPair(byMember[name]))
     .map(name => ({ name, duties: sortDuties(byMember[name]) }));
 }
 /* conflictsFor minus ones already acknowledged (conflictOk) with a matching duty list */
