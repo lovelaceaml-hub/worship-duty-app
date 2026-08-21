@@ -1,6 +1,6 @@
 # Playbook
 
-Last updated: 2026-07-03.
+Last updated: 2026-08-20.
 
 This is the one document to follow if you (Anthony) need to run the app day to
 day, or hand a task to an AI coding tool. It assumes no developer background.
@@ -38,24 +38,39 @@ into that service's choir-song line — it's never added to the People list.
 See the exact column contract in Brief 4 below if you ever need to rebuild
 the sheet.
 
+**Parking Lot and Offering (added 20 August 2026).** The congregation's
+spreadsheet grew two new department blocks — PARKING LOT (`Parking #1`…
+`Parking #5`) and OFFERING (`Offering #1`…`Offering #6`) — so the app now
+knows them too. They appear as their own filter chips and their own coloured
+sections on every service card, in My Duties, in the calendar feed, and in
+Manage, exactly like Media Booth does. Two things to know:
+
+- The **"Raw Data" tab does not emit Parking or Offering rows yet**, and the
+  new columns on the main schedule grid are still empty. Until whoever
+  maintains the sheet extends the Raw Data tab to cover those columns, assign
+  parking and offering in **Manage** — the sync will never overwrite them.
+- Nobody is on the Parking Lot or Offering rosters yet. Add people in
+  Manage → People (the department checkboxes), or just assign them once and
+  the app adds them to the roster automatically.
+
 What the sheet sync does and does not touch:
 
 - It **only changes duties the sheet actually lists**. If a service in the
   sheet doesn't mention "Media Booth #1," the app leaves whatever is already
   assigned there alone. The same applies to the choir song line: it only
   updates when the sheet has a non-empty `Choir Song` row for that service.
-- **Media Booth assignments and any extra/manual services you added
-  directly in Manage are preserved** — the sheet can't overwrite what it
-  doesn't know about.
+- **Media Booth, Parking Lot and Offering assignments, and any extra/
+  manual services you added directly in Manage are preserved** — the sheet
+  can't overwrite what it doesn't know about.
 - New names in the Member column are **added to the People list**
   automatically (song titles from `Choir Song` rows never are).
 - A duty name in the sheet that the app doesn't recognize is **skipped and
   reported as a warning** (visible on the Data & Sync card) — it will not
   silently disappear or crash the sync.
 
-**Use the Manage tab for quick fixes the sheet doesn't carry:** Media Booth
-assignments, choir songs, one-off/extra services, or anything you want to
-change before the next sheet edit. Manage → Services → tap a service to
+**Use the Manage tab for quick fixes the sheet doesn't carry:** Media Booth,
+Parking Lot and Offering assignments, choir songs, one-off/extra services, or
+anything you want to change before the next sheet edit. Manage → Services → tap a service to
 expand it → assign people or edit the choir song line.
 
 ### 2. Passcodes

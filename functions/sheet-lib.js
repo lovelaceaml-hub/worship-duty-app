@@ -13,7 +13,9 @@ const CATEGORIES = [
   { name: 'Usher Brothers', duties: ['Usher #1', 'Usher #2', 'Lobby Security'] },
   { name: 'Lobby',          duties: ['Lobby Desk #1', 'Lobby Desk #2'] },
   { name: 'Translation',    duties: ['Translation #1', 'Translation #2'] },
-  { name: 'Media',          duties: ['Media Booth #1', 'Media Booth #2'] }
+  { name: 'Media',          duties: ['Media Booth #1', 'Media Booth #2'] },
+  { name: 'Parking Lot',    duties: ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'] },
+  { name: 'Offering',       duties: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'] }
 ];
 
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv';

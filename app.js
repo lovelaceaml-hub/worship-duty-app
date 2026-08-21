@@ -8,7 +8,9 @@ const CATEGORIES = [
   { name: 'Usher Brothers', color: '#0369a1', duties: ['Usher #1', 'Usher #2', 'Lobby Security'] },
   { name: 'Lobby',          color: '#b45309', duties: ['Lobby Desk #1', 'Lobby Desk #2'] },
   { name: 'Translation',    color: '#047857', duties: ['Translation #1', 'Translation #2'] },
-  { name: 'Media',          color: '#6d28d9', duties: ['Media Booth #1', 'Media Booth #2'] }
+  { name: 'Media',          color: '#6d28d9', duties: ['Media Booth #1', 'Media Booth #2'] },
+  { name: 'Parking Lot',    color: '#3f6212', duties: ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'] },
+  { name: 'Offering',       color: '#a21caf', duties: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'] }
 ];
 const SERVICE_LABELS = ['Morning', 'Afternoon', 'Evening', 'Early Morning', 'Commemoration'];
 const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
@@ -21,7 +23,9 @@ const DEPARTMENTS_SEED = {
   'Usher Brothers': ['B. Alex', 'B. Anthony', 'B. Clyde', 'B. Davidson', 'B. Delvin', 'B. Drew', 'B. Dustin', 'B. Giomar', 'B. Irvin', 'B. James S', 'B. Jordan', 'D. Chris'],
   'Lobby': ['S. Adrienne', 'S. Anessa', 'S. Bridgette', 'S. Ivonne', 'S. Leslie', 'S. Lupita', 'S. Mercie', 'S. Nichol', 'S. Paola'],
   'Translation': ['B. Irvin', 'B. Jason', 'D. Roza', 'S. Elena', 'S. Elisa', 'S. Leslie', 'S. Martha', 'S. Monica C', 'S. Monica S', 'S. Paola'],
-  'Media': []
+  'Media': [],
+  'Parking Lot': [],
+  'Offering': []
 };
 const DATA_KEY = 'wds-data-v2';
 // Fallback site-passcode hash, used only on a brand-new device before app/
@@ -694,7 +698,8 @@ function mergeSheetServices(services) {
     if (sheetSvc.worship && existing.worship !== sheetSvc.worship) { existing.worship = sheetSvc.worship; changed = true; }
     if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong) { existing.choirSong = sheetSvc.choirSong; changed = true; }
     if (!existing.assignments) existing.assignments = {};
-    // Only touch duties the sheet mentions — Media Booth etc. are preserved.
+    // Only touch duties the sheet mentions — Media Booth, Parking Lot and
+    // Offering assignments are preserved.
     Object.keys(sheetSvc.assignments).forEach(duty => {
       addToDept(duty, sheetSvc.assignments[duty]);
       if (existing.assignments[duty] !== sheetSvc.assignments[duty]) {
@@ -1566,7 +1571,7 @@ function renderSheetCard() {
     '<input type="text" data-chg="sheet-url" value="' + esc(sheetUrl()) + '" style="width:100%;margin-top:10px" ' +
     'placeholder="Published-CSV link of the schedule sheet">' +
     '<div class="hint" style="margin:6px 2px 0">Published-CSV link of the schedule sheet (File → Share → Publish to web → CSV).</div>' +
-    '<div class="hint" style="margin:8px 2px 0">The sheet is the source of truth for the duties it lists. Media Booth, choir songs, and extra services added here are kept.</div>';
+    '<div class="hint" style="margin:8px 2px 0">The sheet is the source of truth for the duties it lists. Media Booth, Parking Lot, Offering, choir songs, and extra services added here are kept.</div>';
 
   const msgs = (res && res.warningMsgs) || [];
   if (msgs.length) {

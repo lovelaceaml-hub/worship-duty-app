@@ -79,8 +79,9 @@ members' devices.
   localStorage).
 - **Semantics:** the sheet is the source of truth only for the duties it
   lists. `mergeSheetServices()` in app.js does a per-duty upsert — it never
-  touches a duty slot the sheet's row doesn't mention, so Media Booth
-  assignments and manually-added/extra services survive every sync. New
+  touches a duty slot the sheet's row doesn't mention, so Media Booth,
+  Parking Lot and Offering assignments and manually-added/extra services
+  survive every sync. New
   member names appearing in the sheet's Member column are added to
   `app/members` automatically. A duty name the app doesn't recognize is
   skipped and surfaced as a warning (not silently dropped, not a crash).
@@ -234,8 +235,8 @@ descriptions and defaults).
   the app auto-pulls it (see "Google Sheet auto-pull sync" above). No
   deploy needed.
 - **Quick fixes the sheet doesn't carry:** Manage tab (editor passcode) on
-  any device — Media Booth assignments, choir songs, one-off services. No
-  deploy needed.
+  any device — Media Booth, Parking Lot and Offering assignments, choir
+  songs, one-off services. No deploy needed.
 - **Deploy app changes:** from the app folder run `npx firebase-tools deploy`
   (deploys hosting + Firestore rules + Cloud Functions together). Use
   `--only hosting` if only app files changed. CLI already authenticated on

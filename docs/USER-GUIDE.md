@@ -106,7 +106,7 @@ Tap **Schedule** to see every upcoming service for everyone, grouped by day.
 
 - Each card shows the service (e.g. "Sabbath Day · Morning"), the time,
   and who's assigned to each role, grouped by department (Worship, Usher
-  Sisters, Usher Brothers, Lobby, Translation, Media).
+  Sisters, Usher Brothers, Lobby, Translation, Media, Parking Lot, Offering).
 - If a choir song has been chosen for that service, it shows on a line near
   the top of the card.
 - **Department chips** sit above the list — tap one (like "Usher Sisters")
@@ -162,7 +162,8 @@ In **Manage → People**:
 - Click directly on a name to fix a typo — it updates everywhere that
   person is assigned, automatically.
 - Each person has a row of checkboxes, one per department (Worship, Usher
-  Sisters, Usher Brothers, Lobby, Translation, Media). Checking one adds
+  Sisters, Usher Brothers, Lobby, Translation, Media, Parking Lot,
+  Offering). Checking one adds
   them to that department's roster, which controls which duty dropdowns
   they appear in (see above).
 

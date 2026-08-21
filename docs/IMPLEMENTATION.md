@@ -59,7 +59,7 @@ Two operating modes, decided once at startup in `init()` (bottom of
 | `schedule/{date}_{service-slug}` | `{ date: 'YYYY-MM-DD', time: 'HH:MM', service: 'Morning', worship: 'Sabbath Day', choirSong: '', assignments: { [dutyName]: memberName }, conflictOk?: { [memberName]: dutyName[] } }` | One doc per service. Id built by `svcId()` (`date + '_' + slugified service label`). `conflictOk` records acknowledged double-duty warnings, keyed by member name to their exact duty list at the time it was marked OK. Conflict detection intentionally ignores one prayer + one usher duty pairing; other duplicate pairs remain warnings. |
 | `app/members` | `{ list: string[] }` | Sorted array of every known member name. |
 | `app/settings` | `{ features: { [featureId]: boolean }, pinHash: string, sitePinHash: string, sheetUrl: string, schedulerName?: string }` | `pinHash`/`sitePinHash` are SHA-256 hex hashes (never plaintext). `sheetUrl` is the published-CSV link, overriding `DEFAULT_SHEET_URL` in app.js. `schedulerName` is who gets notified when a change request comes in. |
-| `app/departments` | `{ map: { [categoryName]: memberName[] } }` | Roster per category (Worship, Usher Sisters, Usher Brothers, Lobby, Translation, Media) — see §3.2. Seeded once from `DEPARTMENTS_SEED` in app.js if missing/empty. |
+| `app/departments` | `{ map: { [categoryName]: memberName[] } }` | Roster per category (Worship, Usher Sisters, Usher Brothers, Lobby, Translation, Media, Parking Lot, Offering) — see §3.2. Seeded once from `DEPARTMENTS_SEED` in app.js if missing/empty. |
 | `tokens/{fcmToken}` | `{ name: memberName, updatedAt: epoch-ms }` | One doc per device registered for push, keyed by the device's FCM token itself. Written client-side by `registerPush()`. Dead tokens are pruned by Cloud Functions on send failure. |
 | `sent/{markerId}` | `{ t: epoch-ms }` | Internal de-dupe markers for `dutyReminders`, e.g. `svcId_duty-slug_name-slug`. Auto-pruned after 7 days. Not client-readable (`allow read, write: if false`; only the Admin SDK, which bypasses rules, can touch it). |
 | `requests/{svcId_dutySlug_createdAt}` | `{ id, name, svcId, date, service, worship, duty, note, status: 'pending'\|'approved'\|'declined', createdAt: epoch-ms, resolvedAt?, resolvedBy? }` | One doc per change request — see §3.4. |
@@ -178,9 +178,9 @@ there):
   warning string (surfaced on the Data & Sync card) — never silently
   dropped, never a crash.
 - `mergeSheetServices()` does a **per-duty upsert**: it only writes duty
-  slots the sheet's row actually mentions, so Media Booth assignments and
-  any manually-added/extra services in Manage survive every sync
-  untouched. It also grows `app/departments` rosters automatically — any
+  slots the sheet's row actually mentions, so Media Booth, Parking Lot and
+  Offering assignments and any manually-added/extra services in Manage
+  survive every sync untouched. It also grows `app/departments` rosters automatically — any
   `(duty, member)` pair seen adds that member to the roster for that duty's
   category if not already present.
 - New member names appearing in the sheet's Member column are added to
@@ -223,7 +223,8 @@ are separate codebases with separate copies of the same member list:
 ### 3.2 Department rosters / scoped pickers
 
 - `state.departments` maps each category name (`Worship`, `Usher Sisters`,
-  `Usher Brothers`, `Lobby`, `Translation`, `Media`) to an array of member
+  `Usher Brothers`, `Lobby`, `Translation`, `Media`, `Parking Lot`,
+  `Offering`) to an array of member
   names who belong to it. Seeded once from `DEPARTMENTS_SEED` (top of
   app.js) if the Firestore doc is missing or empty.
 - **Manage → People** (`renderManagePeople()`) shows one checkbox per
