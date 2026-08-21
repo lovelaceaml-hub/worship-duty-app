@@ -123,6 +123,14 @@ source of truth copy lives at `/Users/anthony/Documents/Claude/Projects/
 Reminders and Calendars/LV Zion Duty Sheet.gs`, with a companion `README.md`
 there):
 
+- **Apps Script project** (container-bound to the schedule sheet):
+  `https://script.google.com/u/0/home/projects/1B-2w9pCjQM8Bhvg71AlWFrDg-xGJMas6qDmAfs9fYi_iRE6sJeqfy0V-/edit`
+  — script id `1B-2w9pCjQM8Bhvg71AlWFrDg-xGJMas6qDmAfs9fYi_iRE6sJeqfy0V-`.
+  Because it is container-bound it does **not** appear in `clasp list`; clone
+  it by id (`clasp clone <id>`, cache prefix per the environment skill).
+  Saving a script change does **not** rebuild anything — run
+  **Duty Tools → Rebuild Raw Data**, or edit `2026 Entry` to fire the trigger.
+
 - Two tabs only: **`2026 Entry`** (wide grid, header on row 2, one column
   per duty, edited by hand) and **`Raw Data`** (long-format, one row per
   person/duty, auto-generated — never hand-edit it, it's wiped and
