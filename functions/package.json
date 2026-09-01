@@ -7,7 +7,7 @@
     "node": "20"
   },
   "scripts": {
-    "test": "node --test test/public-schedule.test.js"
+    "test": "node --test test/public-schedule.test.js test/worship-sync.test.js"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",

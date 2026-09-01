@@ -361,29 +361,47 @@ Gated by the `songPicker` feature toggle.
 
 ### 4.2 Deploying
 
-From the app folder (`/Users/anthony/New/worship-duty-app`):
-
-```
-npx firebase-tools deploy
-```
-
-Deploys hosting + Firestore rules + Cloud Functions together, per
-`firebase.json`'s top-level config (`hosting.site`, `firestore.rules`,
-`functions.source`). To save time when only static files changed:
+From the app folder (`/Users/anthony/Projects/worship-duty-app`), use only
+an explicit targeted deployment. For static files, use Hosting only:
 
 ```
 npx firebase-tools deploy --only hosting
 ```
 
-Or to redeploy just the rules or just the functions:
+For a separately reviewed rules change, use rules only:
 
 ```
 npx firebase-tools deploy --only firestore:rules
-npx firebase-tools deploy --only functions
 ```
+
+Do not use a broad Firebase deploy or a Functions-wide target. The Section 8
+sender Functions are held until the reviewed Section 9B procedure names exact
+function targets. That later procedure may name
+`npx firebase-tools deploy --only functions:onVercelScheduleWrite,functions:worshipVercelReconcile`,
+but this command must not be run before that gate.
 
 If npm cache permission errors appear, prefix the command with
 `npm_config_cache=/tmp/npmcache`.
+
+### 4.2A Section 8 sender configuration matrix
+
+The Section 8 sender is default off through
+`LV_ZION_WORSHIP_SYNC_ENABLED`. Its nonsecret
+`LV_ZION_WORSHIP_SYNC_KEYRING_MODE` defaults to `current` and accepts only
+`current` or `rotating`. Current mode resolves only
+`LV_ZION_WORSHIP_SYNC_SECRET`; it does not read or activate
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_SECRET`, even if that managed secret exists.
+Rotating mode requires valid distinct
+`LV_ZION_WORSHIP_SYNC_KEY_VERSION` and
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_KEY_VERSION` values plus the exact 13-digit
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_KEY_ACTIVATED_AT_MS` rotation-start value shared
+with the receiver before either managed secret is resolved. Missing, malformed,
+future, or otherwise invalid metadata fails closed with zero managed-secret,
+database, queue, and outbound work. During the active overlap, rotating mode
+also requires a nonempty previous managed secret. At or after the exact
+86400000 ms boundary, the previous secret is not accepted and the current
+secret remains valid. The sender remains held until the reviewed Section 9B
+procedure names exact function targets.
 
 ### 4.3 Seeding behavior
 

@@ -1,6 +1,6 @@
 # LV Zion Worship Service — Handoff Document
 
-Last updated: 2026-07-03. Owner: Anthony (alovelace144@gmail.com).
+Last updated: 2026-08-31. Owner: Anthony (alovelace144@gmail.com).
 
 For day-to-day operation (schedule edits, passcodes, notifications,
 deploying, troubleshooting) and the AI-delegation briefs, see
@@ -57,8 +57,9 @@ members' devices.
     (`allow read, write: if false` — only the Admin SDK, used by Cloud
     Functions, can touch it, since the Admin SDK bypasses rules entirely).
     No expiry (set 2026-07-03).
-  - `firebase.json` deploys hosting + Firestore rules + Cloud Functions
-    together via `npx firebase-tools deploy`.
+  - `firebase.json` contains hosting, Firestore rules, and Cloud Functions
+    configuration. Use only the targeted deployment commands in the
+    Operations runbook. Never use a broad Firebase deploy.
 - **Two modes:** if `firebase-config.js` has a config, the app syncs live
   (Firestore `onSnapshot`); otherwise it runs on localStorage only. The
   first client to see an empty database uploads `seed-data.js` automatically,
@@ -229,6 +230,99 @@ descriptions and defaults).
   "Add my duties to my calendar" (.ics with 24h and 2h alarms) — unaffected
   by any of the above.
 
+## Firebase to Vercel Worship sync sender, Section 8
+
+The sender is implemented only in `functions/worship-sync.js` and is exposed
+through the exact new exports `onVercelScheduleWrite` and
+`worshipVercelReconcile` in `functions/index.js`. The first emits a signed
+single-service event for a schedule write. The second emits a deterministic,
+ordered multipart full snapshot from the authoritative `schedule/*`
+collection. Both use the frozen contract at
+`/Users/anthony/Projects/preaching/docs/WORSHIP-FIREBASE-SYNC-CONTRACT.md`:
+canonical UTF-8 JSON, raw-body HMAC SHA-256, exact framing headers, source
+sequence allocation, 50-service parts, a 2,000-service snapshot maximum,
+10-second request timeout, and at most three attempts with bounded backoff.
+The verified contract SHA-256 is
+`6fe1519db42989f822d5a733688cd7c0b1ae5744f8b77791900419b67be4db96`.
+
+The sender is default off. Provider-managed function configuration uses
+`LV_ZION_WORSHIP_SYNC_ENABLED`, `LV_ZION_WORSHIP_SYNC_URL`, and
+`LV_ZION_WORSHIP_SYNC_KEY_ID`; the signing secret is the managed secret
+`LV_ZION_WORSHIP_SYNC_SECRET`. The rotation overlap secret is
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_SECRET`. The current key-version name is
+optional as `LV_ZION_WORSHIP_SYNC_KEY_VERSION`. The nonsecret
+`LV_ZION_WORSHIP_SYNC_KEYRING_MODE` is `current` by default and accepts only
+`current` or `rotating`. In `current` mode, the sender resolves only the
+current managed secret and ignores the previous secret and its metadata. In
+`rotating` mode, distinct previous-version and exact activation metadata must
+validate before either managed secret is resolved.
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_KEY_VERSION` is required in rotating mode and
+must identify that prior key.
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_KEY_ACTIVATED_AT_MS` is required in rotating
+mode. It is the 13-digit provider UTC millisecond value
+at rotation start, when the current key became active and the previous key
+entered its 24-hour overlap, and this exact value is shared with the receiver.
+In rotating mode, the previous key is accepted only while the
+trusted function clock is before that value plus 86400000; the exact boundary
+expires the previous key. Missing, malformed, or future activation metadata,
+and invalid or equal key versions, fail closed before secret resolution or
+sender state work. At or after the overlap boundary, the previous key is not
+accepted and the current key remains valid. The explicit kill switch is
+`LV_ZION_WORSHIP_SYNC_SOURCE_FROZEN`. No values are recorded here. The
+receiver's managed-key overlap supports rotation without putting old or new
+secret values in this repository.
+
+This is a source-only bridge. It reads `schedule/*` and stores sender state in
+the unmatched top-level `worshipVercelSync/*` collection. Existing Firestore
+rules deny that collection to clients by default. Its state schema is
+`state`, `revisions/items/{revisionHash}`,
+`chunks/sets/{candidateId}/items/{chunkIndex}`,
+with the private parent marker `chunks/sets/{candidateId}`,
+`queue/items/{revisionHash}-part-N`, `snapshots/items/{fullSha256}`, and
+`leases/items/reconcile`. Chunks use authenticated encryption with a
+domain-separated key derived from the provider-managed signing secret and store
+the key version. Each chunk document stays below 900 KiB, staging batches stay
+at or below 50 writes and 2 MiB, and the final allocation transaction stores
+compact manifests only. Losing candidates are deleted on allocation races or
+carry a hard expiry boundary and are never reused. Reconcile deterministically
+deletes expired chunks still referenced by resolved revisions in bounded
+batches. Parent markers move from staged to active to resolved to empty, so
+cleanup queries only eligible nonempty sets and makes monotonic progress without
+revisiting empty parents. A malformed existing
+state fails closed and never restarts the sequence at zero. The dispatcher claims one
+lowest unresolved sequence with a 30-second lease, performs network delivery
+outside the transaction, and records the result transactionally. Unknown,
+retryable, and in-flight outcomes block higher sequences. Expired leases are
+reclaimable with the same body and identity. Snapshot generations reuse only
+an active attempt, while equal content after a later sequence or conflict gets
+a fresh sequence and snapshot ID. Receiver 202 remains
+`accepted_pending_mapping`, not adopted.
+
+The bridge never writes Google Sheets, never reads or writes member rosters,
+tokens, settings, requests, song data, or public schedule data, and does not
+connect to the Signal sink. It does not retire or modify the service worker.
+Each of at most 40 parts has a 30-second worst-case sender budget. With a
+5-second dispatch margin, the maximum is 1,205 seconds, inside the scheduled
+function's explicit 1,800-second timeout and the receiver's 1,500-second
+staging TTL. The event function is capped at 540 seconds and can deliver only
+one lowest-ready event item. The scheduler owns multipart delivery and defers
+when its remaining budget cannot cover every unresolved part. The installed
+Firebase SDK manifest is checked offline for 540 seconds on the event export
+and 1,800 seconds on the scheduled export. The existing
+`onScheduleWrite` export and complete function block remain byte-identical.
+The protected block's exact slice SHA-256 is
+`535f67182e87564170e9e6e8b8336b6f9d75c9e13f19c91b7cdf0ac76c71db92`.
+
+Safe local checks from `functions/` are `npm test`,
+`node --check worship-sync.js`, and `node --check index.js`. Deployment of
+the new functions is prohibited and remains pending the Section 9 and
+Section 10 release gates. Roll back or disable by setting the enable flag to a
+value other than `true`, or set the source-freeze flag to `true`; do not
+remove the existing notification, reminder, ICS, scheduled Sheet sync, or
+public schedule functions. No Firebase CLI, emulator, live Firestore,
+Google Sheet, network delivery, secret, or production action is part of this
+Section 8 implementation verification.
+
 ## Operations runbook
 
 - **Edit the schedule (normal path):** keep editing the Google Sheet —
@@ -237,11 +331,12 @@ descriptions and defaults).
 - **Quick fixes the sheet doesn't carry:** Manage tab (editor passcode) on
   any device — Media Booth, Parking Lot and Offering assignments, choir
   songs, one-off services. No deploy needed.
-- **Deploy app changes:** from the app folder run `npx firebase-tools deploy`
-  (deploys hosting + Firestore rules + Cloud Functions together). Use
-  `--only hosting` if only app files changed. CLI already authenticated on
-  Anthony's Mac; if npm cache errors appear, prefix with
-  `npm_config_cache=/tmp/npmcache`.
+- **Deploy app changes:** no broad Firebase deploy is authorized by this
+  handoff. The Section 8 sender remains undeployed until the Section 9B gate.
+  A later narrowly reviewed sender deployment may use
+  `npx firebase-tools deploy --only functions:onVercelScheduleWrite,functions:worshipVercelReconcile`
+  after the written Section 9B gates and explicit release authorization. Keep
+  hosting, rules, and all other functions outside that operation.
 - **Backups:** Manage → Data & Sync → Export backup file (JSON of the whole
   state). Import restores it (overwrites for everyone).
 - **Reset to spreadsheet:** Manage → Data & Sync — overwrites everything
@@ -291,8 +386,10 @@ so reminders, the song app, and .ics feeds stay fresh when nobody opens
 the app. `sheet-lib.js` is a line-for-line port of the app's pure parsers —
 **if you change parsing rules in `app.js`, mirror them there.** Merge
 policy is unchanged: only duties the sheet mentions are touched; in-app
-edits to other duties survive. First deploy of these functions will prompt
-to enable Cloud Scheduler (expected, Blaze plan required — already on it).
+  edits to other duties survive. Cloud Scheduler is already configured for the
+  existing functions. Do not deploy Functions from this handoff; the Section 8
+  sender remains held until the reviewed Section 9B procedure names exact
+  function targets.
 
 ## Presider song picker (merged in 2026-07-10)
 
@@ -385,7 +482,7 @@ See `docs/PLAYBOOK.md` Part 2 for these as full, ready-to-paste briefs:
 | `firebase-config.js` | Real Firebase web config + Web Push (VAPID) key (public identifiers) |
 | `firebase.json` / `.firebaserc` | Deploy config for hosting + Firestore rules + Cloud Functions |
 | `firestore.rules` | Firestore security rules, deployed alongside hosting |
-| `functions/` | Cloud Functions source: `index.js` (push notifications, `ics` feed, `scheduledSheetSync`), `ics-lib.js` + `sheet-lib.js` (pure, node-testable logic), `package.json` |
+| `functions/` | Cloud Functions source: `index.js` (push notifications, `ics` feed, `scheduledSheetSync`, default-off Vercel sender exports), `worship-sync.js` (pure sender, canonical projection, HMAC, sequence, chunking, retry logic), `ics-lib.js` + `sheet-lib.js` (pure, node-testable logic), and `package.json` |
 | `manifest.json`, `sw.js`, `icon.svg` | PWA install + background push notifications |
 | `song-app.js` | Presider song picker UI (ES module, lazy-loaded, mounts into `#song-root`) — see "Presider song picker" |
 | `song-lib.js` | Pure sung-history logic shared with the Signal ingest daemon (`window.SongLib` / `module.exports`) |

@@ -1,6 +1,6 @@
 # Playbook
 
-Last updated: 2026-08-20.
+Last updated: 2026-08-31.
 
 This is the one document to follow if you (Anthony) need to run the app day to
 day, or hand a task to an AI coding tool. It assumes no developer background.
@@ -198,21 +198,24 @@ Manage → Data & Sync:
 
 ### 7. Deploying app changes
 
-Only needed when the app's code changes (not for schedule edits — those sync
-live through Firestore with no deploy). From the app folder:
-
-```
-npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy
-```
-
-This deploys hosting + Firestore rules + Cloud Functions together. If you
-only changed app files (`index.html`, `app.js`, the `song-*.js`/`song-app.css`
-song-picker files, etc.) and not `firestore.rules` or anything in
-`functions/`, you can save time with:
+Only needed when the app's code changes (not for schedule edits, which sync
+live through Firestore with no deploy). Use explicit targeted commands from
+the app folder. For Hosting-only changes such as `index.html`, `app.js`, or
+the `song-*.js` and `song-app.css` files:
 
 ```
 npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only hosting
 ```
+
+For a separately reviewed rules-only change, use:
+
+```
+npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only firestore:rules
+```
+
+Never use a broad Firebase deploy or a Functions-wide target. The Section 8
+sender Functions remain held until the reviewed Section 9B procedure names
+the exact function targets.
 
 Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
 `song-seed.js`, `song-app.css`) deploy with hosting automatically. If you edit
@@ -221,6 +224,88 @@ Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
 
 Always use the `/tmp/npm-cache` prefix on Anthony's Mac. The CLI is already
 authenticated.
+
+### 7A. Firebase to Vercel sender, Section 8
+
+The sender exports are `onVercelScheduleWrite` and
+`worshipVercelReconcile`. They are separate from the existing
+`onScheduleWrite` notification trigger and remain default off while Firebase
+is authoritative. The sender reads only schedule documents, sends the frozen
+canonical event or multipart snapshot contract, and never writes a Google
+Sheet or any Firebase-to-Sheet path.
+
+Sender state is private and durable under the unmatched top-level
+`worshipVercelSync/*` collection. Existing rules deny it to clients by default.
+The paths are `state`, `revisions/items/{revisionHash}`,
+`queue/items/{revisionHash}-part-N`, `snapshots/items/{fullSha256}`, and
+`leases/items/reconcile`, and
+`chunks/sets/{candidateId}/items/{chunkIndex}`. Chunks use authenticated,
+domain-separated encryption derived from the managed signing secret and retain
+the provider-managed key version. Each chunk document stays below 900 KiB;
+staging uses at most 50 writes and 2 MiB per batch. Allocation stores compact
+manifests only. Losing candidates are deleted on allocation races or carry a
+hard expiry boundary and are never reused. Reconcile deterministically deletes
+expired chunks still referenced by resolved revisions in bounded batches.
+Private parent markers move from staged to active to resolved to empty, so
+cleanup queries only eligible nonempty sets and does not revisit empty parents.
+Malformed state fails closed without resetting sequence. One transaction claims
+the lowest unresolved source sequence, delivery runs outside the transaction,
+and a second transaction records the result. A 30-second lease makes crashes
+reclaimable, while unknown, retryable, or in-flight lower entries block higher
+entries. Equal snapshot content after a later global sequence, conflict, or
+expiry uses a fresh sequence and snapshot ID. Receiver 202 remains
+`accepted_pending_mapping`, not adopted.
+
+The provider-managed configuration names are
+`LV_ZION_WORSHIP_SYNC_ENABLED`, `LV_ZION_WORSHIP_SYNC_URL`, and
+`LV_ZION_WORSHIP_SYNC_KEY_ID`. The signing secret is the managed secret
+`LV_ZION_WORSHIP_SYNC_SECRET`. The rotation overlap secret is
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_SECRET`. The current key-version name is
+optional as `LV_ZION_WORSHIP_SYNC_KEY_VERSION`. The nonsecret
+`LV_ZION_WORSHIP_SYNC_KEYRING_MODE` is `current` by default and accepts only
+`current` or `rotating`. In `current` mode, resolve only the current managed
+secret and ignore the previous secret and its metadata. In `rotating` mode,
+distinct previous-version and exact activation metadata must validate before
+either managed secret is resolved.
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_KEY_VERSION` is required in rotating mode and
+must identify that prior key.
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_KEY_ACTIVATED_AT_MS` is required in rotating
+mode. It is the exact 13-digit provider UTC millisecond rotation-start value
+shared with the receiver, when the current key became active and the previous
+key entered overlap. In rotating mode, the previous key is accepted only while
+trusted time is strictly less than that value plus 86400000 ms. Missing,
+malformed, future, or invalid activation metadata, and invalid or equal key
+versions, fail closed
+before secret resolution or sender state work. At or after the overlap boundary,
+the previous key is not accepted and the current key remains valid.
+`LV_ZION_WORSHIP_SYNC_SOURCE_FROZEN` is the explicit source-freeze kill switch.
+Never paste values into this playbook or the repository.
+
+The maximum sender budget is 30 seconds per part, including three 10-second
+attempts and bounded backoff. At most 40 parts plus a 5-second dispatch margin
+use 1,205 seconds, leaving 595 seconds inside the scheduled function's explicit
+1,800-second timeout and 295 seconds inside the receiver's 1,500-second staging
+TTL. The event function is capped at 540 seconds and delivers at most one
+lowest-ready event item. The scheduler owns multipart delivery and defers when
+the remaining invocation budget is insufficient. The installed Firebase SDK
+endpoint manifest is checked offline for 540 seconds on the event export and
+1,800 seconds on the scheduled export.
+
+Safe checks, with no Firebase connection or network delivery, are:
+
+    cd /Users/anthony/Projects/worship-duty-app/functions
+    npm test
+    node --check worship-sync.js
+    node --check index.js
+
+Do not run a Functions deploy for this sender. Deployment is prohibited until
+the Section 9 and Section 10 release gates authorize the exact two new
+exports. To disable or roll back the sender, set the enable flag to anything
+other than `true`, or set `LV_ZION_WORSHIP_SYNC_SOURCE_FROZEN` to `true`.
+Leave `onScheduleWrite`, `dutyReminders`, `ics`, `scheduledSheetSync`, and
+the public schedule function in place. The existing `onScheduleWrite` block
+is protected and its exact slice SHA-256 is
+`535f67182e87564170e9e6e8b8336b6f9d75c9e13f19c91b7cdf0ac76c71db92`.
 
 ### 8. The Firebase console map
 
@@ -265,8 +350,10 @@ Code or similar) without needing to read or write code personally.
 3. Paste one of the five briefs below, whole, unedited (fill in nothing —
    they're self-contained).
 4. Tell the model: **it must update the relevant docs in `docs/` as part of
-   the change, then deploy (`npx firebase-tools deploy`) and verify the
-   change on the live site before calling the task done.**
+   the change, use only an explicitly reviewed targeted deployment that
+   excludes Functions, and verify the change on the live site before calling
+   the task done. Functions remain held until the reviewed Section 9B
+   procedure names exact function targets.**
 5. Once it reports done, open https://lv-zion-duties.web.app yourself and
    click through the change to confirm it looks and works right.
 
@@ -332,8 +419,8 @@ Constraints: this is a non-developer-owned app; keep the deployed
 experience as simple as possible for the ~45 congregation members. Don't
 introduce a build step or framework.
 
-Verification: after deploying (`npx firebase-tools deploy`), confirm on
-the live site (https://lv-zion-duties.web.app) that (a) viewing works as
+Verification: after the separately targeted Hosting and rules deployments,
+confirm on the live site (https://lv-zion-duties.web.app) that (a) viewing works as
 intended per your documented decision, (b) editing without proper
 auth/role is rejected by Firestore itself (test by attempting a raw
 write via the browser console or Firestore rules simulator, not just
@@ -433,12 +520,15 @@ Update docs/FEATURES.md (new toggle), docs/HANDOFF.md (architecture:
 new collection, new/extended function), and docs/PLAYBOOK.md (a "how
 members request a swap" step, and a troubleshooting row if relevant).
 
-Verification: deploy with `npx firebase-tools deploy` (this touches
-functions and rules, not just hosting), then test on the live site with
-two different member names (two browser profiles or devices) that a
-swap request from one is visible to and actionable by the other, and
-that acceptance actually updates the schedule for everyone. Report what
-you tested, including whether you verified the push notification fired.
+Verification: do not deploy Functions from this brief. If client changes
+also ship, deploy Hosting only with
+`npx firebase-tools deploy --only hosting`, then test on the live site with
+two different member names (two browser profiles or devices) that a swap
+request from one is visible to and actionable by the other. Rules and
+Functions deployment remain separate reviewed operations, with Functions
+held until the reviewed Section 9B procedure names exact function targets.
+Report what you tested, including whether you verified the push notification
+fired.
 ```
 
 ### Brief 4 — New-season import (use Sonnet)

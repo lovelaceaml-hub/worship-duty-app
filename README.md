@@ -108,6 +108,96 @@ the app's code.)
   tap "Add my duties to my calendar" — the phone's own calendar then
   reminds them 1 day and 2 hours before each duty, no internet needed.
 
+## Firebase to Vercel Worship sync sender, Section 8
+
+The separately named Cloud Functions `onVercelScheduleWrite` and
+`worshipVercelReconcile` implement the frozen Firebase to Vercel sender
+contract. The sender reads only `schedule/*`, projects the approved service
+and assignment fields, signs the exact canonical JSON bytes, and sends either
+one event or a deterministic multipart full snapshot. Its durable sender state
+is in the unmatched top-level `worshipVercelSync/*` collection, which the
+existing rules deny to clients by default. The state includes the sequence,
+revision ledger, encrypted binary chunk queue, snapshot generation index, and a
+crash-safe lease. Chunk documents are staged under
+`worshipVercelSync/chunks/sets/{candidateId}/items/{chunkIndex}` with a
+sub-900-KiB document bound, batches of at most 50 writes and 2 MiB. The final
+allocation transaction stores compact manifests and queue state only. Losing
+staged candidates are deleted on allocation races or carry a hard expiry
+boundary and are never reused. Reconcile deterministically deletes expired
+chunks still referenced by resolved revisions, in bounded batches. Each chunk
+set has a private parent marker with staged, active, resolved, or empty status,
+so cleanup queries only eligible nonempty sets and never spends its bound on
+already-empty parents. It never
+uses client-writable `app/*`, writes a Google Sheet,
+reads or writes any other app data, and does not alter the existing
+`onScheduleWrite` notification trigger.
+The frozen contract file SHA-256 is
+`6fe1519db42989f822d5a733688cd7c0b1ae5744f8b77791900419b67be4db96`.
+
+One shared queue dispatcher claims the lowest unresolved source sequence in a
+transaction, sends outside that transaction, and records the result in a
+second transaction. An active 30-second lease blocks higher sequences; an
+expired lease can be reclaimed after the chunk manifest is validated and the
+body is reconstructed and authenticated. Unknown and
+retryable outcomes remain unresolved, so a higher sequence cannot overtake
+them. Snapshot identities are generation-aware. Equal content after a later
+global sequence, or after conflict or expiry cleanup, receives a fresh sequence
+and opaque `snap-N` identifier. Receiver status 202 remains
+`accepted_pending_mapping` and is never rewritten as adopted.
+
+Delivery is default off. It is enabled only when the provider-managed function
+configuration flag `LV_ZION_WORSHIP_SYNC_ENABLED` is exactly `true`, with the
+destination in `LV_ZION_WORSHIP_SYNC_URL`, the active key identifier in
+`LV_ZION_WORSHIP_SYNC_KEY_ID`, and the signing secret in the managed secrets
+`LV_ZION_WORSHIP_SYNC_SECRET` and, during rotation overlap,
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_SECRET`. The current key-version name is
+optional as `LV_ZION_WORSHIP_SYNC_KEY_VERSION`. The nonsecret
+`LV_ZION_WORSHIP_SYNC_KEYRING_MODE` is `current` by default and accepts only
+`current` or `rotating`. In `current` mode, the sender resolves only the
+current managed secret and ignores the previous secret and its metadata. In
+`rotating` mode, distinct previous-version and exact activation metadata must
+validate before either managed secret is resolved.
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_KEY_VERSION` is required in rotating mode and
+must identify that prior key.
+`LV_ZION_WORSHIP_SYNC_PREVIOUS_KEY_ACTIVATED_AT_MS` is required in rotating
+mode and is the exact 13-digit provider UTC millisecond rotation-start value
+shared with the receiver, when the current key became active and the previous
+key entered overlap. In rotating mode, the previous key is accepted only when
+trusted time is strictly less than that value plus 86400000 ms. Missing,
+malformed, future, or invalid activation metadata disables sender work
+fail-closed. At or after the
+overlap boundary, the previous key is not accepted and the current key remains
+valid. The current and previous key versions must be valid, distinct IDs.
+`LV_ZION_WORSHIP_SYNC_SOURCE_FROZEN`
+is the source-freeze kill switch. No configuration values or secrets belong in
+this repository.
+
+Each part allows three 10-second attempts with bounded backoff, for a maximum
+30-second per-part budget. Forty parts plus a 5-second dispatch margin require
+1,205 seconds, which fits within the scheduler's 1,800-second timeout and the
+receiver's 1,500-second staging TTL. The event trigger is capped at 540 seconds
+and can deliver at most its lowest ready event item. The scheduler owns
+multipart delivery and defers when the computed remaining invocation budget is
+insufficient. The installed Firebase SDK endpoint manifest is checked offline
+for `timeoutSeconds: 540` on the event export and `timeoutSeconds: 1800` on the
+scheduled export.
+
+Safe verification from `functions/` is:
+
+    npm test
+    node --check worship-sync.js
+    node --check index.js
+
+Deployment of the sender remains prohibited and pending the Section 9 and
+Section 10 release gates. Until those gates are authorized, do not run a
+Firebase Functions deploy. To disable the sender, set
+`LV_ZION_WORSHIP_SYNC_ENABLED` to a value other than `true` or set
+`LV_ZION_WORSHIP_SYNC_SOURCE_FROZEN` to `true`, then leave the existing
+schedule, notification, ICS, Sheet sync, and public schedule functions in
+place. The protected `onScheduleWrite` block has not been changed. Its exact
+slice SHA-256 is
+`535f67182e87564170e9e6e8b8336b6f9d75c9e13f19c91b7cdf0ac76c71db92`.
+
 ## Files
 
 - `index.html` — the app shell and styles
@@ -116,7 +206,7 @@ the app's code.)
 - `firebase-config.js` — Firebase config + Web Push (VAPID) key for live sync
   and push notifications
 - `firestore.rules` — Firestore security rules (deployed alongside hosting)
-- `functions/` — Cloud Functions for push notifications (`onScheduleWrite`,
-  `dutyReminders`)
+- `functions/`: Cloud Functions for push notifications, the read-only
+  default-off Vercel sender, and pure function tests
 - `sw.js`, `manifest.json`, `icon.svg` — make it installable on phones and
   receive background push

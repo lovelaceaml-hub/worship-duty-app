@@ -10,6 +10,13 @@ const { publicScheduleService } = require('./public-schedule');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+const { defineSecret } = require('firebase-functions/params');
+const worshipSync = require('./worship-sync');
+
+const WORSHIP_SYNC_SECRET = defineSecret('LV_ZION_WORSHIP_SYNC_SECRET');
+const WORSHIP_SYNC_PREVIOUS_SECRET = defineSecret('LV_ZION_WORSHIP_SYNC_PREVIOUS_SECRET');
+const WORSHIP_SYNC_EVENT_TIMEOUT_SECONDS = 540;
+const WORSHIP_SYNC_RECONCILE_TIMEOUT_SECONDS = 1800;
 
 initializeApp();
 const db = getFirestore();
@@ -348,3 +355,46 @@ exports.scheduledSheetSync = onSchedule(
       added: plan.creates.length, updated: plan.updates.length, newMembers: newMembers.length
     });
   });
+
+/* ---- 8. opt-in Firebase to Vercel Worship bridge ----
+   These exports are intentionally separate from onScheduleWrite. The sender
+   reads only schedule documents, is disabled unless the explicit environment
+   flag is true, and never writes a Sheet or any public schedule data. */
+function worshipSyncSecret(mode) {
+  let current = '';
+  try {
+    current = WORSHIP_SYNC_SECRET.value();
+  } catch (_error) {
+    current = '';
+  }
+  if (mode !== 'rotating') return { current };
+  let previous = '';
+  try {
+    previous = WORSHIP_SYNC_PREVIOUS_SECRET.value();
+  } catch (_error) {
+    previous = '';
+  }
+  return { current, previous };
+}
+
+exports.onVercelScheduleWrite = onDocumentWritten(
+  { document: 'schedule/{id}', region: REGION, timeoutSeconds: WORSHIP_SYNC_EVENT_TIMEOUT_SECONDS,
+    secrets: [WORSHIP_SYNC_SECRET, WORSHIP_SYNC_PREVIOUS_SECRET] },
+  async (event) => worshipSync.handleScheduleWrite(event, {
+    db,
+    logger,
+    secretProvider: worshipSyncSecret,
+    invocationStartedAtMs: Date.now(),
+    invocationBudgetMs: WORSHIP_SYNC_EVENT_TIMEOUT_SECONDS * 1000,
+  }));
+
+exports.worshipVercelReconcile = onSchedule(
+  { schedule: 'every 15 minutes', timeZone: TZ, region: REGION, timeoutSeconds: WORSHIP_SYNC_RECONCILE_TIMEOUT_SECONDS,
+    secrets: [WORSHIP_SYNC_SECRET, WORSHIP_SYNC_PREVIOUS_SECRET] },
+  async () => worshipSync.handleReconcile({
+    db,
+    logger,
+    secretProvider: worshipSyncSecret,
+    invocationStartedAtMs: Date.now(),
+    invocationBudgetMs: WORSHIP_SYNC_RECONCILE_TIMEOUT_SECONDS * 1000,
+  }));
