@@ -87,7 +87,12 @@ let fb = null;     // host Firebase handle (ctx.fb) or null in local mode
 
 let _catalogLoaded = false;
 let _subscribed = false;
-let _rootWired = false;
+/* The exact element wireRoot() last attached its listeners to. The host tears
+   #song-root out of the DOM every time the presider leaves the Presider tab, so
+   a remount hands us a BRAND NEW element with no listeners on it. Tracking the
+   element (instead of a one-shot boolean) means the picker gets wired again
+   every time, which is what kept the second visit from responding to taps. */
+let _wiredRoot = null;
 
 const state = {
   songs: [], songById: {}, stats: {}, setlists: {}, settings: {},
@@ -281,18 +286,73 @@ function statRowForSheet(songId, stat) {
 
 function stampMeta(patch) { patch.updatedAt = now(); patch.updatedBy = whoAmI(); return patch; }
 
-function writeSetlist(setlist) {
-  if (fb) fb.setDoc(fb.doc(fb.db, 'setlists', setlist.id), setlist);
-  else { state.setlists[setlist.id] = setlist; saveLocal(); }
+/* Setlists this device created that have not come back from a Firestore
+   snapshot yet. `state.setlists` is rebuilt wholesale on every snapshot, so
+   without this the freshly created setlist would vanish from under the builder
+   and the "+" buttons would stop appearing. */
+const pendingSetlists = {};
+/* id -> promise for a create still in flight, so a song added a split second
+   after opening a service waits for the document to exist. */
+const setlistCreates = {};
+
+function mergePendingSetlists(map) {
+  Object.keys(pendingSetlists).forEach(id => {
+    if (map[id]) delete pendingSetlists[id];
+    else map[id] = pendingSetlists[id];
+  });
+  return map;
 }
+
+/* Applied to the in-memory copy so the screen updates immediately; the
+   snapshot that follows carries the same values. Mutates in place because
+   callers hold references to the setlist object. */
+function applyLocalSetlistPatch(id, patch) {
+  const base = state.setlists[id];
+  if (base) Object.assign(base, patch);
+}
+
+/* Creates the Firestore document ONLY when it is genuinely absent. This used
+   to be a plain setDoc, which blanked a setlist that already had songs
+   whenever the picker was opened before the first snapshot arrived. That was
+   the "sometimes it doesn't save" case. */
+function createSetlistIfAbsent(doc) {
+  const ref = fb.doc(fb.db, 'setlists', doc.id);
+  const p = fb.runTransaction(fb.db, async tx => {
+    const snap = await tx.get(ref);
+    if (snap.exists()) return;
+    tx.set(ref, state.setlists[doc.id] || doc);
+  }).catch(err => {
+    console.warn('Could not create the setlist:', err);
+    delete pendingSetlists[doc.id];
+    alert('That service could not be opened for planning. Check your connection and try again.');
+  });
+  setlistCreates[doc.id] = p;
+  p.then(() => { if (setlistCreates[doc.id] === p) delete setlistCreates[doc.id]; });
+  return p;
+}
+
+/* Every Firestore write to a setlist goes through here: it waits for a create
+   that is still in flight, falls back to writing the whole local record if the
+   document is missing, and tells the presider when a change really could not
+   be saved instead of failing in silence. */
+function writeSetlistPatch(id, patch) {
+  const run = () => fb.updateDoc(fb.doc(fb.db, 'setlists', id), patch).catch(err => {
+    const base = state.setlists[id];
+    if (!base) throw err;
+    return fb.setDoc(fb.doc(fb.db, 'setlists', id), Object.assign({}, base, patch));
+  });
+  const pending = setlistCreates[id];
+  return (pending ? pending.then(run) : run()).catch(err => {
+    console.warn('Could not save the setlist change:', err);
+    alert('That change could not be saved. Check your connection and try again.');
+  });
+}
+
 function updateSetlist(id, patch) {
   stampMeta(patch);
   if (fb) {
-    fb.updateDoc(fb.doc(fb.db, 'setlists', id), patch).catch(err => {
-      const base = state.setlists[id];
-      if (base) fb.setDoc(fb.doc(fb.db, 'setlists', id), Object.assign({}, base, patch));
-      else console.warn('updateSetlist failed:', err);
-    });
+    applyLocalSetlistPatch(id, patch);
+    writeSetlistPatch(id, patch);
   } else {
     state.setlists[id] = Object.assign({}, state.setlists[id], patch);
     saveLocal(); render();
@@ -301,8 +361,11 @@ function updateSetlist(id, patch) {
 function setlistAddSong(id, songId) {
   const sl = state.setlists[id];
   const songs = ((sl && sl.songs) || []).concat(songId);
-  if (fb) fb.updateDoc(fb.doc(fb.db, 'setlists', id), stampMeta({ songs: songs }));
-  else { sl.songs = songs; stampMeta(sl); saveLocal(); render(); }
+  if (fb) {
+    const patch = stampMeta({ songs: songs });
+    applyLocalSetlistPatch(id, patch);
+    writeSetlistPatch(id, patch);
+  } else if (sl) { sl.songs = songs; stampMeta(sl); saveLocal(); render(); }
 }
 function setlistRemoveSongAt(id, index) {
   const sl = state.setlists[id];
@@ -316,16 +379,22 @@ function setlistRemoveSongAt(id, index) {
     if (sl.thanksSong === removed) clear.thanksSong = null;
   }
   if (fb) {
-    fb.updateDoc(fb.doc(fb.db, 'setlists', id), stampMeta(Object.assign({ songs: songs }, clear)));
-    sl.songs = songs; Object.assign(sl, clear); render();
+    const patch = stampMeta(Object.assign({ songs: songs }, clear));
+    applyLocalSetlistPatch(id, patch);
+    writeSetlistPatch(id, patch);
+    render();
   } else {
     sl.songs = songs; Object.assign(sl, clear);
     stampMeta(sl); saveLocal(); render();
   }
 }
 function setlistReorder(id, songs) {
-  if (fb) fb.updateDoc(fb.doc(fb.db, 'setlists', id), stampMeta({ songs: songs.slice() }));
-  else { state.setlists[id].songs = songs.slice(); stampMeta(state.setlists[id]); saveLocal(); render(); }
+  if (fb) {
+    const patch = stampMeta({ songs: songs.slice() });
+    applyLocalSetlistPatch(id, patch);
+    writeSetlistPatch(id, patch);
+    render();
+  } else { state.setlists[id].songs = songs.slice(); stampMeta(state.setlists[id]); saveLocal(); render(); }
 }
 
 /* ================= builder helpers ================= */
@@ -338,8 +407,12 @@ function ensureSetlist(date, worshipType, serviceLabel, source) {
       presider: state.ui.me || '', notes: '', songs: [], status: 'planned',
       sungAt: null, source: source || 'manual'
     });
-    writeSetlist(doc);
-    if (!fb) state.setlists[id] = doc;
+    // Put it in memory first. The builder and the Library's "+" buttons both
+    // read state.setlists, so waiting for the round trip is what used to leave
+    // the presider tapping songs with nothing happening.
+    state.setlists[id] = doc;
+    if (fb) { pendingSetlists[id] = doc; createSetlistIfAbsent(doc); }
+    else saveLocal();
   }
   return id;
 }
@@ -649,13 +722,27 @@ function paginateSongs(list) {
   return pages;
 }
 
-let libPageLockUntil = 0;
+/* The catalog shows one 100-song group at a time, and scrolling to the bottom
+   APPENDS the next group in place. It used to replace the list and jump the
+   page back up to the search controls, which is what made scrolling the song
+   list feel like it was fighting back. */
+const RANGE_DASH = '\u2013';
+function lastShownPage(pages) {
+  return Math.max(0, Math.min(state.ui.libPage + (state.ui.libMore || 0), pages.length - 1));
+}
+function visibleSongs(pages) {
+  let out = [];
+  for (let i = state.ui.libPage; i <= lastShownPage(pages); i++) out = out.concat(pages[i].songs);
+  return out;
+}
+/* Jumping to a group is a deliberate tap, so it does scroll back to the top of
+   the list. Scrolling itself never moves the page under you any more. */
 function goToLibPage(n) {
   const pages = paginateSongs(filteredSongs());
   n = Math.max(0, Math.min(n, pages.length - 1));
-  if (n === state.ui.libPage) return;
+  if (n === state.ui.libPage && !state.ui.libMore) return;
   state.ui.libPage = n;
-  libPageLockUntil = Date.now() + 500;
+  state.ui.libMore = 0;
   const anchor = root && root.querySelector('.lib-controls');
   if (anchor) {
     const top = anchor.getBoundingClientRect().top + window.scrollY - 8;
@@ -663,19 +750,52 @@ function goToLibPage(n) {
   }
   render();
 }
-function renderLibPager(pages, cur) {
+function pagerLabel(pages, cur, last, shown) {
+  if (cur === last) return pages[cur].label;
+  const first = String(pages[cur].label).split(RANGE_DASH)[0];
+  const tail = shown.length ? dispNumber(shown[shown.length - 1]) : String(pages[last].label);
+  return first + RANGE_DASH + tail;
+}
+function renderLibPager(pages, cur, last, shown) {
   if (pages.length <= 1) return '<div class="lib-pager" hidden></div>';
   const dots = pages.map((p, i) =>
-    '<button class="pg-dot' + (i === cur ? ' active' : '') + '" data-song-act="lib-page" data-page="' + i + '" ' +
+    '<button class="pg-dot' + (i >= cur && i <= last ? ' active' : '') + '" data-song-act="lib-page" data-page="' + i + '" ' +
     'aria-label="Group ' + esc(p.label) + '"></button>').join('');
   const prevDis = cur <= 0 ? ' disabled' : '';
-  const nextDis = cur >= pages.length - 1 ? ' disabled' : '';
+  const nextDis = last >= pages.length - 1 ? ' disabled' : '';
   return '<div class="lib-pager">' +
-    '<button class="pg-arrow" data-song-act="lib-page" data-page="' + (cur - 1) + '"' + prevDis + ' aria-label="Previous group">‹</button>' +
-    '<span class="pg-label">' + esc(pages[cur].label) + '</span>' +
+    '<button class="pg-arrow" data-song-act="lib-page" data-page="' + (cur - 1) + '"' + prevDis + ' aria-label="Previous group">\u2039</button>' +
+    '<span class="pg-label">' + esc(pagerLabel(pages, cur, last, shown)) + '</span>' +
     '<div class="pg-dots">' + dots + '</div>' +
-    '<button class="pg-arrow" data-song-act="lib-page" data-page="' + (cur + 1) + '"' + nextDis + ' aria-label="Next group">›</button>' +
+    '<button class="pg-arrow" data-song-act="lib-page" data-page="' + (last + 1) + '"' + nextDis + ' aria-label="Next group">\u203a</button>' +
     '</div>';
+}
+/* Visible fallback for the scroll sentinel: a tap always works, even where
+   IntersectionObserver never fires. */
+function renderLibMore(pages) {
+  const last = lastShownPage(pages);
+  if (last >= pages.length - 1) return '<div class="lib-more" hidden></div>';
+  return '<div class="lib-more"><button class="ghost sm" data-song-act="lib-more">Show the next ' +
+    pages[last + 1].songs.length + ' songs</button></div>';
+}
+/* Appends the next group to the list already on screen. Nothing above the
+   insertion point is touched, so the scroll position stays exactly where the
+   presider left it. */
+function appendNextLibGroup() {
+  if (state.ui.tab !== 'library' || !root) return false;
+  const pages = paginateSongs(filteredSongs());
+  const last = lastShownPage(pages);
+  if (last >= pages.length - 1) return false;
+  state.ui.libMore = (state.ui.libMore || 0) + 1;
+  const listEl = root.querySelector('.song-list');
+  if (listEl) listEl.insertAdjacentHTML('beforeend', pages[last + 1].songs.map(renderSongRow).join(''));
+  const shown = visibleSongs(pages);
+  const pagerEl = root.querySelector('.lib-pager');
+  if (pagerEl) pagerEl.outerHTML = renderLibPager(pages, state.ui.libPage, last + 1, shown);
+  const moreEl = root.querySelector('.lib-more');
+  if (moreEl) moreEl.outerHTML = renderLibMore(pages);
+  setupLibPaging();
+  return true;
 }
 let libObserver = null;
 function setupLibPaging() {
@@ -684,12 +804,11 @@ function setupLibPaging() {
   const sentinel = root.querySelector('.lib-sentinel');
   if (!sentinel || typeof IntersectionObserver === 'undefined') return;
   const pages = paginateSongs(filteredSongs());
-  if (state.ui.libPage >= pages.length - 1) return;
+  if (lastShownPage(pages) >= pages.length - 1) return;
   libObserver = new IntersectionObserver(entries => {
-    if (Date.now() < libPageLockUntil) return;
     if (entries.some(e => e.isIntersecting)) {
       if (libObserver) { libObserver.disconnect(); libObserver = null; }
-      goToLibPage(state.ui.libPage + 1);
+      appendNextLibGroup();
     }
   }, { threshold: 0.1 });
   libObserver.observe(sentinel);
@@ -775,8 +894,9 @@ function renderLibrary() {
   const list = filteredSongs();
   const pages = paginateSongs(list);
   state.ui.libPage = Math.max(0, Math.min(state.ui.libPage, pages.length - 1));
-  const page = pages[state.ui.libPage];
-  const rows = page.songs.map(renderSongRow).join('') || '<div class="empty">No songs match your search.</div>';
+  const last = lastShownPage(pages);
+  const shown = visibleSongs(pages);
+  const rows = shown.map(renderSongRow).join('') || '<div class="empty">No songs match your search.</div>';
   return renderBuilder() +
     '<div class="lib-controls">' +
       '<input type="search" id="lib-search" data-song-chg="search" placeholder="Search title or number" ' +
@@ -787,9 +907,10 @@ function renderLibrary() {
         '<span class="lib-count">' + list.length + ' song' + (list.length === 1 ? '' : 's') + '</span>' +
       '</div>' +
     '</div>' +
-    renderLibPager(pages, state.ui.libPage) +
+    renderLibPager(pages, state.ui.libPage, last, shown) +
     '<div class="song-list">' + rows + '</div>' +
-    '<div class="lib-sentinel" aria-hidden="true"></div>';
+    '<div class="lib-sentinel" aria-hidden="true"></div>' +
+    renderLibMore(pages);
 }
 function renderSongRow(song) {
   const st = statFor(song.id);
@@ -1405,11 +1526,14 @@ function handleAct(act, el) {
     case 'quick-add': {
       if (state.ui.pickSlot) { assignSlotSong(el.dataset.id); break; }
       const sl = currentSetlist(); const sid = el.dataset.id;
-      if (sl) { setlistAddSong(sl.id, sid); if (fb) { sl.songs = (sl.songs || []).concat(sid); render(); } }
+      // setlistAddSong now updates the in-memory setlist itself, so this only
+      // has to redraw.
+      if (sl) { setlistAddSong(sl.id, sid); render(); }
       break;
     }
-    case 'set-category': state.ui.category = el.dataset.cat; state.ui.libPage = 0; render(); break;
+    case 'set-category': state.ui.category = el.dataset.cat; state.ui.libPage = 0; state.ui.libMore = 0; render(); break;
     case 'lib-page': goToLibPage(Number(el.dataset.page)); break;
+    case 'lib-more': appendNextLibGroup(); break;
     case 'toggle-song': state.ui.expandedSong = (state.ui.expandedSong === el.dataset.id) ? null : el.dataset.id; render(); break;
     case 'add-to-setlist': addSongToCurrent(el.dataset.id); break;
     case 'start-setlist': {
@@ -1514,6 +1638,7 @@ function addSongToCurrent(songId) {
     if (!confirm('No setlist is open. Start one for today and add this song?')) { state.ui.tab = 'library'; render(); return; }
     const id = ensureSetlist(todayISO(), WORSHIP_TYPES[0], SERVICE_LABELS[0]);
     state.ui.currentSetlist = id; sl = state.setlists[id];
+    if (!sl) { render(); return; }
   }
   setlistAddSong(sl.id, songId);
   render();
@@ -1527,11 +1652,7 @@ function assignSlotSong(songId) {
   patch[slot === 'glory' ? 'glorySong' : 'thanksSong'] = songId;
   updateSetlist(sl.id, patch);
   if ((sl.songs || []).indexOf(songId) === -1) setlistAddSong(sl.id, songId);
-  if (fb) {
-    Object.assign(sl, patch);
-    if ((sl.songs || []).indexOf(songId) === -1) sl.songs = (sl.songs || []).concat(songId);
-    render();
-  }
+  if (fb) render();
 }
 function moveSong(index, dir) {
   const sl = currentSetlist();
@@ -1548,8 +1669,8 @@ function debounce(key, fn, ms) { clearTimeout(debounceTimers[key]); debounceTime
 
 function handleChg(chg, el) {
   switch (chg) {
-    case 'search': state.ui.search = el.value; state.ui.libPage = 0; render(); break;
-    case 'sort': state.ui.sort = el.value; state.ui.libPage = 0; render(); break;
+    case 'search': state.ui.search = el.value; state.ui.libPage = 0; state.ui.libMore = 0; render(); break;
+    case 'sort': state.ui.sort = el.value; state.ui.libPage = 0; state.ui.libMore = 0; render(); break;
     case 'b-service': {
       const id = el.value;
       if (!id) { render(); break; }
@@ -1577,13 +1698,16 @@ function renderLibraryInPlace() {
   const list = filteredSongs();
   const pages = paginateSongs(list);
   state.ui.libPage = Math.max(0, Math.min(state.ui.libPage, pages.length - 1));
-  const page = pages[state.ui.libPage];
+  const last = lastShownPage(pages);
+  const shown = visibleSongs(pages);
   const listEl = root.querySelector('.song-list');
   const countEl = root.querySelector('.lib-count');
   const pagerEl = root.querySelector('.lib-pager');
-  if (listEl) listEl.innerHTML = page.songs.map(renderSongRow).join('') || '<div class="empty">No songs match your search.</div>';
+  const moreEl = root.querySelector('.lib-more');
+  if (listEl) listEl.innerHTML = shown.map(renderSongRow).join('') || '<div class="empty">No songs match your search.</div>';
   if (countEl) countEl.textContent = list.length + ' song' + (list.length === 1 ? '' : 's');
-  if (pagerEl) pagerEl.outerHTML = renderLibPager(pages, state.ui.libPage);
+  if (pagerEl) pagerEl.outerHTML = renderLibPager(pages, state.ui.libPage, last, shown);
+  if (moreEl) moreEl.outerHTML = renderLibMore(pages);
   setupLibPaging();
 }
 
@@ -1613,7 +1737,7 @@ function wireRoot() {
     const el = e.target.closest('[data-song-chg]');
     if (!el) return;
     const chg = el.dataset.songChg;
-    if (chg === 'search') { state.ui.search = el.value; state.ui.libPage = 0; renderLibraryInPlace(); }
+    if (chg === 'search') { state.ui.search = el.value; state.ui.libPage = 0; state.ui.libMore = 0; renderLibraryInPlace(); }
     else if (chg === 'b-notes') handleChg('b-notes', el);
   });
   root.addEventListener('change', e => {
@@ -1645,7 +1769,10 @@ function wireRoot() {
     if (state.ui.editorGate) return;
     if (dt > 600 || Math.abs(dx) < 60 || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
     if (state.ui.runsheet) { state.ui.runsheet = null; render(); return; }
-    if (onList && state.ui.tab === 'library') { goToLibPage(state.ui.libPage + (dx < 0 ? 1 : -1)); return; }
+    if (onList && state.ui.tab === 'library') {
+      if (dx < 0) appendNextLibGroup(); else goToLibPage(state.ui.libPage - 1);
+      return;
+    }
     state.ui.pickSlot = null;
     const i = TAB_ORDER.indexOf(state.ui.tab);
     const j = i + (dx < 0 ? 1 : -1);
@@ -1674,7 +1801,7 @@ function subscribe() {
   unsubs.push(fb.onSnapshot(fb.collection(fb.db, 'setlists'), snap => {
     const map = {};
     snap.docs.forEach(d => { map[d.id] = d.data(); });
-    state.setlists = map;
+    state.setlists = mergePendingSetlists(map);
     const firstLoad = !state._setlistsLoaded;
     state._setlistsLoaded = true;
     if (!firstLoad) {
@@ -1762,7 +1889,7 @@ export function mount(rootEl, context) {
     else loadLocal();
     _subscribed = true;
   }
-  if (!_rootWired) { wireRoot(); _rootWired = true; }
+  if (_wiredRoot !== root) { wireRoot(); _wiredRoot = root; }
 
   // Explicit navigation from the host (ctx.nav is a one-shot flag): a tapped
   // "Pick songs" button opens that service's setlist; the Presider tab (no

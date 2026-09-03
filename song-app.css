@@ -284,6 +284,8 @@
 #song-root .lib-pager .pg-dot::after { content: ''; position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
 #song-root .lib-pager .pg-dot.active { opacity: 1; background: var(--accent); transform: scale(1.25); }
 #song-root .lib-sentinel { height: 1px; }
+#song-root .lib-more { display: flex; justify-content: center; padding: 14px 0 4px; }
+#song-root .lib-more[hidden] { display: none; }
 
 /* ---- Glory / Thanks song slots ---- */
 #song-root .slot-box { margin-top: 10px; border-top: 1px solid var(--hairline); padding-top: 6px; }

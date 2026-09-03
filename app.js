@@ -1038,7 +1038,8 @@ function renderMy() {
   // recent alerts
   const alerts = getJSON('wds-alerts-' + ui.me, []);
   if (alerts.length) {
-    html += '<div class="card"><b style="font-size:13.5px">Recent updates</b>' +
+    html += '<div class="card"><div class="alerts-head"><b style="font-size:13.5px">Recent updates</b>' +
+      '<button class="linkish alerts-clear" data-act="clear-alerts">Clear</button></div>' +
       alerts.slice(0, 6).map(a =>
         '<div class="alert-item"><span class="t">' + new Date(a.t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + '</span>' +
         '<span>' + esc(a.txt) + '</span></div>').join('') +
@@ -1685,6 +1686,13 @@ function handleAct(act, el) {
   else if (act === 'dept-filter') { ui.deptFilter = el.dataset.val; localStorage.setItem('wds-dept', ui.deptFilter); render(); }
   else if (act === 'dismiss-banner') { ui.banners.splice(Number(el.dataset.i), 1); renderBanners(); }
   else if (act === 'toggle-past') { ui.showPast = !ui.showPast; render(); }
+  else if (act === 'clear-alerts') {
+    // Clears only this member's "Recent updates" list on this device. Duties,
+    // the schedule and change requests are untouched.
+    localStorage.removeItem('wds-alerts-' + ui.me);
+    localStorage.setItem('wds-unread-' + ui.me, '0');
+    render();
+  }
   else if (act === 'expand') { ui.expanded[el.dataset.id] = !ui.expanded[el.dataset.id]; render(); }
   else if (act === 'notify-on') {
     Notification.requestPermission().then(p => {
