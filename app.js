@@ -1073,8 +1073,22 @@ function renderMy() {
   // screen (ported from the old song app). Only presiders ever see it.
   if (feat('songPicker') && duties.some(d => d.duty === 'Presider')) {
     const first = duties.find(d => d.duty === 'Presider');
-    html += '<div class="notify-box"><button class="primary" data-act="open-songs" data-svc="' + esc(svcId(first.svc)) + '">Plan songs for your service</button></div>' +
-      '<p class="hint">You\'re presiding soon — pick the songs for your service here. Each Presider duty below also has its own button.</p>';
+    const firstId = svcId(first.svc);
+    const st = songStateFor(firstId);
+    const label = st && st.confirmed ? 'Review your confirmed songs'
+      : st && st.changed ? 'Confirm your songs again'
+      : st && st.count ? 'Finish picking your songs'
+      : 'Plan songs for your service';
+    const songCount = st ? st.count + ' song' + (st.count === 1 ? '' : 's') : '';
+    const note = st && st.confirmed
+      ? 'Your songs for the next service are confirmed. Open them any time to change the list.'
+      : st && st.changed
+        ? 'You changed the songs for your next service after confirming them. Confirm the list again so it shows as done.'
+        : st && st.count
+          ? 'You have ' + songCount + ' picked for your next service but have not confirmed the list yet.'
+          : 'You\'re presiding soon. Pick the songs for your service here.';
+    html += '<div class="notify-box"><button class="primary" data-act="open-songs" data-svc="' + esc(firstId) + '">' + label + '</button></div>' +
+      '<p class="hint">' + esc(note) + ' Each Presider duty below also has its own button.</p>';
   }
 
   days.forEach(day => {
@@ -1091,7 +1105,9 @@ function renderMy() {
         html += '<div class="role"><span class="dot-c" style="background:' + d.cat.color + '"></span>' +
           '<span class="rname">' + esc(d.duty) + '</span>' +
           (feat('songPicker') && d.duty === 'Presider'
-            ? '<button class="linkish" data-act="open-songs" data-svc="' + esc(se.id) + '">Pick songs</button>'
+            ? songStateTag(se.id) +
+              '<button class="linkish" data-act="open-songs" data-svc="' + esc(se.id) + '">' +
+              (songStateFor(se.id) && songStateFor(se.id).count ? 'Open songs' : 'Pick songs') + '</button>'
             : '') +
           requestChangeTrigger(d, key) + '</div>' +
           requestChangeForm(d, key);
@@ -1661,6 +1677,36 @@ function applyNameMap(map) {
     }
   });
   return { membersChanged, membersMerged, touchedServices, departmentsChanged };
+}
+
+/* Upcoming setlists, read only so My Duties can tell a presider whether the
+   songs for their service are picked and confirmed. The song picker
+   (song-app.js) still owns every write to this collection. Kept out of `state`
+   because `state` is what gets persisted as this device's offline copy. */
+let setlistIndex = {};
+
+/* { count, confirmed, changed } for a service id, or null when nothing is
+   known. `confirmedAt` is written equal to `updatedAt`, so a later edit pushes
+   updatedAt ahead and the list reads as changed since it was confirmed. */
+function songStateFor(id) {
+  const sl = setlistIndex[id];
+  if (!sl) return null;
+  const count = (sl.songs || []).length;
+  const confirmedAt = sl.confirmedAt || 0;
+  return {
+    count: count,
+    confirmed: !!(count && confirmedAt && confirmedAt >= (sl.updatedAt || 0)),
+    changed: !!(count && confirmedAt && confirmedAt < (sl.updatedAt || 0))
+  };
+}
+
+/* The small "where are the songs up to?" tag beside a Presider duty. */
+function songStateTag(id) {
+  const st = songStateFor(id);
+  if (!st || !st.count) return '';
+  if (st.confirmed) return '<span class="song-tag done">Songs confirmed</span>';
+  const n = st.count + ' song' + (st.count === 1 ? '' : 's');
+  return '<span class="song-tag">' + (st.changed ? n + ', confirm again' : n + ', not confirmed') + '</span>';
 }
 
 function findService(id) { return state.services.find(s => svcId(s) === id); }
@@ -2259,6 +2305,17 @@ async function initFirebase(config) {
     state.requests = snap.docs.map(d => d.data());
     render();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
+  // Upcoming setlists only: enough for the My Duties song indicator without
+  // pulling down every setlist the church has ever planned.
+  fsMod.onSnapshot(
+    fsMod.query(fsMod.collection(db, 'setlists'), fsMod.where('date', '>=', todayISO())),
+    snap => {
+      const map = {};
+      snap.docs.forEach(d => { map[d.id] = d.data(); });
+      setlistIndex = map;
+      render();
+    },
+    () => { /* the indicator just stays quiet; errors surface on the schedule listener */ });
   if (notifyOn()) registerPush();
 }
 

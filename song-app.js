@@ -397,6 +397,43 @@ function setlistReorder(id, songs) {
   } else { state.setlists[id].songs = songs.slice(); stampMeta(state.setlists[id]); saveLocal(); render(); }
 }
 
+/* ================= confirmation state ================= */
+
+/* A presider "confirms" the list once it is the one they actually want. The
+   confirm write stamps confirmedAt to the same value as updatedAt, so any
+   later edit (including a song added from Signal) pushes updatedAt ahead and
+   the list reads as changed since it was confirmed. */
+function isConfirmed(sl) {
+  return !!(sl && sl.confirmedAt && sl.confirmedAt >= (sl.updatedAt || 0));
+}
+function changedSinceConfirmed(sl) {
+  return !!(sl && sl.confirmedAt && sl.confirmedAt < (sl.updatedAt || 0));
+}
+function confirmSetlist(id) {
+  const sl = state.setlists[id];
+  if (!sl || !(sl.songs || []).length) return;
+  const patch = stampMeta({ confirmedBy: whoAmI() });
+  patch.confirmedAt = patch.updatedAt;
+  updateSetlist(id, patch);
+  render();
+}
+
+/* One chip that answers "have the songs been picked for this service?" It
+   replaces the old Planned/Sung pill, which said "Planned" whether the service
+   had 14 songs or none at all. */
+function songStatus(sl) {
+  const count = (sl && sl.songs || []).length;
+  if (sl && sl.status === 'sung') return { cls: 'sung', label: 'Sung' };
+  if (!count) return { cls: 'none', label: 'No songs yet' };
+  if (isConfirmed(sl)) return { cls: 'confirmed', label: 'Confirmed' };
+  if (changedSinceConfirmed(sl)) return { cls: 'planned', label: 'Changed' };
+  return { cls: 'planned', label: 'Songs picked' };
+}
+function statusPill(sl) {
+  const st = songStatus(sl);
+  return '<span class="status-pill ' + st.cls + '">' + st.label + '</span>';
+}
+
 /* ================= builder helpers ================= */
 
 function ensureSetlist(date, worshipType, serviceLabel, source) {
@@ -1014,7 +1051,7 @@ function renderBuilder() {
   }
   html += '<div class="card">' +
     '<div class="card-head"><span class="svc-title">' + esc(sl.worshipType) + ' <small>· ' + esc(sl.serviceLabel) + '</small></span>' +
-      '<span class="status-pill ' + sl.status + '">' + (sl.status === 'sung' ? 'Sung' : 'Planned') + '</span></div>' +
+      statusPill(sl) + '</div>' +
     '<div class="svc-meta"><span>' + esc(fmtDate(sl.date)) + '</span>' +
       (sl.presider ? '<span>' + esc(sl.presider) + '</span>' : '') + '</div>' +
     (mine.length > 1 ? '<div style="margin-top:8px"><button class="linkish" data-song-act="change-service">Change service</button></div>' : '') +
@@ -1062,7 +1099,37 @@ function renderBuilder() {
     '<span class="cnt">' + counted.length + ' song' + (counted.length === 1 ? '' : 's') + '</span></div>' +
     '<div class="total-note">Glory &amp; Thanks songs aren’t counted in the total.</div>';
   html += '<div class="set-list">' + listHtml + '</div>';
+  html += renderConfirmBox(sl, prep.length);
   return html;
+}
+
+/* The closing step of picking songs: say "this is my list". Nothing else in
+   the app depended on the presider ever finishing, so there was no way to tell
+   a half-built list from a finished one. */
+function renderConfirmBox(sl, songCount) {
+  if (!sl || sl.status === 'sung') return '';
+  if (!songCount && !(sl.songs || []).length) {
+    return '<div class="confirm-box empty-state">' +
+      '<p class="hint">Add songs from the <b>Library</b> tab, then confirm your list here.</p></div>';
+  }
+  if (isConfirmed(sl)) {
+    const when = sl.confirmedAt ? new Date(sl.confirmedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+    return '<div class="confirm-box done">' +
+      '<span class="confirm-mark" aria-hidden="true">\u2713</span>' +
+      '<div><b>Songs confirmed</b>' +
+      '<div class="hint">' + esc(sl.confirmedBy || '') + (when ? (sl.confirmedBy ? ' on ' : '') + esc(when) : '') +
+      '. Change the list above any time and confirm it again.</div></div></div>';
+  }
+  if (changedSinceConfirmed(sl)) {
+    return '<div class="confirm-box changed">' +
+      '<div><b>You changed the songs after confirming</b>' +
+      '<div class="hint">Confirm again so everyone sees the list you actually want.</div></div>' +
+      '<button class="primary" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">Confirm again</button></div>';
+  }
+  return '<div class="confirm-box">' +
+    '<div><b>Finished picking?</b>' +
+    '<div class="hint">Confirm the list so it shows as done on your duties.</div></div>' +
+    '<button class="primary" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">Done, these are my songs</button></div>';
 }
 
 /* ---------- Home ("My Services") ---------- */
@@ -1155,7 +1222,7 @@ function renderScheduleCard(entry) {
   return '<div class="card svc-card">' +
     '<div class="card-head">' +
       '<span class="svc-title">' + esc(entry.worship || WORSHIP_TYPES[0]) + ' <small>· ' + esc(entry.service) + '</small></span>' +
-      '<span class="status-pill planned">Planned</span>' +
+      statusPill(state.setlists[id]) +
     '</div>' +
     '<div class="svc-meta"><span>' + esc(fmtDate(entry.date)) + (badge ? ' · ' + badge : '') + '</span>' +
       (pres ? '<span>' + esc(pres) + '</span>' : '') + '</div>' +
@@ -1215,7 +1282,7 @@ function renderServiceCard(sl, opts) {
       '<span class="svc-title">' + esc(sl.worshipType) + ' <small>· ' + esc(sl.serviceLabel) + '</small></span>' +
       '<span style="display:flex;align-items:center;gap:6px">' +
         (sl.source === 'signal' ? '<span class="src-chip">from Signal</span>' : '') +
-        '<span class="status-pill ' + sl.status + '">' + (sung ? 'Sung' : 'Planned') + '</span>' +
+        statusPill(sl) +
       '</span>' +
     '</div>' +
     '<div class="svc-meta">' +
@@ -1240,17 +1307,24 @@ function renderServiceCard(sl, opts) {
       html += '<div class="hist-none">No songs in this setlist.</div>';
     }
   }
+  // Offered wherever a service is listed, so a presider who already picked
+  // their songs can close the loop without reopening the builder.
+  const needsConfirm = !sung && songs.length && !isConfirmed(sl);
   html += '<div class="svc-actions">';
   if (opts.home) {
     const today = sl.date === todayISO();
     if (today) html += '<button class="primary sm" data-song-act="runsheet" data-id="' + esc(sl.id) + '">Runsheet</button>';
-    html += '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="build-for" data-id="' + esc(sl.id) + '">Add songs</button>';
+    if (needsConfirm) html += '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' +
+      (changedSinceConfirmed(sl) ? 'Confirm again' : 'Confirm songs') + '</button>';
+    html += '<button class="' + (today || needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="build-for" data-id="' + esc(sl.id) + '">Add songs</button>';
     html += '<button class="ghost sm" data-song-act="toggle-service" data-id="' + esc(sl.id) + '">' +
       (expanded ? 'Hide order' : 'Order of worship') + '</button>';
     if (songs.length) html += '<button class="ghost sm" data-song-act="copy-signal" data-id="' + esc(sl.id) + '">Copy for Signal</button>';
   } else if (!sung) {
+    if (needsConfirm) html += '<button class="primary sm" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' +
+      (changedSinceConfirmed(sl) ? 'Confirm again' : 'Confirm songs') + '</button>';
     html += '<button class="ghost sm" data-song-act="edit-setlist" data-id="' + esc(sl.id) + '">Edit in Builder</button>';
-    html += '<button class="primary sm" data-song-act="mark-sung" data-id="' + esc(sl.id) + '">Mark as sung</button>';
+    html += '<button class="' + (needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="mark-sung" data-id="' + esc(sl.id) + '">Mark as sung</button>';
     if (songs.length) html += '<button class="ghost sm" data-song-act="copy-signal" data-id="' + esc(sl.id) + '">Copy for Signal</button>';
     html += '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete</button>';
   } else {
@@ -1534,6 +1608,7 @@ function handleAct(act, el) {
     case 'set-category': state.ui.category = el.dataset.cat; state.ui.libPage = 0; state.ui.libMore = 0; render(); break;
     case 'lib-page': goToLibPage(Number(el.dataset.page)); break;
     case 'lib-more': appendNextLibGroup(); break;
+    case 'confirm-songs': confirmSetlist(el.dataset.id); break;
     case 'toggle-song': state.ui.expandedSong = (state.ui.expandedSong === el.dataset.id) ? null : el.dataset.id; render(); break;
     case 'add-to-setlist': addSongToCurrent(el.dataset.id); break;
     case 'start-setlist': {

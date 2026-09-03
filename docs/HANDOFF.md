@@ -387,6 +387,35 @@ scrolling thumb. A visible "Show the next 100 songs" button backs up the
 group. `state.ui.libMore` counts the appended groups and resets on search,
 sort, category change, or a pager tap.
 
+### Confirming a setlist (2026-09-03)
+
+Picking songs had no finish line: nothing distinguished a half-built list from
+a finished one, and My Duties gave no sign that songs existed at all.
+
+- **New field on `setlists/{id}`:** `confirmedAt` (epoch ms) and `confirmedBy`
+  (member name). The confirm write stamps `confirmedAt` to the same value as
+  `updatedAt`, so the three states are read, never stored:
+  `confirmedAt >= updatedAt` is confirmed, `confirmedAt < updatedAt` is
+  "changed since confirmed", and no `confirmedAt` is unconfirmed. Any later
+  edit, including a song arriving from the Signal ingest daemon, moves
+  `updatedAt` ahead and the list correctly reads as changed. Nothing about
+  `status` (`planned`/`sung`) or `song-lib.js` changed, so the sung-history
+  pipeline is untouched.
+- **In the picker** (`song-app.js`): `renderConfirmBox()` closes the builder
+  with "Done, these are my songs", a green confirmed panel, or an amber
+  "you changed the songs after confirming" prompt. `statusPill()` replaces the
+  old Planned/Sung chip everywhere a service is listed and now reads
+  "No songs yet", "Songs picked", "Changed", "Confirmed", or "Sung". Home and
+  Services cards carry their own Confirm button so the loop can be closed
+  without reopening the builder.
+- **On My Duties** (`app.js`): a `setlists` snapshot limited to
+  `date >= today` fills `setlistIndex` (deliberately outside `state`, which is
+  what gets persisted as the offline copy). `songStateFor()` and
+  `songStateTag()` drive the tag beside each Presider duty line, the
+  "Pick songs" / "Open songs" link text, and the wording of the main call to
+  action. With no Firebase the index stays empty and every label falls back to
+  its original text.
+
 ## Known limitations
 
 1. Open database rules — anyone with the link who bypasses the UI could
