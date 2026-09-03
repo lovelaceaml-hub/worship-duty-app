@@ -1,6 +1,6 @@
 # LV Zion Worship Service — Handoff Document
 
-Last updated: 2026-07-03. Owner: Anthony (alovelace144@gmail.com).
+Last updated: 2026-09-03. Owner: Anthony (alovelace144@gmail.com).
 
 For day-to-day operation (schedule edits, passcodes, notifications,
 deploying, troubleshooting) and the AI-delegation briefs, see
@@ -349,6 +349,44 @@ app instead of a separate site. One app, one Firebase project, one login.
   repo's git history.
 - Full merge write-up and the porting contract: `docs/MERGE-HANDOFF.md`.
 
+### Presider picker repairs (2026-09-03)
+
+Four defects reported from live use, all fixed together:
+
+1. **The picker went dead after the first visit.** `song-app.js` wired its
+   click/input/swipe listeners once behind a `_rootWired` boolean. The host
+   destroys `#song-root` whenever the viewer leaves the Presider tab, so every
+   later visit mounted into a brand new element that had no listeners at all:
+   Library, Services, Insights, "Add songs" and "Order of worship" did
+   nothing. The flag is now `_wiredRoot`, holding the element that was wired,
+   and `mount()` re-wires whenever the element changes.
+2. **Opening a service before the first snapshot blanked its setlist.**
+   `ensureSetlist()` decided "this setlist does not exist" from
+   `state.setlists`, which is empty until the first Firestore snapshot lands,
+   then wrote the empty document with a plain `setDoc`. On a cold load, tapping
+   "Pick songs" overwrote a setlist that already had songs. Creation now goes
+   through `createSetlistIfAbsent()`, a transaction that reads the document
+   first and writes only when it is genuinely absent.
+3. **Songs could not be picked right after opening a service.** In Firebase
+   mode `ensureSetlist()` never put the new setlist in `state.setlists`, so
+   `currentSetlist()` stayed null, the Library rendered no "+" buttons, and
+   `addSongToCurrent()` threw on `sl.id`. The setlist is now held in memory
+   immediately (and in `pendingSetlists`, merged back on every snapshot so a
+   fresh one is not wiped by the wholesale `state.setlists = map`).
+4. **Saves failed silently.** Every setlist write was a bare `updateDoc` with
+   no `catch`, which Firestore rejects outright when the document does not
+   exist yet. All setlist writes now go through `writeSetlistPatch()`, which
+   waits for a create still in flight, falls back to writing the whole local
+   record, and tells the presider when a change truly could not be saved.
+
+The Library's 100-song groups also changed: reaching the bottom now **appends**
+the next group in place (`appendNextLibGroup()`) instead of replacing the list
+and scrolling back to the search controls, so the page never moves under a
+scrolling thumb. A visible "Show the next 100 songs" button backs up the
+`IntersectionObserver`, and the pager arrows and dots still jump to a single
+group. `state.ui.libMore` counts the appended groups and resets on search,
+sort, category change, or a pager tap.
+
 ## Known limitations
 
 1. Open database rules — anyone with the link who bypasses the UI could
@@ -405,7 +443,7 @@ See `docs/PLAYBOOK.md` Part 2 for these as full, ready-to-paste briefs:
 | `wds-fcm-token` | This device's registered FCM push token |
 | `wds-fcm-name` | The member name the FCM token is currently registered under |
 | `wds-seen-<name>` | Duty keys already seen, per member name, for new-duty detection |
-| `wds-alerts-<name>` | Recent in-app alert history shown on My Duties |
+| `wds-alerts-<name>` | Recent in-app alert history shown on My Duties. The card's **Clear** button (`data-act="clear-alerts"`, added 2026-09-03) removes this key and zeroes `wds-unread-<name>` on this device only; duties, the schedule and change requests are untouched |
 | `wds-unread-<name>` | Unread alert count shown as a dot on the My Duties tab |
 | `wds-reminded` | De-dupe map for the in-app 24h reminder |
 | `wds-sheet-sync-at` | Timestamp of the last sheet sync attempt (throttle) |
