@@ -268,7 +268,19 @@ expires the previous key. Missing, malformed, or future activation metadata,
 and invalid or equal key versions, fail closed before secret resolution or
 sender state work. At or after the overlap boundary, the previous key is not
 accepted and the current key remains valid. The explicit kill switch is
-`LV_ZION_WORSHIP_SYNC_SOURCE_FROZEN`. No values are recorded here. The
+`LV_ZION_WORSHIP_SYNC_SOURCE_FROZEN`. No secret values are recorded here.
+Deployment configuration (September 3, 2026, release 1 of the LV Zion app): the
+non-secret values live in the gitignored file `functions/.env.lv-zion-duties`
+that the deploy uploads with the functions, currently
+`LV_ZION_WORSHIP_SYNC_ENABLED=true`,
+`LV_ZION_WORSHIP_SYNC_URL=https://lvzion.vercel.app/api/internal/worship-firebase-sync`,
+`LV_ZION_WORSHIP_SYNC_KEY_ID=lvzion-2026-09`, and
+`LV_ZION_WORSHIP_SYNC_KEYRING_MODE=current`; the signing secret is managed
+secret `LV_ZION_WORSHIP_SYNC_SECRET` version 2 (version 1 carried a trailing
+newline and is superseded), and the receiver holds the same key under the id
+`lvzion-2026-09` in its Vercel production keyring variable. Recreate the env
+file from these lines before any future narrow deploy; the LV Zion Build log
+records whether the deployment happened. The
 receiver's managed-key overlap supports rotation without putting old or new
 secret values in this repository.
 
