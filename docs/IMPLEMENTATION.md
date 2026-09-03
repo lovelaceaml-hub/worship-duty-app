@@ -378,7 +378,14 @@ Do not use a broad Firebase deploy or a Functions-wide target. The Section 8
 sender Functions are held until the reviewed Section 9B procedure names exact
 function targets. That later procedure may name
 `npx firebase-tools deploy --only functions:onVercelScheduleWrite,functions:worshipVercelReconcile`,
-but this command must not be run before that gate.
+but this command must not be run before that gate. The same operation must
+also ship the composite index declared in `firestore.indexes.json` (collection
+`sets`, `status` then `expiresAtMs`) with
+`npx firebase-tools deploy --only firestore:indexes`. Without that index the
+scheduled reconcile throws `FAILED_PRECONDITION` on its first expired-chunk
+cleanup query, before any projection is attempted, so nothing is ever sent.
+This step was missed in the September 3, 2026 sender deployment and the index
+was created directly in `lv-zion-duties` the same day.
 
 If npm cache permission errors appear, prefix the command with
 `npm_config_cache=/tmp/npmcache`.

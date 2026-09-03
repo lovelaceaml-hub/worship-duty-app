@@ -348,7 +348,15 @@ Section 8 implementation verification.
   A later narrowly reviewed sender deployment may use
   `npx firebase-tools deploy --only functions:onVercelScheduleWrite,functions:worshipVercelReconcile`
   after the written Section 9B gates and explicit release authorization. Keep
-  hosting, rules, and all other functions outside that operation.
+  hosting, rules, and all other functions outside that operation. That same
+  operation must also ship the composite index declared in
+  `firestore.indexes.json` (collection `sets`, `status` then `expiresAtMs`)
+  with `npx firebase-tools deploy --only firestore:indexes`. The index is not
+  optional: without it the scheduled reconcile throws `FAILED_PRECONDITION` on
+  its first expired-chunk cleanup query, before any projection is attempted, so
+  nothing is ever sent. This step was missed in the September 3, 2026 sender
+  deployment and the index was created directly in `lv-zion-duties` the same
+  day.
 - **Backups:** Manage → Data & Sync → Export backup file (JSON of the whole
   state). Import restores it (overwrites for everyone).
 - **Reset to spreadsheet:** Manage → Data & Sync — overwrites everything
