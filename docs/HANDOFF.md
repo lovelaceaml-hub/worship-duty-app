@@ -335,6 +335,37 @@ public schedule functions. No Firebase CLI, emulator, live Firestore,
 Google Sheet, network delivery, secret, or production action is part of this
 Section 8 implementation verification.
 
+### Receiver 202 response and schedule adoption
+
+A 202 response from the receiver endpoint means the multipart snapshot was
+accepted, verified, and parsed, but not yet adopted into the live schedule
+because one or more member names have no roster mapping. This is normal
+behavior, not a transmission failure. The response does not say how many names
+are waiting; the receiver's reconciliation card reports the real open count.
+
+The sender indexes snapshots by content hash and will not resend an unchanged
+schedule. In `functions/worship-sync.js`, `handleReconcile` checks
+`reserveSnapshotRevision` against the Firestore path
+`worshipVercelSync/snapshots/items/{fullSha256}`. If that content hash already
+holds a revision with status `accepted_pending_mapping`, `handleReconcile` exits
+early without creating a new sequence or queueing any network delivery.
+
+Resolving unmapped names happens entirely on the receiver side in the LV Zion
+Administrator panel (the Firebase name reconciliation card), not in this
+repository.
+
+Once the name queue on the receiver reaches zero, the schedule must be
+re-triggered from this side. A real, reversible edit to one service in the
+Firebase Worship Duty app (such as editing and restoring a duty assignment or
+note) updates that document's `sourceUpdatedAt` timestamp in Firestore. That
+timestamp change alters the projection's content hash, allowing the next
+scheduled run of `worshipVercelReconcile` to allocate a fresh sequence and
+deliver the full projection for adoption.
+
+The complete operator workflow and recovery procedure are documented in the
+receiver repository at
+`/Users/anthony/Projects/preaching/docs/OPERATIONS-RUNBOOK.md`.
+
 ## Operations runbook
 
 - **Edit the schedule (normal path):** keep editing the Google Sheet —
@@ -344,8 +375,10 @@ Section 8 implementation verification.
   any device — Media Booth, Parking Lot and Offering assignments, choir
   songs, one-off services. No deploy needed.
 - **Deploy app changes:** no broad Firebase deploy is authorized by this
-  handoff. The Section 8 sender remains undeployed until the Section 9B gate.
-  A later narrowly reviewed sender deployment may use
+  handoff. The Section 8 sender was deployed on September 3, 2026 and is live;
+  the two sender functions and the composite index below are the only things
+  that deployment shipped, and the seven pre-existing functions were untouched.
+  A repeat of that narrowly reviewed sender deployment uses
   `npx firebase-tools deploy --only functions:onVercelScheduleWrite,functions:worshipVercelReconcile`
   after the written Section 9B gates and explicit release authorization. Keep
   hosting, rules, and all other functions outside that operation. That same
