@@ -395,7 +395,7 @@ function sheetRowsToServices(rows, today) {
 let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
 let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
 
-/* Anonymous sign-in no longer blocks startup — reads are open in
+/* Anonymous sign-in no longer blocks startup. Reads are open in
    firestore.rules, so making the whole app wait for a sign-in round trip
    before the first schedule row was requested bought nothing. Writes DO need
    it (the rules require request.auth != null), so every write goes through
@@ -1205,7 +1205,7 @@ function loadTag(el) {
 
 /* song-app.css, song-seed.js and song-lib.js are ~91 KB that only a presider
    ever uses, and song-app.js reads window.SongLib / window.SONG_SEED at module
-   top level — so all three must land before the module is imported. Loading
+   top level, so all three must land before the module is imported. Loading
    them here instead of in index.html keeps them off every member's page load. */
 function loadSongAssets() {
   if (songAssetsLoading) return songAssetsLoading;
@@ -2277,7 +2277,7 @@ function pulse(event) {
 }
 
 async function initFirebase(config) {
-  // Fetched together, not one after the other — these are two separate
+  // Fetched together, not one after the other: these are two separate
   // downloads from Google's CDN and the second does not depend on the first.
   const [appMod, fsMod] = await Promise.all([
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),

@@ -14,7 +14,7 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   snapshot that goes stale. A cold phone open is about 1.2 seconds; a repeat open about 0.9
   seconds with no app-file network traffic. See
   [Handoff → Load performance and the release stamp](docs/HANDOFF.md).
-- **Earlier:** **26 July 2026: member writes were broken and are now fixed** — Firebase
+- **Earlier:** **26 July 2026: member writes were broken and are now fixed.** Firebase
   Authentication had never been switched on for this project, so the rules (which require a
   signed-in session) were rejecting every duty reminder, swap request and Manage edit. See
   [Usage Counter](docs/USAGE-COUNTER.md). A privacy-safe daily usage counter was added at the

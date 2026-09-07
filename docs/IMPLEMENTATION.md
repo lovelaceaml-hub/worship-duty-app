@@ -142,8 +142,30 @@ there):
 - Column contract written to `Raw Data`: `Month, Date, Service, Worship,
   Time, Category, Duty, Member` (`HEADER` constant). Date format `EEE, MMM
   dd` (e.g. `Sat, May 02`, no year). Time is a fixed lookup by service label
-  (`TIME_BY_SERVICE`: Morning 9:00 AM, Afternoon 3:00 PM, Evening 8:00 PM,
-  Early Morning 5:00 AM, Commemoration blank). `GROUPS` defines the
+  (see the next bullet).
+- **Service times are date-aware (changed 7 September 2026).** Times are NOT
+  stored per row; the whole `Raw Data` tab is wiped and regenerated from
+  `2026 Entry` on every rebuild, so a single time table would silently rewrite
+  the times on every *past* service too. There are therefore two tables and a
+  cutoff:
+
+  | Service | Before 12 Sep 2026 | From 12 Sep 2026 (Feast of Trumpets) |
+  |---|---|---|
+  | Morning | 9:00 AM | **10:00 AM** |
+  | Afternoon | 3:00 PM | **2:30 PM** |
+  | Evening | 8:00 PM | **7:30 PM** |
+  | Early Morning | 5:00 AM | 5:00 AM (unchanged) |
+  | Commemoration | blank | blank |
+
+  `timeForService_(service, dateVal, tz)` picks the table by comparing the
+  service date, formatted as `yyyy-MM-dd` in the **spreadsheet's own timezone**,
+  against `TIME_CHANGE_ISO` (`'2026-09-12'`). Comparing formatted text rather
+  than Date objects is deliberate: it cannot drift by a day depending on how the
+  sheet stores midnight. Sept 12 itself uses the new times.
+
+  **If the times change again, add another table and cutoff. Never edit an
+  existing table in place, or you rewrite history.**
+- `GROUPS` defines the
   duty-to-category mapping written to the Category column (the app itself
   ignores this column and re-derives category from the duty name via its
   own `CATEGORIES` constant — the two lists must stay in sync by hand).

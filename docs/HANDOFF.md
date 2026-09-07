@@ -449,7 +449,7 @@ Other startup changes worth knowing:
 - `song-app.css`, `song-seed.js` and `song-lib.js` load only when a presider
   opens the song screen (`loadSongAssets()` in app.js). `song-app.js` reads
   `window.SongLib` and `window.SONG_SEED` at module top level, so all three must
-  land before the module import — that ordering is load-bearing.
+  land before the module import, and that ordering is load-bearing.
 - Anonymous sign-in no longer blocks startup. Reads are open in the rules, so it
   bought nothing there. **Every Firestore write must go through `fbWrite()`**,
   which waits on the `authReady` promise; a raw `fb.setDoc(...)` can now race
@@ -458,7 +458,7 @@ Other startup changes worth knowing:
   arrives, then unsubscribes. The full listener still owns the data: Manage
   edits past services and `mergeSheetServices` compares against every service,
   so neither may ever run against the partial set. The fast listener only ever
-  paints — it never seeds, syncs or raises duty alerts.
+  paints: it never seeds, syncs or raises duty alerts.
 - The six startup listeners share one render per animation frame via
   `renderSoon()` instead of triggering six full `innerHTML` rebuilds.
 
@@ -468,7 +468,7 @@ My Duties now subscribes to the live per-member feed served by the `ics` Cloud
 Function (`webcal://…/ics/<member>`) instead of downloading a one-time `.ics`
 snapshot. The snapshot went stale the moment a duty or a service time changed,
 with no way to tell the member. `downloadICS()` is still in app.js but is no
-longer wired to any button. Note the feed is unauthenticated — consistent with
+longer wired to any button. Note the feed is unauthenticated, consistent with
 `firestore.rules`, which already allow open reads (see Known limitations).
 
 ## Known limitations
