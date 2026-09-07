@@ -7,7 +7,14 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 ## Quick links
 
 - **Website:** https://lv-zion-duties.web.app — share this link with members
-- **Status:** Live. **26 July 2026: member writes were broken and are now fixed** — Firebase
+- **Status:** Live. **7 September 2026: the app now opens fast and the tabs sit at the top.**
+  Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
+  deploy with that script), the presider song files load only for presiders, sign-in no longer
+  blocks startup, and the calendar button subscribes to the live feed instead of downloading a
+  snapshot that goes stale. A cold phone open is about 1.2 seconds; a repeat open about 0.9
+  seconds with no app-file network traffic. See
+  [Handoff → Load performance and the release stamp](docs/HANDOFF.md).
+- **Earlier:** **26 July 2026: member writes were broken and are now fixed** — Firebase
   Authentication had never been switched on for this project, so the rules (which require a
   signed-in session) were rejecting every duty reminder, swap request and Manage edit. See
   [Usage Counter](docs/USAGE-COUNTER.md). A privacy-safe daily usage counter was added at the
