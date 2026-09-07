@@ -28,6 +28,10 @@ const DEPARTMENTS_SEED = {
   'Offering': []
 };
 const DATA_KEY = 'wds-data-v2';
+/* Release stamp appended to every lazily-loaded local file. scripts/deploy.sh
+   rewrites the 'DEV' token here, in index.html and in sw.js at release time, so
+   long-lived browser caching can never serve a member a stale mix of files. */
+const ASSET_V = '?v=DEV';
 // Fallback site-passcode hash, used only on a brand-new device before app/
 // settings.sitePinHash is set. The live code is managed in Manage → Features
 // and its plaintext is intentionally not recorded here (see docs).
@@ -92,6 +96,7 @@ function esc(s) {
 function pad(n) { return (n < 10 ? '0' : '') + n; }
 function toISO(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 function todayISO() { return toISO(new Date()); }
+function isoDaysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return toISO(d); }
 function fmtDate(iso) {
   return new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
@@ -389,6 +394,14 @@ function sheetRowsToServices(rows, today) {
 
 let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
 let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
+
+/* Anonymous sign-in no longer blocks startup — reads are open in
+   firestore.rules, so making the whole app wait for a sign-in round trip
+   before the first schedule row was requested bought nothing. Writes DO need
+   it (the rules require request.auth != null), so every write goes through
+   fbWrite() and waits on this promise instead. */
+let authReady = Promise.resolve();
+function fbWrite(fn) { return authReady.then(fn); }
 let settingsLoaded = false; // true once shared settings arrived (or local mode)
 let departmentsLoaded = false; // true once the departments doc arrived (or local mode)
 let membersLoaded = false; // true once the members doc arrived (or local mode)
@@ -438,30 +451,30 @@ function loadLocal() {
 
 /* persistence that works in both modes */
 function persistService(svc) {
-  if (fb) fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), svc);
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), svc));
   else saveLocal();
 }
 function persistDeleteService(id) {
-  if (fb) fb.deleteDoc(fb.doc(fb.db, 'schedule', id));
+  if (fb) fbWrite(() => fb.deleteDoc(fb.doc(fb.db, 'schedule', id)));
   else saveLocal();
 }
 function persistMembers() {
-  if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'members'), { list: state.members });
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'members'), { list: state.members }));
   else saveLocal();
 }
 function persistSettings() {
-  if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'settings'), state.settings);
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'settings'), state.settings));
   else saveLocal();
 }
 function persistDepartments() {
-  if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments });
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments }));
   else saveLocal();
 }
 function persistNameMap(map) {
-  if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'nameMap'), { map: map });
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'nameMap'), { map: map }));
 }
 function persistRequest(req) {
-  if (fb) fb.setDoc(fb.doc(fb.db, 'requests', req.id), req);
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'requests', req.id), req));
   else saveLocal();
 }
 function resolveRequest(id, status) {
@@ -488,9 +501,12 @@ function persistAll() {
   ops.push(b => b.set(fb.doc(fb.db, 'app', 'settings'), state.settings));
   ops.push(b => b.set(fb.doc(fb.db, 'app', 'departments'), { map: state.departments }));
   for (let i = 0; i < ops.length; i += 450) {
-    const batch = fb.writeBatch(fb.db);
-    ops.slice(i, i + 450).forEach(fn => fn(batch));
-    batch.commit();
+    const chunk = ops.slice(i, i + 450);
+    fbWrite(() => {
+      const batch = fb.writeBatch(fb.db);
+      chunk.forEach(fn => fn(batch));
+      return batch.commit();
+    });
   }
 }
 
@@ -542,6 +558,7 @@ async function sysNotify(title, body) {
 async function registerPush() {
   try {
     if (!fb || !fb.messaging || !fb.getToken) return;
+    await authReady;                                 // token docs are a write
     if (!window.FCM_VAPID_KEY) return;              // owner has not pasted the key yet
     if (!notifyOn() || !ui.me) return;
     const reg = (await navigator.serviceWorker.ready) ||
@@ -568,6 +585,7 @@ async function registerPush() {
 
 async function unregisterPush() {
   try {
+    await authReady;                                 // deleting a token doc is a write
     const token = localStorage.getItem('wds-fcm-token');
     if (fb && fb.deleteToken && fb.messaging) {
       try { await fb.deleteToken(fb.messaging); } catch (e) { /* ignore */ }
@@ -649,6 +667,18 @@ function addBanner(txt, alert) {
   if (ui.banners.some(b => b.txt === txt)) return;
   ui.banners.push({ txt, alert });
   renderBanners();
+}
+
+/* Six Firestore listeners land within milliseconds of each other at startup,
+   and each one used to trigger its own full innerHTML rebuild. Coalescing them
+   into one render per frame removes five wasted rebuilds from every load. */
+let renderQueued = false;
+function renderSoon() {
+  if (renderQueued) return;
+  renderQueued = true;
+  const run = () => { renderQueued = false; render(); };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+  else setTimeout(run, 0);
 }
 
 function afterDataChange() {
@@ -858,6 +888,35 @@ function downloadICS() {
   URL.revokeObjectURL(a.href);
 }
 
+/* The live per-member calendar feed served by the `ics` Cloud Function (see
+   firebase.json's /ics/** rewrite). Subscribing to it beats the downloaded file
+   below because the phone re-reads it: a service that moves updates by itself,
+   instead of leaving a stale time in someone's calendar forever. downloadICS()
+   is left in place for the one-off snapshot case but is no longer wired to a
+   button; the Subscribe path replaced it. */
+function icsFeedUrl(scheme) {
+  const nameMap = unifiedNameMap();
+  const who = nameMap[ui.me] || ui.me;
+  return scheme + '//' + location.host + '/ics/' + encodeURIComponent(who);
+}
+
+function subscribeICS() {
+  if (!ui.me) return;
+  // webcal: is what tells iOS and macOS to subscribe rather than download.
+  location.href = icsFeedUrl('webcal:');
+}
+
+function copyICSLink() {
+  if (!ui.me) return;
+  const url = icsFeedUrl('https:');
+  const done = () => addBanner('Calendar link copied. In Google Calendar, add it under Other calendars \u2192 From URL.');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done, () => addBanner('Your calendar link is: ' + url));
+  } else {
+    addBanner('Your calendar link is: ' + url);
+  }
+}
+
 /* ================= rendering ================= */
 
 function render() {
@@ -1027,12 +1086,13 @@ function renderMy() {
       : '<button class="primary" data-act="notify-on">Turn on notifications</button>';
   }
   if (feat('calendarExport')) {
-    controls += '<button class="ghost" data-act="download-ics">Add my duties to my calendar</button>';
+    controls += '<button class="ghost" data-act="subscribe-ics">Add my duties to my calendar</button>' +
+      '<button class="ghost" data-act="copy-ics">Copy calendar link</button>';
   }
   if (controls) {
     html += '<div class="notify-box">' + controls + '</div>' +
       '<p class="hint">You\'ll be alerted when a new duty is added for you, and reminded the day before each duty. ' +
-      'The calendar file adds reminders straight to your phone\'s calendar.</p>';
+      'Adding your duties to your calendar subscribes it to the live schedule, so the times stay correct by themselves if a service ever moves. On Android, tap Copy calendar link and add it in Google Calendar under Other calendars \u2192 From URL.</p>';
   }
 
   // recent alerts
@@ -1132,11 +1192,40 @@ function renderMy() {
    first open — most members never preside, so they never pay for it. */
 let songApp = null;      // the imported module, once loaded
 let songAppLoading = null; // in-flight import promise
+let songAssetsLoading = null; // in-flight <link>/<script> loads
+
+/* Inject a <link> or <script> and resolve when the browser has run it. */
+function loadTag(el) {
+  return new Promise((resolve, reject) => {
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error('could not load ' + (el.src || el.href)));
+    document.head.appendChild(el);
+  });
+}
+
+/* song-app.css, song-seed.js and song-lib.js are ~91 KB that only a presider
+   ever uses, and song-app.js reads window.SongLib / window.SONG_SEED at module
+   top level — so all three must land before the module is imported. Loading
+   them here instead of in index.html keeps them off every member's page load. */
+function loadSongAssets() {
+  if (songAssetsLoading) return songAssetsLoading;
+  const css = document.createElement('link');
+  css.rel = 'stylesheet';
+  css.href = 'song-app.css' + ASSET_V;
+  const seed = document.createElement('script');
+  seed.src = 'song-seed.js' + ASSET_V;
+  const lib = document.createElement('script');
+  lib.src = 'song-lib.js' + ASSET_V;
+  songAssetsLoading = Promise.all([loadTag(css), loadTag(seed), loadTag(lib)])
+    .catch(e => { songAssetsLoading = null; throw e; });
+  return songAssetsLoading;
+}
 
 function loadSongApp() {
   if (songApp) return Promise.resolve(songApp);
   if (!songAppLoading) {
-    songAppLoading = import('./song-app.js')
+    songAppLoading = loadSongAssets()
+      .then(() => import('./song-app.js' + ASSET_V))
       .then(m => { songApp = m; return m; })
       .catch(e => { songAppLoading = null; throw e; });
   }
@@ -1814,7 +1903,8 @@ function handleAct(act, el) {
     localStorage.removeItem('wds-unlock');
     render();
   }
-  else if (act === 'download-ics') { downloadICS(); }
+  else if (act === 'subscribe-ics') { subscribeICS(); }
+  else if (act === 'copy-ics') { copyICSLink(); }
   else if (act === 'add-service') {
     const svc = {
       date: document.getElementById('svc-date').value,
@@ -2163,11 +2253,11 @@ function pulse(event) {
     if (seen.includes(event) || pulseInFlight.has(event)) return; // counted already
     pulseInFlight.add(event);
 
-    fb.setDoc(
+    fbWrite(() => fb.setDoc(
       fb.doc(fb.db, 'pulse', day),
       { date: day, [event]: fb.increment(1) },
       { merge: true }
-    ).then(() => {
+    )).then(() => {
       // Only remember it once the write actually landed. Marking it earlier
       // meant a rejected write (offline, rules not yet deployed, quota) made
       // this device stop counting for the rest of the day, silently.
@@ -2187,8 +2277,12 @@ function pulse(event) {
 }
 
 async function initFirebase(config) {
-  const appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-  const fsMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  // Fetched together, not one after the other — these are two separate
+  // downloads from Google's CDN and the second does not depend on the first.
+  const [appMod, fsMod] = await Promise.all([
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+  ]);
   const app = appMod.initializeApp(config);
 
   // App Check — attests requests come from the real app. Activates only once a
@@ -2209,12 +2303,14 @@ async function initFirebase(config) {
 
   // Anonymous auth — an invisible sign-in so the Firestore write rules can
   // require an authenticated context without adding any login UI for members.
-  // Reads stay open, so if this fails (e.g. Anonymous auth not yet enabled in
-  // the console) the app still shows data; only writes would be rejected.
-  try {
+  // Reads stay open, so this deliberately runs alongside the rest of startup
+  // instead of in front of it: nothing a member sees depends on it. Writes wait
+  // for it via fbWrite(). If it fails (e.g. Anonymous auth switched off in the
+  // console) the app still shows data; only writes would be rejected.
+  authReady = (async () => {
     const authMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
     await authMod.signInAnonymously(authMod.getAuth(app));
-  } catch (e) { console.warn('Anonymous sign-in failed:', e); }
+  })().catch(e => { console.warn('Anonymous sign-in failed:', e); });
 
   const db = fsMod.getFirestore(app);
   fb = {
@@ -2246,8 +2342,31 @@ async function initFirebase(config) {
       fb.deleteToken = msgMod.deleteToken;
     }
   } catch (e) { console.warn('FCM unavailable:', e); }
+  // Fast first paint. The last 30 days plus everything ahead is a small slice of
+  // the collection and is all any member ever looks at, so it is fetched as its
+  // own query in parallel with the full one below and painted the moment it
+  // lands. The full listener still owns the data: Manage edits past services and
+  // the sheet sync compares against every service, so history must be complete
+  // before either runs. This one only ever paints, never seeds, syncs or alerts.
+  let historyLoaded = false;
+  let unsubRecent = fsMod.onSnapshot(
+    fsMod.query(fsMod.collection(db, 'schedule'), fsMod.where('date', '>=', isoDaysAgo(30))),
+    snap => {
+      if (historyLoaded || snap.empty) return;
+      state.services = snap.docs.map(d => d.data());
+      setSyncPill(true);
+      renderSoon();
+    },
+    () => { /* the full listener below is what reports connection errors */ }
+  );
+  const takeOverFromRecent = () => {
+    historyLoaded = true;
+    if (unsubRecent) { unsubRecent(); unsubRecent = null; }
+  };
+
   let firstSnapshot = true;
   fsMod.onSnapshot(fsMod.collection(db, 'schedule'), snap => {
+    takeOverFromRecent();
     if (firstSnapshot && snap.empty) {
       firstSnapshot = false;
       // brand-new database: upload the spreadsheet schedule once
@@ -2272,12 +2391,12 @@ async function initFirebase(config) {
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'members'), snap => {
     if (snap.exists()) state.members = snap.data().list || [];
     membersLoaded = true;
-    render();
+    renderSoon();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'settings'), snap => {
     if (snap.exists()) {
       state.settings = Object.assign({ features: {}, pinHash: '' }, snap.data());
-      render();
+      renderSoon();
     }
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'departments'), snap => {
@@ -2289,7 +2408,7 @@ async function initFirebase(config) {
       state.departments = map;
     }
     departmentsLoaded = true;
-    render();
+    renderSoon();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'nameMap'), snap => {
     const map = snap.exists() ? (snap.data().map || {}) : null;
@@ -2303,7 +2422,7 @@ async function initFirebase(config) {
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   fsMod.onSnapshot(fsMod.collection(db, 'requests'), snap => {
     state.requests = snap.docs.map(d => d.data());
-    render();
+    renderSoon();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   // Upcoming setlists only: enough for the My Duties song indicator without
   // pulling down every setlist the church has ever planned.
@@ -2313,7 +2432,7 @@ async function initFirebase(config) {
       const map = {};
       snap.docs.forEach(d => { map[d.id] = d.data(); });
       setlistIndex = map;
-      render();
+      renderSoon();
     },
     () => { /* the indicator just stays quiet; errors surface on the schedule listener */ });
   if (notifyOn()) registerPush();
@@ -2322,7 +2441,17 @@ async function initFirebase(config) {
 function init() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (window.FIREBASE_CONFIG) {
-    renderLoading();
+    // Paint the schedule this device saw last, right now, instead of a
+    // "Loading…" placeholder. The live snapshot overwrites it moments later.
+    // membersLoaded / departmentsLoaded stay false on purpose: they gate the
+    // sheet sync, which must not run against a cached roster.
+    const cached = loadLocal();
+    if (cached && cached.services && cached.services.length) {
+      state = cached;
+      render();
+    } else {
+      renderLoading();
+    }
     initFirebase(window.FIREBASE_CONFIG).catch(() => {
       addBanner('Firebase config is invalid — running on this device only.', true);
       state = loadLocal() || seedState();
