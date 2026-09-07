@@ -85,10 +85,13 @@ notifications to work on iPhone while the app is closed).
 
 To publish visual or app-file changes, run in this folder:
 
-    npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only hosting
+    bash scripts/deploy.sh
 
-This safely deploys Hosting only. Deploy Firestore rules or Cloud Functions
-only when those files intentionally changed and were separately reviewed.
+This stamps the release, deploys Hosting only, and restores your working
+folder. The stamp is what makes the one-year browser cache safe, so always
+deploy app changes this way rather than calling firebase directly. Deploy
+Firestore rules or Cloud Functions only when those files intentionally changed
+and were separately reviewed.
 
 (Schedule edits do NOT need a re-deploy — they sync live through the
 database, or via the Google Sheet sync. Re-deploying is only for changes to

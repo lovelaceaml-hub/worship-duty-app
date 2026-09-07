@@ -11,7 +11,7 @@ no deploy needed.
 | Editor passcode | ON | Manage tab requires the passcode. Turning this OFF lets anyone edit — only do that temporarily. |
 | New-duty alerts | ON | Members get an alert (in-app + push notification) when a duty is added for them. |
 | Day-before reminders | ON | Members are reminded within 24 hours of each duty (push notification, plus in-app while the app is open). |
-| Add-to-calendar button | ON | The .ics download on My Duties (phone-calendar reminders). |
+| Add-to-calendar button | ON | Subscribe to your live duty feed from My Duties (phone-calendar reminders that stay correct when a duty or time changes). |
 | "Who else is serving?" | ON | The expander on each duty card showing the full service lineup. |
 | Choir song on services | ON | The choir-song line on service cards. |
 | Past services | ON | The "Show past services" link on the Schedule tab. |

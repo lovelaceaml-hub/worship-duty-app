@@ -416,6 +416,61 @@ a finished one, and My Duties gave no sign that songs existed at all.
   action. With no Firebase the index stays empty and every label falls back to
   its original text.
 
+## Load performance and the release stamp (added 2026-09-07)
+
+Before this, every file was served `no-cache`, so a phone re-downloaded about
+253 KB on **every** open, 91 KB of it the presider song picker that most
+members never touch. Startup then fetched Firebase core, then Firestore, then
+Auth, and waited on an anonymous sign-in round trip before requesting the first
+schedule row, all while showing "Loading schedule…" over a copy of the schedule
+already sitting in localStorage. A cold phone open is now about 1.2 s to a
+visible schedule over 4 requests / 166 KB; a repeat open is about 0.9 s with all
+four files served by the service worker and no app-file network traffic.
+
+**The rule a future agent must not break:** every local file referenced from
+`index.html` or loaded at runtime carries a `?v=` release stamp, and
+`firebase.json` gives the stamped files a one-year immutable cache.
+
+- The source of truth for the stamp is the literal token `DEV` in three places:
+  `index.html` (the `<script src>` attributes), `app.js` (`const ASSET_V`) and
+  `sw.js` (`const RELEASE`).
+- `scripts/deploy.sh` rewrites all three to a UTC timestamp, verifies no `DEV`
+  placeholder survived, deploys hosting, and restores the files. The repo
+  therefore always reads `DEV` and the working tree is never left dirty.
+- **If you add a new local script, stylesheet or lazily-loaded file, append
+  `ASSET_V` (or `?v=DEV` in the HTML) and add it to the `headers` list in
+  `firebase.json`.** An unstamped file with a one-year cache would strand
+  members on a stale copy; an unlisted file just loses the caching win.
+- `index.html` and `sw.js` deliberately stay `no-cache` so a new release is
+  always noticed.
+
+Other startup changes worth knowing:
+
+- `song-app.css`, `song-seed.js` and `song-lib.js` load only when a presider
+  opens the song screen (`loadSongAssets()` in app.js). `song-app.js` reads
+  `window.SongLib` and `window.SONG_SEED` at module top level, so all three must
+  land before the module import — that ordering is load-bearing.
+- Anonymous sign-in no longer blocks startup. Reads are open in the rules, so it
+  bought nothing there. **Every Firestore write must go through `fbWrite()`**,
+  which waits on the `authReady` promise; a raw `fb.setDoc(...)` can now race
+  ahead of sign-in and be rejected by the rules.
+- A "recent plus upcoming" query paints before the full `schedule` collection
+  arrives, then unsubscribes. The full listener still owns the data: Manage
+  edits past services and `mergeSheetServices` compares against every service,
+  so neither may ever run against the partial set. The fast listener only ever
+  paints — it never seeds, syncs or raises duty alerts.
+- The six startup listeners share one render per animation frame via
+  `renderSoon()` instead of triggering six full `innerHTML` rebuilds.
+
+## Calendar: subscribe, not download (changed 2026-09-07)
+
+My Duties now subscribes to the live per-member feed served by the `ics` Cloud
+Function (`webcal://…/ics/<member>`) instead of downloading a one-time `.ics`
+snapshot. The snapshot went stale the moment a duty or a service time changed,
+with no way to tell the member. `downloadICS()` is still in app.js but is no
+longer wired to any button. Note the feed is unauthenticated — consistent with
+`firestore.rules`, which already allow open reads (see Known limitations).
+
 ## Known limitations
 
 1. Open database rules — anyone with the link who bypasses the UI could

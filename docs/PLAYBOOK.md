@@ -202,17 +202,26 @@ Only needed when the app's code changes (not for schedule edits — those sync
 live through Firestore with no deploy). From the app folder:
 
 ```
-npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy
+bash scripts/deploy.sh
 ```
 
-This deploys hosting + Firestore rules + Cloud Functions together. If you
-only changed app files (`index.html`, `app.js`, the `song-*.js`/`song-app.css`
-song-picker files, etc.) and not `firestore.rules` or anything in
-`functions/`, you can save time with:
+**Always use this script for app-file changes.** Every local file is served
+with a one-year browser cache, which is only safe because its address carries a
+release stamp. The script is what writes that stamp, so it can never be
+forgotten: the files in the repo keep the placeholder `DEV`, the stamp exists
+only in the copy that is uploaded, and your working folder is put back exactly
+as it was afterwards, even if the deploy fails. It refuses to upload anything
+if a stamp is missing. It deploys **hosting only**.
+
+If `firestore.rules` or anything in `functions/` genuinely changed and was
+reviewed, deploy those separately and deliberately:
 
 ```
-npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only hosting
+npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only firestore
+npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only functions
 ```
+
+Never run a bare `firebase deploy` here.
 
 Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
 `song-seed.js`, `song-app.css`) deploy with hosting automatically. If you edit

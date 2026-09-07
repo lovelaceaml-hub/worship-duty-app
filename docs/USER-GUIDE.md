@@ -42,11 +42,14 @@ Once it's on, you'll get an alert when:
 
 ### Adding duties to your calendar
 
-Tap **Add my duties to my calendar** to download a file with all your
-upcoming duties. Open it with your phone's calendar app and it adds them
-automatically, complete with a reminder the day before and again a couple
-hours ahead — this works even without the app installed or any internet
-connection later on.
+Tap **Add my duties to my calendar**. Your phone subscribes to your own live
+duty list, complete with a reminder the day before and again a couple of hours
+ahead. Because it is a subscription rather than a one-time copy, it keeps
+itself right: when a duty is reassigned, or a service time moves, your calendar
+follows within about half a day. You do not need the app open for this.
+
+On Android, tap **Copy calendar link** instead, then in Google Calendar go to
+**Other calendars → From URL** and paste it.
 
 ---
 
