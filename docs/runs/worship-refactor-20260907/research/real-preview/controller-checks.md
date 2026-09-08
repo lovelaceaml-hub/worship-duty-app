@@ -1,6 +1,6 @@
 # Real-data preview correction checks
 
-Status: controller checks passed; native source review in progress. This report contains no member information.
+Status: controller checks and native source review passed. This report contains no member information.
 
 ## Duplicate rendering
 
@@ -12,7 +12,7 @@ Unauthenticated HTTPS GET access to the canonical Worship Service Firestore sche
 
 ## Pending
 
-Six fictional adapter/server tests passed, including pagination, schema normalization, GET-only methods, Host/Origin restrictions, asset allowlisting and generic read failures. Actual phone and desktop smoke passed all four tabs without browser errors, overflow, external requests or writes. No screenshots or personal-text output were collected. Final fictional phone/desktop tests passed eight Axe views, both confirmation states, all four empty-data views and fail-closed data loading. Duplicate-row checks were repeated after the final browser changes and passed. Native source review remains in progress.
+Six fictional adapter/server tests passed, including pagination, schema normalization, GET-only methods, Host/Origin restrictions, asset allowlisting and generic read failures. Actual phone and desktop smoke passed all four tabs without browser errors, overflow, external requests or writes. No screenshots or personal-text output were collected. Final fictional phone/desktop tests passed eight Axe views, both confirmation states, all four empty-data views and fail-closed data loading. Duplicate-row checks were repeated after the final browser changes and passed. Native source review passed after correction3.
 
 ## Review correction checks
 
@@ -20,4 +20,4 @@ Six updated fictional server checks passed. Controller browser checks passed on 
 
 The controller compared the local payload against current source records without emitting record contents. All service assignments and saved song order matched. Excluded credential/token and updater fields were absent, and real song statistics were present. Only aggregate verification results were printed.
 
-The final integrated six source files match the frozen lane files. Port 8100 now runs the canonical server and canonical browser source. No production deployment or record write occurred. Native correction review2 remains pending.
+The final integrated six source files match the frozen lane files. Port 8100 now runs the canonical server and canonical browser source. No production deployment or record write occurred. Native correction review3 passed. Source commit 2c4c24b is backed up on the verified private branch.

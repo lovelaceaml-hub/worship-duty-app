@@ -1,13 +1,13 @@
 ---
 lane: LD
 title: Design (approval pending)
-state: running
+state: reviewed
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/design
-review: correction-pending
+review: Sol-pass
 depends_on: none
-updated: 2026-09-08T15:35Z
+updated: 2026-09-08T16:32Z
 ---
 
 # Lane LD: Local design directions

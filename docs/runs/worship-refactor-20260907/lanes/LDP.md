@@ -1,13 +1,13 @@
 ---
 lane: LDP
 title: Local read-only preview server
-state: landed
+state: merged
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/real-preview-server
-review: Sol-retry
+review: Sol-pass
 depends_on: LD
-updated: 2026-09-08T16:24Z
+updated: 2026-09-08T16:32Z
 ---
 
 # Local preview server sublane
