@@ -181,6 +181,14 @@
   function ensureSongStats(songId) {
     const history = songHistory(songId);
     const stat = state.songStats[songId];
+    if (REAL_MODE) {
+      if (stat && typeof stat === "object") {
+        const suppliedCount = stat.sungCount !== undefined ? stat.sungCount : (stat.timesSung !== undefined ? stat.timesSung : 0);
+        const suppliedLast = stat.lastSung !== undefined ? stat.lastSung : null;
+        return Object.assign({ songId, sungCount: suppliedCount, timesSung: suppliedCount, lastSung: suppliedLast, history }, stat);
+      }
+      return { songId, sungCount: history.length, timesSung: history.length, lastSung: lastHistoryDate(history), history };
+    }
     const count = history.length;
     const last = lastHistoryDate(history);
     if (!stat || !Array.isArray(stat.history) || stat.sungCount !== count || stat.lastSung !== last) {
@@ -592,12 +600,19 @@
 
   function renderRequestsHistory() {
     const mine = state.requests.filter((item) => item.name === state.selectedName);
-    return '<section class="secondary-panel" aria-labelledby="request-history-title"><div class="panel-heading"><h2 id="request-history-title">Request history</h2><span>' + mine.length + " record" + (mine.length === 1 ? "" : "s") + "</span></div>" + (mine.length ? '<div class="request-history">' + mine.map((request) => '<div class="request-history-row"><div><strong>' + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId)) + '</span></div><span class="request-status ' + escapeHtml(request.status) + '" data-request-status="' + escapeHtml(request.status) + '">' + escapeHtml(request.status) + "</span></div>").join("") + "</div>" : '<p class="service-empty">No change requests for this selected member.</p>') + "</section>";
+    return '<section class="secondary-panel" aria-labelledby="request-history-title"><div class="panel-heading"><h2 id="request-history-title">Request history</h2><span>' + mine.length + " record" + (mine.length === 1 ? "" : "s") + "</span></div>" + (mine.length ? '<div class="request-history">' + mine.map((request) => '<div class="request-history-row"><div><strong>' + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId, request)) + '</span></div><span class="request-status ' + escapeHtml(request.status) + '" data-request-status="' + escapeHtml(request.status) + '">' + escapeHtml(request.status) + "</span></div>").join("") + "</div>" : '<p class="service-empty">No change requests for this selected member.</p>') + "</section>";
   }
 
-  function serviceLabel(id) {
-    const service = serviceById(id);
-    return service ? service.worshipType + ", " + service.serviceLabel + ", " + compactDate(service.date) : "Service removed";
+  function serviceLabel(id, fallback) {
+    const service = state.services.find((item) => item.id === id);
+    if (service) return [service.worshipType, service.serviceLabel, compactDate(service.date)].filter(Boolean).join(", ");
+    if (REAL_MODE) {
+      const source = fallback || {};
+      const ownLabel = [source.worshipType, source.serviceLabel, source.date ? compactDate(source.date) : ""].filter(Boolean).join(", ");
+      return ownLabel || "Service no longer scheduled";
+    }
+    const original = serviceById(id);
+    return original ? original.worshipType + ", " + original.serviceLabel + ", " + compactDate(original.date) : "Service removed";
   }
 
   function renderDuty() {
@@ -703,7 +718,8 @@
     if (!setlist) {
       const noPlanCopy = REAL_MODE ? "No saved song plan for this service." : "The local setlist was deleted, but the service is still available.";
       const recreate = REAL_MODE ? "" : '<button class="button-primary" type="button" data-action="create-setlist">Recreate outline</button>';
-      return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true }) + '<div class="state-card"><p class="state-marker">No outline</p><h2>No outline for this service</h2><p>' + noPlanCopy + "</p>" + recreate + "</div></section>";
+      const servicePicker = '<p class="selected-member service-picker"><label for="presider-service">Service</label><select id="presider-service" data-change="presider-service">' + serviceOptions(service.id, options) + "</select></p>";
+      return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true, control: servicePicker }) + '<div class="state-card"><p class="state-marker">No outline</p><h2>No outline for this service</h2><p>' + noPlanCopy + "</p>" + recreate + "</div></section>";
     }
     const deleteConfirm = REAL_MODE ? "" : (state.deleteSetlistConfirm ? '<div class="confirm-inline"><p>Delete this local setlist and keep the service?</p><button class="button-danger" type="button" data-action="delete-setlist-confirm">Delete setlist</button><button class="text-button" type="button" data-action="cancel-delete-setlist">Cancel</button></div>' : "");
     const sungConfirm = REAL_MODE ? "" : (state.markSungConfirm ? '<div class="confirm-inline"><p>Mark songs in this service as sung?</p><button class="button-primary" type="button" data-action="confirm-mark-sung">Mark sung</button><button class="text-button" type="button" data-action="cancel-mark-sung">Cancel</button></div>' : "");
@@ -722,7 +738,9 @@
       ? '<div class="song-slots read-only-song-slots"><div class="read-only-field"><span class="field-label">Glory song</span><p>' + escapeHtml(songById(setlist.glorySong)?.title || "Not assigned") + '</p></div><div class="read-only-field"><span class="field-label">Thanks song</span><p>' + escapeHtml(songById(setlist.thanksSong)?.title || "Not assigned") + "</p></div></div>"
       : '<div class="song-slots"><label class="field-label">Glory song<select data-change="glory-song">' + songOptions(setlist.glorySong, true) + '</select></label><label class="field-label">Thanks song<select data-change="thanks-song">' + songOptions(setlist.thanksSong, true) + "</select></label></div>";
     const copyButton = REAL_MODE ? "" : '<button class="text-button" type="button" data-action="copy-setlist">Copy outline</button>';
-    const presiderLabel = state.selectedName || "Choose your name";
+    const presiderLabel = REAL_MODE
+      ? (setlist.presider || (service.assignments && service.assignments.Presider) || service.presider || "Not listed")
+      : (state.selectedName || "Choose your name");
     const footer = REAL_MODE
       ? '<div class="outline-footer"><span class="read-only-note">Saved plan is read-only in this preview.</span></div>'
       : '<div class="outline-footer"><button class="button-secondary" type="button" data-action="mark-sung"' + (sung || !hasSongs ? " disabled" : "") + ">" + (sung ? "Sung" : "Mark service sung") + "</button>" + (hasHistory ? '<button class="text-button" type="button" data-action="undo-sung">Undo sung</button>' : "") + '<button class="button-danger" type="button" data-action="delete-setlist">Delete setlist</button></div>' + sungConfirm + undoConfirm + deleteConfirm;
@@ -758,7 +776,7 @@
   function renderPendingRequests() {
     const pending = state.requests.filter((request) => request.status === "pending");
     return '<section class="pending-band" aria-labelledby="pending-title"><div class="panel-heading"><h2 id="pending-title">Pending requests</h2><span data-pending-count="' + pending.length + '">' + pending.length + "</span></div>" +
-      (pending.length ? '<div class="pending-list">' + pending.map((request) => '<article class="pending-request"><div><strong>' + escapeHtml(request.name) + " · " + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId)) + "</span><p>" + escapeHtml(request.note || "No note added.") + '</p></div><div class="button-row"><button class="button-secondary" type="button" data-action="open-request-service" data-service="' + escAttr(request.serviceId) + '">Open service</button><button class="button-primary" type="button" data-action="approve-request" data-request="' + escAttr(request.id) + '">Approve</button><button class="text-button" type="button" data-action="decline-request" data-request="' + escAttr(request.id) + '">Decline</button></div></article>').join("") + "</div>" : '<p class="service-empty">No pending requests.</p>') + "</section>";
+      (pending.length ? '<div class="pending-list">' + pending.map((request) => '<article class="pending-request"><div><strong>' + escapeHtml(request.name) + " · " + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId, request)) + "</span><p>" + escapeHtml(request.note || "No note added.") + '</p></div><div class="button-row"><button class="button-secondary" type="button" data-action="open-request-service" data-service="' + escAttr(request.serviceId) + '">Open service</button><button class="button-primary" type="button" data-action="approve-request" data-request="' + escAttr(request.id) + '">Approve</button><button class="text-button" type="button" data-action="decline-request" data-request="' + escAttr(request.id) + '">Decline</button></div></article>').join("") + "</div>" : '<p class="service-empty">No pending requests.</p>') + "</section>";
   }
 
   function renderAssignmentEditor() {
@@ -782,7 +800,7 @@
   }
 
   function renderManageRequests() {
-    return '<section class="manage-section" aria-labelledby="request-admin-title"><p class="section-label">Change requests</p><h2 id="request-admin-title">Request history</h2><div class="request-admin-list">' + (state.requests.length ? state.requests.map((request) => '<article class="request-admin-row"><div><strong>' + escapeHtml(request.name) + " · " + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId)) + '</span><p>' + escapeHtml(request.note || "No note added.") + "</p></div><span class=\"request-status " + escapeHtml(request.status) + '">' + escapeHtml(request.status) + "</span>" + (request.status === "pending" ? '<div class="button-row"><button class="button-primary" type="button" data-action="approve-request" data-request="' + escAttr(request.id) + '">Approve</button><button class="text-button" type="button" data-action="decline-request" data-request="' + escAttr(request.id) + '">Decline</button></div>' : "") + "</article>").join("") : '<p class="service-empty">No requests recorded.</p>') + "</div></section>";
+    return '<section class="manage-section" aria-labelledby="request-admin-title"><p class="section-label">Change requests</p><h2 id="request-admin-title">Request history</h2><div class="request-admin-list">' + (state.requests.length ? state.requests.map((request) => '<article class="request-admin-row"><div><strong>' + escapeHtml(request.name) + " · " + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId, request)) + '</span><p>' + escapeHtml(request.note || "No note added.") + "</p></div><span class=\"request-status " + escapeHtml(request.status) + '">' + escapeHtml(request.status) + "</span>" + (request.status === "pending" ? '<div class="button-row"><button class="button-primary" type="button" data-action="approve-request" data-request="' + escAttr(request.id) + '">Approve</button><button class="text-button" type="button" data-action="decline-request" data-request="' + escAttr(request.id) + '">Decline</button></div>' : "") + "</article>").join("") : '<p class="service-empty">No requests recorded.</p>') + "</div></section>";
   }
 
   function addDaysISO(iso, days) {
@@ -980,7 +998,7 @@
       : '<p class="service-empty">No saved assignments for this service.</p>';
     const pending = state.requests.filter((request) => request.status === "pending");
     const requestBody = pending.length
-      ? pending.map((request) => '<div class="request-admin-row"><div><strong>' + escapeHtml(request.name || "Unassigned") + " · " + escapeHtml(request.duty || "Duty") + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId)) + '</span><p>' + escapeHtml(request.note || "No note added.") + "</p></div><span class=\"request-status pending\">Pending</span></div>").join("")
+      ? pending.map((request) => '<div class="request-admin-row"><div><strong>' + escapeHtml(request.name || "Unassigned") + " · " + escapeHtml(request.duty || "Duty") + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId, request)) + '</span><p>' + escapeHtml(request.note || "No note added.") + "</p></div><span class=\"request-status pending\">Pending</span></div>").join("")
       : '<p class="service-empty">No pending requests.</p>';
     const peopleBody = state.members.length
       ? '<div class="people-list">' + state.members.map((person) => '<div class="person-row\"><span>' + escapeHtml(person) + "</span></div>").join("") + "</div>"

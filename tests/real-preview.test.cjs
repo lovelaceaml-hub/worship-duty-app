@@ -100,6 +100,7 @@ function sourceRecords() {
         worshipType: 'Third Day',
         serviceLabel: 'Evening',
         presider: 'B. Member',
+        time: '6:30 PM',
         songs: ['missing-99'],
         updatedAt: '2026-09-07T12:00:00.000Z',
         confirmedAt: '2026-09-06T12:00:00.000Z',
@@ -140,6 +141,24 @@ function sourceRecords() {
         createdAt: '2026-09-08T10:00:00.000Z',
         resolvedAt: '2026-09-08T11:00:00.000Z',
         updatedBy: 'private actor'
+      },
+      {
+        id: 'request-approved',
+        name: 'A. Member',
+        svcId: 'service-1',
+        duty: 'Sermon',
+        note: 'Approved history must not enter the preview',
+        status: 'approved',
+        createdAt: '2026-09-07T10:00:00.000Z'
+      },
+      {
+        id: 'request-declined',
+        name: 'B. Member',
+        svcId: 'service-1',
+        duty: 'Media',
+        note: 'Declined history must not enter the preview',
+        status: 'declined',
+        createdAt: '2026-09-06T10:00:00.000Z'
       }
     ]
   };
@@ -175,7 +194,7 @@ test('decodes Firestore values and normalizes the prototype payload safely', () 
     date: '2026-09-13',
     worshipType: 'Third Day',
     serviceLabel: 'Evening',
-    time: '',
+    time: '18:30',
     presider: 'B. Member',
     assignments: {},
     standalone: true
@@ -191,6 +210,7 @@ test('decodes Firestore values and normalizes the prototype payload safely', () 
     createdAt: '2026-09-08T10:00:00.000Z',
     resolvedAt: '2026-09-08T11:00:00.000Z'
   });
+  assert.equal(data.requests.length, 1);
   assert.equal(data.requests[0].svcId, undefined);
 
   assert.deepEqual(data.songStats['001'], {

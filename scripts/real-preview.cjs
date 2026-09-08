@@ -438,6 +438,11 @@ function normalizeRequest(record, idOverride) {
   };
 }
 
+function isPendingRequest(record) {
+  if (!isObject(record) || !hasOwn(record, 'status') || record.status == null || record.status === '') return true;
+  return nonEmptyString(record.status).toLowerCase() === 'pending';
+}
+
 function appendRequestOptionalFields(output, record) {
   if (hasOwn(record, 'resolvedAt')) output.resolvedAt = record.resolvedAt;
   if (hasOwn(record, 'date')) output.date = nonEmptyString(record.date);
@@ -475,7 +480,7 @@ function addStandaloneSetlists(services, setlists) {
       date: setlist.date,
       worshipType: setlist.worshipType,
       serviceLabel: setlist.serviceLabel,
-      time: '',
+      time: hasOwn(setlist, 'time') ? setlist.time : '',
       presider: setlist.presider,
       assignments: {},
       standalone: true
@@ -538,9 +543,9 @@ function normalizePreviewData(raw, options = {}) {
     const id = nonEmptyString(record && (record.id || record.songId));
     if (id) songStats[id] = normalizeSongStat(record, id);
   });
-  const requestRows = recordsFromList(source.requests).map((record) => appendRequestOptionalFields(
-    normalizeRequest(record), record
-  ));
+  const requestRows = recordsFromList(source.requests)
+    .filter(isPendingRequest)
+    .map((record) => appendRequestOptionalFields(normalizeRequest(record), record));
   const fetchedAt = options.fetchedAt || new Date().toISOString();
   const today = options.today || localDateISO(options.now);
   return {
