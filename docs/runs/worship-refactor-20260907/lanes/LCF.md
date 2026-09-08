@@ -1,13 +1,13 @@
 ---
 lane: LCF
 title: Confirmation timestamp compatibility fix
-state: reviewed
+state: deployed
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/confirmation-fix
 review: Sol-pass
 depends_on: LF2
-updated: 2026-09-08T03:03Z
+updated: 2026-09-08T03:08Z
 ---
 
 # Confirmation timestamp work order
@@ -48,3 +48,7 @@ Source is frozen for root integration. Native Sol high review passed with no act
 ## Release scope
 
 Only song-app.js changes at runtime. All existing visuals, collection fields, write fallback paths, and importer interfaces remain intact. The broad fixture-suite review remains independently open for deterministic timing and isolation corrections; no full-suite pass is claimed for this release.
+
+## Deployment
+
+Hosting release `20260908030600` deployed successfully from runtime commit `8acf332` through the staged release script. Immediate production checks matched all 18 runtime SHA-256 hashes and verified the phone passcode screen with Firebase disabled and fictional empty data. No database or notification write was used for verification.

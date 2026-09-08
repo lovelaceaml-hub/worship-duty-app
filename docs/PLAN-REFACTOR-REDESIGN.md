@@ -10,7 +10,7 @@ Keep lightweight buildless JavaScript and Firebase. Preserve records and IDs, lo
 
 ## Design approval
 
-Create three distinct local HTML/CSS directions with fictional information and phone/desktop exports. Anthony explicitly chose local work instead of Stitch on 2026-09-07: "no need to use stitch." Anthony explicitly chooses one direction; then create and verify one complete clickable prototype across member, presider, and coordinator flows and empty/loading/error/success states. Anthony approves that prototype before production UI implementation. Freeze references and manifest in a committed milestone; do not change targets to hide mismatches. No selection exists yet.
+Create three distinct local HTML/CSS directions with fictional information and phone/desktop exports. Anthony explicitly chose local work instead of Stitch on 2026-09-07: "no need to use stitch." Anthony explicitly chooses one direction; then create and verify one complete clickable prototype across member, presider, and coordinator flows and empty/loading/error/success states. Anthony approves that prototype before production UI implementation. Freeze references and manifest in a committed milestone; do not change targets to hide mismatches. Anthony selected direction B, Open Bulletin, with a more compact and refined layout. Full prototype approval remains pending.
 
 ## Models and roles
 
@@ -20,7 +20,7 @@ Requested controller: gpt-5.6-sol, high. Architecture critic: planner_sol, gpt-5
 
 Canonical repository: /Users/anthony/Projects/worship-duty-app. Worktree root: /Users/anthony/Projects/worship-refactor-worktrees. Each lane has a separate worktree. No agent may revert another agent's changes. Writers do not operate Git, deploy, or change shared records. Controller integrates explicit owned changes and owns Git, INDEX, Build log, handoff, shared entrypoints, and board publication. Each agent reads this full plan, docs/HANDOFF.md, and docs/runs/worship-refactor-20260907/INDEX.md in its worktree before editing. Its capsule supplies absolute paths and exact ownership.
 
-All lanes use Codex/executor_luna/max, controller review, one writer, no helpers unless explicitly named below. Design exports are authorized by the approved plan; only fictional names and records may go to Stitch. Record tree and board contain sanitized engineering progress only. Do not copy production personal data or credentials into fixtures, outputs, reviewer payloads, or new documentation. Verify existing private remote before any push.
+All lanes use Codex/executor_luna/max, controller review, one writer, no helpers unless explicitly named below. Design exports are authorized by the approved plan and use fictional information. Stitch is not used. Record tree and board contain sanitized engineering progress only. Do not copy production personal data or credentials into fixtures, outputs, reviewer payloads, or new documentation. Verify existing private remote before any push.
 
 ### Lane 0: Architecture critique
 
@@ -36,7 +36,7 @@ Setup: executor_luna, max, Codex, controller review. Starts immediately as a dis
 
 ### Lane D: Design
 
-Setup: executor_luna, max, Codex, controller review. Starts immediately. Own docs/design/directions/** and docs/runs/worship-refactor-20260907/research/design/** in design worktree. Produce three original local HTML/CSS directions and export phone/desktop screenshots. Record local provenance; no Stitch needed per Anthony's correction. Direction choice is pending. No production code or selected prototype until Anthony chooses. Controller maintains DESIGN.md and approval record.
+Setup: executor_luna, max, Codex, controller review. Starts immediately. Own docs/design/directions/** and docs/runs/worship-refactor-20260907/research/design/** in design worktree. Produce three original local HTML/CSS directions and export phone/desktop screenshots. Record local provenance; no Stitch needed per Anthony's correction. Anthony selected compact Open Bulletin. The lane now owns the complete prototype and its design documentation under the revised capsule; no production UI changes before prototype approval.
 
 ### Lane V: Verification
 
@@ -70,7 +70,7 @@ Required docs: project AGENTS.md, README quick links, HANDOFF.md, USER-MANUAL.md
 
 ## Frozen design targets
 
-Pending Anthony's direction selection and prototype approval. Production UI lanes M/P/C may not start.
+Anthony selected direction B, Open Bulletin, on 7 September 2026 and required smaller, more compact, refined layouts with less vertical space. See docs/DESIGN.md for his exact messages. Complete prototype approval remains pending; production UI lanes M/P/C may not start.
 
 ## Build log
 
@@ -83,3 +83,11 @@ Pending Anthony's direction selection and prototype approval. Production UI lane
 - 2026-09-07: All seven changed backend functions deployed successfully through an explicit function allowlist. Immediate read-only smoke passed for the calendar rewrite using a fictional member and for public schedule schema/projection. No notification or write handler was invoked for the production check. Existing runtime deprecation is recorded as separate maintenance.
 
 - 2026-09-07: Foundation 2 state and subscription extraction passed native Sol high review in round 3 after startup rollback, dependency guard, and metadata corrections. Root passed the Foundation harness, fifteen combined Node/release tests, and fifteen fictional browser scenarios, including focused and unfocused song preservation, request drafts, nonzero scroll, keyboard controls, passcodes, and explicit deferred-auth timing. Compatible Hosting release is next. Design choice and full prototype approval remain pending.
+
+- 2026-09-07: Compatible Foundation 2 Hosting release `20260908022716` deployed through the staging script from source commit `670ddb7`. Immediate smoke verified all eighteen runtime hashes and the locked phone interface without production record reads or writes. Reviewed source is pushed privately. Verification-suite native review is finishing separately; design selection and full prototype approval remain pending.
+
+- 2026-09-07: A final integrated browser test exposed an intermittent confirmation failure. Root reproduced the pre-existing cause in unchanged song-app.js: metadata is stamped twice, so confirmedAt can be earlier than updatedAt immediately after confirmation. A bounded LCF integration correction with actual-source advancing-clock tests is authorized independently of the visual approval gate. Verification round 2 also requires fixed fixture dates, reduced motion for stable accessibility captures, and sorted source digest inputs.
+
+- 2026-09-07: Anthony selected visual direction B and asked for everything to use less vertical space, feel smaller, and be more compact and refined. The original Open Bulletin direction is now the basis for a complete compact phone/desktop prototype. No production UI approval is implied.
+
+- 2026-09-07: Single-timestamp song confirmation fix passed native Sol high review, 5 actual-source advancing-clock tests, Foundation harness, 14 state/staging tests, and actual service worker update/rollback/offline verification. Hosting release `20260908030600` from runtime commit `8acf332` is live; immediate smoke matched all 18 runtime hashes and verified the locked phone view without production writes. Verification-suite round 3 corrections continue independently.

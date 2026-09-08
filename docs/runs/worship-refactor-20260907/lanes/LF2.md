@@ -1,13 +1,13 @@
 ---
 lane: LF2
 title: Foundation state and subscriptions
-state: reviewed
+state: deployed
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-state
 review: Sol-pass
 depends_on: LF,LR
-updated: 2026-09-08T02:26Z
+updated: 2026-09-08T02:29Z
 ---
 
 # Foundation 2 work order

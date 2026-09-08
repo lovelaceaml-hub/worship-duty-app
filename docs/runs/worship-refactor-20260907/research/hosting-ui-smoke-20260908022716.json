@@ -1,0 +1,8 @@
+{
+  "release": "20260908022716",
+  "scope": "Live Hosting UI smoke with empty fictional seed, Firebase disabled and external traffic blocked. No production write or member selection.",
+  "siteLockVisible": true,
+  "keyboardFocus": true,
+  "horizontalOverflow": false,
+  "pageErrors": []
+}
