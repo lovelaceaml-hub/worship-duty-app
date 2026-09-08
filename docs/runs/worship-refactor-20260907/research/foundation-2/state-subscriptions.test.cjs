@@ -17,7 +17,25 @@ test('missing subscriptions dependency fails before adapter side effects', () =>
     window: {
       WorshipApp: {
         core: {},
-        domain: { schedule: {}, sheet: {} },
+        domain: {
+          schedule: {},
+          member: {
+            groupDuties() {},
+            findPendingRequest() {},
+            requestsForMember() {},
+            pendingRequestCount() {},
+            setlistSummary() {}
+          },
+          coordinator: {
+            upcomingServices() {},
+            eligibleDutyRoster() {},
+            conflictsWithSuggestions() {},
+            gapRows() {},
+            workloadRows() {},
+            splitRequests() {}
+          },
+          sheet: {}
+        },
         services: {
           storage: { createAdapter() { storageAdapterCalls++; } },
           firebase: { createAdapter() { firebaseAdapterCalls++; } }
@@ -39,13 +57,29 @@ test('missing subscriptions dependency fails before adapter side effects', () =>
 test('browser namespaces load after frozen core constants', () => {
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  ['src/core/constants.js', 'src/core/state.js', 'src/services/subscriptions.js']
+  [
+    'src/core/constants.js',
+    'src/core/state.js',
+    'src/domain/schedule.js',
+    'src/domain/member.js',
+    'src/domain/coordinator.js',
+    'src/domain/sheet.js',
+    'src/services/storage.js',
+    'src/services/firebase.js',
+    'src/services/subscriptions.js'
+  ]
     .forEach(relativePath => vm.runInContext(
       fs.readFileSync(path.join(sourceRoot, relativePath), 'utf8'),
       sandbox,
       { filename: relativePath }
     ));
   assert(Object.isFrozen(sandbox.window.WorshipApp.core));
+  assert(Object.isFrozen(sandbox.window.WorshipApp.domain.schedule));
+  assert(Object.isFrozen(sandbox.window.WorshipApp.domain.member));
+  assert(Object.isFrozen(sandbox.window.WorshipApp.domain.coordinator));
+  assert(Object.isFrozen(sandbox.window.WorshipApp.domain.sheet));
+  assert(Object.isFrozen(sandbox.window.WorshipApp.services.storage));
+  assert(Object.isFrozen(sandbox.window.WorshipApp.services.firebase));
   assert.strictEqual(sandbox.window.WorshipApp.state, sandbox.window.WorshipApp.services.state);
   assert(Object.isFrozen(sandbox.window.WorshipApp.services.subscriptions));
 });

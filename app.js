@@ -5,13 +5,27 @@
 const APP_FOUNDATION = window.WorshipApp || {};
 const CORE = APP_FOUNDATION.core;
 const DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.schedule;
+const MEMBER_DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.member;
+const COORDINATOR_DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.coordinator;
 const SHEET_DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.sheet;
 const STORAGE_SERVICE = APP_FOUNDATION.services && APP_FOUNDATION.services.storage;
 const FIREBASE_SERVICE = APP_FOUNDATION.services && APP_FOUNDATION.services.firebase;
 const STATE_SERVICE = (APP_FOUNDATION.services && APP_FOUNDATION.services.state) || APP_FOUNDATION.state;
 const SUBSCRIPTIONS_SERVICE = APP_FOUNDATION.services && APP_FOUNDATION.services.subscriptions;
-if (!CORE || !DOMAIN || !SHEET_DOMAIN || !STORAGE_SERVICE || !FIREBASE_SERVICE ||
-    !SUBSCRIPTIONS_SERVICE || typeof SUBSCRIPTIONS_SERVICE.createManager !== 'function') {
+if (!CORE || !DOMAIN || !MEMBER_DOMAIN || !COORDINATOR_DOMAIN || !SHEET_DOMAIN ||
+    !STORAGE_SERVICE || !FIREBASE_SERVICE || !SUBSCRIPTIONS_SERVICE ||
+    typeof SUBSCRIPTIONS_SERVICE.createManager !== 'function' ||
+    typeof MEMBER_DOMAIN.groupDuties !== 'function' ||
+    typeof MEMBER_DOMAIN.findPendingRequest !== 'function' ||
+    typeof MEMBER_DOMAIN.requestsForMember !== 'function' ||
+    typeof MEMBER_DOMAIN.pendingRequestCount !== 'function' ||
+    typeof MEMBER_DOMAIN.setlistSummary !== 'function' ||
+    typeof COORDINATOR_DOMAIN.upcomingServices !== 'function' ||
+    typeof COORDINATOR_DOMAIN.eligibleDutyRoster !== 'function' ||
+    typeof COORDINATOR_DOMAIN.conflictsWithSuggestions !== 'function' ||
+    typeof COORDINATOR_DOMAIN.gapRows !== 'function' ||
+    typeof COORDINATOR_DOMAIN.workloadRows !== 'function' ||
+    typeof COORDINATOR_DOMAIN.splitRequests !== 'function') {
   throw new Error('WorshipApp foundation modules did not load');
 }
 
@@ -138,13 +152,17 @@ function conflictBadge(svc, member) {
 
 /* Per-member duty counts across the whole schedule: rolling 4/8-week windows,
    upcoming load, year total, last served and next duty dates. */
-function workloadStats() { return DOMAIN.workloadStats(state.services, state.members, todayISO(), CATEGORIES); }
+function workloadStats() {
+  return DOMAIN.workloadStats(state.services, state.members, todayISO(), CATEGORIES);
+}
 
 /* Best substitutes for a duty in a service: same department, not already
    serving that service, lightest recent+upcoming load first, then longest
    since last served. */
 function suggestSubs(svc, duty, excludeName, stats) {
-  return DOMAIN.suggestSubs(svc, duty, excludeName, stats, state.departments, state.members, CATEGORIES);
+  return DOMAIN.suggestSubs(
+    svc, duty, excludeName, stats, state.departments, state.members, CATEGORIES
+  );
 }
 
 /* ================= google sheet sync — pure parsers ================= */
@@ -840,19 +858,8 @@ function renderMy() {
 
   html += '<p class="hint">You have <b>' + duties.length + '</b> upcoming dut' + (duties.length > 1 ? 'ies' : 'y') + '.</p>';
 
-  // Group a member's duties by day (and, within a day, by service) so every
-  // duty on the same date shares one card. `dutiesFor` already returns them in
-  // date → time → category order, so first-seen order here is the display order.
-  const days = [];
-  const dayIndex = {};
-  duties.forEach(d => {
-    let day = dayIndex[d.svc.date];
-    if (!day) { day = dayIndex[d.svc.date] = { date: d.svc.date, edge: d.cat.color, services: [], svcIndex: {} }; days.push(day); }
-    const sid = svcId(d.svc);
-    let se = day.svcIndex[sid];
-    if (!se) { se = day.svcIndex[sid] = { svc: d.svc, id: sid, duties: [] }; day.services.push(se); }
-    se.duties.push(d);
-  });
+  // Grouping is pure and preserves first-seen date, service, and duty order.
+  const days = MEMBER_DOMAIN.groupDuties(duties, svcId);
 
   // Presider song picker — a role-conditional door into the song-selection
   // screen (ported from the old song app). Only presiders ever see it.
@@ -995,7 +1002,7 @@ function renderSongs(view) {
 
 /* Pending request (if any) by `name` for this exact svc + duty */
 function findPendingRequest(svcIdVal, duty, name) {
-  return state.requests.find(r => r.svcId === svcIdVal && r.duty === duty && r.name === name && r.status === 'pending');
+  return MEMBER_DOMAIN.findPendingRequest(state.requests, svcIdVal, duty, name);
 }
 
 /* Compact "Request change" affordance that sits at the end of the duty's role
@@ -1032,7 +1039,7 @@ function statusChip(status) {
 /* "Your requests" card in My Duties — newest first, last ~6, only if any exist for ui.me. */
 function renderYourRequests() {
   if (!ui.me) return '';
-  const mine = state.requests.filter(r => r.name === ui.me).slice().sort((a, b) => b.createdAt - a.createdAt);
+  const mine = MEMBER_DOMAIN.requestsForMember(state.requests, ui.me);
   if (!mine.length) return '';
   return '<div class="card req-card"><b style="font-size:13.5px">Your requests</b>' +
     mine.slice(0, 6).map(r =>
@@ -1045,7 +1052,7 @@ function renderYourRequests() {
 }
 
 function pendingRequestsCount() {
-  return state.requests.filter(r => r.status === 'pending').length;
+  return MEMBER_DOMAIN.pendingRequestCount(state.requests);
 }
 
 function renderManage() {
@@ -1136,19 +1143,26 @@ function renderFeatures() {
 function renderManagePlanning() {
   const t = todayISO();
   const stats = workloadStats();
-  const upcoming = state.services
-    .filter(s => s.date >= t)
-    .sort((a, b) => a.date.localeCompare(b.date) || SERVICE_LABELS.indexOf(a.service) - SERVICE_LABELS.indexOf(b.service));
+  const upcoming = COORDINATOR_DOMAIN.upcomingServices(state.services, t, SERVICE_LABELS);
 
   /* --- conflicts, with suggested subs --- */
   let confHtml = '';
-  upcoming.forEach(svc => {
-    activeConflicts(svc).forEach(c => {
+  const planningRows = COORDINATOR_DOMAIN.conflictsWithSuggestions(upcoming, {
+    categories: CATEGORIES,
+    stats,
+    departments: state.departments,
+    members: state.members,
+    schedule: DOMAIN
+  });
+  planningRows.forEach(row => {
+    const svc = row.service;
+    const c = row.conflict;
       confHtml += '<div class="plan-conflict"><div class="plan-when"><b>' + esc(c.name) + '</b> — ' +
         esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) +
         ' <span class="plan-duties">(' + c.duties.map(esc).join(' + ') + ')</span></div>';
       c.duties.forEach(duty => {
-        const subs = suggestSubs(svc, duty, c.name, stats);
+        const suggestion = row.suggestions.find(item => item.duty === duty);
+        const subs = suggestion ? suggestion.members : [];
         confHtml += '<div class="plan-suggest"><span class="lab">' + esc(duty) + ' →</span> ' +
           (subs.length
             ? subs.map(m => '<button class="ghost mini" data-act="plan-assign" data-svc="' + svcId(svc) +
@@ -1157,7 +1171,6 @@ function renderManagePlanning() {
           '</div>';
       });
       confHtml += '</div>';
-    });
   });
   let html = '<div class="card"><div class="f-label">Double-duty conflicts — upcoming</div>' +
     '<div class="f-desc">Tap a name to hand that duty to them. Already-acknowledged doubles (marked OK) are not listed.</div>' +
@@ -1170,26 +1183,12 @@ function renderManagePlanning() {
      (e.g. Media/Translation on a weekday), which previously marked every
      service "unfilled". Fully-empty (not-yet-planned) services are skipped —
      that's a different signal than a partially-planned service with a gap. */
-  const expFilled = {}, expCount = {};
-  (state.services || []).forEach(s => {
-    const assigned = Object.keys(s.assignments || {}).filter(d => s.assignments[d]);
-    if (!assigned.length) return;
-    const key = (s.worship || '') + '|' + (s.service || '');
-    expCount[key] = (expCount[key] || 0) + 1;
-    const f = expFilled[key] || (expFilled[key] = {});
-    assigned.forEach(d => { f[d] = (f[d] || 0) + 1; });
-  });
-  const expectedDuties = svc => {
-    const key = (svc.worship || '') + '|' + (svc.service || '');
-    const f = expFilled[key] || {}, n = expCount[key] || 0;
-    return n ? ALL_DUTIES_ORDER.filter(d => (f[d] || 0) * 2 >= n) : [];
-  };
   const horizon = (() => { const d = new Date(); d.setDate(d.getDate() + 28); return toISO(d); })();
   let gapHtml = '';
-  upcoming.filter(s => s.date <= horizon).forEach(svc => {
-    const a = svc.assignments || {};
-    if (!Object.keys(a).some(d => a[d])) return; // not yet planned — different signal
-    const missing = expectedDuties(svc).filter(d => !a[d]);
+  const gapRows = COORDINATOR_DOMAIN.gapRows(state.services, t, horizon, CATEGORIES, SERVICE_LABELS);
+  gapRows.forEach(row => {
+    const svc = row.service;
+    const missing = row.missing;
     if (missing.length) {
       gapHtml += '<div class="plan-suggest"><span class="lab">' + esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) + '</span> ' +
         '<span class="plan-duties">' + missing.length + ' unfilled: ' + missing.map(esc).join(', ') + '</span></div>';
@@ -1199,10 +1198,7 @@ function renderManagePlanning() {
     (gapHtml || '<p class="hint" style="margin-top:12px">Every planned service has its usual duties filled.</p>') + '</div>';
 
   /* --- workload table --- */
-  const rows = Object.keys(stats)
-    .map(m => ({ m, s: stats[m] }))
-    .filter(r => r.s.total > 0 || state.members.indexOf(r.m) !== -1)
-    .sort((a, b) => (b.s.past8 + b.s.upcoming) - (a.s.past8 + a.s.upcoming) || a.m.localeCompare(b.m));
+  const rows = COORDINATOR_DOMAIN.workloadRows(stats, state.members);
   html += '<div class="card"><div class="f-label">Workload — who is carrying what</div>' +
     '<div class="f-desc">Duty counts. Sorted heaviest first (last 8 weeks + upcoming).</div>' +
     '<div class="plan-scroll"><table class="plan-table"><tr>' +
@@ -1222,10 +1218,9 @@ function renderManagePlanning() {
 function memberSelect(svc, duty) {
   const cur = (svc.assignments || {})[duty] || '';
   const conflicted = feat('conflictWarnings') && cur && activeConflicts(svc).some(c => c.name === cur);
-  const cat = dutyCategory(duty);
-  const roster = (state.departments || {})[cat.name] || [];
-  let options = roster.length ? roster : state.members;
-  if (cur && options.indexOf(cur) === -1) options = [cur].concat(options);
+  const options = COORDINATOR_DOMAIN.eligibleDutyRoster(
+    svc, duty, state.departments, state.members, CATEGORIES
+  );
   return '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '"' +
     (conflicted ? ' class="conflict"' : '') + '>' +
     '<option value="">—</option>' +
@@ -1259,9 +1254,10 @@ function reqSubmittedAt(r) {
 }
 
 function renderManageRequests() {
-  const all = state.requests.slice().sort((a, b) => b.createdAt - a.createdAt);
-  const pending = all.filter(r => r.status === 'pending');
-  const resolved = all.filter(r => r.status !== 'pending');
+  const requestSets = COORDINATOR_DOMAIN.splitRequests(state.requests);
+  const all = requestSets.all;
+  const pending = requestSets.pending;
+  const resolved = requestSets.resolved;
 
   let html = '<p class="hint">Members can request a schedule change from My Duties. Approving here does not edit the schedule — ' +
     'open the service in <b>Services</b> to make the actual change.</p>';
@@ -1466,15 +1462,7 @@ let setlistIndex = {};
    known. `confirmedAt` is written equal to `updatedAt`, so a later edit pushes
    updatedAt ahead and the list reads as changed since it was confirmed. */
 function songStateFor(id) {
-  const sl = setlistIndex[id];
-  if (!sl) return null;
-  const count = (sl.songs || []).length;
-  const confirmedAt = sl.confirmedAt || 0;
-  return {
-    count: count,
-    confirmed: !!(count && confirmedAt && confirmedAt >= (sl.updatedAt || 0)),
-    changed: !!(count && confirmedAt && confirmedAt < (sl.updatedAt || 0))
-  };
+  return MEMBER_DOMAIN.setlistSummary(setlistIndex, id);
 }
 
 /* The small "where are the songs up to?" tag beside a Presider duty. */

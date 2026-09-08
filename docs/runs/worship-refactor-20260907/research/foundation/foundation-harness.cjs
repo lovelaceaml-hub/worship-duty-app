@@ -9,10 +9,15 @@ const sourceRoot = path.resolve(__dirname, '../../../../../');
 const core = require(path.join(sourceRoot, 'src/core/constants.js'));
 const stateService = require(path.join(sourceRoot, 'src/core/state.js'));
 const schedule = require(path.join(sourceRoot, 'src/domain/schedule.js'));
+const member = require(path.join(sourceRoot, 'src/domain/member.js'));
+const coordinator = require(path.join(sourceRoot, 'src/domain/coordinator.js'));
 const sheet = require(path.join(sourceRoot, 'src/domain/sheet.js'));
 const storage = require(path.join(sourceRoot, 'src/services/storage.js'));
 const firebase = require(path.join(sourceRoot, 'src/services/firebase.js'));
 const subscriptions = require(path.join(sourceRoot, 'src/services/subscriptions.js'));
+assert.equal(member.dutiesFor, undefined);
+assert.equal(coordinator.workloadStats, undefined);
+assert.equal(coordinator.suggestSubs, undefined);
 
 const browserSandbox = { window: {} };
 vm.createContext(browserSandbox);
@@ -20,6 +25,8 @@ vm.createContext(browserSandbox);
   'src/core/constants.js',
   'src/core/state.js',
   'src/domain/schedule.js',
+  'src/domain/member.js',
+  'src/domain/coordinator.js',
   'src/domain/sheet.js',
   'src/services/storage.js',
   'src/services/firebase.js',
@@ -30,6 +37,11 @@ vm.createContext(browserSandbox);
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.core));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.services.state));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.schedule));
+assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.member));
+assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.coordinator));
+assert.equal(browserSandbox.window.WorshipApp.domain.member.dutiesFor, undefined);
+assert.equal(browserSandbox.window.WorshipApp.domain.coordinator.workloadStats, undefined);
+assert.equal(browserSandbox.window.WorshipApp.domain.coordinator.suggestSubs, undefined);
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.sheet));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.services.storage));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.services.firebase));
@@ -59,6 +71,8 @@ vm.createContext(appSandbox);
   'src/core/constants.js',
   'src/core/state.js',
   'src/domain/schedule.js',
+  'src/domain/member.js',
+  'src/domain/coordinator.js',
   'src/domain/sheet.js',
   'src/services/storage.js',
   'src/services/firebase.js',
@@ -72,6 +86,8 @@ vm.runInContext(appSource, appSandbox, { filename: 'app.js' });
 assert(Object.isFrozen(core));
 assert(Object.isFrozen(stateService));
 assert(Object.isFrozen(schedule));
+assert(Object.isFrozen(member));
+assert(Object.isFrozen(coordinator));
 assert(Object.isFrozen(sheet));
 assert(Object.isFrozen(storage));
 assert(Object.isFrozen(firebase));
