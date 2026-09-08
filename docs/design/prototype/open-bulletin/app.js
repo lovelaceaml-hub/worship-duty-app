@@ -120,6 +120,18 @@
     return service && (service.time24 || service.time || "");
   }
 
+  function choirSongLabel(service) {
+    const value = service && service.choirSong;
+    const catalogId = value && typeof value === "object" ? (value.catalogId || value.songId || value.id || "") : value;
+    const song = songById(catalogId);
+    if (song) return song.title;
+    if (REAL_MODE) {
+      const sourceLabel = value && typeof value === "object" ? (value.label || value.title || value.name || "") : value;
+      if (sourceLabel && String(sourceLabel).trim()) return String(sourceLabel);
+    }
+    return "Not assigned";
+  }
+
   function setlistById(id) {
     return state.setlists[id] || null;
   }
@@ -284,7 +296,7 @@
   }
 
   function upcomingServices() {
-    return state.services.filter((service) => service.date >= today).sort((a, b) => a.date.localeCompare(b.date) || serviceTime(a).localeCompare(serviceTime(b)));
+    return state.services.filter((service) => service.date >= today && !service.standalone).sort((a, b) => a.date.localeCompare(b.date) || serviceTime(a).localeCompare(serviceTime(b)));
   }
 
   function pastServices() {
@@ -292,6 +304,7 @@
   }
 
   function myAssignments(name, includePast) {
+    if (REAL_MODE && !name) return [];
     const source = (includePast ? state.services : state.services.filter((service) => service.date >= today)).filter((service) => !service.standalone);
     return source.flatMap((service) => Object.entries(service.assignments || {})
       .filter(([, member]) => member === name)
@@ -622,7 +635,7 @@
       order.push({ label: "Thanks song", note: songById(setlist.thanksSong)?.title || "Not assigned" });
       order.push({ label: "Prayer of thanks", who: assignment["Prayer of Thanks"] || "Not assigned" });
     }
-    order.push({ label: "Choir song", note: state.features.choirSong ? (songById(service.choirSong)?.title || "Not assigned") : "Choir song is off" });
+    order.push({ label: "Choir song", note: state.features.choirSong ? choirSongLabel(service) : "Choir song is off" });
     order.push({ label: "Sermon", who: assignment.Sermon || "Not assigned" });
     order.push({ label: "Closing prayer", who: assignment["Closing Prayer"] || "Not assigned" });
     return prepHtml + '<div class="outline-group"><p class="outline-group-label">Order of worship</p>' + order.map((step, index) => '<div class="order-row"><span class="order-number">' + (index + 1) + '</span><span><strong>' + escapeHtml(step.label) + '</strong><small>' + escapeHtml(step.note || "") + '</small></span><span class="step-who">' + escapeHtml(step.who || "") + "</span></div>").join("") + "</div>";
@@ -703,7 +716,7 @@
       ? '<div class="read-only-field"><span class="field-label">Notes</span><p>' + escapeHtml(setlist.notes || "No notes recorded.") + "</p></div>"
       : '<label class="field-label" for="setlist-notes">Notes<textarea id="setlist-notes" data-change="setlist-notes" rows="3">' + escapeHtml(setlist.notes || "") + "</textarea></label>";
     const choir = state.features.choirSong ? (REAL_MODE
-      ? '<div class="read-only-field"><span class="field-label">Choir song</span><p>' + escapeHtml(songById(service.choirSong)?.title || "Not assigned") + "</p></div>"
+      ? '<div class="read-only-field"><span class="field-label">Choir song</span><p>' + escapeHtml(choirSongLabel(service)) + "</p></div>"
       : '<label class="field-label">Choir song<select data-change="choir-song">' + songOptions(service.choirSong, true) + "</select></label>") : "";
     const slots = REAL_MODE
       ? '<div class="song-slots read-only-song-slots"><div class="read-only-field"><span class="field-label">Glory song</span><p>' + escapeHtml(songById(setlist.glorySong)?.title || "Not assigned") + '</p></div><div class="read-only-field"><span class="field-label">Thanks song</span><p>' + escapeHtml(songById(setlist.thanksSong)?.title || "Not assigned") + "</p></div></div>"
@@ -981,7 +994,7 @@
     const servicePicker = '<label class="selected-member service-picker\"><span>Service</span><select data-change="presider-service">' + serviceOptions(service && service.id, state.services) + "</select></label>";
     const serviceLabelText = service ? (service.worshipType ? service.worshipType + ", " : "") + (service.serviceLabel || "Service") + ", " + compactDate(service.date) : "No service selected";
     return '<section class="prototype-page manage-page" data-prototype-screen="manage">' + renderHeading("Read-only preview", "Manage", { memberControl: true, control: servicePicker }) +
-      '<section class="manage-section\" aria-labelledby=\"read-only-assignments-title\"><div class=\"section-heading-row\"><div><p class=\"section-label\">Current records</p><h2 id=\"read-only-assignments-title\">Service assignments</h2><p class=\"heading-subtitle\">' + escapeHtml(serviceLabelText) + "</p></div></div><div class=\"assignment-table read-only-assignment-table\"><div class=\"assignment-table-head\"><span>Department</span><span>Duty</span><span>Assigned member</span></div>" + assignmentBody + "</div></section>" +
+      '<section class="manage-section\" aria-labelledby=\"read-only-assignments-title\"><div class=\"section-heading-row\"><div><p class=\"section-label\">Current records</p><h2 id=\"read-only-assignments-title\">Service assignments</h2><p class=\"heading-subtitle\">' + escapeHtml(serviceLabelText) + "</p></div></div><div class=\"assignment-table read-only-assignment-table\" tabindex=\"0\" role=\"region\" aria-label=\"Read-only service assignments\"><div class=\"assignment-table-head\"><span>Department</span><span>Duty</span><span>Assigned member</span></div>" + assignmentBody + "</div></section>" +
       '<section class=\"manage-section\" aria-labelledby=\"read-only-requests-title\"><p class=\"section-label\">Current records</p><h2 id=\"read-only-requests-title\">Pending requests</h2><div class=\"request-admin-list\">' + requestBody + "</div></section>" +
       '<section class=\"manage-section\" aria-labelledby=\"read-only-people-title\"><p class=\"section-label\">Current records</p><h2 id=\"read-only-people-title\">People</h2>' + peopleBody + '<div class=\"roster-editor\"><div class=\"panel-heading\"><h3>Department roster</h3></div>' + departmentBody + "</div></section>" +
       '<section class=\"manage-section\" aria-labelledby=\"read-only-features-title\"><p class=\"section-label\">Preview state</p><h2 id=\"read-only-features-title\">Feature settings</h2>' + featureBody + "</section></section>";
