@@ -1,0 +1,1285 @@
+/* Runtime-neutral fictional prototype for LV Zion Worship Service.
+   All state lives in memory. No Firebase, external requests, fonts, or assets are used. */
+(function bootPrototype(window, document) {
+  "use strict";
+
+  const FIX = window.WorshipPrototypeFixtures;
+  if (!FIX) return;
+
+  const NAV = ["home", "duty", "presider", "manage"];
+  const SPECIAL = ["empty", "loading", "offline", "error", "success"];
+  const VALID_SCREENS = NAV.concat(SPECIAL);
+  const deepClone = (value) => JSON.parse(JSON.stringify(value));
+  const escapeHtml = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[char]));
+  const BASE = deepClone(FIX);
+  const today = "2026-09-10";
+
+  const state = {
+    screen: readScreen(),
+    selectedName: FIX.members[0],
+    selectedDate: "2026-09-12",
+    selectedServiceId: FIX.services[0].id,
+    expandedServices: { [FIX.services[0].id]: true },
+    homeDepartment: "All",
+    dutyDepartment: "All",
+    showPast: false,
+    dutyNoteOpen: false,
+    memberNotice: "",
+    calendarMessage: "",
+    copyText: "",
+    copyMessage: "",
+    alerts: [
+      { id: "alert-1", text: "B. Daniel Reed is assigned Presider for the next service.", read: false },
+      { id: "alert-2", text: "A fictional change request is waiting for coordinator review.", read: false }
+    ],
+    requestOpen: null,
+    requestNote: "",
+    requestMessage: "",
+    services: deepClone(FIX.services),
+    members: deepClone(FIX.members),
+    categories: deepClone(FIX.categories),
+    departments: deepClone(FIX.departments),
+    setlists: deepClone(FIX.setlists),
+    requests: deepClone(FIX.requests),
+    songs: deepClone(FIX.songs),
+    songStats: deepClone(FIX.songStats),
+    features: deepClone(FIX.features),
+    manageTab: "assignments",
+    manageUnlocked: true,
+    siteLocked: false,
+    editorPasscode: FIX.passcodes.editor,
+    sitePasscode: FIX.passcodes.site,
+    accessError: "",
+    passcodeMode: null,
+    manageNotice: "",
+    serviceDeleteId: null,
+    removeMember: null,
+    conflictAcknowledged: {},
+    planWindow: "next-4-weeks",
+    planNotice: "",
+    sheetUrl: "local-sheet://fictional-schedule",
+    syncStatus: "idle",
+    syncMessage: "",
+    songSearch: "",
+    songCategory: "All",
+    openSong: null,
+    songNotice: "",
+    saveState: "ready",
+    failNextSave: new URLSearchParams(window.location.search).get("review") === "save-failure",
+    showHistory: false,
+    backfillOpen: false,
+    markSungConfirm: null,
+    undoSungConfirm: null,
+    sungSnapshot: null,
+    runsheetOpen: false,
+    deleteSetlistConfirm: false,
+    touchStart: null,
+    saveTimer: null,
+    importMessage: "",
+    scheduler: ""
+  };
+
+  function readScreen() {
+    const value = new URLSearchParams(window.location.search).get("screen");
+    return VALID_SCREENS.includes(value) ? value : "home";
+  }
+
+  function serviceById(id) {
+    return state.services.find((item) => item.id === id) || state.services[0] || null;
+  }
+
+  function setlistById(id) {
+    return state.setlists[id] || null;
+  }
+
+  function currentSetlist() {
+    return setlistById(state.selectedServiceId);
+  }
+
+  function songById(id) {
+    return state.songs.find((item) => item.id === id) || null;
+  }
+
+  function categoryForDuty(duty) {
+    return state.categories.find((category) => category.duties.includes(duty)) || { name: "Worship", duties: [] };
+  }
+
+  function dateObject(iso) {
+    return new Date(String(iso) + "T12:00:00");
+  }
+
+  function fullDate(iso) {
+    return dateObject(iso).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  }
+
+  function compactDate(iso) {
+    return dateObject(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  }
+
+  function dateWithoutYear(iso) {
+    return dateObject(iso).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  }
+
+  function formatTime(value) {
+    const [rawHour, minute = "00"] = String(value || "00:00").split(":");
+    const hour24 = Number(rawHour) || 0;
+    const hour = hour24 % 12 || 12;
+    return hour + ":" + minute + " " + (hour24 >= 12 ? "PM" : "AM");
+  }
+
+  function timeParts(value) {
+    const full = formatTime(value);
+    return { large: full.replace(/\s?(AM|PM)$/, ""), suffix: full.slice(-2) };
+  }
+
+  function formatDuration(seconds) {
+    const total = Number(seconds || 0);
+    return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
+  }
+
+  function escAttr(value) {
+    return escapeHtml(value);
+  }
+
+  function servicesForDate(date) {
+    return state.services.filter((service) => service.date === date).sort((a, b) => a.time.localeCompare(b.time));
+  }
+
+  function upcomingServices() {
+    return state.services.filter((service) => service.date >= today).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  }
+
+  function pastServices() {
+    return state.services.filter((service) => service.date < today).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+  }
+
+  function myAssignments(name, includePast) {
+    const source = includePast ? state.services : state.services.filter((service) => service.date >= today);
+    return source.flatMap((service) => Object.entries(service.assignments)
+      .filter(([, member]) => member === name)
+      .map(([duty]) => ({ service, duty, department: categoryForDuty(duty).name })));
+  }
+
+  function nextDutyFor(name) {
+    return myAssignments(name, false).sort((a, b) => a.service.date.localeCompare(b.service.date) || a.service.time.localeCompare(b.service.time))[0] || null;
+  }
+
+  function isPresider(name, service) {
+    return Boolean(service && service.assignments && service.assignments.Presider === name);
+  }
+
+  function presiderServices(name) {
+    return upcomingServices().filter((service) => isPresider(name, service));
+  }
+
+  function selectedPresiderService() {
+    const options = presiderServices(state.selectedName);
+    if (!options.some((service) => service.id === state.selectedServiceId)) {
+      state.selectedServiceId = options[0]?.id || state.services[0]?.id || "";
+    }
+    return serviceById(state.selectedServiceId);
+  }
+
+  function memberOptions(selected, includeBlank) {
+    const options = includeBlank ? ['<option value="">Unassigned</option>'] : [];
+    return options.concat(state.members.map((member) => '<option value="' + escAttr(member) + '"' + (member === selected ? " selected" : "") + ">" + escapeHtml(member) + "</option>")).join("");
+  }
+
+  function serviceOptions(selected, list) {
+    return (list || upcomingServices()).map((service) => '<option value="' + escAttr(service.id) + '"' + (service.id === selected ? " selected" : "") + ">" + escapeHtml(service.worshipType + ", " + service.serviceLabel + ", " + compactDate(service.date) + ", " + formatTime(service.time)) + "</option>").join("");
+  }
+
+  function songOptions(selected, allowBlank) {
+    const values = allowBlank ? ['<option value="">No song selected</option>'] : [];
+    return values.concat(state.songs.map((song) => '<option value="' + escAttr(song.id) + '"' + (song.id === selected ? " selected" : "") + ">#" + escapeHtml(song.number) + " " + escapeHtml(song.title) + "</option>")).join("");
+  }
+
+  function notice(text, kind) {
+    return text ? '<p class="prototype-notice' + (kind ? " " + kind : "") + '" role="' + (kind === "error" ? "alert" : "status") + '">' + escapeHtml(text) + "</p>" : "";
+  }
+
+  function renderCopyFallback(label) {
+    if (!state.copyText) return "";
+    return '<div class="copy-fallback">' + notice(state.copyMessage || "Copyable text prepared locally.", "success") + '<label class="field-label">' + escapeHtml(label || "Copyable text") + '<textarea readonly rows="4">' + escapeHtml(state.copyText) + '</textarea></label><button class="text-button" type="button" data-action="clear-copy">Clear copy text</button></div>';
+  }
+
+  function serviceCalendarText() {
+    const rows = myAssignments(state.selectedName, false);
+    return [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "X-WR-CALNAME:LV Zion Worship Service",
+      ...rows.flatMap((item) => [
+        "SUMMARY:" + item.duty + " | " + item.service.worshipType + " " + item.service.serviceLabel,
+        "DTSTART:" + item.service.date.replace(/-/g, "") + "T" + item.service.time.replace(":", "") + "00",
+      ]),
+      "END:VCALENDAR",
+    ].join("\n");
+  }
+
+  function outlineText(service, setlist) {
+    const preparation = preparationEntries(setlist).map((entry) => "#" + entry.song.number + " " + entry.song.title + " (" + formatDuration(entry.song.durationSec) + ")");
+    const order = ["Glory song", "Opening prayer"];
+    if (service.worshipType === "Sabbath Day" && service.serviceLabel === "Morning") order.push("Thanks song", "Prayer of thanks");
+    order.push("Choir song", "Sermon", "Closing prayer");
+    return [
+      service.worshipType + ", " + service.serviceLabel + ", " + fullDate(service.date),
+      "Preparation: " + preparation.join(", "),
+      "Order: " + order.join(", "),
+    ].join("\n");
+  }
+
+  function copyLocal(text, message, label) {
+    state.copyText = text;
+    state.copyMessage = message;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => { state.copyMessage = message + " Clipboard text is also shown below."; render(); }).catch(() => render());
+    } else render();
+  }
+
+  function navigate(screen, replace) {
+    state.screen = VALID_SCREENS.includes(screen) ? screen : "home";
+    const url = new URL(window.location.href);
+    url.searchParams.set("screen", state.screen);
+    if (screen !== "presider") url.searchParams.delete("review");
+    if (replace) window.history.replaceState({}, "", url);
+    else window.history.pushState({}, "", url);
+    render();
+    focusMain();
+  }
+
+  function focusMain() {
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById("main-title") || document.querySelector("#app-main h1, #app-main h2");
+      if (target) target.focus();
+    });
+  }
+
+  function renderMemberControl(id) {
+    const controlId = id || "member-select";
+    return '<p class="selected-member member-picker"><label for="' + controlId + '">Selected member</label><select id="' + controlId + '" data-change="member">' + memberOptions(state.selectedName) + "</select></p>";
+  }
+
+  function renderHeading(kicker, title, options) {
+    const opts = options || {};
+    const controls = (opts.memberControl ? renderMemberControl(opts.memberId) : "") + (opts.control || "");
+    return '<section class="compact-heading" aria-labelledby="main-title"><div><p class="kicker">' + escapeHtml(kicker) + '</p><h1 id="main-title" tabindex="-1">' + escapeHtml(title) + "</h1>" +
+      (opts.subtitle ? '<p class="heading-subtitle">' + escapeHtml(opts.subtitle) + "</p>" : "") +
+      "</div>" + (controls ? '<div class="heading-controls">' + controls + "</div>" : "") + "</section>";
+  }
+
+  function renderNextDuty(actionName) {
+    const next = nextDutyFor(state.selectedName);
+    if (!next) {
+      return '<section class="next-duty" aria-labelledby="next-duty-title"><div class="next-duty-header"><p class="section-label" id="next-duty-title">My next duty</p><span class="date-chip"><span class="full-date">September 2026</span><span class="short-date">Sep 2026</span></span></div><div class="next-duty-content"><div><h2>No upcoming duty</h2><p>Choose a selected member with an assignment in the September sample.</p></div></div></section>';
+    }
+    const parts = timeParts(next.service.time);
+    const action = actionName || "open-my-duties";
+    const label = action === "open-presider" ? "Open Presider" : action === "duty-note" ? (state.dutyNoteOpen ? "Hide duty note" : "Show duty note") : "Open My Duties";
+    const expanded = action === "duty-note" && state.dutyNoteOpen;
+    const hidden = expanded ? "" : " hidden";
+    return `<section class="next-duty" aria-labelledby="next-duty-title"><div class="next-duty-header"><p class="section-label" id="next-duty-title">My next duty</p><span class="date-chip"><span class="full-date">${escapeHtml(fullDate(next.service.date))}</span><span class="short-date">${escapeHtml(next.service.worshipType + ", " + compactDate(next.service.date))}</span></span></div><div class="next-duty-content"><div><h2>${escapeHtml(next.duty)}</h2><p>${escapeHtml(next.department + " department, " + state.selectedName + ".")}</p></div><div class="duty-time"><span>${escapeHtml(parts.large)}</span><small> ${escapeHtml(parts.suffix)}</small></div><button class="text-button" type="button" data-action="${action}" aria-expanded="${action === "duty-note" ? String(expanded) : "false"}">${label}</button></div><p class="duty-note" id="duty-note"${hidden}>Duty: ${escapeHtml(next.duty)}. Department: ${escapeHtml(next.department)}. Service: ${escapeHtml(fullDate(next.service.date) + ", " + formatTime(next.service.time))}.</p></section>`;
+  }
+
+  function renderDateStrip(selectedDate, extra) {
+    const dates = upcomingServices().map((service) => service.date).filter((date, index, all) => all.indexOf(date) === index);
+    return '<div class="date-strip prototype-date-strip" aria-label="Service dates"><span class="date-strip-label">Dates</span>' +
+      dates.map((date) => '<button class="date-strip-item' + (date === selectedDate ? " selected" : "") + '" data-action="select-date" data-date="' + escAttr(date) + '">' + escapeHtml(date === "2026-09-12" ? "Sabbath Day, " + compactDate(date) : "Third Day, " + compactDate(date)) + "</button>").join("") +
+      '<span class="date-strip-note">September 2026</span>' + (extra || "") + '</div>';
+  }
+
+  function renderDepartmentSelect(value, changeName) {
+    const opts = ['<option value="All"' + (value === "All" ? " selected" : "") + ">All departments</option>"];
+    state.categories.forEach((category) => opts.push('<option value="' + escAttr(category.name) + '"' + (value === category.name ? " selected" : "") + ">" + escapeHtml(category.name) + "</option>"));
+    return '<label class="inline-filter">Department<select data-change="' + escAttr(changeName) + '">' + opts.join("") + "</select></label>";
+  }
+
+  function assignmentEntries(service, filter) {
+    const rows = [];
+    state.categories.forEach((category) => category.duties.forEach((duty) => {
+      if (filter && filter !== "All" && category.name !== filter) return;
+      if (Object.prototype.hasOwnProperty.call(service.assignments, duty)) rows.push({ category: category.name, duty, member: service.assignments[duty] || "" });
+    }));
+    return rows;
+  }
+
+  function renderAssignmentPairs(service, options) {
+    const opts = options || {};
+    const rows = assignmentEntries(service, opts.filter || "All");
+    const visible = opts.limit ? rows.slice(0, opts.limit) : rows;
+    if (!visible.length) return '<p class="service-empty">No assigned duties in this department.</p>';
+    return visible.map((row) => {
+      const mine = row.member && row.member === state.selectedName;
+      return '<span class="assignment-dept">' + escapeHtml(row.duty) + '</span><strong class="' + (mine ? "is-mine" : "") + '">' + escapeHtml(row.member || "Unassigned") + (mine ? ' <em>You</em>' : "") + "</strong>";
+    }).join("");
+  }
+
+  function renderServiceCard(service, nearest) {
+    const expanded = state.expandedServices[service.id] === true;
+    const entries = assignmentEntries(service, state.homeDepartment);
+    const shown = entries.slice(0, 12);
+    const remaining = entries.slice(12);
+    const time = timeParts(service.time);
+    const status = nearest ? "Nearest service" : service.serviceLabel + " worship";
+    const details = state.features.whoElse ? '<details' + (expanded ? " open" : "") + '><summary>' + (expanded ? "Hide full team" : "View full team") + '</summary><div class="service-people service-people-extra">' + renderAssignmentPairs(service, { filter: state.homeDepartment }) + "</div></details>" : "";
+    return '<article class="service-card' + (nearest ? " nearest" : "") + '" data-service-card="' + escAttr(service.id) + '"><div class="service-card-top"><time datetime="' + escAttr(service.date + "T" + service.time) + '">' + escapeHtml(time.large + " " + time.suffix) + '</time><span class="service-status">' + escapeHtml(status) + '</span></div><h3>' + escapeHtml(service.serviceLabel + " worship") + '</h3><p class="presider-line">Worship department</p><div class="service-people">' + shown.map((row) => {
+      const mine = row.member && row.member === state.selectedName;
+      return '<span>' + escapeHtml(row.duty) + '</span><strong class="' + (mine ? "is-mine" : "") + '">' + escapeHtml(row.member || "Unassigned") + (mine ? ' <em>You</em>' : "") + "</strong>";
+    }).join("") + "</div>" + (remaining.length ? '<p class="card-footnote">' + remaining.length + " more assignments in full team" + "</p>" : "") + details + "</article>";
+  }
+
+  function renderScheduleSection(date) {
+    const services = servicesForDate(date).filter((service) => service.date >= today);
+    if (!services.length) return '<div class="service-empty">No upcoming services for this date in the fictional sample.</div>';
+    return '<div class="service-grid">' + services.map((service, index) => renderServiceCard(service, index === 0)).join("") + "</div>";
+  }
+
+  function renderHome() {
+    const selected = state.selectedDate;
+    const count = servicesForDate(selected).length;
+    const homeFilter = '<span class="home-heading-filter">' + renderDepartmentSelect(state.homeDepartment, "home-department") + '</span>';
+    const dateFilter = '<span class="date-strip-filter">' + renderDepartmentSelect(state.homeDepartment, "home-department") + '</span>';
+    return '<section class="prototype-page home-page" data-prototype-screen="home">' +
+      renderHeading("Sabbath Day schedule", "Worship schedule", { memberControl: true }) +
+      renderNextDuty("duty-note") +
+      renderDateStrip(selected, dateFilter) +
+      '<section class="schedule" aria-labelledby="schedule-title"><div class="schedule-heading"><div><p class="section-label">Upcoming schedule</p><h2 id="schedule-title"><span class="full-date">' + escapeHtml(selected === "2026-09-12" ? "Sabbath Day, Saturday, September 12" : "Third Day, Tuesday, September 15") + '</span><span class="short-date">' + escapeHtml(selected === "2026-09-12" ? "Sabbath Day, Sat Sep 12" : "Third Day, Tue Sep 15") + '</span></h2></div><div class="schedule-heading-actions">' + homeFilter + '<span class="schedule-count">' + count + " service" + (count === 1 ? "" : "s") + "</span></div></div>" + renderScheduleSection(selected) + "</section>" +
+      '<section class="quick-links" aria-label="Quick actions"><a href="?screen=duty" data-nav="duty"><span>For you</span><strong>My Duties</strong><small>See every assignment</small></a><a href="?screen=presider" data-nav="presider"><span>For the service</span><strong>Presider</strong><small>Prepare one service</small></a><a href="?screen=manage" data-nav="manage"><span>For the team</span><strong>Manage</strong><small>Review people and requests</small></a></section></section>';
+  }
+
+  function requestFor(serviceId, duty, name) {
+    return state.requests.find((item) => item.serviceId === serviceId && item.duty === duty && item.name === name && item.status === "pending") ||
+      state.requests.find((item) => item.serviceId === serviceId && item.duty === duty && item.name === name && item.status === "approved") || null;
+  }
+
+  function renderRequestForm(service, duty) {
+    return '<form class="request-form" data-form="request" data-service="' + escAttr(service.id) + '" data-duty="' + escAttr(duty) + '"><p>Request a change for ' + escapeHtml(duty) + "</p><label for=\"request-note\">Reason or note<textarea id=\"request-note\" name=\"note\" rows=\"3\" data-input=\"request-note\">" + escapeHtml(state.requestNote) + '</textarea></label><div class="button-row"><button class="button-primary" type="submit">Submit request</button><button class="text-button" type="button" data-action="cancel-request">Cancel</button></div></form>';
+  }
+
+  function renderDutyRows() {
+    const assignments = myAssignments(state.selectedName, state.showPast && state.features.pastServices).filter((item) => state.dutyDepartment === "All" || item.department === state.dutyDepartment);
+    const grouped = [];
+    assignments.forEach((item) => {
+      let group = grouped.find((entry) => entry.service.id === item.service.id);
+      if (!group) { group = { service: item.service, items: [] }; grouped.push(group); }
+      group.items.push(item);
+    });
+    if (!grouped.length) return '<div class="service-empty">No duties are assigned to this selected member in the current view.</div>';
+    return grouped.map((group) => '<article class="duty-service-card"><div class="duty-service-card-head"><div><p class="section-label">' + escapeHtml(group.service.worshipType) + "</p><h3>" + escapeHtml(group.service.serviceLabel + " worship") + '</h3></div><time>' + escapeHtml(fullDate(group.service.date) + ", " + formatTime(group.service.time)) + "</time></div>" +
+      '<div class="duty-role-list">' + group.items.map((item) => {
+        const req = requestFor(item.service.id, item.duty, state.selectedName);
+        const requestOpen = state.requestOpen && state.requestOpen.serviceId === item.service.id && state.requestOpen.duty === item.duty;
+        const changeControl = state.features.changeRequests ? (req && req.status === "pending" ? '<span class="request-status pending">Pending</span>' : '<button class="text-button" type="button" data-action="request-change" data-service="' + escAttr(item.service.id) + '" data-duty="' + escAttr(item.duty) + '">Request change</button>') : "";
+        return '<div class="duty-role-row"><div><strong>' + escapeHtml(item.duty) + "</strong><span>" + escapeHtml(item.department) + '</span></div><div><b>' + escapeHtml(state.selectedName) + '</b><small>You</small></div>' + changeControl + "</div>" + (requestOpen ? renderRequestForm(item.service, item.duty) : "");
+      }).join("") + "</div></article>").join("");
+  }
+
+  function renderAlerts() {
+    if (!state.features.notifications) return "";
+    const unread = state.alerts.filter((item) => !item.read).length;
+    return '<section class="secondary-panel" aria-labelledby="alerts-title"><div class="panel-heading"><h2 id="alerts-title">Alerts</h2><span>' + unread + " new</span></div>" +
+      (state.alerts.length ? '<ul class="alert-list">' + state.alerts.map((alert) => '<li class="' + (alert.read ? "read" : "") + '"><span>' + escapeHtml(alert.text) + '</span><button class="text-button" type="button" data-action="clear-alert" data-alert="' + escAttr(alert.id) + '">Clear</button></li>').join("") + "</ul>" : '<p class="service-empty">No alerts right now.</p>') + "</section>";
+  }
+
+  function renderCalendarTools() {
+    if (!state.features.calendarExport) return "";
+    return '<section class="secondary-panel" aria-labelledby="calendar-title"><div class="panel-heading"><h2 id="calendar-title">Calendar</h2><span>Local sample</span></div><p>Prepare the selected member schedule as calendar text for a local calendar.</p><div class="button-row"><button class="button-secondary" type="button" data-action="calendar">Prepare calendar text</button><button class="text-button" type="button" data-action="copy-calendar">Copy calendar text</button></div>' + notice(state.calendarMessage, "success") + "</section>";
+  }
+
+  function renderRequestsHistory() {
+    const mine = state.requests.filter((item) => item.name === state.selectedName);
+    return '<section class="secondary-panel" aria-labelledby="request-history-title"><div class="panel-heading"><h2 id="request-history-title">Request history</h2><span>' + mine.length + " record" + (mine.length === 1 ? "" : "s") + "</span></div>" + (mine.length ? '<div class="request-history">' + mine.map((request) => '<div class="request-history-row"><div><strong>' + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId)) + '</span></div><span class="request-status ' + escapeHtml(request.status) + '" data-request-status="' + escapeHtml(request.status) + '">' + escapeHtml(request.status) + "</span></div>").join("") + "</div>" : '<p class="service-empty">No change requests for this selected member.</p>') + "</section>";
+  }
+
+  function serviceLabel(id) {
+    const service = serviceById(id);
+    return service ? service.worshipType + ", " + service.serviceLabel + ", " + compactDate(service.date) : "Service removed";
+  }
+
+  function renderDuty() {
+    const pastControl = state.features.pastServices ? '<button class="text-button" type="button" data-action="toggle-past">' + (state.showPast ? "Hide past services" : "Show past services") + "</button>" : "";
+    return '<section class="prototype-page duty-page" data-prototype-screen="duty">' + renderHeading("Selected member", "My duties", { memberControl: true }) + renderNextDuty("open-presider") + renderDateStrip(state.selectedDate) +
+      '<section class="schedule personal-schedule" aria-labelledby="personal-title"><div class="schedule-heading"><div><p class="section-label">Personal schedule</p><h2 id="personal-title">Upcoming assignments</h2></div><div class="schedule-heading-actions">' + renderDepartmentSelect(state.dutyDepartment, "duty-department") + '<span class="schedule-count">' + myAssignments(state.selectedName, state.showPast && state.features.pastServices).length + " duties</span>" + pastControl + "</div></div>" +
+      (state.requestMessage ? '<p class="prototype-notice success" data-request-success role="status">' + escapeHtml(state.requestMessage) + '</p>' : "") + '<div class="duty-list">' + renderDutyRows() + "</div></section>" + renderAlerts() + renderCalendarTools() + renderCopyFallback("Calendar text") + renderRequestsHistory() + "</section>";
+  }
+
+  function preparationEntries(setlist) {
+    if (!setlist) return [];
+    return setlist.songs.map((id, index) => ({ id, index, song: songById(id) })).filter((entry) => entry.song && entry.id !== setlist.glorySong && entry.id !== setlist.thanksSong);
+  }
+
+  function prepTotal(setlist) {
+    return preparationEntries(setlist).reduce((total, entry) => total + entry.song.durationSec, 0);
+  }
+
+  function renderOutline(service, setlist) {
+    const assignment = service.assignments || {};
+    const prep = preparationEntries(setlist);
+    const prepHtml = prep.length ? '<div class="outline-group"><p class="outline-group-label">Preparation songs</p>' + prep.map((entry, position) => {
+      return '<div class="outline-row"><span class="song-number">' + escapeHtml(entry.song.number) + '</span><span class="song-title">' + escapeHtml(entry.song.title) + '</span><span class="song-duration">' + formatDuration(entry.song.durationSec) + '</span><span class="outline-actions">' +
+        '<button class="icon-button" type="button" data-action="move-song" data-index="' + entry.index + '" data-direction="up"' + (position === 0 ? " disabled" : "") + '>Up</button>' +
+        '<button class="icon-button" type="button" data-action="move-song" data-index="' + entry.index + '" data-direction="down"' + (position === prep.length - 1 ? " disabled" : "") + '>Down</button>' +
+        '<button class="icon-button" type="button" data-action="remove-song" data-index="' + entry.index + '">Remove</button></span></div>';
+    }).join("") + "</div>" : '<div class="service-empty">No preparation songs yet. Add one from the library.</div>';
+    const order = [
+      { label: "Glory song", note: songById(setlist.glorySong)?.title || "Not assigned" },
+      { label: "Opening prayer", who: assignment.Sermon || "Not assigned" }
+    ];
+    if (service.worshipType === "Sabbath Day" && service.serviceLabel === "Morning") {
+      order.push({ label: "Thanks song", note: songById(setlist.thanksSong)?.title || "Not assigned" });
+      order.push({ label: "Prayer of thanks", who: assignment["Prayer of Thanks"] || "Not assigned" });
+    }
+    order.push({ label: "Choir song", note: state.features.choirSong ? (songById(service.choirSong)?.title || "Not assigned") : "Choir song is off" });
+    order.push({ label: "Sermon", who: assignment.Sermon || "Not assigned" });
+    order.push({ label: "Closing prayer", who: assignment["Closing Prayer"] || "Not assigned" });
+    return prepHtml + '<div class="outline-group"><p class="outline-group-label">Order of worship</p>' + order.map((step, index) => '<div class="order-row"><span class="order-number">' + (index + 1) + '</span><span><strong>' + escapeHtml(step.label) + '</strong><small>' + escapeHtml(step.note || "") + '</small></span><span class="step-who">' + escapeHtml(step.who || "") + "</span></div>").join("") + "</div>";
+  }
+
+  function renderSongPicker() {
+    const search = state.songSearch.trim().toLowerCase();
+    const categories = ["All", "Faith", "Hope", "Love", "Gratitude", "Worship"];
+    const filtered = state.songs.filter((song) => (!search || (song.number + " " + song.title).toLowerCase().includes(search)) && (state.songCategory === "All" || song.category === state.songCategory));
+    return '<aside class="song-picker" aria-labelledby="song-picker-title"><div class="panel-heading"><h2 id="song-picker-title">Song library</h2><span>' + filtered.length + " of " + state.songs.length + "</span></div><label class=\"field-label\" for=\"song-search\">Search songs<input id=\"song-search\" type=\"search\" value=\"" + escAttr(state.songSearch) + "\" data-input=\"song-search\"></label><div class=\"filter-pills\" role=\"toolbar\" aria-label=\"Song categories\">" + categories.map((category) => '<button type=\"button\" class=\"' + (state.songCategory === category ? "selected" : "") + '\" data-action=\"song-category\" data-category=\"' + escAttr(category) + '">' + escapeHtml(category) + "</button>").join("") + "</div><div class=\"song-library-list\">" + (filtered.length ? filtered.map((song) => {
+      const open = state.openSong === song.id;
+      const stat = state.songStats[song.id] || { sungCount: 0, lastSung: null };
+      return '<div class="song-library-row"><button class="song-open" type="button" data-action="toggle-song" data-song="' + escAttr(song.id) + '"><span>#' + escapeHtml(song.number) + " " + escapeHtml(song.title) + '</span><small>' + formatDuration(song.durationSec) + "</small></button><button class=\"text-button\" type=\"button\" data-action=\"add-song\" data-song=\"" + escAttr(song.id) + '">Add</button>' + (open ? '<div class="song-detail"><p>' + escapeHtml(song.category) + " category, " + formatDuration(song.durationSec) + ".</p><p>" + stat.sungCount + " recorded uses" + (stat.lastSung ? ", last " + escapeHtml(stat.lastSung) : ", no recorded use") + '.</p><p>' + (song.history.length ? song.history.map((entry) => escapeHtml(entry.date + ", " + entry.service)).join("; ") : "No sung history yet.") + "</p></div>" : "") + "</div>";
+    }).join("") : '<p class="service-empty">No songs match this search.</p>') + "</div></aside>";
+  }
+
+  function renderSetlistState(setlist) {
+    const status = state.saveState === "saving" ? "Saving" : state.saveState === "failed" ? "Save failed" : setlist.status === "changed" ? "Changed after confirmation" : setlist.status === "sung" ? "Sung" : setlist.confirmed ? "Confirmed" : state.saveState === "saved" ? "Saved locally" : "Ready to save";
+    const saveButton = state.saveState === "failed" ? '<button class="button-primary" type="button" data-action="retry-save">Retry save</button>' : '<button class="button-primary" type="button" data-action="save-setlist"' + (state.saveState === "saving" ? " disabled" : "") + ">Save changes</button>";
+    return '<div class="planner-state-bar"><span class="state-pill ' + (state.saveState === "failed" ? "failed" : setlist.status === "changed" ? "changed" : setlist.confirmed ? "confirmed" : "") + '" data-save-state="' + escapeHtml(state.saveState) + '">' + escapeHtml(status) + '</span><div class="button-row">' + saveButton + '<button class="text-button" type="button" data-action="confirm-songs">' + (setlist.confirmed ? "Confirm again" : "Confirm songs") + "</button></div></div>";
+  }
+
+  function renderPresiderHistory() {
+    const rows = state.songs.flatMap((song) => song.history.map((entry, index) => ({ song, entry, index })));
+    return '<section class="secondary-panel history-panel" aria-labelledby="song-history-title"><div class="panel-heading"><h2 id="song-history-title">Song history</h2><button class="text-button" type="button" data-action="toggle-history">' + (state.showHistory ? "Hide history" : "Show history") + "</button></div>" + (state.showHistory ? (rows.length ? '<div class="history-list">' + rows.map((row) => '<div class="history-row"><span>#' + escapeHtml(row.song.number) + " " + escapeHtml(row.song.title) + '</span><span>' + escapeHtml(row.entry.date + ", " + row.entry.service) + '</span><button class="text-button" type="button" data-action="remove-history" data-song="' + escAttr(row.song.id) + '" data-history-index="' + row.index + '">Remove</button></div>').join("") + "</div>" : '<p class="service-empty">No song history yet.</p>') : "") + '<div class="backfill-area">' + (state.backfillOpen ? '<form class="backfill-form" data-form="backfill"><label class="field-label">Song<select name="song">' + songOptions(state.backfillSong, false) + '</select></label><label class="field-label">Past date<input type="date" name="date" min="2026-09-01" max="2026-09-30" value="' + escAttr(state.backfillDate) + '" required></label><div class="button-row"><button class="button-secondary" type="submit">Add history</button><button class="text-button" type="button" data-action="close-backfill">Cancel</button></div></form>' : '<button class="text-button" type="button" data-action="open-backfill">Backfill a September date</button>') + "</div></section>";
+  }
+
+  function renderRunsheet(service, setlist) {
+    if (!state.runsheetOpen) return "";
+    const steps = ["Glory song", "Opening prayer"];
+    if (service.worshipType === "Sabbath Day" && service.serviceLabel === "Morning") steps.push("Thanks song", "Prayer of thanks");
+    steps.push("Choir song", "Sermon", "Closing prayer");
+    return '<section class="runsheet-panel" aria-labelledby="runsheet-title"><div class="panel-heading"><h2 id="runsheet-title">Runsheet</h2><button class="text-button" type="button" data-action="close-runsheet">Close</button></div><ol>' + steps.map((step) => "<li>" + escapeHtml(step) + "</li>").join("") + "</ol><p>Preparation total: " + formatDuration(prepTotal(setlist)) + "</p></section>";
+  }
+
+  function renderPresider() {
+    const options = presiderServices(state.selectedName);
+    if (!state.features.songPicker) {
+      return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true }) + '<div class="state-card"><p class="state-marker">Song picker unavailable</p><h2>Presider tools are turned off</h2><p>Turn on Presider song picker in Manage settings to prepare a fictional outline.</p><button class="button-primary" type="button" data-action="open-manage-settings">Open settings</button></div></section>';
+    }
+    if (!options.length) {
+      return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true }) + '<div class="state-card"><p class="state-marker">No Presider duty</p><h2>Choose a member with a Presider duty</h2><p>' + escapeHtml(state.selectedName) + " is not the Presider for an upcoming fictional service. Select another member above.</p></div></section>";
+    }
+    const service = selectedPresiderService();
+    const setlist = currentSetlist();
+    if (!setlist) return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true }) + '<div class="state-card"><h2>No outline for this service</h2></div></section>';
+    const deleteConfirm = state.deleteSetlistConfirm ? '<div class="confirm-inline"><p>Delete this local setlist and keep the service?</p><button class="button-danger" type="button" data-action="delete-setlist-confirm">Delete setlist</button><button class="text-button" type="button" data-action="cancel-delete-setlist">Cancel</button></div>' : "";
+    const sungConfirm = state.markSungConfirm ? '<div class="confirm-inline"><p>Mark every song occurrence in this service as sung?</p><button class="button-primary" type="button" data-action="confirm-mark-sung">Mark sung</button><button class="text-button" type="button" data-action="cancel-mark-sung">Cancel</button></div>' : "";
+    const undoConfirm = state.undoSungConfirm ? '<div class="confirm-inline"><p>Undo the sung mark and restore the recorded counts?</p><button class="button-primary" type="button" data-action="confirm-undo-sung">Undo sung</button><button class="text-button" type="button" data-action="cancel-undo-sung">Cancel</button></div>' : "";
+    return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true, control: '<p class="selected-member service-picker"><label for="presider-service">Service</label><select id="presider-service" data-change="presider-service">' + serviceOptions(service.id, options) + "</select></p>" }) +
+      '<section class="presider-intro"><div><p class="section-label">' + escapeHtml(service.worshipType + ", " + compactDate(service.date)) + '</p><h2>' + escapeHtml(service.serviceLabel + " worship") + '</h2><p>' + escapeHtml(formatTime(service.time) + ", Presider: " + state.selectedName) + "</p></div><div class=\"button-row\"><button class=\"button-secondary\" type=\"button\" data-action=\"open-runsheet\">View runsheet</button><button class=\"text-button\" type=\"button\" data-action=\"copy-setlist\">Copy outline</button></div></section>" +
+      renderSetlistState(setlist) + '<div class="presider-layout"><section class="outline-card" aria-labelledby="outline-title"><div class="panel-heading"><h2 id="outline-title">Service outline</h2><span>' + formatDuration(prepTotal(setlist)) + " preparation</span></div><label class=\"field-label\" for=\"setlist-notes\">Notes<textarea id=\"setlist-notes\" data-change=\"setlist-notes\" rows=\"3\">" + escapeHtml(setlist.notes || "") + '</textarea></label>' + (state.features.choirSong ? '<label class="field-label">Choir song<select data-change="choir-song">' + songOptions(service.choirSong, true) + "</select></label>" : "") + '<div class="song-slots"><label class="field-label">Glory song<select data-change="glory-song">' + songOptions(setlist.glorySong, true) + '</select></label><label class="field-label">Thanks song<select data-change="thanks-song">' + songOptions(setlist.thanksSong, true) + "</select></label></div>" + renderOutline(service, setlist) + '<div class="outline-footer"><button class="button-secondary" type="button" data-action="mark-sung">' + (setlist.status === "sung" ? "Sung" : "Mark service sung") + "</button>" + (setlist.status === "sung" ? '<button class="text-button" type="button" data-action="undo-sung">Undo sung</button>' : "") + '<button class="button-danger" type="button" data-action="delete-setlist">Delete setlist</button></div>' + sungConfirm + undoConfirm + deleteConfirm + "</section>" + renderSongPicker() + "</div>" + renderRunsheet(service, setlist) + notice(state.songNotice, "success") + renderCopyFallback("Outline text") + renderPresiderHistory() + "</section>";
+  }
+
+
+  function conflictRows(service) {
+    const byMember = {};
+    assignmentEntries(service).forEach((row) => {
+      if (!row.member) return;
+      (byMember[row.member] ||= []).push(row);
+    });
+    const prayer = (duty) => duty === "Prayer of Thanks" || duty === "Closing Prayer";
+    const usher = (duty) => duty.indexOf("Usher") === 0 || duty === "Lobby Security";
+    const rows = [];
+    Object.keys(byMember).forEach((member) => {
+      const entries = byMember[member];
+      for (let i = 0; i < entries.length; i += 1) {
+        for (let j = i + 1; j < entries.length; j += 1) {
+          const first = entries[i];
+          const second = entries[j];
+          if ((prayer(first.duty) && usher(second.duty)) || (prayer(second.duty) && usher(first.duty))) continue;
+          rows.push({ id: service.id + "|" + member + "|" + first.duty + "|" + second.duty, member, first, second });
+        }
+      }
+    });
+    return rows;
+  }
+
+  function renderPendingRequests() {
+    const pending = state.requests.filter((request) => request.status === "pending");
+    return '<section class="pending-band" aria-labelledby="pending-title"><div class="panel-heading"><h2 id="pending-title">Pending requests</h2><span data-pending-count="' + pending.length + '">' + pending.length + "</span></div>" +
+      (pending.length ? '<div class="pending-list">' + pending.map((request) => '<article class="pending-request"><div><strong>' + escapeHtml(request.name) + " · " + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId)) + "</span><p>" + escapeHtml(request.note || "No note added.") + '</p></div><div class="button-row"><button class="button-secondary" type="button" data-action="open-request-service" data-service="' + escAttr(request.serviceId) + '">Open service</button><button class="button-primary" type="button" data-action="approve-request" data-request="' + escAttr(request.id) + '">Approve</button><button class="text-button" type="button" data-action="decline-request" data-request="' + escAttr(request.id) + '">Decline</button></div></article>').join("") + "</div>" : '<p class="service-empty">No pending requests.</p>') + "</section>";
+  }
+
+  function renderAssignmentEditor() {
+    const service = serviceById(state.selectedServiceId);
+    if (!service) return '<section class="manage-section"><div class="state-card"><h2>No services</h2><p>Add a fictional service to continue.</p>' + renderAddService() + "</div></section>";
+    const conflicts = state.features.conflictWarnings ? conflictRows(service) : [];
+    const deletion = state.serviceDeleteId === service.id ? '<div class="confirm-inline"><p>Delete ' + escapeHtml(service.worshipType + ", " + service.serviceLabel) + " and its local assignments?</p><button class=\"button-danger\" type=\"button\" data-action=\"confirm-delete-service\">Delete service</button><button class=\"text-button\" type=\"button\" data-action=\"cancel-delete-service\">Cancel</button></div>" : "";
+    return renderPendingRequests() + '<section class="manage-section" aria-labelledby="assignment-title"><div class="section-heading-row"><div><p class="section-label">Assignments</p><h2 id="assignment-title">Service team</h2></div><label class="selected-member service-picker"><span>Service</span><select data-change="manage-service">' + serviceOptions(service.id, state.services.slice().sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))) + "</select></label></div>" +
+      '<div class="service-edit-grid"><label class="field-label">Worship type<select data-change="service-field" data-field="worshipType"><option' + (service.worshipType === "Sabbath Day" ? " selected" : "") + '>Sabbath Day</option><option' + (service.worshipType === "Third Day" ? " selected" : "") + '>Third Day</option></select></label><label class="field-label">Service label<input data-change="service-field" data-field="serviceLabel" value="' + escAttr(service.serviceLabel) + '"></label><label class="field-label">Date<input type="date" data-change="service-field" data-field="date" min="2026-09-01" max="2026-09-30" value="' + escAttr(service.date) + '"></label><label class="field-label">Time<input type="time" data-change="service-field" data-field="time" value="' + escAttr(service.time) + '"></label><label class="field-label field-wide">Notes<textarea data-change="service-field" data-field="notes" rows="2">' + escapeHtml(service.notes || "") + "</textarea></label>" + (state.features.choirSong ? '<label class=\"field-label\">Choir song<select data-change=\"service-field\" data-field=\"choirSong\">' + songOptions(service.choirSong, true) + "</select></label>" : "") + "</div>" +
+      '<div class="assignment-table"><div class="assignment-table-head"><span>Department</span><span>Duty</span><span>Assigned member</span></div>' + state.categories.map((category) => '<div class="department-group"><h3>' + escapeHtml(category.name) + "</h3>" + category.duties.map((duty) => {
+        const has = Object.prototype.hasOwnProperty.call(service.assignments, duty);
+        if (!has && !state.features.emptyDuties) return "";
+        return '<label class="assignment-edit-row"><span>' + escapeHtml(category.name) + '</span><strong>' + escapeHtml(duty) + '</strong><select data-change="assignment" data-duty="' + escAttr(duty) + '">' + memberOptions(service.assignments[duty] || "", true) + "</select></label>";
+      }).join("") + "</div>").join("") + "</div>" +
+      (conflicts.length ? '<div class="conflict-panel"><div class="panel-heading"><h3>Conflicts</h3><span>' + conflicts.length + "</span></div>" + conflicts.map((conflict) => '<div class="conflict-row"><span><strong>' + escapeHtml(conflict.member) + "</strong>: " + escapeHtml(conflict.first.duty + " and " + conflict.second.duty) + '</span><button class="text-button" type="button" data-action="' + (state.conflictAcknowledged[conflict.id] ? "reopen-conflict" : "ack-conflict") + '" data-conflict="' + escAttr(conflict.id) + '">' + (state.conflictAcknowledged[conflict.id] ? "Reopen" : "Acknowledge") + "</button></div>").join("") + "</div>" : '<p class="service-empty">No double-duty conflicts in this service.</p>') +
+      '<div class="service-actions"><button class="button-danger" type="button" data-action="delete-service">Delete service</button></div>' + deletion + notice(state.manageNotice, "success") + "</section>" + renderAddService();
+  }
+
+  function renderAddService() {
+    return '<section class="secondary-panel" aria-labelledby="add-service-title"><div class="panel-heading"><h2 id="add-service-title">Add service</h2><span>Blank assignments</span></div><form class="add-service-form" data-form="add-service"><label class="field-label">Worship type<select name="worship"><option>Sabbath Day</option><option>Third Day</option></select></label><label class="field-label">Service label<input name="label" value="Evening" required></label><label class="field-label">Date<input name="date" type="date" min="2026-09-01" max="2026-09-30" value="2026-09-18" required></label><label class="field-label">Time<input name="time" type="time" value="19:00" required></label><button class="button-secondary" type="submit">Add blank service</button></form></section>';
+  }
+
+  function renderManageRequests() {
+    return '<section class="manage-section" aria-labelledby="request-admin-title"><p class="section-label">Change requests</p><h2 id="request-admin-title">Request history</h2><div class="request-admin-list">' + (state.requests.length ? state.requests.map((request) => '<article class="request-admin-row"><div><strong>' + escapeHtml(request.name) + " · " + escapeHtml(request.duty) + '</strong><span>' + escapeHtml(serviceLabel(request.serviceId)) + '</span><p>' + escapeHtml(request.note || "No note added.") + "</p></div><span class=\"request-status " + escapeHtml(request.status) + '">' + escapeHtml(request.status) + "</span>" + (request.status === "pending" ? '<div class="button-row"><button class="button-primary" type="button" data-action="approve-request" data-request="' + escAttr(request.id) + '">Approve</button><button class="text-button" type="button" data-action="decline-request" data-request="' + escAttr(request.id) + '">Decline</button></div>' : "") + "</article>").join("") : '<p class="service-empty">No requests recorded.</p>') + "</div></section>";
+  }
+
+  function countAssignments(person) {
+    return state.services.filter((service) => service.date >= today).reduce((total, service) => total + Object.values(service.assignments).filter((value) => value === person).length, 0);
+  }
+
+  function renderPeople() {
+    const currentDepartment = state.departmentChoice || state.categories[0].name;
+    const roster = state.departments[currentDepartment] || [];
+    const removal = state.removeMember && state.members.includes(state.removeMember) ? '<div class="confirm-inline"><p>Remove ' + escapeHtml(state.removeMember) + " from the local roster? This will unassign " + countAssignments(state.removeMember) + " future duties.</p><button class=\"button-danger\" type=\"button\" data-action=\"confirm-remove-member\">Remove member</button><button class=\"text-button\" type=\"button\" data-action=\"cancel-remove-member\">Cancel</button></div>" : "";
+    return '<section class="manage-section" aria-labelledby="people-title"><p class="section-label">People</p><h2 id="people-title">Roster</h2><form class="add-person-form" data-form="add-person"><label class="field-label">Add fictional person<input name="name" placeholder="Title. First Last" required></label><button class="button-secondary" type="submit">Add person</button></form><div class="people-list">' + state.members.map((person) => '<div class="person-row"><form data-form="rename-person" data-person="' + escAttr(person) + '"><label class="field-label"><span class="sr-only">Name</span><input name="name" value="' + escAttr(person) + '" required></label><button class="text-button" type="submit">Rename</button></form><button class="button-danger" type="button" data-action="remove-member" data-member="' + escAttr(person) + '">Remove</button></div>').join("") + "</div>" + removal + '<div class="roster-editor"><div class="panel-heading"><h3>Department roster</h3><label class="inline-filter"><span class="sr-only">Department</span><select data-change="department-choice">' + state.categories.map((category) => '<option value="' + escAttr(category.name) + '"' + (category.name === currentDepartment ? " selected" : "") + ">" + escapeHtml(category.name) + "</option>").join("") + "</select></label></div><div class=\"roster-checks\">" + state.members.map((person) => '<label><input type="checkbox" data-change="department-member" data-member="' + escAttr(person) + '"' + (roster.includes(person) ? " checked" : "") + ">" + escapeHtml(person) + "</label>").join("") + "</div></div>" + notice(state.manageNotice, "success") + "</section>";
+  }
+
+  function findSuggestion() {
+    const service = upcomingServices().find((item) => !item.assignments["Parking #5"] || !item.assignments["Offering #6"]);
+    if (!service) return null;
+    const duty = !service.assignments["Parking #5"] ? "Parking #5" : "Offering #6";
+    const member = state.members.find((person) => service.assignments[duty] !== person) || state.members[0];
+    return { service, duty, member, current: service.assignments[duty] || "Unassigned" };
+  }
+
+  function renderPlanning() {
+    const conflicts = state.services.flatMap((service) => conflictRows(service).map((row) => Object.assign(row, { service })));
+    const allInYear = state.services.filter((service) => service.date.slice(0, 4) === "2026");
+    const serviceCount = state.planWindow === "last" ? pastServices().length : state.planWindow === "next" ? (upcomingServices()[0] ? 1 : 0) : state.planWindow === "year" ? allInYear.length : upcomingServices().length;
+    const workload = state.members.map((person) => ({ person, count: myAssignments(person, state.planWindow === "last").filter((item) => state.planWindow === "last" ? item.service.date < today : item.service.date >= today).length }));
+    const suggestion = findSuggestion();
+    const gapRows = state.categories.flatMap((category) => category.duties.map((duty) => {
+      const missing = upcomingServices().filter((service) => !service.assignments[duty]).length;
+      return missing ? { department: category.name, duty, missing } : null;
+    }).filter(Boolean)).slice(0, 8);
+    const ranges = [["next-4-weeks", "Next 4 weeks"], ["next-8-weeks", "Next 8 weeks"], ["upcoming", "Upcoming"], ["year", "2026 year"], ["last", "Last service"], ["next", "Next service"]];
+    const rangeOptions = ranges.map((item) => '<option value="' + item[0] + '"' + (state.planWindow === item[0] ? " selected" : "") + ">" + item[1] + "</option>").join("");
+    const conflictPanel = conflicts.length ? '<div class="secondary-panel"><div class="panel-heading"><h3>Conflict review</h3><span>Prayer and usher pairings are allowed</span></div>' + conflicts.slice(0, 8).map((item) => '<div class="conflict-row"><span><strong>' + escapeHtml(item.member) + "</strong>, " + escapeHtml(item.service.serviceLabel + ", " + item.first.duty + " and " + item.second.duty) + '</span><span class="request-status">' + (state.conflictAcknowledged[item.id] ? "Acknowledged" : "Open") + "</span></div>").join("") + "</div>" : '<div class="secondary-panel"><p class="service-empty">No derived conflicts in this range.</p></div>';
+    const suggestionPanel = '<div class="secondary-panel"><div class="panel-heading"><h3>Next coverage suggestion</h3><span>Changes one assignment</span></div>' + (suggestion ? '<div class="suggestion-row"><span><strong>' + escapeHtml(suggestion.service.serviceLabel + ", " + suggestion.duty) + "</strong><small>" + escapeHtml(suggestion.current) + " to " + escapeHtml(suggestion.member) + '</small></span><button class="button-secondary" type="button" data-action="apply-suggestion" data-service="' + escAttr(suggestion.service.id) + '" data-duty="' + escAttr(suggestion.duty) + '" data-member="' + escAttr(suggestion.member) + '">Apply suggestion</button></div>' : '<p class="service-empty">No open suggestion for the current sample.</p>') + notice(state.planNotice, "success") + "</div>";
+    const gapsPanel = '<div class="secondary-panel"><div class="panel-heading"><h3>Coverage gaps</h3><span>Upcoming services</span></div>' + (gapRows.length ? '<div class="gap-list">' + gapRows.map((row) => '<div><strong>' + escapeHtml(row.duty) + '</strong><span>' + escapeHtml(row.department) + '</span><b>' + row.missing + " open</b></div>").join("") + "</div>" : '<p class="service-empty">No open duty slots.</p>') + "</div>";
+    const workloadPanel = '<div class="secondary-panel"><div class="panel-heading"><h3>Workload</h3><span>Derived from assignments</span></div><div class="workload-list">' + workload.map((row) => '<div><strong>' + escapeHtml(row.person) + "</strong><span>" + row.count + " duties</span></div>").join("") + "</div></div>";
+    return '<section class="manage-section" aria-labelledby="planning-title"><div class="section-heading-row"><div><p class="section-label">Planning</p><h2 id="planning-title">Coverage review</h2></div><label class="inline-filter">Range<select data-change="plan-window">' + rangeOptions + '</select></label></div><div class="planning-grid"><div class="metric"><strong>' + conflicts.length + '</strong><span>derived conflicts</span></div><div class="metric"><strong>' + serviceCount + '</strong><span>services in range</span></div><div class="metric"><strong>' + state.categories.length + '</strong><span>departments</span></div></div>' + conflictPanel + suggestionPanel + gapsPanel + workloadPanel + "</section>";
+  }
+
+  function renderSync() {
+    const statusText = state.syncStatus === "syncing" ? "Syncing locally" : state.syncStatus === "warning" ? "Review warning" : state.syncStatus === "complete" ? "Saved locally" : "Ready";
+    return '<section class="manage-section" aria-labelledby="sync-title"><p class="section-label">Sync and recovery</p><h2 id="sync-title">Local schedule data</h2><div class="secondary-panel"><div class="panel-heading"><h3>Sheet URL</h3><span>' + escapeHtml(statusText) + "</span></div><form data-form=\"sheet-url\"><label class=\"field-label\" for=\"sheet-url-input\">Fictional schedule source<input id=\"sheet-url-input\" name=\"url\" value=\"" + escAttr(state.sheetUrl) + '" inputmode="url" required></label><div class="button-row"><button class="button-secondary" type="submit">Save URL</button><button class="button-primary" type="button" data-action="sync-now">Sync fictional sample</button></div></form>' + notice(state.syncMessage, state.syncStatus === "warning" ? "error" : "success") + "</div><div class=\"secondary-panel\"><div class=\"panel-heading\"><h3>Backup</h3><span>This device only</span></div><p>Export or import a fictional JSON backup for this prototype.</p><div class=\"button-row\"><button class=\"button-secondary\" type=\"button\" data-action=\"export-backup\">Export local backup</button><label class=\"button-secondary file-button\">Import local backup<input type=\"file\" accept=\"application/json\" data-change=\"import-file\"></label><button class=\"text-button\" type=\"button\" data-action=\"restore-sample\">Restore sample</button></div>" + notice(state.importMessage, "success") + "</div><div class=\"secondary-panel\"><div class=\"panel-heading\"><h3>Reset</h3></div><p>Reset all in-memory people, services, assignments, requests, songs, and settings.</p><button class=\"button-danger\" type=\"button\" data-action=\"reset-prototype\">Reset all local changes</button></div></section>";
+  }
+
+  const FEATURE_LABELS = {
+    siteLock: ["Site passcode", "Lock the prototype entry screen locally."],
+    editorLock: ["Editor passcode", "Gate Manage editing locally."],
+    notifications: ["New-duty alerts", "Show selected member alerts."],
+    reminders: ["Day-before reminders", "Include reminder language in alerts."],
+    calendarExport: ["Add to calendar", "Show calendar preview actions."],
+    whoElse: ["Full service lineup", "Allow full team expansion on service cards."],
+    choirSong: ["Choir song", "Keep the service choir song field visible."],
+    songPicker: ["Presider song picker", "Allow outline and song history editing."],
+    pastServices: ["Past services", "Show past records in My Duties."],
+    emptyDuties: ["Unassigned duties", "Show blank slots in Manage."],
+    conflictWarnings: ["Double-duty warnings", "Derive and review same-service conflicts."],
+    sheetSync: ["Schedule sync", "Show the local Sheet URL and sync actions."],
+    changeRequests: ["Change requests", "Allow members to submit requests."]
+  };
+
+  function renderSettings() {
+    const passcodeForm = state.passcodeMode ? '<form class="passcode-form" data-form="passcode"><input type="hidden" name="kind" value="' + escAttr(state.passcodeMode) + '"><label class="field-label">Current passcode<input name="current" type="password" inputmode="numeric" autocomplete="off" required></label><label class="field-label">New passcode<input name="next" type="password" inputmode="numeric" autocomplete="off" minlength="4" required></label><div class="button-row"><button class="button-primary" type="submit">Save passcode</button><button class="text-button" type="button" data-action="cancel-passcode">Cancel</button></div></form>' : "";
+    const featureRows = Object.keys(FEATURE_LABELS).map((key) => '<label class="feature-row"><span><strong>' + escapeHtml(FEATURE_LABELS[key][0]) + '</strong><small>' + escapeHtml(FEATURE_LABELS[key][1]) + '</small></span><input type="checkbox" data-change="feature" data-feature="' + escAttr(key) + '"' + (state.features[key] ? " checked" : "") + ' aria-label="' + escAttr(FEATURE_LABELS[key][0]) + '"></label>').join("");
+    const schedulerOptions = '<option value="">None</option>' + memberOptions(state.scheduler || "");
+    const passcodes = '<div class="secondary-panel"><div class="panel-heading"><h3>Passcodes</h3><span>Fictional local values</span></div><p>Demo editor passcode is 2468. Demo site passcode is 1357.</p><div class="button-row"><button class="button-secondary" type="button" data-action="edit-passcode" data-kind="editor">Change editor passcode</button><button class="button-secondary" type="button" data-action="edit-passcode" data-kind="site">Change site passcode</button><button class="text-button" type="button" data-action="lock-editor">Lock Manage</button><button class="text-button" type="button" data-action="lock-site">Lock site</button></div>' + passcodeForm + notice(state.manageNotice, "success") + "</div>";
+    return '<section class="manage-section" aria-labelledby="settings-title"><p class="section-label">Settings</p><h2 id="settings-title">Feature controls</h2><div class="feature-list">' + featureRows + "</div>" + passcodes + '<div class="secondary-panel"><div class="panel-heading"><h3>Selected scheduler</h3></div><label class="field-label">Request notification recipient<select data-change="scheduler">' + schedulerOptions + "</select></label></div></section>";
+  }
+
+  function renderManageTabs() {
+    const tabs = [["assignments", "Assignments"], ["requests", "Requests"], ["people", "People"], ["planning", "Planning"], ["sync", "Sync"], ["settings", "Settings"]];
+    return '<div class="manage-tabs" role="tablist" aria-label="Manage sections">' + tabs.map(([id, label]) => '<button type="button" role="tab" aria-selected="' + (state.manageTab === id ? "true" : "false") + '" class="' + (state.manageTab === id ? "active" : "") + '" data-action="manage-tab" data-tab="' + id + '">' + label + "</button>").join("") + "</div>";
+  }
+
+  function renderSiteGate() {
+    return '<section class="state-wrap" data-prototype-screen="manage"><div class="state-card access-gate"><p class="state-marker">Site passcode</p><h1 id="main-title" tabindex="-1">Site is locked</h1><p>Enter the fictional site passcode to continue this local review.</p><form data-form="site-unlock"><label class="field-label">Site passcode<input name="passcode" type="password" inputmode="numeric" autocomplete="off" required></label><div class="button-row"><button class="button-primary" type="submit">Unlock site</button><a class="text-button" href="?screen=home" data-nav="home">Return Home</a></div></form>' + notice(state.accessError, "error") + "</div></section>";
+  }
+
+  function renderEditorGate() {
+    return '<section class="state-wrap" data-prototype-screen="manage"><div class="state-card access-gate"><p class="state-marker">Manage access</p><h1 id="main-title" tabindex="-1">Editing is locked</h1><p>Enter the fictional editor passcode to review local coordinator controls.</p><form data-form="unlock"><label class="field-label">Editor passcode<input name="passcode" type="password" inputmode="numeric" autocomplete="off" required></label><div class="button-row"><button class="button-primary" type="submit">Unlock Manage</button><a class="text-button" href="?screen=home" data-nav="home">Return Home</a></div></form>' + notice(state.accessError, "error") + "</div></section>";
+  }
+
+  function renderManage() {
+    if (state.siteLocked) return renderSiteGate();
+    if (!state.manageUnlocked) return renderEditorGate();
+    let body = "";
+    if (state.manageTab === "assignments") body = renderAssignmentEditor();
+    if (state.manageTab === "requests") body = renderPendingRequests() + renderManageRequests();
+    if (state.manageTab === "people") body = renderPeople();
+    if (state.manageTab === "planning") body = renderPlanning();
+    if (state.manageTab === "sync") body = state.features.sheetSync ? renderSync() : '<section class="manage-section"><div class="state-card"><h2>Schedule sync is off</h2><button class="button-secondary" type="button" data-action="open-manage-settings">Open settings</button></div></section>';
+    if (state.manageTab === "settings") body = renderSettings();
+    return '<section class="prototype-page manage-page" data-prototype-screen="manage">' + renderHeading("For the team", "Manage", { memberControl: true }) + renderManageTabs() + body + "</section>";
+  }
+
+  function renderSpecial(screen) {
+    const states = {
+      empty: ["Empty state", "No upcoming duties", "This fictional member has no assignment in the selected view. Choose another member to return to the schedule.", '<button class="button-primary" type="button" data-action="recover-empty">Choose another member</button>'],
+      loading: ["Loading state", "Loading schedule", "The local September sample is being prepared.", '<span class="loading-mark" role="status" aria-label="Loading"></span><button class="button-primary" type="button" data-action="recover-loading">Load sample</button>'],
+      offline: ["Offline state", "Using saved schedule", "A local saved schedule is available while sync is unavailable.", '<button class="button-primary" type="button" data-action="recover-offline">Use saved schedule</button>'],
+      error: ["Recoverable error", "Could not save this change", "The review state simulates a local save failure. Retry to restore the outline.", '<button class="button-primary" type="button" data-action="recover-error">Retry save</button>'],
+      success: ["Success state", "Saved locally", "The fictional action completed in this browser.", '<button class="button-primary" type="button" data-action="recover-success">Continue to Home</button>']
+    }[screen];
+    return '<section class="state-wrap" data-prototype-screen="' + screen + '"><div class="state-card ' + screen + '"><p class="state-marker">' + escapeHtml(states[0]) + '</p><h1 id="main-title" tabindex="-1">' + escapeHtml(states[1]) + "</h1><p>" + escapeHtml(states[2]) + '</p><div class="button-row">' + states[3] + "</div></div></section>";
+  }
+
+
+  function renderPeople() {
+    const department = state.departmentChoice || state.categories[0].name;
+    const roster = state.departments[department] || [];
+    const removal = state.removeMember ? '<div class="confirm-inline"><p>Remove ' + escapeHtml(state.removeMember) + " from the local roster? " + countAssignments(state.removeMember) + " future duties will become unassigned.</p><button class=\"button-danger\" type=\"button\" data-action=\"confirm-remove-member\">Remove member</button><button class=\"text-button\" type=\"button\" data-action=\"cancel-remove-member\">Cancel</button></div>" : "";
+    return '<section class="manage-section" aria-labelledby="people-title"><p class="section-label">People</p><h2 id="people-title">Roster</h2><form class="add-person-form" data-form="add-person"><label class="field-label">Add fictional person<input name="name" placeholder="Title. First Last" required></label><button class="button-secondary" type="submit">Add person</button></form><div class="people-list">' +
+      state.members.map((person) => '<div class="person-row"><form data-form="rename-person" data-person="' + escAttr(person) + '"><label class="field-label"><span class="sr-only">Name</span><input name="name" value="' + escAttr(person) + '" required></label><button class="text-button" type="submit">Rename</button></form><button class="button-danger" type="button" data-action="remove-member" data-member="' + escAttr(person) + '">Remove</button></div>').join("") +
+      "</div>" + removal + '<div class="roster-editor"><div class="panel-heading"><h3>Department roster</h3><label class="inline-filter"><span class="sr-only">Department</span><select data-change="department-choice">' +
+      state.categories.map((category) => '<option value="' + escAttr(category.name) + '"' + (category.name === department ? " selected" : "") + ">" + escapeHtml(category.name) + "</option>").join("") +
+      '</select></label></div><div class="roster-checks">' + state.members.map((person) => '<label><input type="checkbox" data-change="department-member" data-member="' + escAttr(person) + '"' + (roster.includes(person) ? " checked" : "") + ">" + escapeHtml(person) + "</label>").join("") + "</div></div>" + notice(state.manageNotice, "success") + "</section>";
+  }
+
+  function renderManageTabs() {
+    const tabs = [["assignments", "Assignments"], ["requests", "Requests"], ["people", "People"], ["planning", "Planning"], ["sync", "Sync"], ["settings", "Settings"]];
+    return '<div class="manage-tabs" role="tablist" aria-label="Manage sections">' + tabs.map(([id, label]) => '<button type="button" role="tab" aria-selected="' + (state.manageTab === id ? "true" : "false") + '" class="' + (state.manageTab === id ? "active" : "") + '" data-action="manage-tab" data-tab="' + id + '">' + label + "</button>").join("") + "</div>";
+  }
+
+  function renderSiteGate() {
+    return '<section class="state-wrap" data-prototype-screen="manage"><div class="state-card access-gate"><p class="state-marker">Site passcode</p><h1 id="main-title" tabindex="-1">Site is locked</h1><p>Enter the fictional site passcode to continue this local review.</p><form data-form="site-unlock"><label class="field-label">Site passcode<input name="passcode" type="password" inputmode="numeric" autocomplete="off" required></label><div class="button-row"><button class="button-primary" type="submit">Unlock site</button><a class="text-button" href="?screen=home" data-nav="home">Return Home</a></div></form>' + notice(state.accessError, "error") + "</div></section>";
+  }
+
+  function renderEditorGate() {
+    return '<section class="state-wrap" data-prototype-screen="manage"><div class="state-card access-gate"><p class="state-marker">Manage access</p><h1 id="main-title" tabindex="-1">Editing is locked</h1><p>Enter the fictional editor passcode to review local coordinator controls.</p><form data-form="unlock"><label class="field-label">Editor passcode<input name="passcode" type="password" inputmode="numeric" autocomplete="off" required></label><div class="button-row"><button class="button-primary" type="submit">Unlock Manage</button><a class="text-button" href="?screen=home" data-nav="home">Return Home</a></div></form>' + notice(state.accessError, "error") + "</div></section>";
+  }
+
+  function renderManage() {
+    if (state.siteLocked) return renderSiteGate();
+    if (!state.manageUnlocked) return renderEditorGate();
+    let body = "";
+    if (state.manageTab === "assignments") body = renderAssignmentEditor();
+    if (state.manageTab === "requests") body = renderPendingRequests() + renderManageRequests();
+    if (state.manageTab === "people") body = renderPeople();
+    if (state.manageTab === "planning") body = renderPlanning();
+    if (state.manageTab === "sync") body = state.features.sheetSync ? renderSync() : '<section class="manage-section"><div class="state-card"><h2>Schedule sync is off</h2><button class="button-secondary" type="button" data-action="open-manage-settings">Open settings</button></div></section>';
+    if (state.manageTab === "settings") body = renderSettings();
+    return '<section class="prototype-page manage-page" data-prototype-screen="manage">' + renderHeading("For the team", "Manage", { memberControl: true }) + renderManageTabs() + body + "</section>";
+  }
+
+  function render() {
+    const app = document.getElementById("app-main");
+    if (!app) return;
+    if (state.screen === "presider" && state.failNextSave) state.saveState = "failed";
+    const content = SPECIAL.includes(state.screen) ? renderSpecial(state.screen) :
+      state.screen === "home" ? renderHome() :
+      state.screen === "duty" ? renderDuty() :
+      state.screen === "presider" ? renderPresider() : renderManage();
+    app.innerHTML = content;
+    document.querySelectorAll("nav a[data-nav]").forEach((link) => {
+      const active = link.dataset.nav === state.screen;
+      link.classList.toggle("active", active);
+      if (active) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+    document.title = state.screen === "home" ? "Worship schedule, LV Zion Worship Service" : state.screen.charAt(0).toUpperCase() + state.screen.slice(1) + ", LV Zion Worship Service";
+  }
+
+  function markSetlistChanged() {
+    const setlist = currentSetlist();
+    if (!setlist) return;
+    setlist.status = setlist.confirmed ? "changed" : "planned";
+    state.saveState = setlist.confirmed ? "changed" : "ready";
+  }
+
+  function saveSetlist() {
+    const setlist = currentSetlist();
+    if (!setlist) return;
+    state.saveState = "saving";
+    render();
+    window.clearTimeout(state.saveTimer);
+    state.saveTimer = window.setTimeout(() => {
+      if (state.failNextSave) {
+        state.failNextSave = false;
+        state.saveState = "failed";
+      } else {
+        state.saveState = "saved";
+        setlist.updatedAt = "2026-09-07T12:00:00";
+      }
+      render();
+    }, 180);
+  }
+
+  function addSong(id) {
+    const setlist = currentSetlist();
+    const song = songById(id);
+    if (!setlist || !song) return;
+    setlist.songs.push(id);
+    state.songNotice = "#" + song.number + " " + song.title + " added to the local outline.";
+    markSetlistChanged();
+    render();
+  }
+
+  function moveSong(index, direction) {
+    const setlist = currentSetlist();
+    const numeric = Number(index);
+    if (!setlist || !Number.isInteger(numeric) || numeric < 0 || numeric >= setlist.songs.length) return;
+    const prep = preparationEntries(setlist);
+    const position = prep.findIndex((entry) => entry.index === numeric);
+    const next = position + (direction === "up" ? -1 : 1);
+    if (position < 0 || next < 0 || next >= prep.length) return;
+    const swapIndex = prep[next].index;
+    [setlist.songs[numeric], setlist.songs[swapIndex]] = [setlist.songs[swapIndex], setlist.songs[numeric]];
+    markSetlistChanged();
+    render();
+  }
+
+  function removeSong(index) {
+    const setlist = currentSetlist();
+    const numeric = Number(index);
+    if (!setlist || !Number.isInteger(numeric) || numeric < 0 || numeric >= setlist.songs.length) return;
+    setlist.songs.splice(numeric, 1);
+    markSetlistChanged();
+    render();
+  }
+
+  function updateServiceField(field, value) {
+    const service = serviceById(state.selectedServiceId);
+    if (!service) return;
+    service[field] = value;
+    const setlist = setlistById(service.id);
+    if (setlist && ["date", "worshipType", "serviceLabel"].includes(field)) setlist[field] = value;
+    if (field === "choirSong") service.choirSong = value || null;
+    if (field === "date") state.selectedDate = value;
+    if (field === "time") service.time = value;
+  }
+
+  function addService(date, time, worshipType, label) {
+    if (!date || !time || !worshipType || !label) return;
+    const id = "local-" + date + "-" + time.replace(":", "");
+    if (state.services.some((service) => service.id === id)) {
+      state.manageNotice = "A service with that date and time already exists.";
+      render();
+      return;
+    }
+    const service = { id, date, time, worshipType, serviceLabel: label, notes: "", choirSong: null, status: "planned", assignments: {} };
+    state.services.push(service);
+    state.setlists[id] = { id, date, worshipType, serviceLabel: label, presider: "", notes: "", songs: [], glorySong: null, thanksSong: null, confirmed: false, status: "planned", updatedAt: "2026-09-07T12:00:00", sungAt: null };
+    state.selectedServiceId = id;
+    state.manageNotice = "Blank service added locally.";
+    render();
+  }
+
+  function deleteService() {
+    const id = state.serviceDeleteId;
+    const service = serviceById(id);
+    if (!service) return;
+    state.services = state.services.filter((item) => item.id !== id);
+    delete state.setlists[id];
+    state.serviceDeleteId = null;
+    state.selectedServiceId = state.services[0]?.id || "";
+    state.manageNotice = service.serviceLabel + " service deleted locally.";
+    render();
+  }
+
+  function renameMember(oldName, newName) {
+    state.members = state.members.map((member) => member === oldName ? newName : member);
+    state.services.forEach((service) => Object.keys(service.assignments).forEach((duty) => { if (service.assignments[duty] === oldName) service.assignments[duty] = newName; }));
+    Object.keys(state.departments).forEach((key) => { state.departments[key] = state.departments[key].map((member) => member === oldName ? newName : member); });
+    state.requests.forEach((request) => { if (request.name === oldName) request.name = newName; });
+    Object.keys(state.setlists).forEach((id) => { if (state.setlists[id].presider === oldName) state.setlists[id].presider = newName; });
+    if (state.selectedName === oldName) state.selectedName = newName;
+    state.manageNotice = "Member renamed locally.";
+    render();
+  }
+
+  function removeMember() {
+    const member = state.removeMember;
+    if (!member) return;
+    state.services.forEach((service) => Object.keys(service.assignments).forEach((duty) => { if (service.assignments[duty] === member) service.assignments[duty] = ""; }));
+    Object.keys(state.departments).forEach((key) => { state.departments[key] = state.departments[key].filter((person) => person !== member); });
+    state.members = state.members.filter((person) => person !== member);
+    if (!state.members.length) state.members = deepClone(BASE.members);
+    if (state.selectedName === member) state.selectedName = state.members[0];
+    state.removeMember = null;
+    state.manageNotice = "Future duties were unassigned and the member was removed locally.";
+    render();
+  }
+
+  function deleteSetlist() {
+    if (!state.selectedServiceId) return;
+    delete state.setlists[state.selectedServiceId];
+    state.deleteSetlistConfirm = false;
+    state.songNotice = "Setlist deleted locally. The service remains available.";
+    render();
+  }
+
+  function createSetlist() {
+    const service = serviceById(state.selectedServiceId);
+    if (!service) return;
+    state.setlists[service.id] = { id: service.id, date: service.date, worshipType: service.worshipType, serviceLabel: service.serviceLabel, presider: service.assignments.Presider || "", notes: "", songs: [], glorySong: null, thanksSong: null, confirmed: false, status: "planned", updatedAt: "2026-09-07T12:00:00", sungAt: null };
+    state.saveState = "ready";
+    state.songNotice = "Blank outline created locally.";
+    render();
+  }
+
+  function markSung() {
+    const setlist = currentSetlist();
+    if (!setlist) return;
+    const counts = {};
+    setlist.songs.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+    state.sungSnapshot = counts;
+    Object.keys(counts).forEach((id) => {
+      const song = songById(id);
+      const stat = state.songStats[id] ||= { sungCount: 0, lastSung: null };
+      stat.sungCount += counts[id];
+      stat.lastSung = today;
+      if (song) song.history.unshift({ date: today, service: serviceLabel(setlist.id), setlistId: setlist.id });
+    });
+    setlist.status = "sung";
+    setlist.sungAt = "2026-09-07T12:00:00";
+    setlist.confirmed = true;
+    state.markSungConfirm = null;
+    state.songNotice = "Service marked sung locally.";
+    render();
+  }
+
+  function undoSung() {
+    const setlist = currentSetlist();
+    if (!setlist || !state.sungSnapshot) return;
+    Object.keys(state.sungSnapshot).forEach((id) => {
+      const stat = state.songStats[id];
+      if (stat) stat.sungCount = Math.max(0, stat.sungCount - state.sungSnapshot[id]);
+      const song = songById(id);
+      if (song) {
+        let removed = 0;
+        song.history = song.history.filter((entry) => {
+          if (removed < state.sungSnapshot[id] && entry.date === today && entry.setlistId === setlist.id) { removed += 1; return false; }
+          return true;
+        });
+      }
+    });
+    setlist.status = "confirmed";
+    setlist.sungAt = null;
+    state.undoSungConfirm = null;
+    state.songNotice = "Sung mark undone locally.";
+    render();
+  }
+
+  function resetPrototype(message) {
+    state.services = deepClone(BASE.services);
+    state.members = deepClone(BASE.members);
+    state.categories = deepClone(BASE.categories);
+    state.departments = deepClone(BASE.departments);
+    state.setlists = deepClone(BASE.setlists);
+    state.requests = deepClone(BASE.requests);
+    state.songs = deepClone(BASE.songs);
+    state.songStats = deepClone(BASE.songStats);
+    state.features = deepClone(BASE.features);
+    state.selectedName = BASE.members[0];
+    state.selectedServiceId = BASE.services[0].id;
+    state.selectedDate = "2026-09-12";
+    state.manageUnlocked = true;
+    state.siteLocked = false;
+    state.accessError = "";
+    state.passcodeMode = null;
+    state.removeMember = null;
+    state.serviceDeleteId = null;
+    state.manageNotice = message;
+    state.syncMessage = message;
+    state.syncStatus = "complete";
+    render();
+  }
+
+  function exportBackup() {
+    const payload = { members: state.members, services: state.services, departments: state.departments, setlists: state.setlists, requests: state.requests, songs: state.songs, songStats: state.songStats };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "fictional-worship-sample-backup.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    state.syncMessage = "Local fictional backup prepared.";
+    render();
+  }
+
+  function importBackup(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const payload = JSON.parse(String(reader.result));
+        if (!Array.isArray(payload.members) || !Array.isArray(payload.services)) throw new Error("shape");
+        if (payload.services.some((service) => !String(service.date || "").startsWith("2026-09-"))) throw new Error("date");
+        state.members = deepClone(payload.members);
+        state.services = deepClone(payload.services);
+        if (payload.departments) state.departments = deepClone(payload.departments);
+        if (payload.setlists) state.setlists = deepClone(payload.setlists);
+        if (payload.requests) state.requests = deepClone(payload.requests);
+        if (payload.songs) state.songs = deepClone(payload.songs);
+        if (payload.songStats) state.songStats = deepClone(payload.songStats);
+        state.importMessage = "Fictional backup imported locally.";
+      } catch (error) {
+        state.importMessage = "Backup rejected. Choose a September 2026 fictional backup.";
+      }
+      render();
+    };
+    reader.readAsText(file);
+  }
+
+
+  function handleClick(event) {
+    const nav = event.target.closest("[data-nav]");
+    if (nav) {
+      event.preventDefault();
+      navigate(nav.dataset.nav);
+      return;
+    }
+    const review = event.target.closest("[data-review-route]");
+    if (review) {
+      event.preventDefault();
+      navigate(review.dataset.reviewRoute);
+      return;
+    }
+    const saveFailure = event.target.closest("[data-review-save-error]");
+    if (saveFailure) {
+      event.preventDefault();
+      state.failNextSave = true;
+      state.selectedName = FIX.members[0];
+      state.selectedServiceId = FIX.services[0].id;
+      navigate("presider");
+      return;
+    }
+    const action = event.target.closest("[data-action]");
+    if (!action) return;
+    const type = action.dataset.action;
+    if (type === "duty-note") { state.dutyNoteOpen = !state.dutyNoteOpen; render(); }
+    else if (type === "open-my-duties") navigate("duty");
+    else if (type === "open-presider") navigate("presider");
+    else if (type === "open-manage-settings") { state.manageTab = "settings"; navigate("manage"); }
+    else if (type === "select-date") { state.selectedDate = action.dataset.date; render(); }
+    else if (type === "toggle-service") { state.expandedServices[action.dataset.service] = !state.expandedServices[action.dataset.service]; render(); }
+    else if (type === "toggle-past") { state.showPast = !state.showPast; render(); }
+    else if (type === "request-change") { state.requestOpen = { serviceId: action.dataset.service, duty: action.dataset.duty }; state.requestNote = ""; render(); }
+    else if (type === "cancel-request") { state.requestOpen = null; state.requestNote = ""; render(); }
+    else if (type === "calendar") {
+      state.calendarMessage = "Calendar text prepared for " + state.selectedName + ".";
+      copyLocal(serviceCalendarText(), state.calendarMessage, "Calendar text");
+    }
+    else if (type === "copy-calendar") {
+      state.calendarMessage = "Calendar text prepared for " + state.selectedName + ".";
+      copyLocal(serviceCalendarText(), state.calendarMessage, "Calendar text");
+    }
+    else if (type === "clear-alert") { state.alerts = state.alerts.filter((item) => item.id !== action.dataset.alert); render(); }
+    else if (type === "save-setlist") saveSetlist();
+    else if (type === "retry-save") { state.failNextSave = false; saveSetlist(); }
+    else if (type === "confirm-songs") {
+      const setlist = currentSetlist();
+      if (setlist) { setlist.confirmed = true; setlist.status = "confirmed"; state.saveState = "saved"; state.songNotice = "Outline confirmed locally."; render(); }
+    } else if (type === "toggle-song") { state.openSong = state.openSong === action.dataset.song ? null : action.dataset.song; render(); }
+    else if (type === "add-song") addSong(action.dataset.song);
+    else if (type === "move-song") moveSong(action.dataset.index, action.dataset.direction);
+    else if (type === "remove-song") removeSong(action.dataset.index);
+    else if (type === "song-category") { state.songCategory = action.dataset.category; render(); }
+    else if (type === "manage-tab") { state.manageTab = action.dataset.tab; state.manageNotice = ""; render(); }
+    else if (type === "open-request-service") { state.selectedServiceId = action.dataset.service; state.manageTab = "assignments"; render(); }
+    else if (type === "approve-request" || type === "decline-request") {
+      const request = state.requests.find((item) => item.id === action.dataset.request);
+      if (request) {
+        request.status = type === "approve-request" ? "approved" : "declined";
+        request.resolvedAt = "2026-09-07T12:00:00";
+        state.manageNotice = "Request " + request.status + " locally.";
+        render();
+      }
+    } else if (type === "lock-editor") { state.manageUnlocked = false; state.accessError = ""; render(); }
+    else if (type === "lock-site") { state.siteLocked = true; state.accessError = ""; render(); }
+    else if (type === "edit-passcode") { state.passcodeMode = action.dataset.kind; render(); }
+    else if (type === "cancel-passcode") { state.passcodeMode = null; render(); }
+    else if (type === "sync-now") {
+      state.syncStatus = "syncing";
+      state.syncMessage = "Preparing the fictional schedule locally.";
+      render();
+      window.clearTimeout(state.saveTimer);
+      state.saveTimer = window.setTimeout(() => {
+        state.syncStatus = state.sheetUrl.indexOf("local-sheet://") === 0 ? "complete" : "warning";
+        state.syncMessage = state.syncStatus === "complete" ? "Fictional sample synced locally." : "Review the fictional URL before syncing.";
+        render();
+      }, 180);
+    } else if (type === "export-backup") exportBackup();
+    else if (type === "restore-sample") resetPrototype("Sample restored locally.");
+    else if (type === "reset-prototype") resetPrototype("All local changes were reset.");
+    else if (type === "apply-suggestion") {
+      const service = serviceById(action.dataset.service);
+      if (service) {
+        service.assignments[action.dataset.duty] = action.dataset.member;
+        state.planNotice = action.dataset.duty + " assigned to " + action.dataset.member + ".";
+        render();
+      }
+    } else if (type === "delete-service") { state.serviceDeleteId = state.selectedServiceId; render(); }
+    else if (type === "cancel-delete-service") { state.serviceDeleteId = null; render(); }
+    else if (type === "confirm-delete-service") deleteService();
+    else if (type === "remove-member") { state.removeMember = action.dataset.member; render(); }
+    else if (type === "cancel-remove-member") { state.removeMember = null; render(); }
+    else if (type === "confirm-remove-member") removeMember();
+    else if (type === "ack-conflict" || type === "reopen-conflict") { state.conflictAcknowledged[action.dataset.conflict] = type === "ack-conflict"; render(); }
+    else if (type === "open-runsheet") { state.runsheetOpen = true; render(); }
+    else if (type === "close-runsheet") { state.runsheetOpen = false; render(); }
+    else if (type === "copy-setlist") {
+      const service = serviceById(state.selectedServiceId);
+      const setlist = currentSetlist();
+      if (service && setlist) copyLocal(outlineText(service, setlist), "Outline text prepared for copying.", "Outline text");
+    }
+    else if (type === "clear-copy") { state.copyText = ""; state.copyMessage = ""; render(); }
+    else if (type === "mark-sung") { state.markSungConfirm = state.selectedServiceId; render(); }
+    else if (type === "cancel-mark-sung") { state.markSungConfirm = null; render(); }
+    else if (type === "confirm-mark-sung") markSung();
+    else if (type === "undo-sung") { state.undoSungConfirm = state.selectedServiceId; render(); }
+    else if (type === "cancel-undo-sung") { state.undoSungConfirm = null; render(); }
+    else if (type === "confirm-undo-sung") undoSung();
+    else if (type === "delete-setlist") { state.deleteSetlistConfirm = true; render(); }
+    else if (type === "cancel-delete-setlist") { state.deleteSetlistConfirm = false; render(); }
+    else if (type === "delete-setlist-confirm") deleteSetlist();
+    else if (type === "create-setlist") createSetlist();
+    else if (type === "toggle-history") { state.showHistory = !state.showHistory; render(); }
+    else if (type === "remove-history") removeHistory(action.dataset.song, action.dataset.historyIndex);
+    else if (type === "open-backfill") { state.backfillOpen = true; render(); }
+    else if (type === "close-backfill") { state.backfillOpen = false; render(); }
+    else if (type === "recover-empty" || type === "recover-loading" || type === "recover-offline" || type === "recover-success") navigate("home");
+    else if (type === "recover-error") { state.failNextSave = false; navigate("success"); }
+  }
+
+  function handleChange(event) {
+    const target = event.target;
+    const change = target.dataset.change;
+    if (!change) return;
+    if (change === "member") {
+      state.selectedName = target.value;
+      state.memberNotice = "";
+      state.calendarMessage = "";
+      if (state.screen === "presider") state.selectedServiceId = presiderServices(state.selectedName)[0]?.id || state.selectedServiceId;
+      render();
+    } else if (change === "home-department") { state.homeDepartment = target.value; render(); }
+    else if (change === "duty-department") { state.dutyDepartment = target.value; render(); }
+    else if (change === "presider-service") { state.selectedServiceId = target.value; state.saveState = currentSetlist()?.confirmed ? "saved" : "ready"; state.failNextSave = false; render(); }
+    else if (change === "manage-service") { state.selectedServiceId = target.value; state.serviceDeleteId = null; render(); }
+    else if (change === "service-field") { updateServiceField(target.dataset.field, target.value); render(); }
+    else if (change === "assignment") {
+      const service = serviceById(state.selectedServiceId);
+      if (service) {
+        service.assignments[target.dataset.duty] = target.value;
+        if (target.dataset.duty === "Presider" && state.setlists[service.id]) state.setlists[service.id].presider = target.value;
+        state.manageNotice = "Assignment saved locally.";
+      }
+      render();
+    } else if (change === "department-choice") { state.departmentChoice = target.value; render(); }
+    else if (change === "department-member") {
+      const department = state.departmentChoice || state.categories[0]?.name || "Worship";
+      state.departmentChoice = department;
+      const roster = state.departments[department] ||= [];
+      if (target.checked && !roster.includes(target.dataset.member)) roster.push(target.dataset.member);
+      if (!target.checked) state.departments[department] = roster.filter((person) => person !== target.dataset.member);
+      state.manageNotice = "Department roster updated locally.";
+      render();
+    } else if (change === "plan-window") { state.planWindow = target.value; render(); }
+    else if (change === "feature") {
+      state.features[target.dataset.feature] = target.checked;
+      state.manageNotice = FEATURE_LABELS[target.dataset.feature][0] + " is now " + (target.checked ? "on" : "off") + " locally.";
+      render();
+    } else if (change === "scheduler") { state.scheduler = target.value; state.manageNotice = "Scheduler recipient saved locally."; render(); }
+    else if (change === "choir-song") { const service = serviceById(state.selectedServiceId); if (service) service.choirSong = target.value || null; render(); }
+    else if (change === "glory-song" || change === "thanks-song") {
+      const setlist = currentSetlist();
+      if (setlist) { setlist[change === "glory-song" ? "glorySong" : "thanksSong"] = target.value || null; markSetlistChanged(); render(); }
+    } else if (change === "setlist-notes") {
+      const setlist = currentSetlist();
+      if (setlist) { setlist.notes = target.value; markSetlistChanged(); render(); }
+    } else if (change === "import-file") importBackup(target.files && target.files[0]);
+  }
+
+  function handleInput(event) {
+    const target = event.target;
+    if (target.dataset.input === "request-note") state.requestNote = target.value;
+    else if (target.dataset.input === "song-search") {
+      const active = document.activeElement === target;
+      state.songSearch = target.value;
+      render();
+      if (active) {
+        const next = document.getElementById("song-search");
+        if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+      }
+    }
+  }
+
+  function handleSubmit(event) {
+    const form = event.target.closest("[data-form]");
+    if (!form) return;
+    event.preventDefault();
+    const data = new FormData(form);
+    if (form.dataset.form === "request") {
+      const request = { id: "request-local-" + Date.now(), name: state.selectedName, serviceId: form.dataset.service, duty: form.dataset.duty, note: String(data.get("note") || ""), status: "pending", createdAt: "2026-09-07T12:00:00" };
+      state.requests.unshift(request);
+      state.requestOpen = null;
+      state.requestNote = "";
+      state.requestMessage = "Request pending for coordinator review.";
+      render();
+    } else if (form.dataset.form === "unlock") {
+      if (String(data.get("passcode")) === state.editorPasscode) { state.manageUnlocked = true; state.accessError = ""; }
+      else state.accessError = "That editor passcode does not match the fictional local value.";
+      render();
+    } else if (form.dataset.form === "site-unlock") {
+      if (String(data.get("passcode")) === state.sitePasscode) { state.siteLocked = false; state.accessError = ""; }
+      else state.accessError = "That site passcode does not match the fictional local value.";
+      render();
+    } else if (form.dataset.form === "passcode") {
+      const kind = String(data.get("kind"));
+      const current = kind === "editor" ? state.editorPasscode : state.sitePasscode;
+      if (String(data.get("current")) !== current) state.manageNotice = "Current passcode did not match.";
+      else { if (kind === "editor") state.editorPasscode = String(data.get("next")); else state.sitePasscode = String(data.get("next")); state.manageNotice = (kind === "editor" ? "Editor" : "Site") + " passcode changed locally."; state.passcodeMode = null; }
+      render();
+    } else if (form.dataset.form === "add-person") {
+      const name = String(data.get("name") || "").trim();
+      if (!name) return;
+      if (!state.members.includes(name)) { state.members.push(name); state.departments.Worship.push(name); state.manageNotice = name + " added to the local roster."; }
+      render();
+    } else if (form.dataset.form === "rename-person") {
+      const oldName = form.dataset.person;
+      const newName = String(data.get("name") || "").trim();
+      if (!newName || state.members.includes(newName)) { state.manageNotice = "Choose a new unique fictional name."; render(); return; }
+      renameMember(oldName, newName);
+    } else if (form.dataset.form === "add-service") {
+      addService(String(data.get("date")), String(data.get("time")), String(data.get("worship")), String(data.get("label")));
+    } else if (form.dataset.form === "sheet-url") {
+      state.sheetUrl = String(data.get("url") || "").trim();
+      state.syncMessage = "Fictional Sheet URL saved locally.";
+      state.syncStatus = "complete";
+      render();
+    } else if (form.dataset.form === "backfill") {
+      const song = songById(String(data.get("song")));
+      const date = String(data.get("date"));
+      if (song && /^2026-09-\d\d$/.test(date)) {
+        song.history.unshift({ date, service: "Backfilled September record", backfilled: true });
+        const stat = state.songStats[song.id] ||= { sungCount: 0, lastSung: null };
+        stat.sungCount += 1;
+        stat.lastSung = date;
+        state.songNotice = "Backfilled history for #" + song.number + " locally.";
+        state.backfillOpen = false;
+        render();
+      }
+    }
+  }
+
+  function renameMember(oldName, newName) {
+    state.members = state.members.map((member) => member === oldName ? newName : member);
+    state.services.forEach((service) => Object.keys(service.assignments).forEach((duty) => { if (service.assignments[duty] === oldName) service.assignments[duty] = newName; }));
+    Object.keys(state.departments).forEach((key) => { state.departments[key] = state.departments[key].map((member) => member === oldName ? newName : member); });
+    state.requests.forEach((request) => { if (request.name === oldName) request.name = newName; });
+    Object.keys(state.setlists).forEach((id) => { if (state.setlists[id].presider === oldName) state.setlists[id].presider = newName; });
+    if (state.selectedName === oldName) state.selectedName = newName;
+    state.manageNotice = "Member renamed locally.";
+    render();
+  }
+
+  function countAssignments(person) {
+    return state.services.filter((service) => service.date >= today).reduce((total, service) => total + Object.values(service.assignments).filter((value) => value === person).length, 0);
+  }
+
+  function markSung() {
+    const setlist = currentSetlist();
+    if (!setlist) return;
+    const counts = {};
+    setlist.songs.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+    state.sungSnapshot = counts;
+    Object.keys(counts).forEach((id) => {
+      const song = songById(id);
+      const stat = state.songStats[id] ||= { sungCount: 0, lastSung: null };
+      stat.sungCount += counts[id];
+      stat.lastSung = today;
+      if (song) song.history.unshift({ date: today, service: serviceLabel(setlist.id), setlistId: setlist.id });
+    });
+    setlist.status = "sung";
+    setlist.sungAt = "2026-09-07T12:00:00";
+    setlist.confirmed = true;
+    state.markSungConfirm = null;
+    state.songNotice = "Service marked sung locally.";
+    render();
+  }
+
+  function undoSung() {
+    const setlist = currentSetlist();
+    if (!setlist || !state.sungSnapshot) return;
+    Object.keys(state.sungSnapshot).forEach((id) => {
+      const stat = state.songStats[id];
+      if (stat) stat.sungCount = Math.max(0, stat.sungCount - state.sungSnapshot[id]);
+      const song = songById(id);
+      if (song) {
+        let removed = 0;
+        song.history = song.history.filter((entry) => {
+          if (removed < state.sungSnapshot[id] && entry.date === today && entry.setlistId === setlist.id) { removed += 1; return false; }
+          return true;
+        });
+      }
+    });
+    setlist.status = "confirmed";
+    setlist.sungAt = null;
+    state.undoSungConfirm = null;
+    state.songNotice = "Sung mark undone locally.";
+    render();
+  }
+
+  function removeHistory(songId, historyIndex) {
+    const song = songById(songId);
+    const index = Number(historyIndex);
+    if (!song || !Number.isInteger(index) || !song.history[index]) return;
+    const entry = song.history[index];
+    song.history.splice(index, 1);
+    if (entry.backfilled && state.songStats[songId]) state.songStats[songId].sungCount = Math.max(0, state.songStats[songId].sungCount - 1);
+    state.songNotice = "History entry removed locally.";
+    render();
+  }
+
+  document.addEventListener("click", handleClick);
+  document.addEventListener("change", handleChange);
+  document.addEventListener("input", handleInput);
+  document.addEventListener("submit", handleSubmit);
+  window.addEventListener("popstate", () => { state.screen = readScreen(); render(); focusMain(); });
+  document.addEventListener("touchstart", handleTouchStart, { passive: true });
+  document.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+  function handleTouchStart(event) {
+    if (window.innerWidth >= 600 || event.touches.length !== 1) return;
+    if (event.target.closest("input,select,textarea,button,a,[data-scrollable]")) return;
+    const touch = event.touches[0];
+    state.touchStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  }
+
+  function handleTouchEnd(event) {
+    if (!state.touchStart || window.innerWidth >= 600 || event.changedTouches.length !== 1) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - state.touchStart.x;
+    const dy = touch.clientY - state.touchStart.y;
+    const elapsed = Date.now() - state.touchStart.time;
+    state.touchStart = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) <= 1.5 * Math.abs(dy) || elapsed >= 600) return;
+    const index = NAV.indexOf(state.screen);
+    const next = index + (dx < 0 ? 1 : -1);
+    if (index >= 0 && next >= 0 && next < NAV.length) navigate(NAV[next]);
+  }
+
+  render();
+})(window, document);

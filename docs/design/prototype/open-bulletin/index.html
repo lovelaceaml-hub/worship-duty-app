@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Local fictional prototype for the LV Zion Worship Service schedule.">
+  <title>LV Zion Worship Service</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="bulletin-shell">
+    <header class="topbar">
+      <a class="brand" href="?screen=home" data-nav="home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="7" /><path d="M12 5v14M5 12h14" /></svg></span><span>LV Zion Worship Service</span></a>
+      <span class="sample-label">Fictional sample data</span>
+      <nav aria-label="Primary navigation">
+        <a class="active" href="?screen=home" data-nav="home" aria-current="page">Home</a>
+        <a href="?screen=duty" data-nav="duty">My Duties</a>
+        <a href="?screen=presider" data-nav="presider">Presider</a>
+        <a href="?screen=manage" data-nav="manage">Manage</a>
+      </nav>
+    </header>
+
+    <main id="app-main" tabindex="-1"></main>
+
+    <details class="review-toolbar">
+      <summary>Prototype review states</summary>
+      <div class="review-toolbar-body">
+        <p>Local review routes are kept here so the product screens remain focused.</p>
+        <div class="review-actions" role="toolbar" aria-label="Prototype review routes">
+          <a href="?screen=home" data-review-route="home">Home</a>
+          <a href="?screen=duty" data-review-route="duty">My Duties</a>
+          <a href="?screen=presider" data-review-route="presider">Presider</a>
+          <a href="?screen=manage" data-review-route="manage">Manage</a>
+          <a href="?screen=empty" data-review-route="empty">Empty</a>
+          <a href="?screen=loading" data-review-route="loading">Loading</a>
+          <a href="?screen=offline" data-review-route="offline">Offline</a>
+          <a href="?screen=error" data-review-route="error">Error</a>
+          <a href="?screen=success" data-review-route="success">Success</a>
+          <a href="?screen=presider&amp;review=save-failure" data-review-save-error>Presider save failure</a>
+        </div>
+      </div>
+    </details>
+  </div>
+  <script src="fixtures.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

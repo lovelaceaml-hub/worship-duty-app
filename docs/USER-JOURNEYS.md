@@ -1,37 +1,43 @@
-# User Journeys
+# Prototype user journeys
 
-## Journey: Find my next duty
+The prototype starts at http://127.0.0.1:8099/open-bulletin/index.html. Every route is local and uses the same fictional September 2026 state.
 
-- **User:** a congregation member on a phone.
-- **Starting situation:** the member has opened the private app and entered the site passcode.
-- **Goal:** identify the next duty and service time.
-- **Success is observable when:** My Duties shows the next assignment, date, service, and duty category.
-- **Steps:** open My Duties, choose a name, read the first duty card.
-- **States:** loading says the schedule is loading; no duties explains that none are assigned; connection problems fall back to available local data and show a banner.
-- **Recovery:** changing the selected name is immediate and reversible.
-- **Phone:** navigation remains visible at the bottom; swipe is optional.
-- **Keyboard:** tabs, name picker, cards, and actions are reachable with visible focus.
+## 1. Find the next duty
 
-## Journey: Plan songs for my service
+Route: ?screen=home.
 
-- **User:** an assigned presider.
-- **Starting situation:** the presider has selected their name and has an upcoming service.
-- **Goal:** choose an ordered set of songs with an appropriate total duration.
-- **Success is observable when:** the service record shows the saved ordered set and total time.
-- **Steps:** open Presider or Pick songs, choose the service, search/filter the library, add and order songs, save/review the run sheet.
-- **States:** the planner names the active service; empty library/search results explain what to change; save feedback is immediate; load failure offers a retry message.
-- **Recovery:** songs can be removed or reordered before the service is marked sung.
-- **Phone:** compact tabs and full-width controls avoid horizontal page scrolling.
-- **Keyboard:** internal tabs and song controls remain ordinary buttons and form controls.
+The member sees the selected name, reads My next duty above the schedule, and uses the My Duties nav or data-action="open-my-duties" to open the personal schedule. The next assignment includes date, role, department, service label, and time. The member picker updates the fictional roster immediately.
 
-## Journey: Coordinate the schedule
+## 2. Review the service lineup
 
-- **User:** the authorized scheduler.
-- **Starting situation:** Manage is locked.
-- **Goal:** review or update a service without disturbing unrelated schedule data.
-- **Success is observable when:** the edited service is reflected in the shared schedule and sync remains live.
-- **Steps:** open Manage, unlock, choose a management section, make the narrow edit, confirm the result.
-- **States:** locked, loading, validation, saved, conflict-warning, and sync-error states use explicit text.
-- **Recovery:** destructive actions require confirmation; backup export remains available.
-- **Phone:** edit labels stack above fields when width is limited.
-- **Keyboard:** unlock, section navigation, fields, and action buttons are keyboard operable.
+On Home, the nearest service is expanded with real department headings and duty rows. Later services start closed and open with data-action="toggle-service". The selected member is marked You with pale blue highlighting. The department filter changes the visible rows. The calendar action creates an actual local calendar text preview in a read-only text area. Copy calendar uses the same visible text and attempts the browser clipboard only as a local convenience.
+
+## 3. Request a duty change
+
+Route: ?screen=duty.
+
+The member chooses Request change for a personal role, enters an optional note, submits, and sees a pending status and request history. Manage opens with the pending request first. Approve, Decline, and Open service update local request state or open the assignment editor.
+
+## 4. Plan the worship outline
+
+Route: ?screen=presider.
+
+The Presider page is reachable only when the selected member has an actual Presider assignment. It switches among those services and shows Glory song, Opening prayer, Thanks song where applicable, Prayer of thanks, Choir song, Sermon, and Closing prayer. Preparation duration excludes Glory and Thanks. The song library supports search, category filters, details, history, Add, Up, Down, and Remove.
+
+## 5. Save, confirm, and record service history
+
+Save changes enters Saving and then Saved locally. The review route ?screen=presider&review=save-failure enters Save failed and Retry save returns to Saved locally. Confirm songs enters Confirmed. Editing a confirmed outline enters Changed after confirmation until it is confirmed again. Mark sung updates song counts and history for every occurrence, and Undo sung restores the prior counts. Runsheet and Copy outline expose real local text. Backfill adds a fictional history entry, and Delete setlist requires a visible confirmation.
+
+## 6. Coordinate the roster
+
+Route: ?screen=manage.
+
+Manage starts with Assignments and the pending request band. The coordinator can edit assignment selects, add a blank service, edit date, time, label, worship type, notes, and choir song, acknowledge or reopen derived conflicts, delete a service with confirmation, add a person, rename a person, remove a person after future-duty impact confirmation, and edit department rosters. Planning shows derived conflict, workload, and coverage data across its window choices and applies a concrete suggestion. Sync edits the fictional Sheet URL, reports syncing and warning results, exports a local backup, imports a local JSON file, restores the sample, and resets local changes. Settings uses human feature labels, changes both fictional passcodes, and locks and unlocks the editor or site.
+
+## 7. Recover from route states
+
+The closed review toolbar below product content opens unique Empty, Loading, Offline, Error, and Success routes. Each state has a marker and a visible recovery action. The error recovery action reaches the Success state. Main navigation and the product name remain available on ordinary routes. Focus moves to the page heading after route changes.
+
+## Accessibility and input behavior
+
+Buttons, links, selects, fields, file input, and checkboxes use native semantics and visible focus. The prototype is checked at 390 by 844 and 1440 by 1000 with no horizontal overflow. Optional mobile swiping requires at least 60px horizontal movement, more than 1.5 times vertical movement, and less than 600ms. Inputs, links, buttons, and horizontal scrollers are ignored. Reduced motion removes spinner and smooth-scroll animation.
