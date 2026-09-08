@@ -10,7 +10,7 @@ Keep lightweight buildless JavaScript and Firebase. Preserve records and IDs, lo
 
 ## Design approval
 
-Create three distinct Stitch directions with fictional information and phone/desktop exports. Anthony explicitly chooses one; then create and verify one complete clickable prototype across member, presider, and coordinator flows and empty/loading/error/success states. Anthony approves that prototype before production UI implementation. Freeze references and manifest in a committed milestone; do not change targets to hide mismatches. No selection exists yet.
+Create three distinct local HTML/CSS directions with fictional information and phone/desktop exports. Anthony explicitly chose local work instead of Stitch on 2026-09-07: "no need to use stitch." Anthony explicitly chooses one direction; then create and verify one complete clickable prototype across member, presider, and coordinator flows and empty/loading/error/success states. Anthony approves that prototype before production UI implementation. Freeze references and manifest in a committed milestone; do not change targets to hide mismatches. No selection exists yet.
 
 ## Models and roles
 
@@ -36,7 +36,7 @@ Setup: executor_luna, max, Codex, controller review. Starts immediately as a dis
 
 ### Lane D: Design
 
-Setup: executor_luna, max, Codex, controller review. Starts immediately. Own docs/design/directions/** and docs/runs/worship-refactor-20260907/research/design/** in design worktree. Produce three Stitch directions and export phone/desktop HTML and screenshots. Record exact project/screen IDs and provenance. Direction choice is pending. No production code or selected prototype until Anthony chooses. Controller maintains DESIGN.md and approval record.
+Setup: executor_luna, max, Codex, controller review. Starts immediately. Own docs/design/directions/** and docs/runs/worship-refactor-20260907/research/design/** in design worktree. Produce three original local HTML/CSS directions and export phone/desktop screenshots. Record local provenance; no Stitch needed per Anthony's correction. Direction choice is pending. No production code or selected prototype until Anthony chooses. Controller maintains DESIGN.md and approval record.
 
 ### Lane V: Verification
 
@@ -75,3 +75,4 @@ Pending Anthony's direction selection and prototype approval. Production UI lane
 ## Build log
 
 - 2026-09-07: Approved plan recorded. Baseline commit 885b0bb0ffb80802a5e6428edcea89ad66c428a7, clean tracked working tree. Integration branch codex/worship-refactor-redesign. No production changes yet. Existing ignored local files stay untouched. Remote target observed as lovelaceaml-hub/worship-duty-app; private visibility check requires network retry.
+- 2026-09-07: Private GitHub visibility verified; initial plan commit 5beec15 pushed to the isolated feature branch. Anthony removed the Stitch requirement; direction artifacts will be local original HTML/CSS and screenshots. Foundation, release, verification and design lanes continue in separate worktrees.

@@ -6,6 +6,8 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 
 ## Quick links
 
+- **Active refactor:** [Approved redesign plan](docs/PLAN-REFACTOR-REDESIGN.md) and [lane board](docs/runs/worship-refactor-20260907/board/index.html). Work runs on an isolated feature branch. Local design options are in progress; no redesigned interface has been released yet.
+
 - **Website:** https://lv-zion-duties.web.app — share this link with members
 - **Status:** Live. **7 September 2026: the app now opens fast and the tabs sit at the top.**
   Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always

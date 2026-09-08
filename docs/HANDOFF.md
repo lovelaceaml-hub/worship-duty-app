@@ -1,6 +1,8 @@
 # LV Zion Worship Service — Handoff Document
 
-Last updated: 2026-09-03. Owner: Anthony (alovelace144@gmail.com).
+Active refactor checkpoint: 2026-09-07. Read [the approved plan and Build log](PLAN-REFACTOR-REDESIGN.md) and [run index](runs/worship-refactor-20260907/INDEX.md) first. Foundation, release, verification, backend, and local design lanes are running in isolated worktrees. No new production UI is approved or deployed. Source baseline is 885b0bb0ffb80802a5e6428edcea89ad66c428a7.
+
+Historical architecture text below includes older rules, navigation, and release descriptions. Current source and the September 7 release-stamp section take precedence. The refactor preserves current data/access contracts; it does not turn the existing client gates into server-enforced permissions.
 
 For day-to-day operation (schedule edits, passcodes, notifications,
 deploying, troubleshooting) and the AI-delegation briefs, see

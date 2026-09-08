@@ -1,0 +1,486 @@
+<title>worship-refactor-20260907 lane board</title>
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --panel-bg: #ffffff;
+    --border: #d8d8dd;
+    --text: #1b1b1f;
+    --text-muted: #5b5b63;
+    --accent: #3355dd;
+    --arrow-color: #6b6b76;
+    --state-planned: #8a8a94;
+    --state-running: #2a7de1;
+    --state-landed: #2f9e5a;
+    --state-reviewed: #b8860b;
+    --state-merged: #7a4fd1;
+    --state-deployed: #178a7a;
+    --state-blocked: #cc3333;
+    --state-unknown: #9a9aa2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17171b;
+      --panel-bg: #202024;
+      --border: #3a3a41;
+      --text: #ececef;
+      --text-muted: #a7a7b1;
+      --accent: #7d9bff;
+      --arrow-color: #9a9aa5;
+      --state-planned: #9d9da8;
+      --state-running: #5aa4f2;
+      --state-landed: #4fc27f;
+      --state-reviewed: #e0b23c;
+      --state-merged: #a785ea;
+      --state-deployed: #3fc3b0;
+      --state-blocked: #f26161;
+      --state-unknown: #b3b3bd;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17171b;
+    --panel-bg: #202024;
+    --border: #3a3a41;
+    --text: #ececef;
+    --text-muted: #a7a7b1;
+    --accent: #7d9bff;
+    --arrow-color: #9a9aa5;
+    --state-planned: #9d9da8;
+    --state-running: #5aa4f2;
+    --state-landed: #4fc27f;
+    --state-reviewed: #e0b23c;
+    --state-merged: #a785ea;
+    --state-deployed: #3fc3b0;
+    --state-blocked: #f26161;
+    --state-unknown: #b3b3bd;
+  }
+
+  body { background: var(--bg); }
+
+  .board {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding: 16px;
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+  .board * { box-sizing: border-box; }
+
+  .coordinator-box {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  .coordinator-box h1 {
+    margin: 0 0 8px 0;
+    font-size: 1.25rem;
+  }
+  .coordinator-box dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 12px;
+    margin: 0 0 10px 0;
+    font-size: 0.85rem;
+  }
+  .coordinator-box dt { color: var(--text-muted); }
+  .coordinator-box dd { margin: 0; word-break: break-word; }
+
+  .baselines-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    display: block;
+    overflow-x: auto;
+  }
+  .baselines-table th, .baselines-table td {
+    border-bottom: 1px solid var(--border);
+    padding: 4px 8px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .lanes-wrap { margin-bottom: 24px; }
+
+  /* The lane columns, the arrows gap, and the integration bar share one
+     horizontally scrolling container so narrow viewports scroll this
+     region instead of squeezing every lane column unreadably thin. The
+     page body itself never scrolls horizontally. */
+  .lanes-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .lanes-inner { width: 100%; }
+
+  .lanes-row {
+    display: grid;
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  .lane-col { min-width: 0; }
+
+  .lane-card, .integration-lane {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-left: 5px solid var(--state-unknown);
+    border-radius: 8px;
+    padding: 12px 14px;
+    height: 100%;
+  }
+
+  .lane-card.state-planned, .integration-lane.state-planned { border-left-color: var(--state-planned); }
+  .lane-card.state-running, .integration-lane.state-running { border-left-color: var(--state-running); }
+  .lane-card.state-landed, .integration-lane.state-landed { border-left-color: var(--state-landed); }
+  .lane-card.state-reviewed, .integration-lane.state-reviewed { border-left-color: var(--state-reviewed); }
+  .lane-card.state-merged, .integration-lane.state-merged { border-left-color: var(--state-merged); }
+  .lane-card.state-deployed, .integration-lane.state-deployed { border-left-color: var(--state-deployed); }
+  .lane-card.state-blocked, .integration-lane.state-blocked { border-left-color: var(--state-blocked); }
+  .lane-card.state-unknown, .integration-lane.state-unknown { border-left-color: var(--state-unknown); }
+
+  .lane-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+  .lane-id { font-weight: 700; color: var(--text); }
+
+  .lane-title {
+    margin: 0 0 8px 0;
+    font-size: 0.95rem;
+    word-break: break-word;
+  }
+
+  .lane-meta {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 3px 10px;
+    margin: 0;
+    font-size: 0.76rem;
+  }
+  .lane-meta dt { color: var(--text-muted); }
+  .lane-meta dd { margin: 0; word-break: break-word; }
+  .lane-meta-row { grid-template-columns: repeat(4, max-content 1fr); }
+  @media (max-width: 720px) {
+    .lane-meta-row { grid-template-columns: max-content 1fr; }
+  }
+
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.72rem; }
+
+  .arrows-gap { width: 100%; height: 46px; }
+  .arrows-svg { width: 100%; height: 100%; display: block; }
+  .dep-arrow { stroke: var(--arrow-color); stroke-width: 1.4; }
+  .dep-arrowhead { fill: var(--arrow-color); }
+
+  .integration-lane { border-left-width: 6px; }
+  .integration-lane .lane-title { font-size: 1rem; }
+
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  @media (min-width: 720px) {
+    .panels { grid-template-columns: 1fr 1fr; }
+  }
+
+  .decisions-panel, .event-log {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    overflow-x: auto;
+  }
+  .decisions-panel h2, .event-log h2 {
+    margin: 0 0 10px 0;
+    font-size: 1rem;
+  }
+
+  .decision-card {
+    border-top: 1px solid var(--border);
+    padding: 8px 0;
+  }
+  .decision-card:first-of-type { border-top: none; padding-top: 0; }
+  .decision-card h4 { margin: 0 0 4px 0; font-size: 0.85rem; }
+  .decision-card p { margin: 0 0 4px 0; font-size: 0.8rem; color: var(--text-muted); }
+
+  .event-log { list-style: none; }
+  .event-log ul, .event-log li { margin: 0; padding: 0; }
+  .log-entry {
+    list-style: none;
+    border-top: 1px solid var(--border);
+    padding: 8px 0;
+  }
+  .log-entry:first-child { border-top: none; padding-top: 0; }
+  .log-entry strong { display: block; font-size: 0.85rem; margin: 2px 0 4px 0; }
+  .log-entry p { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+
+  .file-tag {
+    display: inline-block;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+  }
+
+  .empty-note { color: var(--text-muted); font-size: 0.82rem; margin: 0; }
+
+  .lane-note {
+    margin: 8px 0 0 0;
+    font-size: 0.72rem;
+    color: var(--state-blocked);
+    border-top: 1px dashed var(--border);
+    padding-top: 6px;
+  }
+</style>
+<div class="board">
+  <div class="coordinator-box">
+    <h1>worship-refactor-20260907</h1>
+    <dl>
+      <dt>Plan</dt><dd class="mono">/Users/anthony/Projects/worship-duty-app/docs/PLAN-REFACTOR-REDESIGN.md</dd>
+      <dt>Runner</dt><dd>coordinator</dd>
+      <dt>Coordinator</dt><dd>current Codex task with coordinator_terra supervision</dd>
+    </dl>
+    
+      <table class="baselines-table">
+        <thead><tr><th>Repo</th><th>Path</th><th>Branch</th><th>Baseline HEAD</th></tr></thead>
+        <tbody>
+          <tr><td>worship-duty-app</td><td class="mono">/Users/anthony/Projects/worship-duty-app</td><td>codex/worship-refactor-redesign</td><td class="mono">885b0bb0ffb80802a5e6428edcea89ad66c428a7</td></tr>
+        </tbody>
+      </table>
+  </div>
+
+  <div class="lanes-wrap">
+    <div class="lanes-scroll">
+      <div class="lanes-inner" style="min-width: 2000px;">
+        <div class="lanes-row" style="grid-template-columns: repeat(10, 1fr);">
+
+    <div class="lane-col " data-lane="L0">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">L0</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Architecture critique</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-sol</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-duty-app</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LF">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">LF</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Foundation</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/foundation</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LR">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">LR</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Release machinery</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/release</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LD">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">LD</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Design</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/design</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LV">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">LV</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Verification</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/verification</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LM">
+      <div class="lane-card state-planned">
+        <div class="lane-head">
+          <span class="lane-id">LM</span>
+          <span class="lane-state">planned</span>
+        </div>
+        <h3 class="lane-title">Member experience</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>pending</dd>
+          <dt>Worktree</dt><dd class="mono">pending</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:29Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LP">
+      <div class="lane-card state-planned">
+        <div class="lane-head">
+          <span class="lane-id">LP</span>
+          <span class="lane-state">planned</span>
+        </div>
+        <h3 class="lane-title">Presider experience</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>pending</dd>
+          <dt>Worktree</dt><dd class="mono">pending</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:29Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LC">
+      <div class="lane-card state-planned">
+        <div class="lane-head">
+          <span class="lane-id">LC</span>
+          <span class="lane-state">planned</span>
+        </div>
+        <h3 class="lane-title">Coordinator experience</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>pending</dd>
+          <dt>Worktree</dt><dd class="mono">pending</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:29Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LB">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">LB</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Backend</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/backend</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>L0</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:32Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LI">
+      <div class="lane-card state-planned">
+        <div class="lane-head">
+          <span class="lane-id">LI</span>
+          <span class="lane-state">planned</span>
+        </div>
+        <h3 class="lane-title">Integration and completion</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>pending</dd>
+          <dt>Worktree</dt><dd class="mono">pending</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:29Z</dd>
+        </dl>
+        
+      </div>
+    </div>
+        </div>
+        
+        
+      </div>
+    </div>
+  </div>
+
+  <div class="panels">
+    <section class="decisions-panel">
+      <h2>Decisions</h2>
+      
+        <div class="decision-card">
+          <h4>Local design directions</h4>
+          <p>Anthony&#39;s exact correction: &quot;no need to use stitch.&quot;</p>
+          <span class="file-tag mono">20260907-local-design.md</span>
+        </div>
+    </section>
+    <section class="event-log">
+      <h2>Event log</h2>
+      <ul>
+        
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T00-31Z-LD-anthony-selected-local-design-tools.md</span>
+          <strong>2026-09-08T00:31Z LD Anthony selected local design tools</strong>
+          <p></p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T00-31Z-LI-first-parallel-wave-launched.md</span>
+          <strong>2026-09-08T00:31Z LI First parallel wave launched</strong>
+          <p></p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T00-32Z-LB-backend-contracts-frozen-and-extraction-started.md</span>
+          <strong>2026-09-08T00:32Z LB Backend contracts frozen and extraction started</strong>
+          <p></p>
+        </li>
+      </ul>
+    </section>
+  </div>
+</div>

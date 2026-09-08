@@ -1,13 +1,13 @@
 ---
 lane: LD
 title: Design
-state: planned
-model: pending
-runner: pending
-worktree: pending
+state: running
+model: gpt-5.6-luna
+runner: coordinator
+worktree: /Users/anthony/Projects/worship-refactor-worktrees/design
 review: pending
-depends_on: pending
-updated: 2026-09-08T00:29Z
+depends_on: none
+updated: 2026-09-08T00:31Z
 ---
 
 # LD: Design

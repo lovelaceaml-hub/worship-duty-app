@@ -1,13 +1,13 @@
 ---
 lane: LB
 title: Backend
-state: planned
-model: pending
-runner: pending
-worktree: pending
+state: running
+model: gpt-5.6-luna
+runner: coordinator
+worktree: /Users/anthony/Projects/worship-refactor-worktrees/backend
 review: pending
-depends_on: pending
-updated: 2026-09-08T00:29Z
+depends_on: L0
+updated: 2026-09-08T00:32Z
 ---
 
 # LB: Backend
