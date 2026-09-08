@@ -1,6 +1,6 @@
 # Welcome to LV Zion Worship Service
 
-Current version note (7 September 2026): the compatible Foundation update keeps the existing member and coordinator workflows. The planned redesign is awaiting a selected direction and complete prototype approval. Continue using the instructions below.
+Current version note (7 September 2026): the compatible Foundation update keeps the existing member and coordinator workflows. Original Open Bulletin with smaller display text is selected. The complete clickable prototype is in progress and awaits approval. Continue using the instructions below.
 
 A simple guide to using the app — no technical background needed.
 

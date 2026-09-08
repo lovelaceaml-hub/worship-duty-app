@@ -1,13 +1,13 @@
 ---
 lane: LF3
 title: Pure member and coordinator selectors
-state: reviewed
+state: deployed
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-domain
 review: Sol-pass
 depends_on: LF2
-updated: 2026-09-08T04:08Z
+updated: 2026-09-08T04:19Z
 ---
 
 # Foundation 3 capsule
