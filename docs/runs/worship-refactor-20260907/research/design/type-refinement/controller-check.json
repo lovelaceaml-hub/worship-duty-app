@@ -1,0 +1,20 @@
+{
+  "scope": "Original B display typography only",
+  "htmlIdentical": true,
+  "javascriptIdentical": true,
+  "cssOnlyFontSizeChanges": true,
+  "phone": {
+    "width": 390,
+    "height": 844,
+    "horizontalOverflow": false,
+    "h1Px": 24
+  },
+  "desktop": {
+    "width": 1440,
+    "height": 1000,
+    "horizontalOverflow": false,
+    "h1Px": 34.4
+  },
+  "productionInterfaceChanged": false,
+  "fullPrototypeApproval": "pending"
+}

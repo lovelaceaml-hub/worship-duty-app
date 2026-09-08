@@ -10,7 +10,7 @@ Keep lightweight buildless JavaScript and Firebase. Preserve records and IDs, lo
 
 ## Design approval
 
-Create three distinct local HTML/CSS directions with fictional information and phone/desktop exports. Anthony explicitly chose local work instead of Stitch on 2026-09-07: "no need to use stitch." Anthony explicitly chooses one direction; then create and verify one complete clickable prototype across member, presider, and coordinator flows and empty/loading/error/success states. Anthony approves that prototype before production UI implementation. Freeze references and manifest in a committed milestone; do not change targets to hide mismatches. Anthony selected direction B, Open Bulletin, with a more compact and refined layout. Full prototype approval remains pending.
+Create three distinct local HTML/CSS directions with fictional information and phone/desktop exports. Anthony explicitly chose local work instead of Stitch on 2026-09-07: "no need to use stitch." Anthony explicitly chooses one direction; then create and verify one complete clickable prototype across member, presider, and coordinator flows and empty/loading/error/success states. Anthony approves that prototype before production UI implementation. Freeze references and manifest in a committed milestone; do not change targets to hide mismatches. Anthony selected original direction B, Open Bulletin. His latest clarification rejects layout compaction and asks only for smaller oversized text. Full prototype approval remains pending.
 
 ## Models and roles
 
@@ -36,7 +36,7 @@ Setup: executor_luna, max, Codex, controller review. Starts immediately as a dis
 
 ### Lane D: Design
 
-Setup: executor_luna, max, Codex, controller review. Starts immediately. Own docs/design/directions/** and docs/runs/worship-refactor-20260907/research/design/** in design worktree. Produce three original local HTML/CSS directions and export phone/desktop screenshots. Record local provenance; no Stitch needed per Anthony's correction. Anthony selected compact Open Bulletin. The lane now owns the complete prototype and its design documentation under the revised capsule; no production UI changes before prototype approval.
+Setup: executor_luna, max, Codex, controller review. Starts immediately. Own docs/design/directions/** and docs/runs/worship-refactor-20260907/research/design/** in design worktree. Produce three original local HTML/CSS directions and export phone/desktop screenshots. Record local provenance; no Stitch needed per Anthony's correction. Anthony selected original Open Bulletin with a typography-only size correction. The lane now owns the complete prototype and its design documentation under the revised capsule; no production UI changes before prototype approval.
 
 ### Lane V: Verification
 
@@ -70,7 +70,7 @@ Required docs: project AGENTS.md, README quick links, HANDOFF.md, USER-MANUAL.md
 
 ## Frozen design targets
 
-Anthony selected direction B, Open Bulletin, on 7 September 2026 and required smaller, more compact, refined layouts with less vertical space. See docs/DESIGN.md for his exact messages. Complete prototype approval remains pending; production UI lanes M/P/C may not start.
+Anthony selected original direction B, Open Bulletin, on 7 September 2026. He rejected the compact layout draft and clarified that he only wanted smaller oversized text. Preserve original B layout and spacing. See docs/DESIGN.md for the authoritative clarification. Complete prototype approval remains pending; production UI lanes M/P/C may not start.
 
 ## Build log
 
@@ -91,3 +91,7 @@ Anthony selected direction B, Open Bulletin, on 7 September 2026 and required sm
 - 2026-09-07: Anthony selected visual direction B and asked for everything to use less vertical space, feel smaller, and be more compact and refined. The original Open Bulletin direction is now the basis for a complete compact phone/desktop prototype. No production UI approval is implied.
 
 - 2026-09-07: Single-timestamp song confirmation fix passed native Sol high review, 5 actual-source advancing-clock tests, Foundation harness, 14 state/staging tests, and actual service worker update/rollback/offline verification. Hosting release `20260908030600` from runtime commit `8acf332` is live; immediate smoke matched all 18 runtime hashes and verified the locked phone view without production writes. Verification-suite round 3 corrections continue independently.
+
+- 2026-09-07: Architecture critic approved Foundation 3 pure member/coordinator selector extraction, preserving all rendered output and data contracts while the compact prototype proceeds. One isolated Luna writer owns the two new domain modules and app.js/index.html wiring. Screen lifecycle extraction waits for prototype approval.
+
+- 2026-09-07: Anthony rejected the compact layout draft: "no. that looks dumb. I just didnt want huge text". Root acknowledged overcorrection and stopped the density redesign. The immediate preview restores original B layout and changes oversized display text only. Full prototype expansion is paused until this correction is delivered. Nonvisual refactor lanes continue.
