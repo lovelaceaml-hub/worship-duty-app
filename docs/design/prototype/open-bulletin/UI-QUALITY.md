@@ -79,3 +79,7 @@ The validator result is therefore pending controller Git integration. No Git sta
 ## Review status
 
 The selected original Open Bulletin direction remains the visual anchor. Full prototype approval, contract approval, and production implementation remain pending Anthony and controller review. This receipt does not claim design approval.
+
+## Correction3 controller checkpoint
+
+Three actual UI journeys passed after the source freeze: marking newly added songs without duplicating pairs, removing every outline song followed by complete service-wide Undo, and rejection without mutation of marker-bearing backups with mismatched setlist identity/date/type/label. The original visual geometry and typography are unchanged. Evidence: docs/runs/worship-refactor-20260907/research/design/prototype/correction-3 in the project root. Earlier correction2 screenshots are retained; the controller's site-locked-phone capture shows the lock before unlock, whereas the correction2 site-lock named capture is after successful unlock. Native Sol review3 is pending.

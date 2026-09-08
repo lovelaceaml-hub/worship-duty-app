@@ -6,7 +6,7 @@ Status: awaiting Anthony's full-prototype approval. The user's "Just move on" au
 
 Review target: open-bulletin/index.html and its committed app.js, fixtures.js, styles.css, screenshots, CAPABILITY-MAP.md, and STATE-COVERAGE.md. Local preview: http://127.0.0.1:8099/open-bulletin/index.html.
 
-Controller verification: nineteen phone/desktop views and nine targeted journeys passed using fictional data only. Native Sol review2 is pending. Findings will be corrected in follow-up commits. Material visual revisions return to Anthony; references will not be replaced to hide differences.
+Controller verification: nineteen phone/desktop views and nine targeted journeys passed using fictional data only. The three sung-history/import findings from native Sol review2 are corrected and independently verified. Focused native Sol review3 and the committed-artifact contract result are pending. Material visual revisions return to Anthony; references will not be replaced to hide differences.
 
 Approval quote: pending.
 Approval date: pending.

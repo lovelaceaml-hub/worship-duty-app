@@ -6,7 +6,7 @@ The prototype starts at http://127.0.0.1:8099/open-bulletin/index.html. Every ro
 
 Route: ?screen=home.
 
-The member sees the selected name, reads My next duty above the schedule, and uses the My Duties nav or data-action="open-my-duties" to open the personal schedule. The next assignment includes date, role, department, service label, and time. The member picker updates the fictional roster immediately.
+The member sees the selected name, reads My next duty above the schedule, and uses the My Duties navigation to open the personal schedule. The next assignment includes date, role, department, service label, and time. The member picker updates the fictional roster immediately.
 
 ## 2. Review the service lineup
 
