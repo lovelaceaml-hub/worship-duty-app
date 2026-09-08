@@ -6,7 +6,7 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 
 ## Quick links
 
-- **Active refactor:** [Approved plan](docs/PLAN-REFACTOR-REDESIGN.md), [design directions](docs/design/directions/index.html), and [lane board](docs/runs/worship-refactor-20260907/board/index.html). The first compatible Foundation release is live at stamp `20260908013701`. Direction selection and complete prototype approval are pending. State and subscription extraction continues on an isolated worktree.
+- **Active refactor:** [Approved plan](docs/PLAN-REFACTOR-REDESIGN.md), [design directions](docs/design/directions/index.html), and [lane board](docs/runs/worship-refactor-20260907/board/index.html). The compatible Foundation 3 and confirmation fix are live at stamp `20260908041730`. State, subscription lifecycle, and member/coordinator selectors are extracted and reviewed. Anthony selected original Open Bulletin (direction B) with smaller display text; the compact layout draft was rejected. The [complete clickable prototype](docs/design/prototype/open-bulletin/index.html) is available with [phone and desktop references](docs/design/prototype/open-bulletin/screenshots/) and [state coverage](docs/design/prototype/open-bulletin/STATE-COVERAGE.md). Native prototype review and Anthony's full-prototype approval are pending.
 
 - **Website:** https://lv-zion-duties.web.app — share this link with members
 - **Status:** Live. **7 September 2026: the app now opens fast and the tabs sit at the top.**
@@ -123,6 +123,7 @@ the app's code.)
 
 - [Core constants](src/core/constants.js), [schedule domain](src/domain/schedule.js), and [Sheet parsing](src/domain/sheet.js) provide testable domain logic.
 - [Firebase gateway](src/services/firebase.js) and [storage adapter](src/services/storage.js) isolate persistence.
+- [State store](src/core/state.js) separates cached state from remote readiness; [subscriptions](src/services/subscriptions.js) owns listener startup, teardown, and preview/full takeover.
 - [Release staging](scripts/release.mjs) validates the runtime allowlist, versions, and cache rules.
 
 
@@ -136,3 +137,13 @@ the app's code.)
   `dutyReminders`)
 - `sw.js`, `manifest.json`, `icon.svg` — make it installable on phones and
   receive background push
+
+## Fictional regression checks
+
+The UI test command uses fictional members, services, songs, and passcodes on a loopback server. It ignores UI_BASE_URL. The suite passed native Sol review8 and independent controller browser/emulator verification. It binds evidence to tested source bytes, scopes screenshots to each run, and rejects unexpected traffic and browser errors. It covers phone and desktop journeys, keyboard controls, delayed authentication, visible save failures, setlist creation races, and draft/search/scroll preservation.
+
+```sh
+WORSHIP_EVIDENCE_ROOT=/private/tmp/worship-current-qa npm --prefix /Users/anthony/Projects/worship-duty-app run test:ui
+```
+
+Current test evidence is kept separately from the original baseline and includes a source digest. [Baseline and current evidence](docs/runs/worship-refactor-20260907/research/verification/) retain known accessibility findings for the redesign; a passing functional suite is not a full accessibility verdict.

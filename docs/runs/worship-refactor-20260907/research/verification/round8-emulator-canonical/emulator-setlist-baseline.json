@@ -1,0 +1,151 @@
+{
+  "taskId": "WORSHIP-V-20260907",
+  "mode": "firestore-emulator-only",
+  "baselineReference": "5beec15d9a9299bed2c51a91c33f157fb769cd79",
+  "sourceRoot": "/Users/anthony/Projects/worship-duty-app",
+  "evidenceScope": "round8-emulator-canonical",
+  "sourceRevision": {
+    "kind": "sha256",
+    "method": "sha256-v2:path-null-byte-and-file-bytes;order=lexicographic-relative-path",
+    "fileOrder": "lexicographic relative paths",
+    "digest": "37af96cb1f58d3b5e061f255910269bb0ff4a896873b204703ca52215de3f7f5",
+    "files": [
+      "app.js",
+      "index.html",
+      "manifest.json",
+      "song-app.css",
+      "song-app.js",
+      "song-lib.js",
+      "src/core/constants.js",
+      "src/core/state.js",
+      "src/domain/coordinator.js",
+      "src/domain/member.js",
+      "src/domain/schedule.js",
+      "src/domain/sheet.js",
+      "src/services/firebase.js",
+      "src/services/storage.js",
+      "src/services/subscriptions.js",
+      "sw.js"
+    ]
+  },
+  "runtime": {
+    "node": "v24.14.1",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "projectId": "demo-worship-refactor",
+  "emulatorHost": "127.0.0.1:8193",
+  "functionsEmulation": false,
+  "functionUnderTest": "createSetlistIfAbsent",
+  "concurrency": {
+    "runCount": 2,
+    "uniqueDocumentPaths": true,
+    "overlapping": true
+  },
+  "scenarios": {
+    "existingSetlistTransaction": {
+      "status": "passed",
+      "runs": [
+        {
+          "status": "passed",
+          "path": "setlists/fixture-setlist-fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-alpha-existing",
+          "transactionReads": 1,
+          "transactionSets": 0,
+          "songs": [
+            "fixture-song-001"
+          ],
+          "elapsedMs": 36.75
+        },
+        {
+          "status": "passed",
+          "path": "setlists/fixture-setlist-fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-beta-existing",
+          "transactionReads": 1,
+          "transactionSets": 0,
+          "songs": [
+            "fixture-song-001"
+          ],
+          "elapsedMs": 35.22
+        }
+      ]
+    },
+    "missingSetlistTransaction": {
+      "status": "passed",
+      "runs": [
+        {
+          "status": "passed",
+          "path": "setlists/fixture-setlist-fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-alpha-created",
+          "transactionReads": 2,
+          "transactionSets": 1,
+          "songs": [
+            "fixture-song-003"
+          ],
+          "elapsedMs": 20.73
+        },
+        {
+          "status": "passed",
+          "path": "setlists/fixture-setlist-fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-beta-created",
+          "transactionReads": 2,
+          "transactionSets": 1,
+          "songs": [
+            "fixture-song-003"
+          ],
+          "elapsedMs": 21.92
+        }
+      ]
+    }
+  },
+  "runs": [
+    {
+      "label": "alpha",
+      "runId": "fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-alpha",
+      "startedAt": 243.221209,
+      "finishedAt": 1562.098584,
+      "existingSetlistTransaction": {
+        "status": "passed",
+        "path": "setlists/fixture-setlist-fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-alpha-existing",
+        "transactionReads": 1,
+        "transactionSets": 0,
+        "songs": [
+          "fixture-song-001"
+        ],
+        "elapsedMs": 36.75
+      },
+      "missingSetlistTransaction": {
+        "status": "passed",
+        "path": "setlists/fixture-setlist-fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-alpha-created",
+        "transactionReads": 2,
+        "transactionSets": 1,
+        "songs": [
+          "fixture-song-003"
+        ],
+        "elapsedMs": 20.73
+      }
+    },
+    {
+      "label": "beta",
+      "runId": "fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-beta",
+      "startedAt": 401.928584,
+      "finishedAt": 1559.741709,
+      "existingSetlistTransaction": {
+        "status": "passed",
+        "path": "setlists/fixture-setlist-fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-beta-existing",
+        "transactionReads": 1,
+        "transactionSets": 0,
+        "songs": [
+          "fixture-song-001"
+        ],
+        "elapsedMs": 35.22
+      },
+      "missingSetlistTransaction": {
+        "status": "passed",
+        "path": "setlists/fixture-setlist-fixture-run-93924-af47f546-a72b-4c55-a228-b694aeeb2564-beta-created",
+        "transactionReads": 2,
+        "transactionSets": 1,
+        "songs": [
+          "fixture-song-003"
+        ],
+        "elapsedMs": 21.92
+      }
+    }
+  ]
+}

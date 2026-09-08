@@ -1,0 +1,13 @@
+# Full prototype capability audit
+
+Planner Sol max read-only audit of interrupted draft, 7 September 2026. Findings concern journey coverage, not original B styling. Original B typography-only preview is the visual anchor; the rejected compact prototype is not a visual target.
+
+1. Member: gate Presider entry/service choices to actual Presider duties and show no-Presider state. Restore department filters, past services, notifications on/off, alert clearing, calendar subscribe and copy-link, full-team expansion, and request history. Check canonical renderSchedule, renderMy and renderYourRequests.
+2. Services: direct service selection, every duty including empty slots, blank unassignment, complete empty service creation (date/time/label/worship), existing-field and choir-song edits, conflict acknowledge/reopen, confirmed deletion. New services must not automatically assign sample members. Check renderManageServices, memberSelect, renderManageConflicts and relevant handlers.
+3. People: rename, remove with future-assignment impact confirmation, per-department roster editing. Check renderManagePeople and member-name/member-cat/del-member handlers.
+4. Planning: real fixture-derived conflicts with prayer-plus-usher exemption and acknowledged-conflict semantics, suggestions that change a specific assignment, next-four-week gaps, workload 4-week/8-week/upcoming/year/last/next. No hardcoded conflict text or toast-only assignment.
+5. Sync/settings: editable fictional Sheet URL, syncing/last-result/warning states, export/import local fixture backup, name unification, distinct reset confirmations. Reset must restore people/services as well as other state. Both editor and site passcode creation/change/locked/bad-entry/unlock states must work locally.
+6. Presider: notes, Glory/Thanks choose/change, actual service choir song, role-correct service choices. Changed-after-confirmation persists across saving until reconfirmed. Duplicate song occurrences are removed/reordered by index, not song ID. Keep exact existing outline and preparation duration excluding Glory/Thanks.
+7. History: planned/confirmed/changed/sung, mark-sung and undo with mutable song stats, recent-use and empty-history detail, backfill/removal, runsheet/copy/setlist-delete confirmation. Check canonical song-app renderServices/renderServiceCard/renderSongDetail/renderInsights/renderRunsheet and markSetlistSung/undoSetlistSung.
+
+Requests pending/resolved, approve/decline and opening associated service were represented. All controls simulate fictional state only. Preserve records in real production by never connecting this prototype to Firebase, seeds or external services.

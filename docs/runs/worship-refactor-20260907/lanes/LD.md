@@ -1,13 +1,13 @@
 ---
 lane: LD
 title: Design
-state: landed
+state: running
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/design
-review: direction-choice-pending
+review: corrections-3
 depends_on: none
-updated: 2026-09-08T01:31Z
+updated: 2026-09-08T14:52Z
 ---
 
 # Lane LD: Local design directions
@@ -91,3 +91,7 @@ This is a local proposal artifact. Direction selection remains pending before a 
 Component suggestions for root: preserve the shared shell and selected-member line, choose one of the three schedule composition patterns, keep the expanded nearest service as the first content block, and retain a reusable assignment row or team table with the real department and duty vocabulary.
 
 The plan Build log and Git state remain controller-owned. This lane did not mutate Git, deploy, publish, merge, or touch protected production areas. Controller review is pending.
+
+## Authoritative typography correction
+
+Anthony rejected the compact layout draft and clarified that he only wanted smaller oversized text. The original Open Bulletin layout is restored in docs/design/prototype/type-refinement. Root verified identical HTML and JavaScript to original B, and CSS differs only in font-size declarations. Phone and desktop have no horizontal overflow; original body text, palette, structure and spacing remain. Full prototype approval remains pending.

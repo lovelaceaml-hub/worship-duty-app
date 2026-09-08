@@ -52,3 +52,7 @@ Only song-app.js changes at runtime. All existing visuals, collection fields, wr
 ## Deployment
 
 Hosting release `20260908030600` deployed successfully from runtime commit `8acf332` through the staged release script. Immediate production checks matched all 18 runtime SHA-256 hashes and verified the phone passcode screen with Firebase disabled and fictional empty data. No database or notification write was used for verification.
+
+## Corrected broad suite
+
+After the test reliability corrections froze, root independently ran all 15 fictional scenarios against deployed source with zero expected regressions and zero unexpected external requests. Phone readiness: 58.03 ms; desktop: 56.75 ms on this local fixture run. Evidence is under research/confirmation-fix/controller-browser. Manage retains baseline accessibility findings for the redesign; functional passing is not an accessibility completion verdict. The Verification lane native review remains separate.

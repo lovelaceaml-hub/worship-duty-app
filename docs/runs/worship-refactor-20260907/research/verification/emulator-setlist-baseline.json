@@ -1,0 +1,32 @@
+{
+  "taskId": "WORSHIP-V-20260907",
+  "mode": "firestore-emulator-only",
+  "sourceRoot": "/Users/anthony/Projects/worship-refactor-worktrees/verification",
+  "evidenceScope": "immutable-baseline",
+  "projectId": "demo-worship-refactor",
+  "emulatorHost": "127.0.0.1:8187",
+  "functionsEmulation": false,
+  "functionUnderTest": "createSetlistIfAbsent",
+  "scenarios": {
+    "existingSetlistTransaction": {
+      "status": "passed",
+      "path": "setlists/fixture-setlist-existing",
+      "transactionReads": 1,
+      "transactionSets": 0,
+      "songs": [
+        "fixture-song-001"
+      ],
+      "elapsedMs": 18.53
+    },
+    "missingSetlistTransaction": {
+      "status": "passed",
+      "path": "setlists/fixture-setlist-created",
+      "transactionReads": 2,
+      "transactionSets": 1,
+      "songs": [
+        "fixture-song-003"
+      ],
+      "elapsedMs": 12.94
+    }
+  }
+}

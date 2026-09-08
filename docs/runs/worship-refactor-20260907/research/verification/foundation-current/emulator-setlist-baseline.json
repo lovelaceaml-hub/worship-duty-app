@@ -1,0 +1,51 @@
+{
+  "taskId": "WORSHIP-V-20260907",
+  "mode": "firestore-emulator-only",
+  "baselineReference": "5beec15d9a9299bed2c51a91c33f157fb769cd79",
+  "sourceRoot": "/Users/anthony/Projects/worship-duty-app",
+  "evidenceScope": "current-integrated-source",
+  "sourceRevision": {
+    "kind": "sha256",
+    "digest": "4032dc736506bfe0e6399af8b48a8617df5fde3f21ae8a45f9c2c86224d3d683",
+    "files": [
+      "index.html",
+      "app.js",
+      "song-app.js",
+      "song-app.css",
+      "song-lib.js",
+      "sw.js",
+      "manifest.json"
+    ]
+  },
+  "runtime": {
+    "node": "v24.14.1",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "projectId": "demo-worship-refactor",
+  "emulatorHost": "127.0.0.1:8187",
+  "functionsEmulation": false,
+  "functionUnderTest": "createSetlistIfAbsent",
+  "scenarios": {
+    "existingSetlistTransaction": {
+      "status": "passed",
+      "path": "setlists/fixture-setlist-existing",
+      "transactionReads": 1,
+      "transactionSets": 0,
+      "songs": [
+        "fixture-song-001"
+      ],
+      "elapsedMs": 13.69
+    },
+    "missingSetlistTransaction": {
+      "status": "passed",
+      "path": "setlists/fixture-setlist-created",
+      "transactionReads": 2,
+      "transactionSets": 1,
+      "songs": [
+        "fixture-song-003"
+      ],
+      "elapsedMs": 6.63
+    }
+  }
+}

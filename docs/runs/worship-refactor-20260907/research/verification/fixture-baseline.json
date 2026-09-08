@@ -1,0 +1,616 @@
+{
+  "taskId": "WORSHIP-V-20260907",
+  "baselineCommit": "5beec15d9a9299bed2c51a91c33f157fb769cd79",
+  "mode": "fixture-only-loopback",
+  "sourceRoot": "/Users/anthony/Projects/worship-refactor-worktrees/verification",
+  "evidenceScope": "immutable-baseline",
+  "fixtures": {
+    "members": 3,
+    "services": 2,
+    "songs": 4
+  },
+  "scenarios": {
+    "seededSchedule": {
+      "status": "covered",
+      "detail": "local fixture rendered 3 fictional members",
+      "axe": {
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "targets": [
+              [
+                ".cat-label:nth-child(3)"
+              ],
+              [
+                ".cat-label:nth-child(8)"
+              ],
+              [
+                ".card:nth-child(5) > .cat-label"
+              ]
+            ]
+          }
+        ],
+        "passes": 25,
+        "incomplete": 0
+      },
+      "screenshot": "/Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/research/verification/screenshots/local-seeded-phone.png"
+    },
+    "manualDutyMerge": {
+      "status": "covered",
+      "detail": "pure sheet merge preserved an unmanaged duty",
+      "result": {
+        "added": 0,
+        "updated": 1
+      }
+    },
+    "yearBoundaries": {
+      "status": "covered",
+      "detail": "pure month/day inference covered both year transitions",
+      "result": {
+        "januaryAfterDecember": "2027-01-02",
+        "decemberBeforeJanuary": "2025-12-31"
+      }
+    },
+    "authWait": {
+      "status": "covered",
+      "detail": "pure write gate remained pending until auth resolved",
+      "result": {
+        "ranBeforeRelease": false,
+        "ranAfterRelease": true
+      }
+    },
+    "manageJourney": {
+      "status": "covered",
+      "detail": "fictional editor unlock changed a schedule assignment through the auth-gated fake write boundary",
+      "result": {
+        "assignment": "Casey Example",
+        "authSignedIn": true,
+        "unlocked": true,
+        "writes": [
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07"
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07"
+          },
+          {
+            "operation": "setDoc",
+            "collection": "app",
+            "id": "nameMap"
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07"
+          },
+          {
+            "operation": "setDoc",
+            "collection": "schedule",
+            "id": "2026-09-12_morning"
+          }
+        ],
+        "axe": {
+          "violations": [
+            {
+              "id": "label",
+              "impact": "critical",
+              "targets": [
+                [
+                  "#svc-date"
+                ],
+                [
+                  "#svc-time"
+                ],
+                [
+                  "input[value=\"2026-09-12\"]"
+                ],
+                [
+                  "input[data-field=\"time\"]"
+                ],
+                [
+                  "input[value=\"Fixture Sabbath\"]"
+                ]
+              ]
+            },
+            {
+              "id": "select-name",
+              "impact": "critical",
+              "targets": [
+                [
+                  "#svc-label"
+                ],
+                [
+                  "select[data-duty=\"Presider\"]"
+                ],
+                [
+                  "select[data-duty=\"Sermon\"]"
+                ],
+                [
+                  "select[data-duty=\"Prayer of Thanks\"]"
+                ],
+                [
+                  "select[data-duty=\"Closing Prayer\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher Door\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher Front\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher Back\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Lobby Security\"]"
+                ],
+                [
+                  "select[data-duty=\"Lobby Desk #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Lobby Desk #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Translation #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Translation #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Media Booth #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Media Booth #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #3\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #4\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #5\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #3\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #4\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #5\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #6\"]"
+                ]
+              ]
+            }
+          ],
+          "passes": 28,
+          "incomplete": 0
+        },
+        "screenshot": "/Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/research/verification/screenshots/manage-phone.png",
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": []
+        },
+        "consoleErrors": []
+      }
+    },
+    "memberJourney": {
+      "status": "covered",
+      "detail": "fictional member selection rendered duties and presider access"
+    },
+    "presiderRemount": {
+      "status": "covered",
+      "detail": "second mount accepted Library search input and rendered fixture song"
+    },
+    "domFocus": {
+      "status": "covered",
+      "detail": "schedule snapshot preserved focused Library search on phone and desktop"
+    },
+    "songCreateBeforeSnapshot": {
+      "status": "covered",
+      "detail": "transaction read an existing setlist before delayed snapshot and did not set it",
+      "result": {
+        "openMs": 206.01,
+        "transactionReads": [
+          "setlists/2026-09-12_morning"
+        ],
+        "transactionSets": [],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    },
+    "confirmation": {
+      "status": "covered",
+      "detail": "fictional setlist entered confirmed state through fake write boundary",
+      "result": {
+        "confirmed": 1,
+        "writes": [
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07"
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07"
+          },
+          {
+            "operation": "setDoc",
+            "collection": "app",
+            "id": "nameMap"
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07"
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07"
+          },
+          {
+            "operation": "updateDoc",
+            "collection": "setlists",
+            "id": "2026-09-12_morning"
+          }
+        ],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]",
+            "https://script.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    },
+    "saveErrors": {
+      "status": "covered",
+      "detail": "failed fake setlist writes surfaced a user-facing save error",
+      "result": {
+        "dialogs": [
+          {
+            "type": "alert",
+            "message": "That change could not be saved. Check your connection and try again."
+          }
+        ],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    }
+  },
+  "viewports": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "timings": {
+        "navigationMs": 26.93,
+        "readyMs": 51.73,
+        "presiderMs": 280.19
+      },
+      "screenshots": [
+        "/Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/research/verification/screenshots/phone-schedule.png",
+        "/Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/research/verification/screenshots/phone-my-duties.png",
+        "/Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/research/verification/screenshots/phone-presider.png"
+      ],
+      "axe": {
+        "schedule": {
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "targets": [
+                [
+                  "button[data-val=\"Worship\"]"
+                ],
+                [
+                  "button[data-val=\"Usher Sisters\"]"
+                ],
+                [
+                  "button[data-val=\"Usher Brothers\"]"
+                ],
+                [
+                  "button[data-val=\"Lobby\"]"
+                ],
+                [
+                  "button[data-val=\"Translation\"]"
+                ],
+                [
+                  "button[data-val=\"Media\"]"
+                ],
+                [
+                  "button[data-val=\"Parking Lot\"]"
+                ],
+                [
+                  "button[data-val=\"Offering\"]"
+                ],
+                [
+                  ".card:nth-child(3) > .card-head > .svc-title > small"
+                ],
+                [
+                  ".card:nth-child(3) > .card-head > .time"
+                ],
+                [
+                  ".choir-song"
+                ],
+                [
+                  ".cat-label:nth-child(3)"
+                ],
+                [
+                  ".card:nth-child(3) > .duty-row:nth-child(4) > .dname"
+                ],
+                [
+                  ".card:nth-child(3) > .duty-row:nth-child(5) > .dname"
+                ],
+                [
+                  ".duty-row:nth-child(6) > .dname"
+                ],
+                [
+                  ".duty-row:nth-child(7) > .dname"
+                ],
+                [
+                  ".cat-label:nth-child(8)"
+                ],
+                [
+                  ".duty-row:nth-child(9) > .dname"
+                ],
+                [
+                  ".card:nth-child(5) > .card-head > .svc-title > small"
+                ],
+                [
+                  ".card:nth-child(5) > .card-head > .time"
+                ],
+                [
+                  ".card:nth-child(5) > .cat-label"
+                ],
+                [
+                  ".duty-row:nth-child(3) > .dname"
+                ],
+                [
+                  ".card:nth-child(5) > .duty-row:nth-child(4) > .dname"
+                ],
+                [
+                  ".card:nth-child(5) > .duty-row:nth-child(5) > .dname"
+                ]
+              ]
+            }
+          ],
+          "passes": 25,
+          "incomplete": 0
+        },
+        "myDuties": {
+          "violations": [],
+          "passes": 29,
+          "incomplete": 1
+        },
+        "presider": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        }
+      },
+      "network": {
+        "blocked": [],
+        "moduleIntercepts": [
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]"
+        ],
+        "unexpected": [],
+        "fetchGuard": [
+          "https://docs.google.com [fetch-denied]"
+        ]
+      },
+      "consoleErrors": []
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "timings": {
+        "navigationMs": 23.86,
+        "readyMs": 53.84,
+        "presiderMs": 297.37
+      },
+      "screenshots": [
+        "/Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/research/verification/screenshots/desktop-schedule.png",
+        "/Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/research/verification/screenshots/desktop-my-duties.png",
+        "/Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/research/verification/screenshots/desktop-presider.png"
+      ],
+      "axe": {
+        "schedule": {
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "targets": [
+                [
+                  "button[data-val=\"All\"]"
+                ],
+                [
+                  "button[data-val=\"Worship\"]"
+                ],
+                [
+                  "button[data-val=\"Usher Sisters\"]"
+                ],
+                [
+                  "button[data-val=\"Usher Brothers\"]"
+                ],
+                [
+                  "button[data-val=\"Lobby\"]"
+                ],
+                [
+                  "button[data-val=\"Translation\"]"
+                ],
+                [
+                  "button[data-val=\"Media\"]"
+                ],
+                [
+                  "button[data-val=\"Parking Lot\"]"
+                ],
+                [
+                  "button[data-val=\"Offering\"]"
+                ],
+                [
+                  ".card:nth-child(3) > .card-head > .svc-title > small"
+                ],
+                [
+                  ".card:nth-child(3) > .card-head > .time"
+                ],
+                [
+                  ".choir-song"
+                ],
+                [
+                  ".cat-label:nth-child(3)"
+                ],
+                [
+                  ".card:nth-child(3) > .duty-row:nth-child(4) > .dname"
+                ],
+                [
+                  ".card:nth-child(3) > .duty-row:nth-child(5) > .dname"
+                ],
+                [
+                  ".duty-row:nth-child(6) > .dname"
+                ],
+                [
+                  ".duty-row:nth-child(7) > .dname"
+                ],
+                [
+                  ".cat-label:nth-child(8)"
+                ],
+                [
+                  ".duty-row:nth-child(9) > .dname"
+                ],
+                [
+                  ".card:nth-child(5) > .card-head > .svc-title > small"
+                ],
+                [
+                  ".card:nth-child(5) > .card-head > .time"
+                ],
+                [
+                  ".card:nth-child(5) > .cat-label"
+                ],
+                [
+                  ".duty-row:nth-child(3) > .dname"
+                ],
+                [
+                  ".card:nth-child(5) > .duty-row:nth-child(4) > .dname"
+                ],
+                [
+                  ".card:nth-child(5) > .duty-row:nth-child(5) > .dname"
+                ]
+              ]
+            }
+          ],
+          "passes": 25,
+          "incomplete": 0
+        },
+        "myDuties": {
+          "violations": [],
+          "passes": 29,
+          "incomplete": 1
+        },
+        "presider": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        }
+      },
+      "network": {
+        "blocked": [],
+        "moduleIntercepts": [
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]"
+        ],
+        "unexpected": [],
+        "fetchGuard": [
+          "https://docs.google.com [fetch-denied]"
+        ]
+      },
+      "consoleErrors": []
+    }
+  ],
+  "network": {
+    "blocked": [],
+    "moduleIntercepts": [
+      "https://www.gstatic.com [firebase-module-fixture]"
+    ],
+    "fetchGuard": [
+      "https://docs.google.com [fetch-denied]",
+      "https://script.google.com [fetch-denied]"
+    ],
+    "unexpected": []
+  },
+  "timingUnits": "milliseconds"
+}

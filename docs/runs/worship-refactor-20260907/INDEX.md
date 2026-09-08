@@ -21,8 +21,8 @@ Coordinator: current Codex task with coordinator_terra supervision
 | LF2 | Foundation state and subscriptions | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-state | Sol-pass | LF,LR |
 | LF3 | Pure member and coordinator selectors | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-domain | Sol-pass | LF2 |
 | LR | Release machinery | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/release | Sol-pass | none |
-| LD | Design | running | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | original-B-smaller-text | none |
-| LV | Verification | blocked | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/verification | Anthony-decision-after-review5 | none |
+| LD | Design | running | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | corrections-3 | none |
+| LV | Verification | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/verification | Sol-pass | none |
 | LM | Member experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
 | LP | Presider experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
 | LC | Coordinator experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
@@ -46,8 +46,8 @@ Coordinator: current Codex task with coordinator_terra supervision
 <!-- lane: L0 state: reviewed model: gpt-5.6-sol worktree: /Users/anthony/Projects/worship-duty-app review: architecture approved updated: 2026-09-08T00:39Z -->
 <!-- lane: LF state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation review: Sol-pass updated: 2026-09-08T01:47Z -->
 <!-- lane: LR state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/release review: Sol-pass updated: 2026-09-08T01:47Z -->
-<!-- lane: LD state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/design review: original-B-smaller-text updated: 2026-09-08T03:36Z -->
-<!-- lane: LV state: blocked model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/verification review: Anthony-decision-after-review5 updated: 2026-09-08T04:29Z -->
+<!-- lane: LD state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/design review: corrections-3 updated: 2026-09-08T14:52Z -->
+<!-- lane: LV state: reviewed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/verification review: Sol-pass updated: 2026-09-08T14:52Z -->
 <!-- lane: LM state: planned model: gpt-5.6-luna worktree: pending review: pending updated: 2026-09-08T00:42Z -->
 <!-- lane: LP state: planned model: gpt-5.6-luna worktree: pending review: pending updated: 2026-09-08T00:42Z -->
 <!-- lane: LC state: planned model: gpt-5.6-luna worktree: pending review: pending updated: 2026-09-08T00:42Z -->

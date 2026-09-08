@@ -1,0 +1,200 @@
+{
+  "screenshots": [
+    {
+      "screen": "home",
+      "viewport": "phone",
+      "filename": "open-bulletin-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": 394.5625,
+      "title": "Worship schedule, LV Zion Worship Service"
+    },
+    {
+      "screen": "home",
+      "viewport": "desktop",
+      "filename": "open-bulletin-1440x1000.png",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "firstCardY": 576.0625,
+      "title": "Worship schedule, LV Zion Worship Service"
+    },
+    {
+      "screen": "duty",
+      "viewport": "phone",
+      "filename": "duty-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": null,
+      "title": "Duty, LV Zion Worship Service"
+    },
+    {
+      "screen": "duty",
+      "viewport": "desktop",
+      "filename": "duty-1440x1000.png",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "firstCardY": null,
+      "title": "Duty, LV Zion Worship Service"
+    },
+    {
+      "screen": "presider",
+      "viewport": "phone",
+      "filename": "presider-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": null,
+      "title": "Presider, LV Zion Worship Service"
+    },
+    {
+      "screen": "presider",
+      "viewport": "desktop",
+      "filename": "presider-1440x1000.png",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "firstCardY": null,
+      "title": "Presider, LV Zion Worship Service"
+    },
+    {
+      "screen": "manage",
+      "viewport": "phone",
+      "filename": "manage-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": null,
+      "title": "Manage, LV Zion Worship Service"
+    },
+    {
+      "screen": "manage",
+      "viewport": "desktop",
+      "filename": "manage-1440x1000.png",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "firstCardY": null,
+      "title": "Manage, LV Zion Worship Service"
+    },
+    {
+      "screen": "empty",
+      "viewport": "phone",
+      "filename": "state-empty-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": null,
+      "title": "Empty, LV Zion Worship Service"
+    },
+    {
+      "screen": "loading",
+      "viewport": "phone",
+      "filename": "state-loading-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": null,
+      "title": "Loading, LV Zion Worship Service"
+    },
+    {
+      "screen": "offline",
+      "viewport": "phone",
+      "filename": "state-offline-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": null,
+      "title": "Offline, LV Zion Worship Service"
+    },
+    {
+      "screen": "error",
+      "viewport": "phone",
+      "filename": "state-error-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": null,
+      "title": "Error, LV Zion Worship Service"
+    },
+    {
+      "screen": "success",
+      "viewport": "phone",
+      "filename": "state-success-390x844.png",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "firstCardY": null,
+      "title": "Success, LV Zion Worship Service"
+    }
+  ],
+  "axe": [
+    {
+      "screen": "home",
+      "viewport": "phone",
+      "violations": []
+    },
+    {
+      "screen": "home",
+      "viewport": "desktop",
+      "violations": []
+    },
+    {
+      "screen": "duty",
+      "viewport": "phone",
+      "violations": []
+    },
+    {
+      "screen": "presider",
+      "viewport": "phone",
+      "violations": []
+    },
+    {
+      "screen": "manage",
+      "viewport": "phone",
+      "violations": []
+    },
+    {
+      "screen": "manage",
+      "viewport": "desktop",
+      "violations": []
+    },
+    {
+      "screen": "empty",
+      "viewport": "phone",
+      "violations": []
+    },
+    {
+      "screen": "loading",
+      "viewport": "phone",
+      "violations": []
+    },
+    {
+      "screen": "offline",
+      "viewport": "phone",
+      "violations": []
+    },
+    {
+      "screen": "error",
+      "viewport": "phone",
+      "violations": []
+    },
+    {
+      "screen": "success",
+      "viewport": "phone",
+      "violations": []
+    }
+  ],
+  "flow": {
+    "home": "PASS",
+    "requests": "PASS",
+    "presider": "PASS",
+    "saveRecovery": "PASS",
+    "manage": "PASS",
+    "recovery": "PASS",
+    "keyboard": "PASS"
+  }
+}

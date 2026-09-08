@@ -1,0 +1,3278 @@
+{
+  "taskId": "WORSHIP-V-20260907",
+  "baselineReference": "5beec15d9a9299bed2c51a91c33f157fb769cd79",
+  "mode": "fixture-only-loopback",
+  "sourceRoot": "/Users/anthony/Projects/worship-duty-app",
+  "evidenceScope": "round5-final-canonical-manage-phone-desktop",
+  "sourceRevision": {
+    "kind": "sha256",
+    "method": "sha256-v2:path-null-byte-and-file-bytes;order=lexicographic-relative-path",
+    "fileOrder": "lexicographic relative paths",
+    "digest": "37af96cb1f58d3b5e061f255910269bb0ff4a896873b204703ca52215de3f7f5",
+    "files": [
+      "app.js",
+      "index.html",
+      "manifest.json",
+      "song-app.css",
+      "song-app.js",
+      "song-lib.js",
+      "src/core/constants.js",
+      "src/core/state.js",
+      "src/domain/coordinator.js",
+      "src/domain/member.js",
+      "src/domain/schedule.js",
+      "src/domain/sheet.js",
+      "src/services/firebase.js",
+      "src/services/storage.js",
+      "src/services/subscriptions.js",
+      "sw.js"
+    ]
+  },
+  "runtime": {
+    "node": "v24.14.1",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "fixtures": {
+    "members": 3,
+    "services": 2,
+    "songs": 4
+  },
+  "accessibility": {
+    "fullAccessibilityPass": false,
+    "guard": "per-view exact finding allowlist",
+    "capturedViews": [
+      "desktop-insights",
+      "desktop-library-empty",
+      "desktop-my-duties",
+      "desktop-presider",
+      "desktop-schedule",
+      "desktop-services",
+      "local-seeded-phone",
+      "manage-desktop",
+      "manage-phone",
+      "phone-insights",
+      "phone-library-empty",
+      "phone-my-duties",
+      "phone-presider",
+      "phone-schedule",
+      "phone-services",
+      "site-lock-phone",
+      "site-unlocked-phone"
+    ],
+    "knownBaselineFindings": {
+      "desktop-insights": [],
+      "desktop-library-empty": [],
+      "desktop-my-duties": [],
+      "desktop-presider": [],
+      "desktop-schedule": [],
+      "desktop-services": [],
+      "local-seeded-phone": [],
+      "manage-desktop": [
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "#svc-date"
+          ]
+        },
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "#svc-time"
+          ]
+        },
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "input[value=\"2026-09-12\"]"
+          ]
+        },
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "input[data-field=\"time\"]"
+          ]
+        },
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "input[value=\"Fixture Sabbath\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "#svc-label"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Presider\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Sermon\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Prayer of Thanks\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Closing Prayer\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher Door\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher Front\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher Back\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Lobby Security\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Lobby Desk #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Lobby Desk #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Translation #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Translation #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Media Booth #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Media Booth #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #3\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #4\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #5\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #3\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #4\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #5\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #6\"]"
+          ]
+        }
+      ],
+      "manage-phone": [
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "#svc-date"
+          ]
+        },
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "#svc-time"
+          ]
+        },
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "input[value=\"2026-09-12\"]"
+          ]
+        },
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "input[data-field=\"time\"]"
+          ]
+        },
+        {
+          "id": "label",
+          "impact": "critical",
+          "target": [
+            "input[value=\"Fixture Sabbath\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "#svc-label"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Presider\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Sermon\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Prayer of Thanks\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Closing Prayer\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher Door\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher Front\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher Back\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Usher #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Lobby Security\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Lobby Desk #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Lobby Desk #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Translation #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Translation #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Media Booth #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Media Booth #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #3\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #4\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Parking #5\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #1\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #2\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #3\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #4\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #5\"]"
+          ]
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "target": [
+            "select[data-duty=\"Offering #6\"]"
+          ]
+        }
+      ],
+      "phone-insights": [],
+      "phone-library-empty": [],
+      "phone-my-duties": [],
+      "phone-presider": [],
+      "phone-schedule": [],
+      "phone-services": [],
+      "site-lock-phone": [],
+      "site-unlocked-phone": []
+    }
+  },
+  "scenarios": {
+    "axeGuard": {
+      "status": "covered",
+      "detail": "per-view axe guard rejected serious, moderate, critical, other-view, and duplicate-node regressions",
+      "result": {
+        "checkedImpacts": [
+          "serious",
+          "moderate",
+          "critical"
+        ],
+        "checkedViews": [
+          "phone-schedule",
+          "phone-my-duties",
+          "manage-phone",
+          "site-lock-phone"
+        ],
+        "duplicateCount": true,
+        "passed": true
+      }
+    },
+    "launchCleanup": {
+      "status": "covered",
+      "detail": "injected Chromium launch failure closed its loopback fixture server",
+      "result": {
+        "status": "passed",
+        "serverClosed": true
+      }
+    },
+    "seededSchedule": {
+      "status": "covered",
+      "detail": "local fixture rendered 3 fictional members",
+      "axe": {
+        "violations": [],
+        "passes": 25,
+        "incomplete": 0
+      },
+      "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/local-seeded-phone.png"
+    },
+    "manualDutyMerge": {
+      "status": "covered",
+      "detail": "pure sheet merge preserved an unmanaged duty",
+      "result": {
+        "services": [
+          {
+            "date": "2026-09-12",
+            "time": "09:00",
+            "service": "Morning",
+            "worship": "Fixture Sabbath",
+            "choirSong": "Fixture Choir Song",
+            "assignments": {
+              "Presider": "Robin Sample",
+              "Sermon": "Casey Example",
+              "Prayer of Thanks": "Jordan Fixture",
+              "Closing Prayer": "Robin Sample",
+              "Usher Door": "Casey Example"
+            }
+          }
+        ],
+        "departments": {
+          "Worship": [
+            "Casey Example",
+            "Jordan Fixture",
+            "Robin Sample"
+          ],
+          "Usher Sisters": [
+            "Casey Example"
+          ],
+          "Usher Brothers": [
+            "Jordan Fixture"
+          ],
+          "Lobby": [
+            "Robin Sample"
+          ],
+          "Translation": [
+            "Casey Example"
+          ],
+          "Media": [
+            "Robin Sample"
+          ],
+          "Parking Lot": [
+            "Jordan Fixture"
+          ],
+          "Offering": [
+            "Casey Example"
+          ]
+        },
+        "added": 0,
+        "updated": 1,
+        "addedServices": [],
+        "updatedServices": [
+          {
+            "date": "2026-09-12",
+            "time": "09:00",
+            "service": "Morning",
+            "worship": "Fixture Sabbath",
+            "choirSong": "Fixture Choir Song",
+            "assignments": {
+              "Presider": "Robin Sample",
+              "Sermon": "Casey Example",
+              "Prayer of Thanks": "Jordan Fixture",
+              "Closing Prayer": "Robin Sample",
+              "Usher Door": "Casey Example"
+            }
+          }
+        ],
+        "departmentsChanged": false
+      }
+    },
+    "yearBoundaries": {
+      "status": "covered",
+      "detail": "pure month/day inference covered both year transitions",
+      "result": {
+        "januaryAfterDecember": "2027-01-02",
+        "decemberBeforeJanuary": "2025-12-31"
+      }
+    },
+    "authWait": {
+      "status": "covered",
+      "detail": "pure write gate remained pending until auth resolved",
+      "result": {
+        "ranBeforeRelease": false,
+        "ranAfterRelease": true,
+        "blockedMs": 0.01,
+        "releaseToWriteMs": 0.01
+      }
+    },
+    "siteLock": {
+      "status": "covered",
+      "detail": "fictional whole-site passcode lock rendered, passed axe, and unlocked with a fixture passcode",
+      "result": {
+        "locked": {
+          "axe": {
+            "violations": [],
+            "passes": 28,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "site-lock-phone",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          },
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/site-lock-phone.png"
+        },
+        "unlocked": {
+          "axe": {
+            "violations": [],
+            "passes": 25,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "site-unlocked-phone",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          },
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/site-unlocked-phone.png"
+        },
+        "feature": {
+          "siteLock": true,
+          "unlocked": true
+        },
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": []
+        },
+        "consoleErrors": []
+      }
+    },
+    "manageJourney": {
+      "status": "covered",
+      "detail": "fictional editor unlock changed a schedule assignment through the auth-gated fake write boundary on phone and desktop",
+      "result": {
+        "phone": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "assignment": "Casey Example",
+          "authSignedIn": true,
+          "unlocked": true,
+          "writes": [
+            {
+              "operation": "setDoc",
+              "collection": "app",
+              "id": "nameMap",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 186,
+              "order": 6
+            },
+            {
+              "operation": "setDoc",
+              "collection": "schedule",
+              "id": "2026-09-12_morning",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 186,
+              "order": 8
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 188,
+              "order": 10
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 188,
+              "order": 12
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 188,
+              "order": 14
+            }
+          ],
+          "attempts": [
+            {
+              "operation": "qaProbe",
+              "collection": "schedule",
+              "id": "fixture-preauth-probe",
+              "requiresAuth": true,
+              "authSignedIn": false,
+              "at": 48,
+              "order": 2,
+              "rejected": true
+            },
+            {
+              "operation": "setDoc",
+              "collection": "app",
+              "id": "nameMap",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 186,
+              "order": 5,
+              "rejected": false
+            },
+            {
+              "operation": "setDoc",
+              "collection": "schedule",
+              "id": "2026-09-12_morning",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 186,
+              "order": 7,
+              "rejected": false
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 188,
+              "order": 9,
+              "rejected": false
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 188,
+              "order": 11,
+              "rejected": false
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 188,
+              "order": 13,
+              "rejected": false
+            }
+          ],
+          "preAuthHostWriteCount": 0,
+          "preAuthHostAttemptCount": 0,
+          "preAuthRejectedAttemptCount": 0,
+          "editObservedBeforeRelease": true,
+          "eventSequence": [
+            {
+              "kind": "auth",
+              "event": "started",
+              "at": 45,
+              "order": 1
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 48,
+              "order": 2,
+              "operation": "qaProbe",
+              "collection": "schedule",
+              "id": "fixture-preauth-probe",
+              "requiresAuth": true,
+              "authSignedIn": false
+            },
+            {
+              "kind": "auth",
+              "event": "released",
+              "at": 186,
+              "order": 3
+            },
+            {
+              "kind": "auth",
+              "event": "ready",
+              "at": 186,
+              "order": 4
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 186,
+              "order": 5,
+              "operation": "setDoc",
+              "collection": "app",
+              "id": "nameMap",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 186,
+              "order": 6,
+              "operation": "setDoc",
+              "collection": "app",
+              "id": "nameMap",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 186,
+              "order": 7,
+              "operation": "setDoc",
+              "collection": "schedule",
+              "id": "2026-09-12_morning",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 186,
+              "order": 8,
+              "operation": "setDoc",
+              "collection": "schedule",
+              "id": "2026-09-12_morning",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 188,
+              "order": 9,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 188,
+              "order": 10,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 188,
+              "order": 11,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 188,
+              "order": 12,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 188,
+              "order": 13,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 188,
+              "order": 14,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            }
+          ],
+          "authTiming": {
+            "editStartedAt": 176,
+            "editInitiatedAt": 185,
+            "authStartedAt": 45,
+            "authReadyAt": 186,
+            "scheduleWriteAt": 186,
+            "scheduleWriteOrder": 8,
+            "editToAuthReadyMs": 10,
+            "authToScheduleWriteMs": 0
+          },
+          "preAuthProbe": {
+            "rejected": true,
+            "code": "unauthenticated"
+          },
+          "axe": {
+            "violations": [
+              {
+                "id": "label",
+                "impact": "critical",
+                "targets": [
+                  [
+                    "#svc-date"
+                  ],
+                  [
+                    "#svc-time"
+                  ],
+                  [
+                    "input[value=\"2026-09-12\"]"
+                  ],
+                  [
+                    "input[data-field=\"time\"]"
+                  ],
+                  [
+                    "input[value=\"Fixture Sabbath\"]"
+                  ]
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "targets": [
+                  [
+                    "#svc-label"
+                  ],
+                  [
+                    "select[data-duty=\"Presider\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Sermon\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Prayer of Thanks\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Closing Prayer\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher Door\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher Front\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher Back\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Lobby Security\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Lobby Desk #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Lobby Desk #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Translation #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Translation #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Media Booth #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Media Booth #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #3\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #4\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #5\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #3\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #4\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #5\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #6\"]"
+                  ]
+                ]
+              }
+            ],
+            "passes": 28,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "manage-phone",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "#svc-date"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "#svc-time"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[value=\"2026-09-12\"]"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[data-field=\"time\"]"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[value=\"Fixture Sabbath\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "#svc-label"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Presider\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Sermon\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Prayer of Thanks\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Closing Prayer\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Door\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Front\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Back\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Security\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Desk #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Desk #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Translation #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Translation #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Media Booth #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Media Booth #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #3\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #4\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #5\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #3\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #4\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #5\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #6\"]"
+                ]
+              }
+            ],
+            "observedFindings": [
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "#svc-date"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "#svc-time"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[value=\"2026-09-12\"]"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[data-field=\"time\"]"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[value=\"Fixture Sabbath\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "#svc-label"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Presider\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Sermon\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Prayer of Thanks\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Closing Prayer\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Door\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Front\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Back\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Security\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Desk #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Desk #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Translation #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Translation #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Media Booth #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Media Booth #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #3\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #4\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #5\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #3\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #4\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #5\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #6\"]"
+                ]
+              }
+            ],
+            "unexpectedFindings": [],
+            "overages": []
+          },
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/manage-phone.png",
+          "network": {
+            "blocked": [],
+            "moduleIntercepts": [
+              "https://www.gstatic.com [firebase-module-fixture]",
+              "https://www.gstatic.com [firebase-module-fixture]",
+              "https://www.gstatic.com [firebase-module-fixture]",
+              "https://www.gstatic.com [firebase-module-fixture]"
+            ],
+            "unexpected": [],
+            "fetchGuard": []
+          },
+          "consoleErrors": []
+        },
+        "desktop": {
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          },
+          "assignment": "Casey Example",
+          "authSignedIn": true,
+          "unlocked": true,
+          "writes": [
+            {
+              "operation": "setDoc",
+              "collection": "app",
+              "id": "nameMap",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 173,
+              "order": 6
+            },
+            {
+              "operation": "setDoc",
+              "collection": "schedule",
+              "id": "2026-09-12_morning",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 173,
+              "order": 8
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 174,
+              "order": 10
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 174,
+              "order": 12
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 174,
+              "order": 14
+            }
+          ],
+          "attempts": [
+            {
+              "operation": "qaProbe",
+              "collection": "schedule",
+              "id": "fixture-preauth-probe",
+              "requiresAuth": true,
+              "authSignedIn": false,
+              "at": 48,
+              "order": 2,
+              "rejected": true
+            },
+            {
+              "operation": "setDoc",
+              "collection": "app",
+              "id": "nameMap",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 173,
+              "order": 5,
+              "rejected": false
+            },
+            {
+              "operation": "setDoc",
+              "collection": "schedule",
+              "id": "2026-09-12_morning",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 173,
+              "order": 7,
+              "rejected": false
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 174,
+              "order": 9,
+              "rejected": false
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 174,
+              "order": 11,
+              "rejected": false
+            },
+            {
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true,
+              "at": 174,
+              "order": 13,
+              "rejected": false
+            }
+          ],
+          "preAuthHostWriteCount": 0,
+          "preAuthHostAttemptCount": 0,
+          "preAuthRejectedAttemptCount": 0,
+          "editObservedBeforeRelease": true,
+          "eventSequence": [
+            {
+              "kind": "auth",
+              "event": "started",
+              "at": 44,
+              "order": 1
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 48,
+              "order": 2,
+              "operation": "qaProbe",
+              "collection": "schedule",
+              "id": "fixture-preauth-probe",
+              "requiresAuth": true,
+              "authSignedIn": false
+            },
+            {
+              "kind": "auth",
+              "event": "released",
+              "at": 173,
+              "order": 3
+            },
+            {
+              "kind": "auth",
+              "event": "ready",
+              "at": 173,
+              "order": 4
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 173,
+              "order": 5,
+              "operation": "setDoc",
+              "collection": "app",
+              "id": "nameMap",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 173,
+              "order": 6,
+              "operation": "setDoc",
+              "collection": "app",
+              "id": "nameMap",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 173,
+              "order": 7,
+              "operation": "setDoc",
+              "collection": "schedule",
+              "id": "2026-09-12_morning",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 173,
+              "order": 8,
+              "operation": "setDoc",
+              "collection": "schedule",
+              "id": "2026-09-12_morning",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 174,
+              "order": 9,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 174,
+              "order": 10,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 174,
+              "order": 11,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 174,
+              "order": 12,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "attempt",
+              "at": 174,
+              "order": 13,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            },
+            {
+              "kind": "firestore",
+              "event": "write",
+              "at": 174,
+              "order": 14,
+              "operation": "setDoc",
+              "collection": "pulse",
+              "id": "2026-09-07",
+              "requiresAuth": true,
+              "authSignedIn": true
+            }
+          ],
+          "authTiming": {
+            "editStartedAt": 162,
+            "editInitiatedAt": 172,
+            "authStartedAt": 44,
+            "authReadyAt": 173,
+            "scheduleWriteAt": 173,
+            "scheduleWriteOrder": 8,
+            "editToAuthReadyMs": 11,
+            "authToScheduleWriteMs": 0
+          },
+          "preAuthProbe": {
+            "rejected": true,
+            "code": "unauthenticated"
+          },
+          "axe": {
+            "violations": [
+              {
+                "id": "label",
+                "impact": "critical",
+                "targets": [
+                  [
+                    "#svc-date"
+                  ],
+                  [
+                    "#svc-time"
+                  ],
+                  [
+                    "input[value=\"2026-09-12\"]"
+                  ],
+                  [
+                    "input[data-field=\"time\"]"
+                  ],
+                  [
+                    "input[value=\"Fixture Sabbath\"]"
+                  ]
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "targets": [
+                  [
+                    "#svc-label"
+                  ],
+                  [
+                    "select[data-duty=\"Presider\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Sermon\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Prayer of Thanks\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Closing Prayer\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher Door\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher Front\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher Back\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Usher #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Lobby Security\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Lobby Desk #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Lobby Desk #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Translation #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Translation #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Media Booth #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Media Booth #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #3\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #4\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Parking #5\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #1\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #2\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #3\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #4\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #5\"]"
+                  ],
+                  [
+                    "select[data-duty=\"Offering #6\"]"
+                  ]
+                ]
+              }
+            ],
+            "passes": 28,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "manage-desktop",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "#svc-date"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "#svc-time"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[value=\"2026-09-12\"]"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[data-field=\"time\"]"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[value=\"Fixture Sabbath\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "#svc-label"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Presider\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Sermon\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Prayer of Thanks\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Closing Prayer\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Door\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Front\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Back\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Security\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Desk #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Desk #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Translation #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Translation #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Media Booth #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Media Booth #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #3\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #4\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #5\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #3\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #4\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #5\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #6\"]"
+                ]
+              }
+            ],
+            "observedFindings": [
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "#svc-date"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "#svc-time"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[value=\"2026-09-12\"]"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[data-field=\"time\"]"
+                ]
+              },
+              {
+                "id": "label",
+                "impact": "critical",
+                "target": [
+                  "input[value=\"Fixture Sabbath\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "#svc-label"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Presider\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Sermon\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Prayer of Thanks\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Closing Prayer\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Door\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Front\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher Back\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Usher #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Security\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Desk #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Lobby Desk #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Translation #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Translation #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Media Booth #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Media Booth #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #3\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #4\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Parking #5\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #1\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #2\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #3\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #4\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #5\"]"
+                ]
+              },
+              {
+                "id": "select-name",
+                "impact": "critical",
+                "target": [
+                  "select[data-duty=\"Offering #6\"]"
+                ]
+              }
+            ],
+            "unexpectedFindings": [],
+            "overages": []
+          },
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/manage-desktop.png",
+          "network": {
+            "blocked": [],
+            "moduleIntercepts": [
+              "https://www.gstatic.com [firebase-module-fixture]",
+              "https://www.gstatic.com [firebase-module-fixture]",
+              "https://www.gstatic.com [firebase-module-fixture]",
+              "https://www.gstatic.com [firebase-module-fixture]"
+            ],
+            "unexpected": [],
+            "fetchGuard": []
+          },
+          "consoleErrors": []
+        }
+      }
+    },
+    "memberJourney": {
+      "status": "covered",
+      "detail": "fictional member selection rendered duties and presider access"
+    },
+    "presiderRemount": {
+      "status": "covered",
+      "detail": "second mount accepted Library search input and rendered fixture song"
+    },
+    "domFocus": {
+      "status": "covered",
+      "detail": "schedule snapshot preserved focused request and Library search controls on phone and desktop"
+    },
+    "scheduleSnapshot": {
+      "status": "covered",
+      "detail": "fictional schedule snapshots preserved request draft, document scroll, song root identity, Library view, and nav:false on phone and desktop",
+      "result": {
+        "phone": {
+          "request": {
+            "before": {
+              "activeElement": "textarea[data-chg=\"req-note\"]",
+              "typedValue": "Fixture request draft",
+              "documentScrollY": 240,
+              "requestDraft": {
+                "key": "2026-09-12_morning:Presider",
+                "note": "Fixture request draft"
+              },
+              "requestKey": "2026-09-12_morning:Presider",
+              "scrollBeforeType": 240
+            },
+            "after": {
+              "activeElement": "textarea[data-chg=\"req-note\"]",
+              "typedValue": "Fixture request draft",
+              "documentScrollY": 240,
+              "requestDraft": {
+                "key": "2026-09-12_morning:Presider",
+                "note": "Fixture request draft"
+              }
+            }
+          },
+          "song": {
+            "focused": {
+              "before": {
+                "activeElement": "#lib-search",
+                "typedSearchValue": "Fixture",
+                "documentScrollY": 180,
+                "currentLibraryView": "Library",
+                "nav": false,
+                "rootPresent": true
+              },
+              "after": {
+                "rootSame": true,
+                "activeElement": "#lib-search",
+                "typedSearchValue": "Fixture",
+                "documentScrollY": 180,
+                "currentLibraryView": "Library",
+                "nav": false
+              }
+            },
+            "unfocused": {
+              "before": {
+                "rootPresent": true,
+                "typedSearchValue": "Fixture",
+                "currentLibraryView": "Library",
+                "nav": false
+              },
+              "after": {
+                "rootSame": true,
+                "typedSearchValue": "Fixture",
+                "currentLibraryView": "Library",
+                "nav": false
+              }
+            }
+          }
+        },
+        "desktop": {
+          "request": {
+            "before": {
+              "activeElement": "textarea[data-chg=\"req-note\"]",
+              "typedValue": "Fixture request draft",
+              "documentScrollY": 240,
+              "requestDraft": {
+                "key": "2026-09-12_morning:Presider",
+                "note": "Fixture request draft"
+              },
+              "requestKey": "2026-09-12_morning:Presider",
+              "scrollBeforeType": 240
+            },
+            "after": {
+              "activeElement": "textarea[data-chg=\"req-note\"]",
+              "typedValue": "Fixture request draft",
+              "documentScrollY": 240,
+              "requestDraft": {
+                "key": "2026-09-12_morning:Presider",
+                "note": "Fixture request draft"
+              }
+            }
+          },
+          "song": {
+            "focused": {
+              "before": {
+                "activeElement": "#lib-search",
+                "typedSearchValue": "Fixture",
+                "documentScrollY": 93,
+                "currentLibraryView": "Library",
+                "nav": false,
+                "rootPresent": true
+              },
+              "after": {
+                "rootSame": true,
+                "activeElement": "#lib-search",
+                "typedSearchValue": "Fixture",
+                "documentScrollY": 93,
+                "currentLibraryView": "Library",
+                "nav": false
+              }
+            },
+            "unfocused": {
+              "before": {
+                "rootPresent": true,
+                "typedSearchValue": "Fixture",
+                "currentLibraryView": "Library",
+                "nav": false
+              },
+              "after": {
+                "rootSame": true,
+                "typedSearchValue": "Fixture",
+                "currentLibraryView": "Library",
+                "nav": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "keyboard": {
+      "status": "covered",
+      "detail": "fictional song row, nested action button, and header home control accepted Enter on phone and desktop",
+      "result": {
+        "phone": {
+          "songRowEnter": true,
+          "nestedButtonEnter": true,
+          "headerHomeEnter": true
+        },
+        "desktop": {
+          "songRowEnter": true,
+          "nestedButtonEnter": true,
+          "headerHomeEnter": true
+        }
+      }
+    },
+    "libraryEmpty": {
+      "status": "covered",
+      "detail": "fictional Library search rendered its no-match empty state on phone and desktop",
+      "result": {
+        "phone": {
+          "emptyState": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-library-empty.png",
+          "axe": {
+            "violations": [],
+            "passes": 39,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "phone-library-empty",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        },
+        "desktop": {
+          "emptyState": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-library-empty.png",
+          "axe": {
+            "violations": [],
+            "passes": 38,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "desktop-library-empty",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        }
+      }
+    },
+    "servicesJourney": {
+      "status": "covered",
+      "detail": "fictional Services view rendered upcoming setlists on phone and desktop",
+      "result": {
+        "phone": {
+          "upcomingRendered": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-services.png",
+          "axe": {
+            "violations": [],
+            "passes": 31,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "phone-services",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        },
+        "desktop": {
+          "upcomingRendered": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-services.png",
+          "axe": {
+            "violations": [],
+            "passes": 31,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "desktop-services",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        }
+      }
+    },
+    "insightsJourney": {
+      "status": "covered",
+      "detail": "fictional Insights view rendered song usage panels on phone and desktop",
+      "result": {
+        "phone": {
+          "leastSungRendered": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-insights.png",
+          "axe": {
+            "violations": [],
+            "passes": 31,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "phone-insights",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        },
+        "desktop": {
+          "leastSungRendered": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-insights.png",
+          "axe": {
+            "violations": [],
+            "passes": 31,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "desktop-insights",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        }
+      }
+    },
+    "songCreateBeforeSnapshot": {
+      "status": "covered",
+      "detail": "transaction read an existing setlist before an explicitly released snapshot and did not set it",
+      "result": {
+        "openMs": 44.81,
+        "releasedSnapshots": 2,
+        "transactionReads": [
+          "setlists/2026-09-12_morning"
+        ],
+        "transactionSets": [],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    },
+    "confirmation": {
+      "status": "covered",
+      "detail": "fictional setlist entered confirmed state through fake write boundary with one metadata timestamp",
+      "result": {
+        "status": "covered",
+        "expectedRegression": false,
+        "confirmationState": {
+          "confirmed": 1,
+          "changed": 0,
+          "advancingDateCalls": 1,
+          "timestamps": {
+            "confirmedAt": 1788807600001,
+            "updatedAt": 1788807600001
+          }
+        },
+        "writes": [
+          {
+            "operation": "setDoc",
+            "collection": "app",
+            "id": "nameMap",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 119,
+            "order": 4
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 119,
+            "order": 6
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 119,
+            "order": 8
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 119,
+            "order": 10
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 136,
+            "order": 12
+          },
+          {
+            "operation": "updateDoc",
+            "collection": "setlists",
+            "id": "2026-09-12_morning",
+            "requiresAuth": false,
+            "authSignedIn": true,
+            "at": 178,
+            "order": 14
+          }
+        ],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]",
+            "https://script.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    },
+    "saveErrors": {
+      "status": "covered",
+      "detail": "failed fake setlist writes surfaced a user-facing save error",
+      "result": {
+        "dialogs": [
+          {
+            "type": "alert",
+            "message": "That change could not be saved. Check your connection and try again."
+          }
+        ],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    }
+  },
+  "viewports": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "timings": {
+        "navigationMs": 29.81,
+        "readyMs": 55.53,
+        "presiderMs": 387.62
+      },
+      "snapshotPreservation": {
+        "request": {
+          "before": {
+            "activeElement": "textarea[data-chg=\"req-note\"]",
+            "typedValue": "Fixture request draft",
+            "documentScrollY": 240,
+            "requestDraft": {
+              "key": "2026-09-12_morning:Presider",
+              "note": "Fixture request draft"
+            },
+            "requestKey": "2026-09-12_morning:Presider",
+            "scrollBeforeType": 240
+          },
+          "after": {
+            "activeElement": "textarea[data-chg=\"req-note\"]",
+            "typedValue": "Fixture request draft",
+            "documentScrollY": 240,
+            "requestDraft": {
+              "key": "2026-09-12_morning:Presider",
+              "note": "Fixture request draft"
+            }
+          }
+        },
+        "song": {
+          "focused": {
+            "before": {
+              "activeElement": "#lib-search",
+              "typedSearchValue": "Fixture",
+              "documentScrollY": 180,
+              "currentLibraryView": "Library",
+              "nav": false,
+              "rootPresent": true
+            },
+            "after": {
+              "rootSame": true,
+              "activeElement": "#lib-search",
+              "typedSearchValue": "Fixture",
+              "documentScrollY": 180,
+              "currentLibraryView": "Library",
+              "nav": false
+            }
+          },
+          "unfocused": {
+            "before": {
+              "rootPresent": true,
+              "typedSearchValue": "Fixture",
+              "currentLibraryView": "Library",
+              "nav": false
+            },
+            "after": {
+              "rootSame": true,
+              "typedSearchValue": "Fixture",
+              "currentLibraryView": "Library",
+              "nav": false
+            }
+          }
+        }
+      },
+      "keyboard": {
+        "songRowEnter": true,
+        "nestedButtonEnter": true,
+        "headerHomeEnter": true
+      },
+      "primaryJourneys": {
+        "libraryEmpty": {
+          "emptyState": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-library-empty.png",
+          "axe": {
+            "violations": [],
+            "passes": 39,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "phone-library-empty",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        },
+        "services": {
+          "upcomingRendered": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-services.png",
+          "axe": {
+            "violations": [],
+            "passes": 31,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "phone-services",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        },
+        "insights": {
+          "leastSungRendered": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-insights.png",
+          "axe": {
+            "violations": [],
+            "passes": 31,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "phone-insights",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        }
+      },
+      "screenshots": [
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-schedule.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-my-duties.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-presider.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-library-empty.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-services.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/phone-insights.png"
+      ],
+      "axe": {
+        "schedule": {
+          "violations": [],
+          "passes": 25,
+          "incomplete": 0
+        },
+        "myDuties": {
+          "violations": [],
+          "passes": 29,
+          "incomplete": 1
+        },
+        "presider": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        },
+        "libraryEmpty": {
+          "violations": [],
+          "passes": 39,
+          "incomplete": 0
+        },
+        "services": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        },
+        "insights": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        }
+      },
+      "network": {
+        "blocked": [],
+        "moduleIntercepts": [
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]"
+        ],
+        "unexpected": [],
+        "fetchGuard": [
+          "https://docs.google.com [fetch-denied]"
+        ]
+      },
+      "consoleErrors": []
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "timings": {
+        "navigationMs": 31.49,
+        "readyMs": 57.72,
+        "presiderMs": 420.61
+      },
+      "snapshotPreservation": {
+        "request": {
+          "before": {
+            "activeElement": "textarea[data-chg=\"req-note\"]",
+            "typedValue": "Fixture request draft",
+            "documentScrollY": 240,
+            "requestDraft": {
+              "key": "2026-09-12_morning:Presider",
+              "note": "Fixture request draft"
+            },
+            "requestKey": "2026-09-12_morning:Presider",
+            "scrollBeforeType": 240
+          },
+          "after": {
+            "activeElement": "textarea[data-chg=\"req-note\"]",
+            "typedValue": "Fixture request draft",
+            "documentScrollY": 240,
+            "requestDraft": {
+              "key": "2026-09-12_morning:Presider",
+              "note": "Fixture request draft"
+            }
+          }
+        },
+        "song": {
+          "focused": {
+            "before": {
+              "activeElement": "#lib-search",
+              "typedSearchValue": "Fixture",
+              "documentScrollY": 93,
+              "currentLibraryView": "Library",
+              "nav": false,
+              "rootPresent": true
+            },
+            "after": {
+              "rootSame": true,
+              "activeElement": "#lib-search",
+              "typedSearchValue": "Fixture",
+              "documentScrollY": 93,
+              "currentLibraryView": "Library",
+              "nav": false
+            }
+          },
+          "unfocused": {
+            "before": {
+              "rootPresent": true,
+              "typedSearchValue": "Fixture",
+              "currentLibraryView": "Library",
+              "nav": false
+            },
+            "after": {
+              "rootSame": true,
+              "typedSearchValue": "Fixture",
+              "currentLibraryView": "Library",
+              "nav": false
+            }
+          }
+        }
+      },
+      "keyboard": {
+        "songRowEnter": true,
+        "nestedButtonEnter": true,
+        "headerHomeEnter": true
+      },
+      "primaryJourneys": {
+        "libraryEmpty": {
+          "emptyState": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-library-empty.png",
+          "axe": {
+            "violations": [],
+            "passes": 38,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "desktop-library-empty",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        },
+        "services": {
+          "upcomingRendered": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-services.png",
+          "axe": {
+            "violations": [],
+            "passes": 31,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "desktop-services",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        },
+        "insights": {
+          "leastSungRendered": true,
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-insights.png",
+          "axe": {
+            "violations": [],
+            "passes": 31,
+            "incomplete": 0
+          },
+          "axeGuard": {
+            "view": "desktop-insights",
+            "fullAccessibilityPass": false,
+            "knownBaselineFindings": [],
+            "observedFindings": [],
+            "unexpectedFindings": [],
+            "overages": []
+          }
+        }
+      },
+      "screenshots": [
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-schedule.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-my-duties.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-presider.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-library-empty.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-services.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round5-final-canonical/screenshots/desktop-insights.png"
+      ],
+      "axe": {
+        "schedule": {
+          "violations": [],
+          "passes": 25,
+          "incomplete": 0
+        },
+        "myDuties": {
+          "violations": [],
+          "passes": 29,
+          "incomplete": 1
+        },
+        "presider": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        },
+        "libraryEmpty": {
+          "violations": [],
+          "passes": 38,
+          "incomplete": 0
+        },
+        "services": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        },
+        "insights": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        }
+      },
+      "network": {
+        "blocked": [],
+        "moduleIntercepts": [
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]"
+        ],
+        "unexpected": [],
+        "fetchGuard": [
+          "https://docs.google.com [fetch-denied]"
+        ]
+      },
+      "consoleErrors": []
+    }
+  ],
+  "network": {
+    "blocked": [],
+    "moduleIntercepts": [
+      "https://www.gstatic.com [firebase-module-fixture]"
+    ],
+    "fetchGuard": [
+      "https://docs.google.com [fetch-denied]",
+      "https://script.google.com [fetch-denied]"
+    ],
+    "unexpected": []
+  },
+  "timingUnits": "milliseconds"
+}

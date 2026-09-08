@@ -1,0 +1,876 @@
+{
+  "taskId": "WORSHIP-V-20260907",
+  "baselineReference": "5beec15d9a9299bed2c51a91c33f157fb769cd79",
+  "mode": "fixture-only-loopback",
+  "sourceRoot": "/Users/anthony/Projects/worship-refactor-worktrees/verification",
+  "evidenceScope": "round3-baseline-fixed-date-motion",
+  "sourceRevision": {
+    "kind": "sha256",
+    "method": "sha256-v2:path-null-byte-and-file-bytes;order=lexicographic-relative-path",
+    "fileOrder": "lexicographic relative paths",
+    "digest": "ec7ff363e5e142ad9c64f81c8d09c0ed485a12a5db6ac85a994cf33cdbdeed62",
+    "files": [
+      "app.js",
+      "index.html",
+      "manifest.json",
+      "song-app.css",
+      "song-app.js",
+      "song-lib.js",
+      "sw.js"
+    ]
+  },
+  "runtime": {
+    "node": "v24.14.1",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "fixtures": {
+    "members": 3,
+    "services": 2,
+    "songs": 4
+  },
+  "scenarios": {
+    "launchCleanup": {
+      "status": "covered",
+      "detail": "injected Chromium launch failure closed its loopback fixture server",
+      "result": {
+        "status": "passed",
+        "serverClosed": true
+      }
+    },
+    "seededSchedule": {
+      "status": "covered",
+      "detail": "local fixture rendered 3 fictional members",
+      "axe": {
+        "violations": [],
+        "passes": 25,
+        "incomplete": 0
+      },
+      "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/local-seeded-phone.png"
+    },
+    "manualDutyMerge": {
+      "status": "covered",
+      "detail": "pure sheet merge preserved an unmanaged duty",
+      "result": {
+        "added": 0,
+        "updated": 1
+      }
+    },
+    "yearBoundaries": {
+      "status": "covered",
+      "detail": "pure month/day inference covered both year transitions",
+      "result": {
+        "januaryAfterDecember": "2027-01-02",
+        "decemberBeforeJanuary": "2025-12-31"
+      }
+    },
+    "authWait": {
+      "status": "covered",
+      "detail": "pure write gate remained pending until auth resolved",
+      "result": {
+        "ranBeforeRelease": false,
+        "ranAfterRelease": true,
+        "blockedMs": 0.01,
+        "releaseToWriteMs": 0.01
+      }
+    },
+    "siteLock": {
+      "status": "covered",
+      "detail": "fictional whole-site passcode lock rendered, passed axe, and unlocked with a fixture passcode",
+      "result": {
+        "locked": {
+          "axe": {
+            "violations": [],
+            "passes": 28,
+            "incomplete": 0
+          },
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/site-lock-phone.png"
+        },
+        "unlocked": {
+          "axe": {
+            "violations": [],
+            "passes": 25,
+            "incomplete": 0
+          },
+          "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/site-unlocked-phone.png"
+        },
+        "feature": {
+          "siteLock": true,
+          "unlocked": true
+        },
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": []
+        },
+        "consoleErrors": []
+      }
+    },
+    "manageJourney": {
+      "status": "covered",
+      "detail": "fictional editor unlock changed a schedule assignment through the auth-gated fake write boundary",
+      "result": {
+        "assignment": "Casey Example",
+        "authSignedIn": true,
+        "unlocked": true,
+        "writes": [
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186
+          },
+          {
+            "operation": "setDoc",
+            "collection": "app",
+            "id": "nameMap",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186
+          },
+          {
+            "operation": "setDoc",
+            "collection": "schedule",
+            "id": "2026-09-12_morning",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186
+          }
+        ],
+        "attempts": [
+          {
+            "operation": "qaProbe",
+            "collection": "schedule",
+            "id": "fixture-preauth-probe",
+            "requiresAuth": true,
+            "authSignedIn": false,
+            "at": 45,
+            "rejected": true
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186,
+            "rejected": false
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186,
+            "rejected": false
+          },
+          {
+            "operation": "setDoc",
+            "collection": "app",
+            "id": "nameMap",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186,
+            "rejected": false
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186,
+            "rejected": false
+          },
+          {
+            "operation": "setDoc",
+            "collection": "schedule",
+            "id": "2026-09-12_morning",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 186,
+            "rejected": false
+          }
+        ],
+        "preAuthHostWriteCount": 0,
+        "preAuthHostAttemptCount": 0,
+        "preAuthRejectedAttemptCount": 0,
+        "authTiming": {
+          "editStartedAt": 175,
+          "editInitiatedAt": 185,
+          "authStartedAt": 42,
+          "authReadyAt": 186,
+          "scheduleWriteAt": 186,
+          "editToAuthReadyMs": 11,
+          "authToScheduleWriteMs": 0
+        },
+        "preAuthProbe": {
+          "rejected": true,
+          "code": "unauthenticated"
+        },
+        "axe": {
+          "violations": [
+            {
+              "id": "label",
+              "impact": "critical",
+              "targets": [
+                [
+                  "#svc-date"
+                ],
+                [
+                  "#svc-time"
+                ],
+                [
+                  "input[value=\"2026-09-12\"]"
+                ],
+                [
+                  "input[data-field=\"time\"]"
+                ],
+                [
+                  "input[value=\"Fixture Sabbath\"]"
+                ]
+              ]
+            },
+            {
+              "id": "select-name",
+              "impact": "critical",
+              "targets": [
+                [
+                  "#svc-label"
+                ],
+                [
+                  "select[data-duty=\"Presider\"]"
+                ],
+                [
+                  "select[data-duty=\"Sermon\"]"
+                ],
+                [
+                  "select[data-duty=\"Prayer of Thanks\"]"
+                ],
+                [
+                  "select[data-duty=\"Closing Prayer\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher Door\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher Front\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher Back\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Usher #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Lobby Security\"]"
+                ],
+                [
+                  "select[data-duty=\"Lobby Desk #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Lobby Desk #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Translation #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Translation #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Media Booth #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Media Booth #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #3\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #4\"]"
+                ],
+                [
+                  "select[data-duty=\"Parking #5\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #1\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #2\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #3\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #4\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #5\"]"
+                ],
+                [
+                  "select[data-duty=\"Offering #6\"]"
+                ]
+              ]
+            }
+          ],
+          "passes": 28,
+          "incomplete": 0
+        },
+        "screenshot": "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/manage-phone.png",
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": []
+        },
+        "consoleErrors": []
+      }
+    },
+    "memberJourney": {
+      "status": "covered",
+      "detail": "fictional member selection rendered duties and presider access"
+    },
+    "presiderRemount": {
+      "status": "covered",
+      "detail": "second mount accepted Library search input and rendered fixture song"
+    },
+    "domFocus": {
+      "status": "covered",
+      "detail": "schedule snapshot preserved focused request and Library search controls on phone and desktop"
+    },
+    "scheduleSnapshot": {
+      "status": "covered",
+      "detail": "fictional schedule snapshots preserved request draft, document scroll, song root identity, Library view, and nav:false on phone and desktop",
+      "result": {
+        "phone": {
+          "request": {
+            "before": {
+              "activeElement": "textarea[data-chg=\"req-note\"]",
+              "typedValue": "Fixture request draft",
+              "documentScrollY": 240,
+              "requestDraft": {
+                "key": "2026-09-12_morning:Presider",
+                "note": "Fixture request draft"
+              },
+              "requestKey": "2026-09-12_morning:Presider",
+              "scrollBeforeType": 240
+            },
+            "after": {
+              "activeElement": "textarea[data-chg=\"req-note\"]",
+              "typedValue": "Fixture request draft",
+              "documentScrollY": 240,
+              "requestDraft": {
+                "key": "2026-09-12_morning:Presider",
+                "note": "Fixture request draft"
+              }
+            }
+          },
+          "song": {
+            "focused": {
+              "before": {
+                "activeElement": "#lib-search",
+                "typedSearchValue": "Fixture",
+                "documentScrollY": 180,
+                "currentLibraryView": "Library",
+                "nav": false,
+                "rootPresent": true
+              },
+              "after": {
+                "rootSame": true,
+                "activeElement": "#lib-search",
+                "typedSearchValue": "Fixture",
+                "documentScrollY": 180,
+                "currentLibraryView": "Library",
+                "nav": false
+              }
+            },
+            "unfocused": {
+              "before": {
+                "rootPresent": true,
+                "typedSearchValue": "Fixture",
+                "currentLibraryView": "Library",
+                "nav": false
+              },
+              "after": {
+                "rootSame": true,
+                "typedSearchValue": "Fixture",
+                "currentLibraryView": "Library",
+                "nav": false
+              }
+            }
+          }
+        },
+        "desktop": {
+          "request": {
+            "before": {
+              "activeElement": "textarea[data-chg=\"req-note\"]",
+              "typedValue": "Fixture request draft",
+              "documentScrollY": 240,
+              "requestDraft": {
+                "key": "2026-09-12_morning:Presider",
+                "note": "Fixture request draft"
+              },
+              "requestKey": "2026-09-12_morning:Presider",
+              "scrollBeforeType": 240
+            },
+            "after": {
+              "activeElement": "textarea[data-chg=\"req-note\"]",
+              "typedValue": "Fixture request draft",
+              "documentScrollY": 240,
+              "requestDraft": {
+                "key": "2026-09-12_morning:Presider",
+                "note": "Fixture request draft"
+              }
+            }
+          },
+          "song": {
+            "focused": {
+              "before": {
+                "activeElement": "#lib-search",
+                "typedSearchValue": "Fixture",
+                "documentScrollY": 93,
+                "currentLibraryView": "Library",
+                "nav": false,
+                "rootPresent": true
+              },
+              "after": {
+                "rootSame": true,
+                "activeElement": "#lib-search",
+                "typedSearchValue": "Fixture",
+                "documentScrollY": 93,
+                "currentLibraryView": "Library",
+                "nav": false
+              }
+            },
+            "unfocused": {
+              "before": {
+                "rootPresent": true,
+                "typedSearchValue": "Fixture",
+                "currentLibraryView": "Library",
+                "nav": false
+              },
+              "after": {
+                "rootSame": true,
+                "typedSearchValue": "Fixture",
+                "currentLibraryView": "Library",
+                "nav": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "keyboard": {
+      "status": "covered",
+      "detail": "fictional song row, nested action button, and header home control accepted Enter on phone and desktop",
+      "result": {
+        "phone": {
+          "songRowEnter": true,
+          "nestedButtonEnter": true,
+          "headerHomeEnter": true
+        },
+        "desktop": {
+          "songRowEnter": true,
+          "nestedButtonEnter": true,
+          "headerHomeEnter": true
+        }
+      }
+    },
+    "songCreateBeforeSnapshot": {
+      "status": "covered",
+      "detail": "transaction read an existing setlist before delayed snapshot and did not set it",
+      "result": {
+        "openMs": 36.92,
+        "transactionReads": [
+          "setlists/2026-09-12_morning"
+        ],
+        "transactionSets": [],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    },
+    "confirmation": {
+      "status": "covered",
+      "detail": "fictional setlist entered confirmed state through fake write boundary",
+      "result": {
+        "confirmed": 1,
+        "writes": [
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 117
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 117
+          },
+          {
+            "operation": "setDoc",
+            "collection": "app",
+            "id": "nameMap",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 117
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 118
+          },
+          {
+            "operation": "setDoc",
+            "collection": "pulse",
+            "id": "2026-09-07",
+            "requiresAuth": true,
+            "authSignedIn": true,
+            "at": 130
+          },
+          {
+            "operation": "updateDoc",
+            "collection": "setlists",
+            "id": "2026-09-12_morning",
+            "requiresAuth": false,
+            "authSignedIn": true,
+            "at": 164
+          }
+        ],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]",
+            "https://script.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    },
+    "saveErrors": {
+      "status": "covered",
+      "detail": "failed fake setlist writes surfaced a user-facing save error",
+      "result": {
+        "dialogs": [
+          {
+            "type": "alert",
+            "message": "That change could not be saved. Check your connection and try again."
+          }
+        ],
+        "network": {
+          "blocked": [],
+          "moduleIntercepts": [
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]",
+            "https://www.gstatic.com [firebase-module-fixture]"
+          ],
+          "unexpected": [],
+          "fetchGuard": [
+            "https://docs.google.com [fetch-denied]"
+          ]
+        },
+        "consoleErrors": []
+      }
+    }
+  },
+  "viewports": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "timings": {
+        "navigationMs": 28.6,
+        "readyMs": 53.76,
+        "presiderMs": 431.62
+      },
+      "snapshotPreservation": {
+        "request": {
+          "before": {
+            "activeElement": "textarea[data-chg=\"req-note\"]",
+            "typedValue": "Fixture request draft",
+            "documentScrollY": 240,
+            "requestDraft": {
+              "key": "2026-09-12_morning:Presider",
+              "note": "Fixture request draft"
+            },
+            "requestKey": "2026-09-12_morning:Presider",
+            "scrollBeforeType": 240
+          },
+          "after": {
+            "activeElement": "textarea[data-chg=\"req-note\"]",
+            "typedValue": "Fixture request draft",
+            "documentScrollY": 240,
+            "requestDraft": {
+              "key": "2026-09-12_morning:Presider",
+              "note": "Fixture request draft"
+            }
+          }
+        },
+        "song": {
+          "focused": {
+            "before": {
+              "activeElement": "#lib-search",
+              "typedSearchValue": "Fixture",
+              "documentScrollY": 180,
+              "currentLibraryView": "Library",
+              "nav": false,
+              "rootPresent": true
+            },
+            "after": {
+              "rootSame": true,
+              "activeElement": "#lib-search",
+              "typedSearchValue": "Fixture",
+              "documentScrollY": 180,
+              "currentLibraryView": "Library",
+              "nav": false
+            }
+          },
+          "unfocused": {
+            "before": {
+              "rootPresent": true,
+              "typedSearchValue": "Fixture",
+              "currentLibraryView": "Library",
+              "nav": false
+            },
+            "after": {
+              "rootSame": true,
+              "typedSearchValue": "Fixture",
+              "currentLibraryView": "Library",
+              "nav": false
+            }
+          }
+        }
+      },
+      "keyboard": {
+        "songRowEnter": true,
+        "nestedButtonEnter": true,
+        "headerHomeEnter": true
+      },
+      "screenshots": [
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/phone-schedule.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/phone-my-duties.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/phone-presider.png"
+      ],
+      "axe": {
+        "schedule": {
+          "violations": [],
+          "passes": 25,
+          "incomplete": 0
+        },
+        "myDuties": {
+          "violations": [],
+          "passes": 29,
+          "incomplete": 1
+        },
+        "presider": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        }
+      },
+      "network": {
+        "blocked": [],
+        "moduleIntercepts": [
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]"
+        ],
+        "unexpected": [],
+        "fetchGuard": [
+          "https://docs.google.com [fetch-denied]"
+        ]
+      },
+      "consoleErrors": []
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "timings": {
+        "navigationMs": 28.75,
+        "readyMs": 54.02,
+        "presiderMs": 392.39
+      },
+      "snapshotPreservation": {
+        "request": {
+          "before": {
+            "activeElement": "textarea[data-chg=\"req-note\"]",
+            "typedValue": "Fixture request draft",
+            "documentScrollY": 240,
+            "requestDraft": {
+              "key": "2026-09-12_morning:Presider",
+              "note": "Fixture request draft"
+            },
+            "requestKey": "2026-09-12_morning:Presider",
+            "scrollBeforeType": 240
+          },
+          "after": {
+            "activeElement": "textarea[data-chg=\"req-note\"]",
+            "typedValue": "Fixture request draft",
+            "documentScrollY": 240,
+            "requestDraft": {
+              "key": "2026-09-12_morning:Presider",
+              "note": "Fixture request draft"
+            }
+          }
+        },
+        "song": {
+          "focused": {
+            "before": {
+              "activeElement": "#lib-search",
+              "typedSearchValue": "Fixture",
+              "documentScrollY": 93,
+              "currentLibraryView": "Library",
+              "nav": false,
+              "rootPresent": true
+            },
+            "after": {
+              "rootSame": true,
+              "activeElement": "#lib-search",
+              "typedSearchValue": "Fixture",
+              "documentScrollY": 93,
+              "currentLibraryView": "Library",
+              "nav": false
+            }
+          },
+          "unfocused": {
+            "before": {
+              "rootPresent": true,
+              "typedSearchValue": "Fixture",
+              "currentLibraryView": "Library",
+              "nav": false
+            },
+            "after": {
+              "rootSame": true,
+              "typedSearchValue": "Fixture",
+              "currentLibraryView": "Library",
+              "nav": false
+            }
+          }
+        }
+      },
+      "keyboard": {
+        "songRowEnter": true,
+        "nestedButtonEnter": true,
+        "headerHomeEnter": true
+      },
+      "screenshots": [
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/desktop-schedule.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/desktop-my-duties.png",
+        "/Users/anthony/Projects/worship-refactor-worktrees/verification/docs/runs/worship-refactor-20260907/research/verification/round3-baseline/screenshots/desktop-presider.png"
+      ],
+      "axe": {
+        "schedule": {
+          "violations": [],
+          "passes": 25,
+          "incomplete": 0
+        },
+        "myDuties": {
+          "violations": [],
+          "passes": 29,
+          "incomplete": 1
+        },
+        "presider": {
+          "violations": [],
+          "passes": 31,
+          "incomplete": 0
+        }
+      },
+      "network": {
+        "blocked": [],
+        "moduleIntercepts": [
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]",
+          "https://www.gstatic.com [firebase-module-fixture]"
+        ],
+        "unexpected": [],
+        "fetchGuard": [
+          "https://docs.google.com [fetch-denied]"
+        ]
+      },
+      "consoleErrors": []
+    }
+  ],
+  "network": {
+    "blocked": [],
+    "moduleIntercepts": [
+      "https://www.gstatic.com [firebase-module-fixture]"
+    ],
+    "fetchGuard": [
+      "https://docs.google.com [fetch-denied]",
+      "https://script.google.com [fetch-denied]"
+    ],
+    "unexpected": []
+  },
+  "timingUnits": "milliseconds"
+}
