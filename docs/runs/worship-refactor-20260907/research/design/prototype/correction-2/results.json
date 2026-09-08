@@ -1,0 +1,83 @@
+{
+  "task": "WORSHIP-D2-20260908",
+  "route": "http://127.0.0.1:8099/open-bulletin/index.html",
+  "fictionalOnly": true,
+  "routePolicy": "Loopback requests only, installed before page creation",
+  "checks": [
+    {
+      "name": "phone song search panel focus, Escape return, and selected service preservation",
+      "status": "passed"
+    },
+    {
+      "name": "desktop song library remains a side panel",
+      "status": "passed"
+    },
+    {
+      "name": "calendar subscription, copy feed link, and one-time snapshot stay local",
+      "status": "passed"
+    },
+    {
+      "name": "name unification previews, cancels, and confirms canonical local consolidation",
+      "status": "passed"
+    },
+    {
+      "name": "strict fictional backup validation rejects before mutation and accepts the marker",
+      "status": "passed"
+    },
+    {
+      "name": "restore and reset confirmations are distinct and Cancel preserves state",
+      "status": "passed"
+    },
+    {
+      "name": "site lock gates navigation and Return Home on every route",
+      "status": "passed"
+    },
+    {
+      "name": "planning window scopes conflicts, gaps, suggestions, and workload",
+      "status": "passed"
+    },
+    {
+      "name": "canonical sung history is idempotent, service scoped, date aware, and recomputed on deletion",
+      "status": "passed"
+    }
+  ],
+  "axeChecks": [
+    {
+      "label": "phone open presider search",
+      "violations": 0
+    },
+    {
+      "label": "phone closed presider search",
+      "violations": 0
+    },
+    {
+      "label": "desktop presider library",
+      "violations": 0
+    },
+    {
+      "label": "phone calendar",
+      "violations": 0
+    },
+    {
+      "label": "desktop planning",
+      "violations": 0
+    },
+    {
+      "label": "desktop sung history",
+      "violations": 0
+    }
+  ],
+  "screenshots": [
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/presider-search-phone-390x844.png",
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/presider-search-desktop-1440x1000.png",
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/duty-calendar-phone-390x844.png",
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/duty-calendar-desktop-1440x1000.png",
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/manage-name-unify-preview-phone-390x844.png",
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/manage-restore-confirm-phone-390x844.png",
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/site-lock-phone-390x844.png",
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/manage-planning-desktop-1440x1000.png",
+    "/Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/open-bulletin/screenshots/presider-sung-recreate-desktop-1440x1000.png"
+  ],
+  "failures": [],
+  "completedAt": "2026-09-08T14:28:50.236Z"
+}

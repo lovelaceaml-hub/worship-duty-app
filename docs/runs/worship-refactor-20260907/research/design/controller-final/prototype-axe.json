@@ -1,0 +1,135 @@
+[
+  {
+    "label": "phone",
+    "screen": "home",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "duty",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "presider",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "song-panel",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "manage",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "empty",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "loading",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "offline",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "error",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "phone",
+    "screen": "success",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "home",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "duty",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "presider",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "manage",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "empty",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "loading",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "offline",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "error",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "label": "desktop",
+    "screen": "success",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  }
+]

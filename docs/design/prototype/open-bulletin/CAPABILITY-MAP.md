@@ -1,0 +1,17 @@
+# Prototype capability map
+
+This map records the capability audit against the local prototype. All results are fictional in-memory actions. No production data or service call is used.
+
+| Audit area | Reachable local result |
+| --- | --- |
+| Member access and schedule | Home and My Duties use the selected member picker, My next duty, real department filters, later service expansion, past service toggle, alert clearing, request history, calendar text generation, reserved example feed URL copy, local subscription simulation, copy fallback, and the no Presider duty state. |
+| Services and assignments | Manage Assignments selects a service, edits worship type, label, date, time, notes, choir song, every existing duty, and blank unassigned slots when Show unassigned duties is on. Add blank service creates no automatic assignments. Conflict rows derive from the selected service, skip prayer plus usher pairs, and support Acknowledge and Reopen. Delete service requires a confirmation view. |
+| People and rosters | Manage People adds a fictional person, renames a person across assignments, requests, departments, and setlists, removes a person only after a future-duty impact confirmation, and edits department roster checkboxes. Sync previews the fictional name map, supports Cancel, and confirms a canonical consolidation across members, assignments, and department rosters. |
+| Planning | Manage Planning calculates conflicts, coverage gaps, workload, and suggestions from the selected window. It exposes next four weeks, eight weeks, upcoming, year, last service, and next service windows. Apply suggestion changes one named assignment and shows the changed assignment locally. |
+| Sync and settings | Manage Sync edits the fictional local Sheet URL, reports saving, syncing, complete, and warning results, exports a local JSON backup with a strict fictional marker and fixture signature, rejects unmarked or malformed imports before mutation, restores the sample, and resets all in-memory state. Restore and reset have distinct confirmations with Cancel. Settings uses human feature labels and changes both fictional passcodes, then locks and unlocks editor and site gates on every route. |
+| Presider outline | Presider is shown for actual Presider assignments only. It switches service, edits notes, Glory, Thanks, and service choir song, renders the canonical outline, keeps duplicate song occurrences independent, excludes Glory and Thanks from preparation duration, supports a phone search panel with focus return and Escape, keeps the desktop side library, and supports song category, detail, history, add, remove, and index-based reorder. Deleting a setlist exposes an explicit recreate action. |
+| History and service record | Save exposes saving, saved, failed, retry, and confirmed states. Editing a confirmed outline exposes Changed after confirmation until reconfirmed. Canonical sung history records one entry per song and service, ignores repeated marks, uses the service date, scopes undo to the selected service, and recomputes count and last date after undo or history deletion. Duplicate occurrences remain setlist order only. Runsheet and copy produce visible local results. |
+
+## Canonical references
+
+The audit was checked against the read-only source at /Users/anthony/Projects/worship-duty-app/app.js, /Users/anthony/Projects/worship-duty-app/song-app.js, and /Users/anthony/Projects/worship-duty-app/src/core/constants.js. The prototype fixture contains only fictional names, service records, and songs.

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "layout-templates",
+      "relevant": false,
+      "reason": "The prototype uses an original local responsive layout built for this service schedule.",
+      "referenceCandidates": [],
+      "adoptionCandidates": [],
+      "auditionedCandidateUrls": []
+    },
+    {
+      "id": "components",
+      "relevant": false,
+      "reason": "Cards, rows, tabs, forms, and controls are original local CSS components with no package dependency.",
+      "referenceCandidates": [],
+      "adoptionCandidates": [],
+      "auditionedCandidateUrls": []
+    },
+    {
+      "id": "icons",
+      "relevant": false,
+      "reason": "Text buttons and native form controls communicate every action without an icon dependency.",
+      "referenceCandidates": [],
+      "adoptionCandidates": [],
+      "auditionedCandidateUrls": []
+    },
+    {
+      "id": "typography",
+      "relevant": false,
+      "reason": "The selected serif and sans pairing uses installed Georgia and Arial system fonts only.",
+      "referenceCandidates": [],
+      "adoptionCandidates": [],
+      "auditionedCandidateUrls": []
+    },
+    {
+      "id": "photography",
+      "relevant": false,
+      "reason": "The service schedule needs readable assignment content and no photographic context.",
+      "referenceCandidates": [],
+      "adoptionCandidates": [],
+      "auditionedCandidateUrls": []
+    },
+    {
+      "id": "illustration",
+      "relevant": false,
+      "reason": "No illustration is needed for a fictional duty roster and religious imagery is excluded.",
+      "referenceCandidates": [],
+      "adoptionCandidates": [],
+      "auditionedCandidateUrls": []
+    },
+    {
+      "id": "motion",
+      "relevant": false,
+      "reason": "Short local state changes and reduced motion support cover the interaction without signature motion.",
+      "referenceCandidates": [],
+      "adoptionCandidates": [],
+      "auditionedCandidateUrls": []
+    }
+  ]
+}
