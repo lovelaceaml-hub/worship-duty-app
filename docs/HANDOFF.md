@@ -1,8 +1,8 @@
 # LV Zion Worship Service — Handoff Document
 
-Active refactor checkpoint: 2026-09-07. Read [the approved plan and Build log](PLAN-REFACTOR-REDESIGN.md) and [run index](runs/worship-refactor-20260907/INDEX.md) first. Foundation, release, verification, backend, and local design lanes are running in isolated worktrees. No new production UI is approved or deployed. Source baseline is 885b0bb0ffb80802a5e6428edcea89ad66c428a7.
+Active refactor checkpoint: 2026-09-07. The first compatible Foundation Hosting release is live at `20260908013701`, from reviewed source commit `cd30cd6` (documentation and tests through `3cb7e70`). All sixteen deployed runtime hashes match the staged artifact, and the live locked phone screen passed keyboard focus with privacy-safe fixtures. All seven changed backend functions are also deployed; immediate calendar and public schedule endpoint checks passed without notification or write invocations. Read [the plan and Build log](PLAN-REFACTOR-REDESIGN.md), [run index](runs/worship-refactor-20260907/INDEX.md), and [three design directions](design/directions/index.html) first. Direction selection and full prototype approval are pending. Foundation 2 is extracting state and subscription lifecycle without interface changes. The original source baseline is `885b0bb0ffb80802a5e6428edcea89ad66c428a7`.
 
-Historical architecture text below includes older rules, navigation, and release descriptions. Current source and the September 7 release-stamp section take precedence. The refactor preserves current data/access contracts; it does not turn the existing client gates into server-enforced permissions.
+Historical architecture text below includes older rules, navigation, and release descriptions. Current source, the active plan, and this checkpoint take precedence. The current release script stages an allowlist in a temporary directory and never rewrites working source. The refactor preserves current data/access contracts; it does not turn the existing client gates into server-enforced permissions.
 
 For day-to-day operation (schedule edits, passcodes, notifications,
 deploying, troubleshooting) and the AI-delegation briefs, see

@@ -1,13 +1,13 @@
 ---
 lane: LR
 title: Release machinery
-state: reviewed
+state: deployed
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/release
 review: Sol-pass
 depends_on: none
-updated: 2026-09-08T01:29Z
+updated: 2026-09-08T01:47Z
 ---
 
 # LR: Release machinery

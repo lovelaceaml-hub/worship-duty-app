@@ -6,7 +6,7 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 
 ## Quick links
 
-- **Active refactor:** [Approved redesign plan](docs/PLAN-REFACTOR-REDESIGN.md) and [lane board](docs/runs/worship-refactor-20260907/board/index.html). Work runs on an isolated feature branch. Local design options are in progress; no redesigned interface has been released yet.
+- **Active refactor:** [Approved plan](docs/PLAN-REFACTOR-REDESIGN.md), [design directions](docs/design/directions/index.html), and [lane board](docs/runs/worship-refactor-20260907/board/index.html). The first compatible Foundation release is live at stamp `20260908013701`. Direction selection and complete prototype approval are pending. State and subscription extraction continues on an isolated worktree.
 
 - **Website:** https://lv-zion-duties.web.app — share this link with members
 - **Status:** Live. **7 September 2026: the app now opens fast and the tabs sit at the top.**
@@ -96,8 +96,7 @@ To publish visual or app-file changes, run in this folder:
 
     bash scripts/deploy.sh
 
-This stamps the release, deploys Hosting only, and restores your working
-folder. The stamp is what makes the one-year browser cache safe, so always
+This prepares a validated temporary artifact, stamps every local runtime asset, and deploys only the existing Hosting site. Working source files are never rewritten. Run `bash scripts/deploy.sh --dry-run` to validate without deploying. The stamp is what makes the one-year browser cache safe, so always
 deploy app changes this way rather than calling firebase directly. Deploy
 Firestore rules or Cloud Functions only when those files intentionally changed
 and were separately reviewed.
@@ -121,6 +120,11 @@ the app's code.)
   reminds them 1 day and 2 hours before each duty, no internet needed.
 
 ## Files
+
+- [Core constants](src/core/constants.js), [schedule domain](src/domain/schedule.js), and [Sheet parsing](src/domain/sheet.js) provide testable domain logic.
+- [Firebase gateway](src/services/firebase.js) and [storage adapter](src/services/storage.js) isolate persistence.
+- [Release staging](scripts/release.mjs) validates the runtime allowlist, versions, and cache rules.
+
 
 - `index.html` — the app shell and styles
 - `app.js` — all app logic

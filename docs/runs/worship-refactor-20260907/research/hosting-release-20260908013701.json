@@ -1,0 +1,102 @@
+{
+  "release": "20260908013701",
+  "scope": "Public static asset verification only; no member or Firebase record requests",
+  "runtimeFiles": [
+    {
+      "path": "index.html",
+      "httpStatus": 200,
+      "sha256": "6cc543da7907b97231574a8e4b9ce03f20e8679aebebeab7b7668865ba94584c",
+      "matchesStaged": true
+    },
+    {
+      "path": "manifest.json",
+      "httpStatus": 200,
+      "sha256": "261b047d9477ee6b0f85436fa61ae695c4d55ce422b489ce35c3cb0ab8526c9e",
+      "matchesStaged": true
+    },
+    {
+      "path": "icon.svg",
+      "httpStatus": 200,
+      "sha256": "265daf82d5201ed603a638b78e279a22bd169a2b826e1f642800ea4f0c6a0d2f",
+      "matchesStaged": true
+    },
+    {
+      "path": "sw.js",
+      "httpStatus": 200,
+      "sha256": "71b34dce57b6d5c08c85ab019cc8abeedc55e553f24508fa389ee6bc5cbe26e1",
+      "matchesStaged": true
+    },
+    {
+      "path": "app.js",
+      "httpStatus": 200,
+      "sha256": "0c61b371ff0a4de577ce39b7c9b9cf175603701e168aa7a2f1e47c3b124f5d5d",
+      "matchesStaged": true
+    },
+    {
+      "path": "seed-data.js",
+      "httpStatus": 200,
+      "sha256": "9cd09e859d62d2b509fe86ad17a784493c427dc3200d4746a87e474f2f927e90",
+      "matchesStaged": true
+    },
+    {
+      "path": "firebase-config.js",
+      "httpStatus": 200,
+      "sha256": "732be1750911b88ce462d080c6bc3242e5221e586d436a0b6124922045dca786",
+      "matchesStaged": true
+    },
+    {
+      "path": "song-app.js",
+      "httpStatus": 200,
+      "sha256": "aeedfaeba6287ac1a10eece27f1bf458b3284dddec7dc4e9f463cc4b2d637fb4",
+      "matchesStaged": true
+    },
+    {
+      "path": "song-app.css",
+      "httpStatus": 200,
+      "sha256": "7d821eeec14da7ab57ce93e4e7bf6aeb9d5eb3b48d195aee2efd9554660b24f8",
+      "matchesStaged": true
+    },
+    {
+      "path": "song-seed.js",
+      "httpStatus": 200,
+      "sha256": "5b65494579e50fc11b9127df1e182c54277ab959c0f75fe1d5308541b03d8b20",
+      "matchesStaged": true
+    },
+    {
+      "path": "song-lib.js",
+      "httpStatus": 200,
+      "sha256": "1a4882a156c0cef7c34068aa6bd58688ff059f86c9c92f73e8917f246819e3f5",
+      "matchesStaged": true
+    },
+    {
+      "path": "src/core/constants.js",
+      "httpStatus": 200,
+      "sha256": "179099c72a52fd050a8dc5f8dc3c2220dbc0d588922d0c618bf7c5124a35d913",
+      "matchesStaged": true
+    },
+    {
+      "path": "src/domain/schedule.js",
+      "httpStatus": 200,
+      "sha256": "c62130d1b642ceb9a8c0f7174bf8231a20cf31126944f5d49a260197540f78fb",
+      "matchesStaged": true
+    },
+    {
+      "path": "src/domain/sheet.js",
+      "httpStatus": 200,
+      "sha256": "6495acc4ea19434edec21c9cf973f0d0d618385bdab109a752e5cfd55e736544",
+      "matchesStaged": true
+    },
+    {
+      "path": "src/services/firebase.js",
+      "httpStatus": 200,
+      "sha256": "d0306397bb2cd439019c455434a577a488302b9de72c1f5379af0a722eba229c",
+      "matchesStaged": true
+    },
+    {
+      "path": "src/services/storage.js",
+      "httpStatus": 200,
+      "sha256": "868fb2d155bb35fb7cc8f8ff072a7b8df7c4de8826c8cdbd91b9a872cd5ab432",
+      "matchesStaged": true
+    }
+  ]
+}

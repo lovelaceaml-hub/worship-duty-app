@@ -1,5 +1,7 @@
 # Welcome to LV Zion Worship Service
 
+Current version note (7 September 2026): the compatible Foundation update keeps the existing member and coordinator workflows. The planned redesign is awaiting a selected direction and complete prototype approval. Continue using the instructions below.
+
 A simple guide to using the app — no technical background needed.
 
 **The app:** https://lv-zion-duties.web.app

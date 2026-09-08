@@ -1,13 +1,13 @@
 ---
 lane: LB
 title: Backend
-state: reviewed
+state: deployed
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/backend
 review: Sol-pass
 depends_on: L0
-updated: 2026-09-08T00:58Z
+updated: 2026-09-08T01:51Z
 ---
 
 # LB: Backend

@@ -1,0 +1,23 @@
+{
+  "scope": "Read-only endpoint smoke. Fictional calendar member has no events; public schedule values were checked in memory and not retained. No notification or write function was invoked.",
+  "calendar": {
+    "httpStatus": 200,
+    "formatValid": true,
+    "fictionalMemberEvents": 0
+  },
+  "publicSchedule": {
+    "httpStatus": 200,
+    "version": 1,
+    "serviceCount": 82,
+    "projectionKeysValid": true
+  },
+  "deployedFunctions": [
+    "onScheduleWrite",
+    "dutyReminders",
+    "onRequestCreated",
+    "onRequestResolved",
+    "ics",
+    "publicSchedule",
+    "scheduledSheetSync"
+  ]
+}
