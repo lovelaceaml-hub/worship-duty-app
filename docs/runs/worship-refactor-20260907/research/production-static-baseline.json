@@ -1,0 +1,35 @@
+{
+  "scope": "Read-only public static assets before any refactor deployment; no member selection or Firebase data calls. Single-request transfer times are network samples, not browser startup metrics.",
+  "assets": [
+    {
+      "asset": "index.html",
+      "status": 200,
+      "bytes": 18678,
+      "elapsedMs": 225.6
+    },
+    {
+      "asset": "app.js",
+      "status": 200,
+      "bytes": 113257,
+      "elapsedMs": 342.1
+    },
+    {
+      "asset": "song-app.js",
+      "status": 200,
+      "bytes": 93204,
+      "elapsedMs": 325.7
+    },
+    {
+      "asset": "song-app.css",
+      "status": 200,
+      "bytes": 27686,
+      "elapsedMs": 204.1
+    },
+    {
+      "asset": "sw.js",
+      "status": 200,
+      "bytes": 3605,
+      "elapsedMs": 163.9
+    }
+  ]
+}

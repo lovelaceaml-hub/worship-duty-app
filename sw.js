@@ -33,7 +33,7 @@ try {
   messaging.onBackgroundMessage(payload => {
     const data = (payload && payload.data) || {};
     const title = data.title || 'Worship duty update';
-    self.registration.showNotification(title, { body: data.body || '', icon: 'icon.svg' });
+    self.registration.showNotification(title, { body: data.body || '', icon: 'icon.svg?v=DEV' });
   });
 } catch (e) {
   // gstatic unreachable / offline — SW still serves cached content below

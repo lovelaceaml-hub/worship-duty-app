@@ -28,7 +28,10 @@
       { "source": "song-app.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
       { "source": "song-app.css", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
       { "source": "song-seed.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
-      { "source": "song-lib.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+      { "source": "song-lib.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "src/**/*.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "src/**/*.mjs", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "src/**/*.css", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
     ],
     "rewrites": [
       { "source": "/ics/**", "function": "ics" }

@@ -1,19 +1,21 @@
 'use strict';
 
-/* ================= constants ================= */
+/* ================= foundation contracts ================= */
 
-const CATEGORIES = [
-  { name: 'Worship',        color: '#4338ca', duties: ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer'] },
-  { name: 'Usher Sisters',  color: '#be185d', duties: ['Usher Door', 'Usher Front', 'Usher Back'] },
-  { name: 'Usher Brothers', color: '#0369a1', duties: ['Usher #1', 'Usher #2', 'Lobby Security'] },
-  { name: 'Lobby',          color: '#b45309', duties: ['Lobby Desk #1', 'Lobby Desk #2'] },
-  { name: 'Translation',    color: '#047857', duties: ['Translation #1', 'Translation #2'] },
-  { name: 'Media',          color: '#6d28d9', duties: ['Media Booth #1', 'Media Booth #2'] },
-  { name: 'Parking Lot',    color: '#3f6212', duties: ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'] },
-  { name: 'Offering',       color: '#a21caf', duties: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'] }
-];
-const SERVICE_LABELS = ['Morning', 'Afternoon', 'Evening', 'Early Morning', 'Commemoration'];
-const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
+const APP_FOUNDATION = window.WorshipApp || {};
+const CORE = APP_FOUNDATION.core;
+const DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.schedule;
+const SHEET_DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.sheet;
+const STORAGE_SERVICE = APP_FOUNDATION.services && APP_FOUNDATION.services.storage;
+const FIREBASE_SERVICE = APP_FOUNDATION.services && APP_FOUNDATION.services.firebase;
+if (!CORE || !DOMAIN || !SHEET_DOMAIN || !STORAGE_SERVICE || !FIREBASE_SERVICE) {
+  throw new Error('WorshipApp foundation modules did not load');
+}
+
+const {
+  CATEGORIES, SERVICE_LABELS, WORSHIP_TYPES, DATA_KEY, FEATURES
+} = CORE;
+const ALL_DUTIES_ORDER = DOMAIN.allDutiesOrder(CATEGORIES);
 
 /* Seed data for state.departments (categoryName -> member names), used only
    the first time app/departments is missing/empty in Firestore (or local mode). */
@@ -27,7 +29,6 @@ const DEPARTMENTS_SEED = {
   'Parking Lot': [],
   'Offering': []
 };
-const DATA_KEY = 'wds-data-v2';
 /* Release stamp appended to every lazily-loaded local file. scripts/deploy.sh
    rewrites the 'DEV' token here, in index.html and in sw.js at release time, so
    long-lived browser caching can never serve a member a stale mix of files. */
@@ -51,23 +52,6 @@ const NAME_UNIFY_MAP = {
 /* Live copy of app/nameMap; null until the snapshot arrives (or in local mode). */
 let sharedNameMap = null;
 function unifiedNameMap() { return Object.assign({}, NAME_UNIFY_MAP, sharedNameMap || {}); }
-
-/* Feature toggles — managed live in Manage → Features, synced to every device */
-const FEATURES = [
-  { id: 'siteLock',       label: 'Site passcode',             desc: 'Everyone must enter the 4-digit passcode before the app opens on a new device.', def: true },
-  { id: 'editorLock',     label: 'Editor passcode',           desc: 'Require the passcode before anyone can open Manage and edit the schedule.', def: true },
-  { id: 'notifications',  label: 'New-duty alerts',           desc: 'Members are alerted when a duty is added for them.', def: true },
-  { id: 'reminders',      label: 'Day-before reminders',      desc: 'Members are reminded within 24 hours of each duty.', def: true },
-  { id: 'calendarExport', label: 'Add-to-calendar button',    desc: 'Members can download their duties to their phone calendar with built-in reminders.', def: true },
-  { id: 'whoElse',        label: '"Who else is serving?"',    desc: 'My Duties can expand the full lineup for each service.', def: true },
-  { id: 'choirSong',      label: 'Choir song on services',    desc: 'Show the choir song line on each service card.', def: true },
-  { id: 'songPicker',     label: 'Presider song picker',      desc: 'Presiders get a Presider tab and buttons in My Duties to plan the songs for their service.', def: true },
-  { id: 'pastServices',   label: 'Past services',             desc: 'Allow browsing services that already happened.', def: true },
-  { id: 'emptyDuties',    label: 'Show unassigned duties',    desc: 'The schedule shows every duty slot, even ones without a name yet.', def: false },
-  { id: 'conflictWarnings', label: 'Double-duty warnings',    desc: 'Show a notice when one person has two duties in the same service.', def: true },
-  { id: 'sheetSync',      label: 'Google Sheet sync',        desc: 'Pull schedule updates from the published Google Sheet automatically.', def: true },
-  { id: 'changeRequests', label: 'Change requests',          desc: 'Members can request schedule changes from My Duties; the scheduler is notified.', def: true }
-];
 
 function feat(id) {
   const f = (state.settings && state.settings.features) || {};
@@ -115,72 +99,23 @@ function dateBadge(iso) {
   if (iso === toISO(t)) return 'Tomorrow';
   return '';
 }
-function svcId(svc) {
-  return svc.date + '_' + svc.service.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-}
-function slugify(s) {
-  return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-function requestId(svcIdVal, duty, createdAt) {
-  return svcIdVal + '_' + slugify(duty) + '_' + createdAt;
-}
+function svcId(svc) { return DOMAIN.serviceId(svc); }
+function slugify(s) { return DOMAIN.slugify(s); }
+function requestId(svcIdVal, duty, createdAt) { return DOMAIN.requestId(svcIdVal, duty, createdAt); }
 function svcDateTime(svc) {
   return new Date(svc.date + 'T' + (svc.time || '12:00') + ':00');
 }
-function dutyCategory(duty) {
-  return CATEGORIES.find(c => c.duties.indexOf(duty) !== -1) || CATEGORIES[0];
-}
+function dutyCategory(duty) { return DOMAIN.dutyCategory(duty, CATEGORIES); }
 
 /* ================= double-duty conflicts ================= */
 
-const ALL_DUTIES_ORDER = CATEGORIES.reduce((out, cat) => out.concat(cat.duties), []);
-
-function sortDuties(duties) {
-  return duties.slice().sort((a, b) => ALL_DUTIES_ORDER.indexOf(a) - ALL_DUTIES_ORDER.indexOf(b));
-}
-function sameDuties(a, b) {
-  if (!a || !b || a.length !== b.length) return false;
-  return a.every((d, i) => d === b[i]);
-}
-function isPrayerDuty(duty) {
-  return dutyCategory(duty).name === 'Worship' && /prayer/i.test(duty);
-}
-function isUsherDuty(duty) {
-  const category = dutyCategory(duty).name;
-  return category === 'Usher Sisters' || category === 'Usher Brothers';
-}
-/* Prayer + usher is an intentional pairing. Other duplicate pairs remain
-   warnings: two usher duties, two prayer duties, or either with another role. */
-function hasNonExemptPair(duties) {
-  for (let i = 0; i < duties.length; i++) {
-    for (let j = i + 1; j < duties.length; j++) {
-      const prayerUsherPair =
-        (isPrayerDuty(duties[i]) && isUsherDuty(duties[j])) ||
-        (isUsherDuty(duties[i]) && isPrayerDuty(duties[j]));
-      if (!prayerUsherPair) return true;
-    }
-  }
-  return false;
-}
+function sortDuties(duties) { return DOMAIN.sortDuties(duties, CATEGORIES); }
+function sameDuties(a, b) { return DOMAIN.sameDuties(a, b); }
 /* Every member appearing in 2+ duties of this service, with their duty list (stable order).
    A single prayer + usher pairing is intentionally omitted from the conflicts. */
-function conflictsFor(svc) {
-  const byMember = {};
-  const assignments = svc.assignments || {};
-  Object.keys(assignments).forEach(duty => {
-    const name = assignments[duty];
-    if (!name) return;
-    (byMember[name] || (byMember[name] = [])).push(duty);
-  });
-  return Object.keys(byMember)
-    .filter(name => byMember[name].length >= 2 && hasNonExemptPair(byMember[name]))
-    .map(name => ({ name, duties: sortDuties(byMember[name]) }));
-}
+function conflictsFor(svc) { return DOMAIN.conflictsFor(svc, CATEGORIES); }
 /* conflictsFor minus ones already acknowledged (conflictOk) with a matching duty list */
-function activeConflicts(svc) {
-  const ok = svc.conflictOk || {};
-  return conflictsFor(svc).filter(c => !sameDuties(ok[c.name], c.duties));
-}
+function activeConflicts(svc) { return DOMAIN.activeConflicts(svc, CATEGORIES); }
 
 /* Small inline badge shown next to a name that holds 2+ duties in this service.
    Red = needs review; amber = an editor marked it OK. */
@@ -198,202 +133,46 @@ function conflictBadge(svc, member) {
 
 /* ================= coordinator planning (workload + subs) ================= */
 
-function weeksAgoISO(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n * 7);
-  return toISO(d);
-}
-
 /* Per-member duty counts across the whole schedule: rolling 4/8-week windows,
    upcoming load, year total, last served and next duty dates. */
-function workloadStats() {
-  const t = todayISO(), w4 = weeksAgoISO(4), w8 = weeksAgoISO(8);
-  const stats = {};
-  const ensure = m => stats[m] || (stats[m] = { past4: 0, past8: 0, upcoming: 0, total: 0, last: '', next: '' });
-  (state.members || []).forEach(ensure);
-  (state.services || []).forEach(svc => {
-    Object.keys(svc.assignments || {}).forEach(duty => {
-      const m = svc.assignments[duty];
-      if (!m) return;
-      const s = ensure(m);
-      s.total++;
-      if (svc.date < t) {
-        if (svc.date >= w8) s.past8++;
-        if (svc.date >= w4) s.past4++;
-        if (svc.date > s.last) s.last = svc.date;
-      } else {
-        s.upcoming++;
-        if (!s.next || svc.date < s.next) s.next = svc.date;
-      }
-    });
-  });
-  return stats;
-}
+function workloadStats() { return DOMAIN.workloadStats(state.services, state.members, todayISO(), CATEGORIES); }
 
 /* Best substitutes for a duty in a service: same department, not already
    serving that service, lightest recent+upcoming load first, then longest
    since last served. */
 function suggestSubs(svc, duty, excludeName, stats) {
-  const cat = dutyCategory(duty);
-  let roster = (state.departments || {})[cat.name] || [];
-  if (!roster.length) roster = state.members;
-  const busy = {};
-  Object.keys(svc.assignments || {}).forEach(d => { if (svc.assignments[d]) busy[svc.assignments[d]] = true; });
-  return roster
-    .filter(m => m !== excludeName && !busy[m])
-    .map(m => ({ m, s: stats[m] || { past4: 0, upcoming: 0, last: '' } }))
-    .sort((a, b) =>
-      (a.s.upcoming + a.s.past4) - (b.s.upcoming + b.s.past4) ||
-      (a.s.last === b.s.last ? 0 : (a.s.last < b.s.last ? -1 : 1)))
-    .slice(0, 3)
-    .map(x => x.m);
+  return DOMAIN.suggestSubs(svc, duty, excludeName, stats, state.departments, state.members, CATEGORIES);
 }
 
 /* ================= google sheet sync — pure parsers ================= */
 
 /* Minimal RFC-4180-ish CSV parser. Handles quoted fields, embedded commas,
    escaped quotes (""), and CRLF/LF line endings. Returns array of row arrays. */
-function parseCSV(text) {
-  const rows = [];
-  let row = [];
-  let field = '';
-  let inQuotes = false;
-  const s = String(text == null ? '' : text);
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (s[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else {
-        field += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ',') {
-      row.push(field); field = '';
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && s[i + 1] === '\n') i++;
-      row.push(field); field = '';
-      rows.push(row); row = [];
-    } else {
-      field += c;
-    }
-  }
-  // flush trailing field/row if the file did not end with a newline
-  if (field !== '' || row.length) { row.push(field); rows.push(row); }
-  return rows;
-}
+function parseCSV(text) { return SHEET_DOMAIN.parseCSV(text); }
 
 /* Set of every duty name the app knows, built from CATEGORIES. */
-function validDutySet() {
-  const set = {};
-  CATEGORIES.forEach(cat => cat.duties.forEach(duty => { set[duty] = true; }));
-  return set;
-}
-
-const SHEET_MONTHS = {
-  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-};
+function validDutySet() { return SHEET_DOMAIN.validDutySet(CATEGORIES); }
 
 /* Parse a sheet date like "Sat, May 02" (no year). Returns { month, day } or null. */
-function parseSheetDate(raw) {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/^[a-z]+,?\s*/i, '').trim(); // drop weekday prefix
-  const m = cleaned.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
-  if (!m) return null;
-  const mon = SHEET_MONTHS[m[1].slice(0, 3).toLowerCase()];
-  if (mon == null) return null;
-  const day = parseInt(m[2], 10);
-  if (!(day >= 1 && day <= 31)) return null;
-  return { month: mon, day: day };
-}
+function parseSheetDate(raw) { return SHEET_DOMAIN.parseSheetDate(raw); }
 
 /* Infer the year for a month/day so the resulting date is closest to `today`.
    Tries today's year -1, +0, +1 and picks the smallest absolute distance. */
-function inferYearISO(month, day, today) {
-  const base = today || new Date();
-  const y0 = base.getFullYear();
-  const nowT = base.getTime();
-  let best = null, bestDiff = Infinity;
-  [y0 - 1, y0, y0 + 1].forEach(y => {
-    const d = new Date(y, month, day, 12, 0, 0);
-    const diff = Math.abs(d.getTime() - nowT);
-    if (diff < bestDiff) { bestDiff = diff; best = d; }
-  });
-  return best.getFullYear() + '-' + pad(best.getMonth() + 1) + '-' + pad(best.getDate());
-}
+function inferYearISO(month, day, today) { return SHEET_DOMAIN.inferYearISO(month, day, today); }
 
 /* Parse a 12-hour time like "9:00 AM" into 24-hour "HH:MM". Returns '' if unparseable. */
-function parseSheetTime(raw) {
-  if (!raw) return '';
-  const m = String(raw).trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp])[Mm]?$/);
-  if (!m) return '';
-  let h = parseInt(m[1], 10);
-  const min = m[2];
-  const pm = m[3].toLowerCase() === 'p';
-  if (h === 12) h = 0;
-  if (pm) h += 12;
-  return pad(h) + ':' + min;
-}
+function parseSheetTime(raw) { return SHEET_DOMAIN.parseSheetTime(raw); }
 
 /* Turn parsed CSV rows into service objects.
    Returns { services, members, warnings }. Pure — no window/document/state. */
 function sheetRowsToServices(rows, today) {
-  const result = { services: [], members: [], warnings: [] };
-  if (!rows || !rows.length) return result;
-  const header = rows[0].map(h => String(h == null ? '' : h).trim().toLowerCase());
-  const col = name => header.indexOf(name);
-  const iDate = col('date'), iService = col('service'), iWorship = col('worship');
-  const iTime = col('time'), iDuty = col('duty'), iMember = col('member');
-  if (iDate < 0 || iService < 0 || iDuty < 0 || iMember < 0) {
-    result.warnings.push('Sheet is missing required columns (Date, Service, Duty, Member).');
-    return result;
-  }
-  const valid = validDutySet();
-  const byKey = {}; // date + '|' + serviceLabel -> service object
-  const membersSeen = {};
-  const unknownDuties = {};
-  for (let r = 1; r < rows.length; r++) {
-    const row = rows[r];
-    const cell = i => (i >= 0 && i < row.length ? String(row[i] == null ? '' : row[i]).trim() : '');
-    const rawDate = cell(iDate), serviceLabel = cell(iService);
-    const duty = cell(iDuty), member = cell(iMember);
-    // A blank Member cell in an otherwise-valid duty row is an explicit
-    // "clear this duty" (mergeSheetServices writes '' over the old name).
-    // Date/Service/Duty are still required; a *deleted* row leaves the slot.
-    if (!rawDate || !serviceLabel || !duty) continue;
-    const md = parseSheetDate(rawDate);
-    if (!md) continue;
-    const iso = inferYearISO(md.month, md.day, today);
-    const isChoirSong = duty === 'Choir Song';
-    if (!isChoirSong && !valid[duty]) {
-      if (!unknownDuties[duty]) { unknownDuties[duty] = true; result.warnings.push('Unknown duty in sheet: "' + duty + '"'); }
-      continue;
-    }
-    const key = iso + '|' + serviceLabel;
-    let svc = byKey[key];
-    if (!svc) {
-      svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {}, choirSong: '' };
-      byKey[key] = svc;
-      result.services.push(svc);
-    }
-    if (isChoirSong) {
-      if (member) svc.choirSong = member; // never clear the song on a blank cell
-      continue;
-    }
-    svc.assignments[duty] = member; // '' explicitly clears the slot
-    if (member) membersSeen[member] = true;
-  }
-  result.members = Object.keys(membersSeen).sort();
-  return result;
+  return SHEET_DOMAIN.sheetRowsToServices(rows, today, CATEGORIES);
 }
-
 /* ================= state ================= */
 
 let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
 let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
+let firebaseGateway = null;
 
 /* Anonymous sign-in no longer blocks startup. Reads are open in
    firestore.rules, so making the whole app wait for a sign-in round trip
@@ -401,7 +180,9 @@ let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
    it (the rules require request.auth != null), so every write goes through
    fbWrite() and waits on this promise instead. */
 let authReady = Promise.resolve();
-function fbWrite(fn) { return authReady.then(fn); }
+function fbWrite(fn) {
+  return firebaseGateway ? firebaseGateway.write(fn) : authReady.then(fn);
+}
 let settingsLoaded = false; // true once shared settings arrived (or local mode)
 let departmentsLoaded = false; // true once the departments doc arrived (or local mode)
 let membersLoaded = false; // true once the members doc arrived (or local mode)
@@ -435,48 +216,23 @@ function seedState() {
     requests: []
   }));
 }
-function saveLocal() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); }
-function loadLocal() {
-  try {
-    const obj = JSON.parse(localStorage.getItem(DATA_KEY));
-    if (obj && Array.isArray(obj.members) && Array.isArray(obj.services)) {
-      if (!obj.settings) obj.settings = { features: {}, pinHash: '' };
-      if (!obj.departments) obj.departments = {};
-      if (!Array.isArray(obj.requests)) obj.requests = [];
-      return obj;
-    }
-  } catch (e) { /* ignore */ }
-  return null;
-}
-
-/* persistence that works in both modes */
-function persistService(svc) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), svc));
-  else saveLocal();
-}
-function persistDeleteService(id) {
-  if (fb) fbWrite(() => fb.deleteDoc(fb.doc(fb.db, 'schedule', id)));
-  else saveLocal();
-}
-function persistMembers() {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'members'), { list: state.members }));
-  else saveLocal();
-}
-function persistSettings() {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'settings'), state.settings));
-  else saveLocal();
-}
-function persistDepartments() {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments }));
-  else saveLocal();
-}
-function persistNameMap(map) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'nameMap'), { map: map }));
-}
-function persistRequest(req) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'requests', req.id), req));
-  else saveLocal();
-}
+const storageGateway = STORAGE_SERVICE.createAdapter({
+  storage: localStorage,
+  dataKey: DATA_KEY,
+  getState: () => state,
+  getFirebase: () => fb,
+  getAuthReady: () => authReady,
+  serviceId: svcId
+});
+function saveLocal(value) { return storageGateway.saveLocal(value == null ? state : value); }
+function loadLocal() { return storageGateway.loadLocal(); }
+function persistService(svc) { return storageGateway.persistService(svc); }
+function persistDeleteService(id) { return storageGateway.persistDeleteService(id); }
+function persistMembers() { return storageGateway.persistMembers(); }
+function persistSettings() { return storageGateway.persistSettings(); }
+function persistDepartments() { return storageGateway.persistDepartments(); }
+function persistNameMap(map) { return storageGateway.persistNameMap(map); }
+function persistRequest(req) { return storageGateway.persistRequest(req); }
 function resolveRequest(id, status) {
   const req = state.requests.find(r => r.id === id);
   if (!req) return;
@@ -486,46 +242,23 @@ function resolveRequest(id, status) {
   persistRequest(req);
 }
 function persistAll() {
-  if (!fb) { saveLocal(); return; }
-  // Collect every write as a thunk, then commit in chunks — a full seed or a
-  // large import can exceed Firestore's 500-op single-batch cap.
-  const ops = [];
-  const keep = {};
-  state.services.forEach(svc => {
-    const id = svcId(svc);
-    keep[id] = true;
-    ops.push(b => b.set(fb.doc(fb.db, 'schedule', id), svc));
-  });
-  (fb.knownIds || []).forEach(id => { if (!keep[id]) ops.push(b => b.delete(fb.doc(fb.db, 'schedule', id))); });
-  ops.push(b => b.set(fb.doc(fb.db, 'app', 'members'), { list: state.members }));
-  ops.push(b => b.set(fb.doc(fb.db, 'app', 'settings'), state.settings));
-  ops.push(b => b.set(fb.doc(fb.db, 'app', 'departments'), { map: state.departments }));
-  for (let i = 0; i < ops.length; i += 450) {
-    const chunk = ops.slice(i, i + 450);
-    fbWrite(() => {
-      const batch = fb.writeBatch(fb.db);
-      chunk.forEach(fn => fn(batch));
-      return batch.commit();
-    });
-  }
+  return storageGateway.persistAll();
 }
 
 /* ================= sorting / filtering ================= */
 
 function sortedServices() {
-  return state.services.slice().sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+  return DOMAIN.sortedServices(state.services);
 }
-function upcomingServices() { const t = todayISO(); return sortedServices().filter(s => s.date >= t); }
-function pastServices() { const t = todayISO(); return sortedServices().filter(s => s.date < t); }
+function upcomingServices() { return DOMAIN.upcomingServices(state.services, todayISO()); }
+function pastServices() { return DOMAIN.pastServices(state.services, todayISO()); }
 
 function dutiesFor(member, list) {
-  const out = [];
-  (list || upcomingServices()).forEach(svc => {
-    CATEGORIES.forEach(cat => cat.duties.forEach(duty => {
-      if ((svc.assignments || {})[duty] === member) out.push({ svc, duty, cat });
-    }));
-  });
-  return out;
+  return DOMAIN.dutiesFor(member, list || upcomingServices(), CATEGORIES).map(item => ({
+    svc: item.service,
+    duty: item.duty,
+    cat: item.cat
+  }));
 }
 
 /* ================= notifications ================= */
@@ -558,7 +291,6 @@ async function sysNotify(title, body) {
 async function registerPush() {
   try {
     if (!fb || !fb.messaging || !fb.getToken) return;
-    await authReady;                                 // token docs are a write
     if (!window.FCM_VAPID_KEY) return;              // owner has not pasted the key yet
     if (!notifyOn() || !ui.me) return;
     const reg = (await navigator.serviceWorker.ready) ||
@@ -573,10 +305,10 @@ async function registerPush() {
     const prevName = localStorage.getItem('wds-fcm-name');
     if (prevToken && prevToken !== token) {
       // token rotated — drop the stale doc
-      try { await fb.deleteDoc(fb.doc(fb.db, 'tokens', prevToken)); } catch (e) { /* ignore */ }
+      try { await firebaseGateway.deleteDocument('tokens', prevToken); } catch (e) { /* ignore */ }
     }
     if (prevToken !== token || prevName !== ui.me) {
-      await fb.setDoc(fb.doc(fb.db, 'tokens', token), { name: ui.me, updatedAt: Date.now() });
+      await firebaseGateway.writeDocument('tokens', token, { name: ui.me, updatedAt: Date.now() });
       localStorage.setItem('wds-fcm-token', token);
       localStorage.setItem('wds-fcm-name', ui.me);
     }
@@ -585,13 +317,12 @@ async function registerPush() {
 
 async function unregisterPush() {
   try {
-    await authReady;                                 // deleting a token doc is a write
     const token = localStorage.getItem('wds-fcm-token');
     if (fb && fb.deleteToken && fb.messaging) {
       try { await fb.deleteToken(fb.messaging); } catch (e) { /* ignore */ }
     }
     if (fb && token) {
-      try { await fb.deleteDoc(fb.doc(fb.db, 'tokens', token)); } catch (e) { /* ignore */ }
+      try { await firebaseGateway.deleteDocument('tokens', token); } catch (e) { /* ignore */ }
     }
     localStorage.removeItem('wds-fcm-token');
     localStorage.removeItem('wds-fcm-name');
@@ -697,50 +428,19 @@ const SHEET_SYNC_MIN_MS = 5 * 60 * 1000; // auto-sync throttle window
    to that duty's category roster if not already present (covers brand-new
    names and existing names appearing in a category for the first time). */
 function mergeSheetServices(services) {
-  let added = 0, updated = 0;
-  let deptsChanged = false;
-  const addToDept = (duty, member) => {
-    if (!member || !departmentsLoaded) return;
-    const cat = dutyCategory(duty).name;
-    if (!state.departments) state.departments = {};
-    const roster = state.departments[cat] || (state.departments[cat] = []);
-    if (roster.indexOf(member) === -1) { roster.push(member); roster.sort(); deptsChanged = true; }
-  };
-  services.forEach(sheetSvc => {
-    const existing = findService(svcId(sheetSvc));
-    if (!existing) {
-      const fresh = {
-        date: sheetSvc.date,
-        time: sheetSvc.time || '',
-        service: sheetSvc.service,
-        worship: sheetSvc.worship || '',
-        choirSong: sheetSvc.choirSong || '',
-        assignments: Object.assign({}, sheetSvc.assignments)
-      };
-      state.services.push(fresh);
-      persistService(fresh);
-      Object.keys(fresh.assignments).forEach(duty => addToDept(duty, fresh.assignments[duty]));
-      added++;
-      return;
-    }
-    let changed = false;
-    if (sheetSvc.time && existing.time !== sheetSvc.time) { existing.time = sheetSvc.time; changed = true; }
-    if (sheetSvc.worship && existing.worship !== sheetSvc.worship) { existing.worship = sheetSvc.worship; changed = true; }
-    if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong) { existing.choirSong = sheetSvc.choirSong; changed = true; }
-    if (!existing.assignments) existing.assignments = {};
-    // Only touch duties the sheet mentions — Media Booth, Parking Lot and
-    // Offering assignments are preserved.
-    Object.keys(sheetSvc.assignments).forEach(duty => {
-      addToDept(duty, sheetSvc.assignments[duty]);
-      if (existing.assignments[duty] !== sheetSvc.assignments[duty]) {
-        existing.assignments[duty] = sheetSvc.assignments[duty];
-        changed = true;
-      }
-    });
-    if (changed) { persistService(existing); updated++; }
+  const merge = DOMAIN.mergeSheetServices({
+    currentServices: state.services,
+    departments: state.departments,
+    sheetServices: services,
+    departmentsLoaded,
+    categories: CATEGORIES
   });
-  if (deptsChanged) persistDepartments();
-  return { added: added, updated: updated };
+  state.services = merge.services;
+  state.departments = merge.departments;
+  merge.addedServices.forEach(persistService);
+  merge.updatedServices.forEach(persistService);
+  if (merge.departmentsChanged) persistDepartments();
+  return merge;
 }
 
 async function syncFromSheet(manual) {
@@ -1727,47 +1427,10 @@ function renderManageData() {
    Pure w.r.t. persistence — caller persists whatever comes back touched.
    Returns { membersChanged, membersMerged, touchedServices, departmentsChanged }. */
 function applyNameMap(map) {
-  const canon = n => (map[n] || n);
-  const membersMerged = state.members.filter(m => map[m]).length;
-  const membersChanged = membersMerged > 0;
-  if (membersChanged) {
-    const seen = {};
-    state.members = state.members.map(canon).filter(m => (seen[m] ? false : (seen[m] = true)));
-    state.members.sort();
-  }
-  const touchedServices = [];
-  state.services.forEach(svc => {
-    let touched = false;
-    const assignments = svc.assignments || {};
-    Object.keys(assignments).forEach(duty => {
-      const old = assignments[duty], now = canon(old);
-      if (now !== old) { assignments[duty] = now; touched = true; }
-    });
-    const ok = svc.conflictOk || {};
-    const merged = {};
-    Object.keys(ok).forEach(name => {
-      const now = canon(name);
-      if (now !== name) touched = true;
-      const dutyList = merged[now] ? merged[now].concat(ok[name]) : ok[name];
-      const seenDuty = {};
-      merged[now] = dutyList.filter(d => (seenDuty[d] ? false : (seenDuty[d] = true)));
-    });
-    if (touched) { svc.conflictOk = merged; touchedServices.push(svc); }
-  });
-  let departmentsChanged = false;
-  Object.keys(state.departments || {}).forEach(cat => {
-    const roster = state.departments[cat] || [];
-    const seen = {};
-    const merged = roster.map(canon).filter(m => (seen[m] ? false : (seen[m] = true)));
-    merged.sort();
-    if (merged.length !== roster.length || merged.some((m, i) => m !== roster[i])) {
-      state.departments[cat] = merged;
-      departmentsChanged = true;
-    }
-  });
-  return { membersChanged, membersMerged, touchedServices, departmentsChanged };
+  const result = DOMAIN.applyNameMap(state, map);
+  state = result.state;
+  return result;
 }
-
 /* Upcoming setlists, read only so My Duties can tell a presider whether the
    songs for their service are picked and confirmed. The song picker
    (song-app.js) still owns every write to this collection. Kept out of `state`
@@ -2245,7 +1908,7 @@ function setSyncPill(live) {
 const pulseInFlight = new Set(); // stops a double-count before the write resolves
 
 function pulse(event) {
-  if (!fb || !fb.increment) return;
+  if (!firebaseGateway || !fb || !fb.increment) return;
   try {
     const day = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
     const key = 'wd-pulse-' + day;
@@ -2253,11 +1916,12 @@ function pulse(event) {
     if (seen.includes(event) || pulseInFlight.has(event)) return; // counted already
     pulseInFlight.add(event);
 
-    fbWrite(() => fb.setDoc(
-      fb.doc(fb.db, 'pulse', day),
+    firebaseGateway.writeDocument(
+      'pulse',
+      day,
       { date: day, [event]: fb.increment(1) },
       { merge: true }
-    )).then(() => {
+    ).then(() => {
       // Only remember it once the write actually landed. Marking it earlier
       // meant a rejected write (offline, rules not yet deployed, quota) made
       // this device stop counting for the rest of the day, silently.
@@ -2332,6 +1996,10 @@ async function initFirebase(config) {
     increment: fsMod.increment,
     knownIds: []
   };
+  firebaseGateway = FIREBASE_SERVICE.createAdapter({
+    firebase: fb,
+    getAuthReady: () => authReady
+  });
   pulse('opens');
   // Cloud Messaging — best-effort; unsupported browsers just leave messaging null.
   try {
@@ -2402,7 +2070,7 @@ async function initFirebase(config) {
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'departments'), snap => {
     const map = snap.exists() ? (snap.data().map || {}) : null;
     if (!map || !Object.keys(map).length) {
-      state.departments = DEPARTMENTS_SEED;
+      state.departments = JSON.parse(JSON.stringify(DEPARTMENTS_SEED));
       persistDepartments();
     } else {
       state.departments = map;
