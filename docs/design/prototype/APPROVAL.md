@@ -19,3 +19,7 @@ Reviewed candidate commit:97069d0a224f2f42ff3fbde6aa3ce049d7fc4c69. The final co
 Latest product feedback: Anthony requested a correction to repeated team rows and a local view using real information and data. The prior candidate is being revised for this request. See the local real-data preview decision in the run record; full-prototype approval remains pending.
 
 The requested real-data correction is available locally at http://127.0.0.1:8100/?screen=home and is reviewed and privately backed up at source commit 2c4c24b. Real records are not part of this committed artifact. The duplicate rows and read-only display edge cases are corrected. Full-prototype approval remains pending; no response has been inferred.
+
+## Latest requested revision
+
+On 8 September Anthony requested a broader calendar and service workspace redesign, including a restrained wider palette. This supersedes the old B-only layout constraint. The exact acceptance is in ../../runs/worship-refactor-20260907/decisions/20260908-calendar-redesign.md. The revised candidate is implemented, tested and reviewed; no production interface approval is inferred. Its exact browser/test source is frozen in ../../runs/worship-refactor-20260907/research/calendar-redesign/source-manifest.json and its fictional phone/desktop references are in open-bulletin/screenshots/calendar-20260908/.

@@ -30,6 +30,11 @@ Coordinator: current Codex task with coordinator_terra supervision
 | LB | Backend | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/backend | Sol-pass | L0 |
 | LCF | Confirmation timestamp fix | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/confirmation-fix | Sol-pass | LF2 |
 | LI | Integration and completion | running | controller | /Users/anthony/Projects/worship-duty-app | pending | LF,LR,LV,LD,LB,LM,LP,LC |
+| LDU | Calendar and workspace redesign | merged | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/calendar-redesign | Sol-pass | LDP |
+| LVC | Calendar journey verification | merged | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/calendar-verification | Sol-pass | LDU |
+
+<!-- lane: LDU state: merged model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/calendar-redesign review: Sol-pass updated: 2026-09-08T18:53Z -->
+<!-- lane: LVC state: merged model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/calendar-verification review: Sol-pass updated: 2026-09-08T18:53Z -->
 
 ## Folders
 

@@ -1,8 +1,20 @@
 # Controller continuation checkpoint
 
+## Latest checkpoint: calendar redesign verified
+
+Anthony requested broader layout and color changes, shared month calendars, prominent header name selection, grouped personal duties, a simpler Presider workspace and department-first Manage. This local revision is complete, pending Anthony's full-prototype approval for production. The canonical and fictional8099 previews now use the same updated browser source. Current-records8100 remains memory-only and read-only. All fully enabled checks, final reference Axe views, real aggregate smoke and native Sol high review2 passed. Source hashes are frozen in research/calendar-redesign/source-manifest.json. Both new Luna writers and their coordinator are terminal; no test server remains. Root-owned8100,8099,8098 and8097 previews are preserved.
+
+Next: use the requested candidate at http://127.0.0.1:8100/?screen=home for Anthony's review. Do not infer approval from the request for these changes. On explicit approval, record the response and candidate source commit, then continue the production screen-host seam and disjoint Member/Presider/Coordinator lanes under the existing plan. Production remains runtime9247f75, stamp20260908041730.
+
+The older checkpoints below are historical and superseded where they conflict.
+
 8 September 2026. Latest user steering: correct duplicated team rows and provide a real-data preview. The local GET-only preview is running at http://127.0.0.1:8100/?screen=home and holds records only in memory. Do not capture or commit its real data. Full-prototype approval remains pending. The full refactor and redesign plan is not complete. The real-data preview correction is integrated, reviewed and privately backed up at source commit 2c4c24b. The canonical loopback server runs port 8100 with current records in memory only. Anthony's full-prototype approval remains the next product decision after reviewing these corrections.
 
-## Authority and next action
+## Current authority: 8 September calendar revision
+
+Anthony has now authorized broader palette and layout changes, shared month calendars, grouped personal duties, a simpler Presider workspace, prominent top-right name selection and department-first Manage. Implement the exact acceptance in decisions/20260908-calendar-redesign.md. LDU and LVC own isolated UI and test worktrees; root owns integration. All original-B-only instructions below are historical and superseded. Local real-data preview remains read-only; full revised-prototype approval is pending.
+
+## Historical authority and next action
 
 Anthony selected original Design B, Open Bulletin. His correction was: "no. that looks dumb. I just didnt want huge text". Preserve the original layout, spacing, white/blue palette and cards, with smaller oversized typography only. Original directions and type-refinement references are immutable.
 

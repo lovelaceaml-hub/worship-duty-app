@@ -1,5 +1,9 @@
 # Prototype state coverage
 
+## Calendar revision, 8 September 2026
+
+Current target is the shared header member selector, month/day controls, filtered department schedules, whole-month disclosure list, personal date cards and full teams, Presider My presiding/All services, prominent confirmation state, no-plan context, ordered Preparation/Glory/Thanks groups, and department-first Manage. Real mode remains read-only; fictional mode retains save, failed-save recovery, confirmation, changed-after-confirmation, history and editing flows. The fully enabled canonical calendar journey check passed. It covers15 Axe states, header/calendar focus, year boundary, past months, filtered counts, coincident service labels, full teams, all-presider browsing, missing plans, legacy confirmation, changed/sung status, A03 in all song groups, save failure/retry, fictional editing, and failed-load isolation. Earlier receipts below describe historical candidates.
+
 Each row names a route or action that can be opened from the local prototype. The route state is identified in the page marker and the result is visible in the page.
 
 | State or journey | Route and action selector | Visible result |

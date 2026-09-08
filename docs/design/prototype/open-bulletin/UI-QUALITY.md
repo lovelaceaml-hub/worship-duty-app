@@ -1,5 +1,7 @@
 # Open Bulletin prototype quality receipt
 
+Current calendar revision: warm neutral surfaces, dark green emphasis and restrained labeled department accents replace the historical blue-only requirement. Display text stays modest. Phone430x932 and desktop1280x932 were rendered with fictional data and showed no page overflow or browser errors. The canonical journey suite and all eight final reference Axe views passed, including keyboard focus. Text tokens meet AA contrast on the revised surfaces. Native Sol high final delta review passed; evidence is in the calendar-redesign run folder. Historical quality receipts below remain separate.
+
 ## Scope
 
 This receipt covers the local fictional prototype at http://127.0.0.1:8099/open-bulletin/index.html. The existing controller server was observed on loopback port 8099 with PID 92999, session 19894. No production source or external service was used.

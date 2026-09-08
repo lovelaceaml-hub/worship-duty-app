@@ -260,8 +260,8 @@
 
   <div class="lanes-wrap">
     <div class="lanes-scroll">
-      <div class="lanes-inner" style="min-width: 2600px;">
-        <div class="lanes-row" style="grid-template-columns: repeat(13, 1fr);">
+      <div class="lanes-inner" style="min-width: 3200px;">
+        <div class="lanes-row" style="grid-template-columns: repeat(16, 1fr);">
 
     <div class="lane-col " data-lane="L0">
       <div class="lane-card state-reviewed">
@@ -312,6 +312,24 @@
           <dt>Review</dt><dd>Sol-pass</dd>
           <dt>Depends on</dt><dd>LF2</dd>
           <dt>Updated</dt><dd>2026-09-08T04:19Z</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LDU-CALENDAR-REDESIGN-20260908">
+      <div class="lane-card state-merged">
+        <div class="lane-head">
+          <span class="lane-id">LDU-CALENDAR-REDESIGN-20260908</span>
+          <span class="lane-state">merged</span>
+        </div>
+        <h3 class="lane-title">Open Bulletin calendar redesign</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/calendar-redesign</dd>
+          <dt>Review</dt><dd>Sol-pass</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08T18:53Z</dd>
         </dl>
 
       </div>
@@ -496,6 +514,42 @@
 
       </div>
     </div>
+
+    <div class="lane-col " data-lane="LDU">
+      <div class="lane-card state-merged">
+        <div class="lane-head">
+          <span class="lane-id">LDU</span>
+          <span class="lane-state">merged</span>
+        </div>
+        <h3 class="lane-title">Calendar and workspace redesign</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/calendar-redesign</dd>
+          <dt>Review</dt><dd>Sol-pass</dd>
+          <dt>Depends on</dt><dd>LDP</dd>
+          <dt>Updated</dt><dd>2026-09-08T18:53Z</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LVC">
+      <div class="lane-card state-merged">
+        <div class="lane-head">
+          <span class="lane-id">LVC</span>
+          <span class="lane-state">merged</span>
+        </div>
+        <h3 class="lane-title">Calendar redesign fictional acceptance verification</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/calendar-verification</dd>
+          <dt>Review</dt><dd>Sol-pass</dd>
+          <dt>Depends on</dt><dd>LDU, calendar, redesign, prototype</dd>
+          <dt>Updated</dt><dd>2026-09-08T18:53Z</dd>
+        </dl>
+
+      </div>
+    </div>
         </div>
 
 
@@ -525,6 +579,12 @@
           <h4>Local design directions</h4>
           <p>Anthony&#39;s exact correction: &quot;no need to use stitch.&quot;</p>
           <span class="file-tag mono">20260907-local-design.md</span>
+        </div>
+
+        <div class="decision-card">
+          <h4>Calendar and service workspace redesign</h4>
+          <p>Anthony requested this revision on 8 September 2026. It supersedes the earlier instruction to preserve original B geometry and a white/blue-only palette. No Stitch. Use modest typography, restrained department colors, accessible controls, and no religious imagery or emoji.</p>
+          <span class="file-tag mono">20260908-calendar-redesign.md</span>
         </div>
 
         <div class="decision-card">
@@ -727,6 +787,42 @@
           <span class="file-tag mono">2026-09-08T14-35Z-LV-native-review7-accepted-browser-evidence-and-reque.md</span>
           <strong>2026-09-08T14:35Z LV Native review7 accepted browser evidence and requested three bounded test-evidence corrections; round8 continues under existing authority.</strong>
           <p></p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T18-22Z-LDU-calendar-redesign-candidate-frozen.md</span>
+          <strong>LDU calendar redesign candidate freeze</strong>
+          <p>Task ID: LDU-CALENDAR-REDESIGN-20260908</p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T18-37Z-LDU-review1-corrections.md</span>
+          <strong>LDU review1 correction freeze</strong>
+          <p>Task ID: LDU-CALENDAR-REDESIGN-20260908</p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T18-38Z-LVC-calendar-verification.md</span>
+          <strong>2026-09-08T18:38Z LVC calendar verification</strong>
+          <p>Task ID: `LVC-CALENDAR-VERIFICATION-20260908`</p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T18-40Z-LDU-lvc-contrast-landmark.md</span>
+          <strong>LDU LVC contrast and landmark freeze</strong>
+          <p>Task ID: LDU-CALENDAR-REDESIGN-20260908</p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T18-41Z-LVC-controller-rerun-started.md</span>
+          <strong>2026-09-08T18:41Z LVC controller rerun started</strong>
+          <p>The LVC test source remains frozen with all acceptance assertions enabled and no `if (false)` blocks or Axe bypass. The earlier strict run stopped at the first phone Home Axe gate because the LDU prototype had muted-label contrast findings and duplicate January 2027 calendar and month schedule landmark names.</p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">20260908-calendar-preview-visible.md</span>
+          <strong>Revised local candidate visible</strong>
+          <p>LDU source candidate is integrated into canonical prototype browser files. The existing loopback8100 preview now serves it with current records in memory only. Controller passed aggregate phone/desktop checks, and opened the preview through Codex (queued, not proof of user viewing). Native source review1 returned three accepted findings; final correction and LVC interaction checks continue. No production deployment, database write or full-prototype approval occurred.</p>
         </li>
 
         <li class="log-entry">

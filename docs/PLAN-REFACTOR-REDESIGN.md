@@ -70,7 +70,7 @@ Required docs: project AGENTS.md, README quick links, HANDOFF.md, USER-MANUAL.md
 
 ## Frozen design targets
 
-Anthony selected original direction B, Open Bulletin, on 7 September 2026. He rejected the compact layout draft and clarified that he only wanted smaller oversized text. Preserve original B layout and spacing. See docs/DESIGN.md for the authoritative clarification. Complete prototype approval remains pending; production UI lanes M/P/C may not start.
+Anthony selected original direction B, Open Bulletin, on 7 September 2026. He rejected the compact layout draft and clarified that he only wanted smaller oversized text. On 8 September Anthony superseded this with a broader palette and calendar/workspace redesign. See docs/runs/worship-refactor-20260907/decisions/20260908-calendar-redesign.md for current targets. Complete prototype approval remains pending; production UI lanes M/P/C may not start.
 
 ## Build log
 
@@ -117,3 +117,9 @@ Anthony selected original direction B, Open Bulletin, on 7 September 2026. He re
 - 2026-09-08: Local real-data preview is available on loopback port 8100. Actual source comparison matched assignments and song order; phone/desktop smoke and fictional accessibility, empty, failed-load and fidelity edge cases passed. Native review1 produced seven accepted corrections, review2 left one request-status normalization edge case, and review3 is running after its fix. The separate final browser delta passed native Sol review. No production UI approval, deployment or data write occurred.
 
 - 2026-09-08: The local real-data preview correction passed native Sol review3 and the separate final browser delta review. All accepted findings are fixed. Controller passed six server checks, eight fictional Axe views, state and data-fidelity edge cases, and real phone/desktop read-only smoke without record capture. Source commit 2c4c24b was pushed to the verified private repository. The final loopback server uses the canonical source. Full prototype approval and production interface lanes remain pending.
+
+- 2026-09-08: Anthony authorized a broader local redesign: shared month calendars, prominent header name selection, department distinction, grouped personal duties and a simpler Presider workspace. LDU and LVC run in isolated worktrees. Real-data display remains read-only; production UI approval is pending.
+
+- 2026-09-08: Revised calendar/workspace prototype is available in the local real-data preview. Native source review1 returned three accepted display/focus findings; all were corrected. Fully enabled fictional acceptance then exposed two accessibility issues, corrected before root passed the complete suite with zero failures or skips. Final delta/new-test review2 and canonical smoke are in progress. Production UI approval remains pending.
+
+- 2026-09-08: Calendar/workspace local redesign passed final native Sol high review2 with no actionable regressions. Root passed the fully enabled canonical journey suite, eight final fictional Axe captures and actual read-only aggregate phone/desktop smoke. The source and fictional references are frozen; LDU/LVC writers and their coordinator are terminal. Both local previews use the revised source. Full revised-prototype approval and production interface lanes remain pending. Private backup is the final closing operation.

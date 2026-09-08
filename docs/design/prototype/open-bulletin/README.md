@@ -1,37 +1,25 @@
-# Open Bulletin prototype
+# Calendar and service workspace prototype
 
-This folder contains the complete fictional clickable prototype for the selected Open Bulletin direction.
+Current requested revision: [acceptance and ownership](../../../runs/worship-refactor-20260907/decisions/20260908-calendar-redesign.md). Anthony authorized a broader palette and layout on 8 September 2026. Historical original-B references remain unchanged.
 
-## Open locally
+## Review on this Mac
 
-With the existing local server running:
+[Current records, view-only](http://127.0.0.1:8100/?screen=home). Start the server with:
 
-http://127.0.0.1:8099/open-bulletin/index.html
+```sh
+node /Users/anthony/Projects/worship-duty-app/scripts/real-preview.cjs
+```
 
-The prototype is self contained. It uses local HTML, CSS, JavaScript, inline markup, Georgia, Arial, and fictional September 2026 fixtures. It does not call Firebase, a spreadsheet, a remote URL, or a font or icon service.
+Choose your name in the top-right header. Home, My Duties and Presider share month navigation. The Home month list expands individual services; My Duties groups a date in one card; Presider offers My presiding and All services, actual service details and separate Preparation, Glory and Thanks groups. Manage starts with department selection.
 
-## Screens and review routes
+The current-records preview is read-only and holds data in memory. Its status and fetched time appear in the footer. No records belong in reference images, tests or Git. Ordinary index.html still loads fictional fixtures and supports editable prototype journeys. No production interface approval is inferred.
 
-- Home: ?screen=home
-- My Duties: ?screen=duty
-- Presider: ?screen=presider
-- Manage: ?screen=manage
-- Empty, Loading, Offline, Error, and Success: ?screen=empty, ?screen=loading, ?screen=offline, ?screen=error, ?screen=success
-- Save failure review route: ?screen=presider&review=save-failure
+## Verification
 
-The review toolbar is closed at the bottom of the page so it does not alter the product shell. It exposes the named route states for review only.
+The new deterministic test lives at /Users/anthony/Projects/worship-duty-app/tests/calendar-redesign.mjs after integration. It uses injected fictional data and the loopback server. Existing production regression and emulator checks remain separate.
 
-## Local validation
+Current source review and verification receipts: [calendar redesign evidence](../../../runs/worship-refactor-20260907/research/calendar-redesign/). Original direction, typography and prior prototype evidence are historical, not assertions that the new revision matches an old screenshot.
 
-From /Users/anthony/Projects/worship-refactor-worktrees/design:
+## Current references
 
-    node --check docs/design/prototype/open-bulletin/app.js
-    node --check docs/design/prototype/open-bulletin/fixtures.js
-    node docs/runs/worship-refactor-20260907/research/design/prototype/correction-2/verify-prototype.cjs
-    node docs/design/prototype/contract/scripts/design-contract.mjs
-
-The correction receipt uses the installed Playwright package from /Users/anthony/Projects/worship-duty-app/node_modules/playwright and the local axe package from /Users/anthony/Projects/worship-duty-app/node_modules/@axe-core/playwright. It installs loopback-only request routes before creating each page, uses fictional fixtures, and writes its results to /Users/anthony/Projects/worship-refactor-worktrees/design/docs/runs/worship-refactor-20260907/research/design/prototype/correction-2/results.json. The prototype server is the existing loopback server on port 8099.
-
-## Scope and approval
-
-The source visual anchor is /Users/anthony/Projects/worship-refactor-worktrees/design/docs/design/prototype/type-refinement/. This prototype extends that layout with local journeys and state changes. It remains a proposal artifact pending Anthony's full prototype approval. It is not production UI.
+[Phone and desktop views](screenshots/calendar-20260908/README.md) use fictional information. The canonical comprehensive journey test and eight final Axe capture views passed. Native Sol high source and delta reviews passed.

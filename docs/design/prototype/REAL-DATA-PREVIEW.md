@@ -2,7 +2,7 @@
 
 Anthony requested real information and data on 8 September 2026 after reporting duplicated team rows. This local view supports that design review. It is not a production interface release or a full-prototype approval.
 
-Open [the view-only preview](http://127.0.0.1:8100/?screen=home) on this Mac. Choose a name for personal duties. Open Presider with no name selected to browse saved plans. Manage shows the selected service's assignments, pending requests, people, department rosters and feature values without editing controls.
+Open [the view-only preview](http://127.0.0.1:8100/?screen=home) on this Mac. Choose a name for personal duties. Choose your name in the top-right header. Home, My Duties and Presider share a month calendar with previous/next arrows and clickable days. Whole month clears the day filter. Presider defaults to My presiding; choose All services to browse every presider in the selected month without selecting a name. Manage shows the selected service's assignments, pending requests, people, department rosters and feature values without editing controls.
 
 To start from the canonical repository:
 
@@ -10,7 +10,7 @@ To start from the canonical repository:
 node /Users/anthony/Projects/worship-duty-app/scripts/real-preview.cjs
 ```
 
-The server binds only to 127.0.0.1. A page reload reads current allowlisted Firestore records, and the header shows when they were fetched. Navigation and filtering use that in-memory view. There is no background subscription or offline persistence in this preview. If reading fails, the page displays an unavailable state without substituting sample records.
+The server binds only to 127.0.0.1. A page reload reads current allowlisted Firestore records, and the footer shows when they were fetched. Navigation and filtering use that in-memory view. There is no background subscription or offline persistence in this preview. If reading fails, the page displays an unavailable state without substituting sample records.
 
 The server reads schedule, roster, departments, requests, saved song plans, song history and feature settings. The catalog comes from the same local static catalog currently used by the live app. It preserves saved plans without matching schedule documents for Presider browsing, while Home lists scheduled services only.
 

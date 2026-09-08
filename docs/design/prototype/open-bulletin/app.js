@@ -23,6 +23,7 @@
   const today = FIX.today || "2026-09-10";
   const scheduledServices = sourceServices.filter((service) => !service.standalone).slice().sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.time24 || a.time || "").localeCompare(String(b.time24 || b.time || "")));
   const firstService = scheduledServices.find((service) => String(service.date || "") >= today) || scheduledServices[scheduledServices.length - 1] || sourceServices[0] || null;
+  const initialCalendarDate = FIX.initialDate || (firstService && firstService.date) || today;
   const READ_ONLY_ACTIONS = new Set([
     "request-change", "cancel-request", "calendar", "copy-calendar", "subscribe-calendar", "copy-feed-link", "clear-alert",
     "save-setlist", "retry-save", "confirm-songs", "add-song", "move-song", "remove-song", "manage-tab", "preview-name-unify",
@@ -38,11 +39,16 @@
   const state = {
     screen: readScreen(),
     selectedName: REAL_MODE ? "" : (sourceMembers[0] || ""),
-    selectedDate: FIX.initialDate || (firstService && firstService.date) || "",
+    selectedDate: "",
+    calendarMonth: initialCalendarDate.slice(0, 7),
+    calendarDay: "",
     selectedServiceId: (firstService && firstService.id) || "",
     expandedServices: firstService ? { [firstService.id]: true } : {},
+    openDutyTeams: {},
     homeDepartment: "All",
     dutyDepartment: "All",
+    presiderFilter: "mine",
+    departmentChoice: (FIX.categories && FIX.categories[0] && FIX.categories[0].name) || "",
     showPast: false,
     dutyNoteOpen: false,
     memberNotice: "",
@@ -255,6 +261,91 @@
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
+  function monthStart(monthKey) {
+    const value = /^\d{4}-\d{2}$/.test(String(monthKey || "")) ? String(monthKey) + "-01" : today;
+    const date = dateObject(value) || new Date();
+    date.setDate(1);
+    return date;
+  }
+
+  function monthKey(date) {
+    const source = date instanceof Date ? date : dateObject(date);
+    if (!source) return today.slice(0, 7);
+    return source.getFullYear() + "-" + String(source.getMonth() + 1).padStart(2, "0");
+  }
+
+  function monthTitle(key) {
+    return monthStart(key).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+
+  function shiftMonth(key, amount) {
+    const date = monthStart(key);
+    date.setMonth(date.getMonth() + amount);
+    return monthKey(date);
+  }
+
+  function monthCalendarDays(key) {
+    const first = monthStart(key);
+    const startOffset = first.getDay();
+    const count = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+    const days = [];
+    for (let index = 0; index < startOffset; index += 1) days.push(null);
+    for (let day = 1; day <= count; day += 1) {
+      days.push(key + "-" + String(day).padStart(2, "0"));
+    }
+    while (days.length % 7) days.push(null);
+    return days;
+  }
+
+  function departmentKey(name) {
+    return String(name || "department").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "department";
+  }
+
+  function departmentForDuty(duty) {
+    return categoryForDuty(duty).name || "Worship";
+  }
+
+  function serviceSort(a, b) {
+    return String(a.date || "").localeCompare(String(b.date || "")) || serviceTime(a).localeCompare(serviceTime(b)) || String(a.id || "").localeCompare(String(b.id || ""));
+  }
+
+  function sourceServicesForMonth(key, options) {
+    const opts = options || {};
+    return state.services.filter((service) => service.date && service.date.slice(0, 7) === key && (opts.includeStandalone || !service.standalone)).sort(serviceSort);
+  }
+
+  function servicesForSelectedCalendar(options) {
+    const opts = options || {};
+    if (state.calendarDay) return servicesForDate(state.calendarDay).filter((service) => opts.includeStandalone || !service.standalone).sort(serviceSort);
+    return sourceServicesForMonth(state.calendarMonth, opts);
+  }
+
+  function setCalendarSelection(date) {
+    state.calendarDay = date || "";
+    state.selectedDate = state.calendarDay;
+    if (date) state.calendarMonth = date.slice(0, 7);
+  }
+
+  function selectedCalendarLabel() {
+    return state.calendarDay ? fullDate(state.calendarDay) : monthTitle(state.calendarMonth) + ", whole month";
+  }
+
+  function viewingPastCalendar() {
+    return state.calendarMonth < today.slice(0, 7) || Boolean(state.calendarDay && state.calendarDay < today);
+  }
+
+  function songDisplayNumber(song) {
+    if (!song) return "";
+    const explicit = song.appendixNumber !== undefined ? song.appendixNumber : song.number;
+    const match = String(explicit || "").match(/(?:appx|appendix)\s*\.?\s*#?\s*(\d+)/i);
+    return match ? "A" + String(Number(match[1])).padStart(2, "0") : String(song.number || "");
+  }
+
+  function songLabel(song) {
+    const number = songDisplayNumber(song);
+    return number.charAt(0) === "A" ? number : "#" + number;
+  }
+
   function fullDate(iso) {
     const date = dateObject(iso);
     return date ? date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "Date not listed";
@@ -300,15 +391,15 @@
   }
 
   function servicesForDate(date) {
-    return state.services.filter((service) => service.date === date).sort((a, b) => serviceTime(a).localeCompare(serviceTime(b)));
+    return state.services.filter((service) => service.date === date).sort(serviceSort);
   }
 
   function upcomingServices() {
-    return state.services.filter((service) => service.date >= today && !service.standalone).sort((a, b) => a.date.localeCompare(b.date) || serviceTime(a).localeCompare(serviceTime(b)));
+    return state.services.filter((service) => service.date >= today && !service.standalone).sort(serviceSort);
   }
 
   function pastServices() {
-    return state.services.filter((service) => service.date < today).sort((a, b) => b.date.localeCompare(a.date) || serviceTime(b).localeCompare(serviceTime(a)));
+    return state.services.filter((service) => service.date < today && !service.standalone).sort((a, b) => serviceSort(b, a));
   }
 
   function myAssignments(name, includePast) {
@@ -316,7 +407,7 @@
     const source = (includePast ? state.services : state.services.filter((service) => service.date >= today)).filter((service) => !service.standalone);
     return source.flatMap((service) => Object.entries(service.assignments || {})
       .filter(([, member]) => member === name)
-      .map(([duty]) => ({ service, duty, department: categoryForDuty(duty).name })));
+      .map(([duty]) => ({ service, duty, department: departmentForDuty(duty) })));
   }
 
   function nextDutyFor(name) {
@@ -328,17 +419,42 @@
     return Boolean(service && ((service.assignments && service.assignments.Presider === name) || (setlist && setlist.presider === name)));
   }
 
+  function setlistIsConfirmed(setlist) {
+    return Boolean(setlist && (setlist.confirmed === true || setlist.status === "confirmed" || setlist.status === "changed" || setlist.status === "sung"));
+  }
+
+  function setlistStatusLabel(setlist, fallback) {
+    if (!setlist) return fallback || "Not confirmed";
+    if (setlist.status === "sung") return "Sung";
+    if (setlist.status === "changed") return "Changed after confirmation";
+    if (setlistIsConfirmed(setlist)) return "Confirmed";
+    return fallback || "Not confirmed";
+  }
+
   function presiderServices(name) {
-    const source = REAL_MODE ? state.services : upcomingServices();
-    return source.filter((service) => REAL_MODE && !name ? Boolean(setlistById(service.id)) : isPresider(name, service)).sort((a, b) => a.date.localeCompare(b.date) || serviceTime(a).localeCompare(serviceTime(b)));
+    const allServices = state.services.filter((service) => REAL_MODE || !service.standalone || setlistById(service.id));
+    const selectedDay = state.screen === "presider" && state.calendarDay;
+    const selectedMonth = state.calendarMonth || today.slice(0, 7);
+    if (state.presiderFilter === "all") {
+      const all = allServices.filter((service) => service.date.slice(0, 7) === selectedMonth).sort(serviceSort);
+      return selectedDay ? all.filter((service) => service.date === selectedDay) : all;
+    }
+    if (REAL_MODE && !name) return [];
+    const todayMonth = today.slice(0, 7);
+    const browsingPast = selectedMonth < todayMonth || (selectedDay && selectedDay < today);
+    const source = browsingPast
+      ? allServices.filter((service) => service.date.slice(0, 7) === selectedMonth)
+      : allServices.filter((service) => service.date.slice(0, 7) === selectedMonth && service.date >= today);
+    const mine = source.filter((service) => isPresider(name, service)).sort(serviceSort);
+    return selectedDay ? mine.filter((service) => service.date === selectedDay) : mine;
   }
 
   function selectedPresiderService() {
     const options = presiderServices(state.selectedName);
     if (!options.some((service) => service.id === state.selectedServiceId)) {
-      state.selectedServiceId = options[0]?.id || state.services[0]?.id || "";
+      state.selectedServiceId = options[0]?.id || "";
     }
-    return serviceById(state.selectedServiceId);
+    return options.find((service) => service.id === state.selectedServiceId) || null;
   }
 
   function memberOptions(selected, includeBlank) {
@@ -355,7 +471,7 @@
 
   function songOptions(selected, allowBlank) {
     const values = allowBlank ? ['<option value="">No song selected</option>'] : [];
-    return values.concat(state.songs.map((song) => '<option value="' + escAttr(song.id) + '"' + (song.id === selected ? " selected" : "") + ">#" + escapeHtml(song.number) + " " + escapeHtml(song.title) + "</option>")).join("");
+    return values.concat(state.songs.map((song) => '<option value="' + escAttr(song.id) + '"' + (song.id === selected ? " selected" : "") + ">" + escapeHtml(songLabel(song)) + " " + escapeHtml(song.title) + "</option>")).join("");
   }
 
   function notice(text, kind) {
@@ -382,7 +498,7 @@
   }
 
   function outlineText(service, setlist) {
-    const preparation = preparationEntries(setlist).map((entry) => "#" + entry.song.number + " " + entry.song.title + " (" + formatDuration(entry.song.durationSec) + ")");
+    const preparation = preparationEntries(setlist).map((entry) => songLabel(entry.song) + " " + entry.song.title + " (" + formatDuration(entry.song.durationSec) + ")");
     const order = ["Glory song", "Opening prayer"];
     if (service.worshipType === "Sabbath Day" && service.serviceLabel === "Morning") order.push("Thanks song", "Prayer of thanks");
     order.push("Choir song", "Sermon", "Closing prayer");
@@ -449,14 +565,60 @@
     });
   }
 
+  function captureRenderFocus() {
+    const active = document.activeElement;
+    if (!active || active === document.body) return null;
+    const data = active.dataset || {};
+    const calendar = active.closest && active.closest("[data-calendar]");
+    const focus = {
+      id: active.id || "",
+      action: data.action || "",
+      change: data.change || "",
+      date: data.date || "",
+      service: data.service || "",
+      field: data.field || "",
+      context: calendar ? calendar.dataset.calendar : ""
+    };
+    return focus.id || focus.action || focus.change ? focus : null;
+  }
+
+  function findRenderFocus(focus) {
+    if (!focus) return null;
+    if (focus.id) return document.getElementById(focus.id);
+    if (focus.action) {
+      return Array.from(document.querySelectorAll("[data-action]")).find((element) => {
+        const data = element.dataset || {};
+        const calendar = element.closest && element.closest("[data-calendar]");
+        return data.action === focus.action &&
+          (!focus.date || data.date === focus.date) &&
+          (!focus.service || data.service === focus.service) &&
+          (!focus.context || (calendar && calendar.dataset.calendar === focus.context));
+      }) || null;
+    }
+    return Array.from(document.querySelectorAll("[data-change]")).find((element) => {
+      const data = element.dataset || {};
+      return data.change === focus.change && (!focus.field || data.field === focus.field);
+    }) || null;
+  }
+
+  function restoreRenderFocus(focus, scrollTop) {
+    if (!focus && !Number.isFinite(scrollTop)) return;
+    window.requestAnimationFrame(() => {
+      const target = findRenderFocus(focus);
+      if (target && typeof target.focus === "function") target.focus({ preventScroll: true });
+      if (Number.isFinite(scrollTop) && typeof window.scrollTo === "function") window.scrollTo(0, scrollTop);
+    });
+  }
+
   function renderMemberControl(id) {
     const controlId = id || "member-select";
-    return '<p class="selected-member member-picker"><label for="' + controlId + '">Selected member</label><select id="' + controlId + '" data-change="member">' + memberOptions(state.selectedName) + "</select></p>";
+    const prompt = state.selectedName ? "" : '<span class="member-needed" data-member-state="name-needed">Name needed to personalize</span>';
+    return '<div class="selected-member member-picker" data-member-selector><label for="' + controlId + '">Member</label><select id="' + controlId + '" data-change="member" aria-describedby="' + controlId + '-state">' + memberOptions(state.selectedName) + "</select><span id=\"" + controlId + "-state\" class=\"member-state\">" + (prompt || "Schedule is personalized for this member") + "</span></div>";
   }
 
   function renderHeading(kicker, title, options) {
     const opts = options || {};
-    const controls = (opts.memberControl ? renderMemberControl(opts.memberId) : "") + (opts.control || "");
+    const controls = opts.control || "";
     return '<section class="compact-heading" aria-labelledby="main-title"><div><p class="kicker">' + escapeHtml(kicker) + '</p><h1 id="main-title" tabindex="-1">' + escapeHtml(title) + "</h1>" +
       (opts.subtitle ? '<p class="heading-subtitle">' + escapeHtml(opts.subtitle) + "</p>" : "") +
       "</div>" + (controls ? '<div class="heading-controls">' + controls + "</div>" : "") + "</section>";
@@ -491,6 +653,32 @@
       '<span class="date-strip-note">' + escapeHtml(monthLabel) + '</span>' + (extra || "") + '</div>';
   }
 
+  function renderMonthCalendar(context, includeStandalone) {
+    const key = state.calendarMonth || today.slice(0, 7);
+    const selected = state.calendarDay;
+    const days = monthCalendarDays(key);
+    const dayCounts = {};
+    (includeStandalone ? sourceServicesForMonth(key, { includeStandalone: true }) : sourceServicesForMonth(key)).forEach((service) => {
+      dayCounts[service.date] = (dayCounts[service.date] || 0) + 1;
+    });
+    const dayMarkup = days.map((date) => {
+      if (!date) return '<span class="calendar-day calendar-day-empty" aria-hidden="true"></span>';
+      const count = dayCounts[date] || 0;
+      const day = Number(date.slice(-2));
+      const pressed = selected === date;
+      const todayMarker = date === today ? " Today" : "";
+      return '<button class="calendar-day' + (pressed ? " selected" : "") + (count ? " has-services" : "") + '" type="button" data-action="calendar-day" data-date="' + escAttr(date) + '" data-calendar-day="' + escAttr(date) + '" aria-label="' + escAttr(fullDate(date) + (count ? ", " + count + " service" + (count === 1 ? "" : "s") : "") + todayMarker) + '" aria-pressed="' + String(pressed) + '"><span>' + day + '</span>' + (count ? '<small>' + count + '</small>' : '<small aria-hidden="true"></small>') + '</button>';
+    }).join("");
+    return '<section class="month-calendar" data-calendar="' + escAttr(context || "shared") + '" data-calendar-month="' + escAttr(key) + '" aria-label="' + escAttr(monthTitle(key) + " calendar") + '"><div class="month-calendar-header"><div><h2 id="' + escAttr((context || "shared") + "-calendar-title") + '">' + escapeHtml(monthTitle(key)) + '</h2></div><div class="month-calendar-actions"><button class="calendar-nav" type="button" data-action="calendar-prev" aria-label="Previous month"><span aria-hidden="true">‹</span></button><button class="calendar-nav" type="button" data-action="calendar-next" aria-label="Next month"><span aria-hidden="true">›</span></button><button class="calendar-clear" type="button" data-action="calendar-clear" aria-pressed="' + String(!selected) + '">Whole month</button></div></div><div class="calendar-weekdays" aria-hidden="true">' + ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => '<span>' + day + '</span>').join("") + '</div><div class="calendar-grid">' + dayMarkup + '</div><p class="calendar-selection" data-calendar-selection>' + escapeHtml(selected ? "Selected day: " + selectedCalendarLabel() : "Showing the whole month") + '</p></section>';
+  }
+
+  function renderDepartmentControls(value, changeName, context) {
+    const selected = value || "All";
+    const options = ['<option value="All"' + (selected === "All" ? " selected" : "") + ">All departments</option>"];
+    state.categories.forEach((category) => options.push('<option value="' + escAttr(category.name) + '"' + (selected === category.name ? " selected" : "") + ">" + escapeHtml(category.name) + "</option>"));
+    return '<div class="department-controls" data-department-control="' + escAttr(context || "shared") + '"><div><p class="section-label">Departments</p></div><label class="department-picker" for="' + escAttr((context || "shared") + "-department") + '">Department<select id="' + escAttr((context || "shared") + "-department") + '" data-change="' + escAttr(changeName) + '">' + options.join("") + '</select></label></div>';
+  }
+
   function renderDepartmentSelect(value, changeName) {
     const opts = ['<option value="All"' + (value === "All" ? " selected" : "") + ">All departments</option>"];
     state.categories.forEach((category) => opts.push('<option value="' + escAttr(category.name) + '"' + (value === category.name ? " selected" : "") + ">" + escapeHtml(category.name) + "</option>"));
@@ -500,11 +688,33 @@
   function assignmentEntries(service, filter) {
     const rows = [];
     const assignments = service && service.assignments || {};
+    const seen = new Set();
     state.categories.forEach((category) => category.duties.forEach((duty) => {
       if (filter && filter !== "All" && category.name !== filter) return;
+      if (seen.has(duty)) return;
+      seen.add(duty);
       if (Object.prototype.hasOwnProperty.call(assignments, duty)) rows.push({ category: category.name, duty, member: assignments[duty] || "" });
     }));
     return rows;
+  }
+
+  function renderDepartmentTeam(rows, options) {
+    const opts = options || {};
+    const rowClass = opts.rowClass || "service-team-row";
+    const groups = [];
+    (rows || []).forEach((row) => {
+      let group = groups.find((entry) => entry.category === row.category);
+      if (!group) {
+        group = { category: row.category, rows: [] };
+        groups.push(group);
+      }
+      group.rows.push(row);
+    });
+    if (!groups.length) return '<p class="service-empty">No assigned duties are listed.</p>';
+    return groups.map((group) => '<section class="team-department department-' + departmentKey(group.category) + '" data-department-section="' + escAttr(group.category) + '"><div class="team-department-heading"><span class="department-tag">' + escapeHtml(group.category) + '</span><span class="department-duty-count">' + group.rows.length + " dut" + (group.rows.length === 1 ? "y" : "ies") + '</span></div><div class="team-department-rows">' + group.rows.map((row) => {
+      const mine = row.member && row.member === state.selectedName;
+      return '<div class="' + rowClass + ' department-' + departmentKey(row.category) + '" data-department-row="' + escAttr(row.category) + '"><span class="assignment-duty">' + escapeHtml(row.duty) + '</span><strong class="' + (mine ? "is-mine" : "") + '">' + escapeHtml(row.member || "Unassigned") + (mine ? ' <em>You</em>' : "") + "</strong></div>";
+    }).join("") + '</div></section>').join("");
   }
 
   function renderAssignmentPairs(service, options) {
@@ -527,11 +737,9 @@
     const time = timeParts(serviceTime(service));
     const status = nearest ? "Nearest service" : (service.serviceLabel || service.worshipType || "Service");
     const detailLabel = expanded ? "Hide additional assignments" : "View " + remaining.length + " additional " + (remaining.length === 1 ? "assignment" : "assignments");
-    const details = state.features.whoElse && remaining.length ? '<details' + (expanded ? " open" : "") + "><summary>" + detailLabel + '</summary><div class="service-people service-people-extra">' + renderAssignmentPairs(service, { filter: state.homeDepartment, start: 12 }) + "</div></details>" : "";
-    return '<article class="service-card' + (nearest ? " nearest" : "") + '" data-service-card="' + escAttr(service.id) + '"><div class="service-card-top"><time datetime="' + escAttr(service.date + (serviceTime(service) ? "T" + serviceTime(service) : "")) + '">' + escapeHtml(time.large + " " + time.suffix) + '</time><span class="service-status">' + escapeHtml(status) + '</span></div><h3>' + escapeHtml((service.serviceLabel || service.worshipType || "Service") + " worship") + '</h3><p class="presider-line">Worship department</p><div class="service-people">' + shown.map((row) => {
-      const mine = row.member && row.member === state.selectedName;
-      return '<span>' + escapeHtml(row.duty) + '</span><strong class="' + (mine ? "is-mine" : "") + '">' + escapeHtml(row.member || "Unassigned") + (mine ? ' <em>You</em>' : "") + "</strong>";
-    }).join("") + "</div>" + (remaining.length ? '<p class="card-footnote">' + remaining.length + " more assignments in full team" + "</p>" : "") + details + "</article>";
+    const rowMarkup = (rows) => renderDepartmentTeam(rows);
+    const details = state.features.whoElse && remaining.length ? '<details' + (expanded ? " open" : "") + '><summary>' + escapeHtml(detailLabel) + '</summary><div class="service-team service-team-extra">' + rowMarkup(remaining) + "</div></details>" : "";
+    return '<article class="service-card' + (nearest ? " nearest" : "") + '" data-service-card="' + escAttr(service.id) + '" data-service-id="' + escAttr(service.id) + '"><div class="service-card-top"><div><p class="service-type">' + escapeHtml(service.worshipType || "Service") + '</p><time datetime="' + escAttr(service.date + (serviceTime(service) ? "T" + serviceTime(service) : "")) + '">' + escapeHtml(time.large + " " + time.suffix) + '</time></div><span class="service-status">' + escapeHtml(status) + '</span></div><h3>' + escapeHtml((service.serviceLabel || service.worshipType || "Service") + " worship") + '</h3><p class="service-meta">' + escapeHtml(fullDate(service.date)) + '</p><div class="service-team">' + rowMarkup(shown) + '</div>' + (remaining.length ? '<p class="card-footnote">' + remaining.length + " more labeled assignments in full team" + "</p>" : "") + details + "</article>";
   }
 
   function renderScheduleSection(date) {
@@ -540,20 +748,49 @@
     return '<div class="service-grid">' + services.map((service, index) => renderServiceCard(service, index === 0)).join("") + "</div>";
   }
 
+  function renderServiceCollection(services, emptyMessage) {
+    const visible = (services || []).filter((service) => !service.standalone && (state.homeDepartment === "All" || assignmentEntries(service, state.homeDepartment).length)).sort(serviceSort);
+    if (!visible.length) return '<div class="service-empty">' + escapeHtml(emptyMessage || "No services match this view.") + "</div>";
+    return '<div class="service-grid" data-service-collection>' + visible.map((service, index) => renderServiceCard(service, index === 0)).join("") + "</div>";
+  }
+
+  function upcomingContextServices() {
+    const all = upcomingServices().filter((service) => state.homeDepartment === "All" || assignmentEntries(service, state.homeDepartment).length);
+    if (!all.length) return [];
+    const targetDate = state.calendarDay && state.calendarDay >= today && all.some((service) => service.date === state.calendarDay)
+      ? state.calendarDay
+      : all[0].date;
+    return all.filter((service) => service.date === targetDate).slice(0, 3);
+  }
+
+  function renderMonthServiceList() {
+    const monthServices = monthServicesForHome();
+    if (!monthServices.length) return '<div class="service-empty">' + escapeHtml(REAL_MODE ? "No current services are listed for this month." : "No fictional services are listed for this month.") + '</div>';
+    return '<div class="month-service-list" data-month-service-list>' + monthServices.map((service) => {
+      const team = assignmentEntries(service, state.homeDepartment);
+      return '<details class="month-service-row" data-service-id="' + escAttr(service.id) + '"><summary><span class="month-service-date">' + escapeHtml(compactDate(service.date)) + '</span><span class="month-service-time">' + escapeHtml(formatTime(serviceTime(service))) + '</span><span class="month-service-type">' + escapeHtml(service.worshipType || "Service") + '</span><strong>' + escapeHtml(service.serviceLabel || "Service") + '</strong><span class="month-service-count">' + team.length + " duty" + (team.length === 1 ? "" : "ies") + '</span></summary><div class="month-service-detail"><div class="service-team">' + renderDepartmentTeam(team) + '</div></div></details>';
+    }).join("") + '</div>';
+  }
+
+  function monthServicesForHome() {
+    return sourceServicesForMonth(state.calendarMonth).filter((service) => !service.standalone && (state.homeDepartment === "All" || assignmentEntries(service, state.homeDepartment).length));
+  }
+
+  function renderMonthSchedule() {
+    const monthServices = monthServicesForHome();
+    return '<section class="month-schedule" aria-labelledby="month-schedule-title" data-schedule="month"><div class="schedule-heading"><div><p class="section-label">Selected month</p><h2 id="month-schedule-title">' + escapeHtml(monthTitle(state.calendarMonth)) + '</h2></div><span class="schedule-count">' + monthServices.length + " service" + (monthServices.length === 1 ? "" : "s") + " in month" + '</span></div>' + renderMonthServiceList() + '</section>';
+  }
+
   function renderHome() {
-    const selected = state.selectedDate;
-    const count = servicesForDate(selected).filter((service) => !service.standalone).length;
-    const selectedService = servicesForDate(selected).find((service) => !service.standalone) || servicesForDate(selected)[0];
-    const headingLabel = selectedService ? (selectedService.worshipType ? selectedService.worshipType + ", " : "") + fullDate(selected) : (selected ? fullDate(selected) : "No service date selected");
-    const shortHeadingLabel = selectedService ? (selectedService.worshipType ? selectedService.worshipType + ", " : "") + compactDate(selected) : (selected ? compactDate(selected) : "No service date");
-    const homeFilter = '<span class="home-heading-filter">' + renderDepartmentSelect(state.homeDepartment, "home-department") + '</span>';
-    const dateFilter = '<span class="date-strip-filter">' + renderDepartmentSelect(state.homeDepartment, "home-department") + '</span>';
+    const upcoming = upcomingContextServices();
+    const selectedDate = state.calendarDay;
+    const contextLabel = selectedDate && selectedDate >= today && upcoming.length ? "Upcoming on selected day" : "Next upcoming day";
     return '<section class="prototype-page home-page" data-prototype-screen="home">' +
       renderHeading(REAL_MODE ? "Current schedule" : "Sabbath Day schedule", "Worship schedule", { memberControl: true }) +
       renderNextDuty("duty-note") +
-      renderDateStrip(selected, dateFilter) +
-      '<section class="schedule" aria-labelledby="schedule-title"><div class="schedule-heading"><div><p class="section-label">Upcoming schedule</p><h2 id="schedule-title"><span class="full-date">' + escapeHtml(headingLabel) + '</span><span class="short-date">' + escapeHtml(shortHeadingLabel) + '</span></h2></div><div class="schedule-heading-actions">' + homeFilter + '<span class="schedule-count">' + count + " service" + (count === 1 ? "" : "s") + "</span></div></div>" + renderScheduleSection(selected) + "</section>" +
-      '<section class="quick-links" aria-label="Quick actions"><a href="?screen=duty" data-nav="duty"><span>For you</span><strong>My Duties</strong><small>See every assignment</small></a><a href="?screen=presider" data-nav="presider"><span>For the service</span><strong>Presider</strong><small>Prepare one service</small></a><a href="?screen=manage" data-nav="manage"><span>For the team</span><strong>Manage</strong><small>Review people and requests</small></a></section></section>';
+      '<div class="home-calendar-column">' + renderMonthCalendar("home") + renderDepartmentControls(state.homeDepartment, "home-department", "home") + '</div>' +
+      '<section class="schedule upcoming-schedule" aria-labelledby="upcoming-title" data-schedule="upcoming"><div class="schedule-heading"><div><p class="section-label">Upcoming schedule</p><h2 id="upcoming-title">' + escapeHtml(contextLabel) + '</h2><p class="heading-subtitle">' + escapeHtml(selectedDate ? "Calendar focus: " + fullDate(selectedDate) : "Calendar focus: whole month") + '</p></div><span class="schedule-count">' + upcoming.length + " service" + (upcoming.length === 1 ? "" : "s") + " ahead" + '</span></div>' + renderServiceCollection(upcoming, REAL_MODE ? "No upcoming services are listed." : "No upcoming fictional services are listed.") + '</section>' +
+      renderMonthSchedule() + '</section>';
   }
 
   function requestFor(serviceId, duty, name) {
@@ -565,23 +802,54 @@
     return '<form class="request-form" data-form="request" data-service="' + escAttr(service.id) + '" data-duty="' + escAttr(duty) + '"><p>Request a change for ' + escapeHtml(duty) + "</p><label for=\"request-note\">Reason or note<textarea id=\"request-note\" name=\"note\" rows=\"3\" data-input=\"request-note\">" + escapeHtml(state.requestNote) + '</textarea></label><div class="button-row"><button class="button-primary" type="submit">Submit request</button><button class="text-button" type="button" data-action="cancel-request">Cancel</button></div></form>';
   }
 
+  function renderCompleteTeam(service) {
+    const rows = assignmentEntries(service, "All");
+    if (!rows.length) return '<p class="service-empty">No assigned duties are listed for this service.</p>';
+    return '<div class="complete-team" data-complete-team="' + escAttr(service.id) + '">' + renderDepartmentTeam(rows, { rowClass: "team-row" }) + '</div>';
+  }
+
+  function renderDutyRoleGroups(items) {
+    const groups = [];
+    (items || []).forEach((item) => {
+      let group = groups.find((entry) => entry.department === item.department);
+      if (!group) {
+        group = { department: item.department, items: [] };
+        groups.push(group);
+      }
+      group.items.push(item);
+    });
+    return groups.map((group) => '<section class="team-department duty-department department-' + departmentKey(group.department) + '" data-department-section="' + escAttr(group.department) + '"><div class="team-department-heading"><span class="department-tag">' + escapeHtml(group.department) + '</span><span class="department-duty-count">' + group.items.length + " dut" + (group.items.length === 1 ? "y" : "ies") + '</span></div><div class="team-department-rows">' + group.items.map((item) => {
+      const req = requestFor(item.service.id, item.duty, state.selectedName);
+      const requestOpen = state.requestOpen && state.requestOpen.serviceId === item.service.id && state.requestOpen.duty === item.duty;
+      const changeControl = !REAL_MODE && state.features.changeRequests ? (req && req.status === "pending" ? '<span class="request-status pending">Pending</span>' : '<button class="text-button" type="button" data-action="request-change" data-service="' + escAttr(item.service.id) + '" data-duty="' + escAttr(item.duty) + '">Request change</button>') : "";
+      return '<div class="duty-role-row department-' + departmentKey(item.department) + '" data-department-row="' + escAttr(item.department) + '"><div><strong>' + escapeHtml(item.duty) + "</strong></div><div><b>" + escapeHtml(state.selectedName) + '</b><small>You</small></div>' + changeControl + "</div>" + (requestOpen ? renderRequestForm(item.service, item.duty) : "");
+    }).join("") + '</div></section>').join("");
+  }
+
   function renderDutyRows() {
     if (REAL_MODE && !state.selectedName) return '<div class="service-empty">Choose your name to see your current assignments.</div>';
-    const assignments = myAssignments(state.selectedName, state.showPast && state.features.pastServices).filter((item) => state.dutyDepartment === "All" || item.department === state.dutyDepartment);
+    const includePast = state.features.pastServices && (state.showPast || viewingPastCalendar());
+    let assignments = myAssignments(state.selectedName, includePast).filter((item) => state.dutyDepartment === "All" || item.department === state.dutyDepartment);
+    if (state.calendarDay) assignments = assignments.filter((item) => item.service.date === state.calendarDay);
+    else assignments = assignments.filter((item) => item.service.date.slice(0, 7) === state.calendarMonth);
     const grouped = [];
     assignments.forEach((item) => {
-      let group = grouped.find((entry) => entry.service.id === item.service.id);
-      if (!group) { group = { service: item.service, items: [] }; grouped.push(group); }
+      let group = grouped.find((entry) => entry.date === item.service.date);
+      if (!group) { group = { date: item.service.date, service: item.service, items: [] }; grouped.push(group); }
       group.items.push(item);
     });
     if (!grouped.length) return '<div class="service-empty">No duties are assigned to this selected member in the current view.</div>';
-    return grouped.map((group) => '<article class="duty-service-card"><div class="duty-service-card-head"><div><p class="section-label">' + escapeHtml(group.service.worshipType) + "</p><h3>" + escapeHtml((group.service.serviceLabel || group.service.worshipType || "Service") + " worship") + '</h3></div><time>' + escapeHtml(fullDate(group.service.date) + ", " + formatTime(serviceTime(group.service))) + "</time></div>" +
-      '<div class="duty-role-list">' + group.items.map((item) => {
-        const req = requestFor(item.service.id, item.duty, state.selectedName);
-        const requestOpen = state.requestOpen && state.requestOpen.serviceId === item.service.id && state.requestOpen.duty === item.duty;
-        const changeControl = !REAL_MODE && state.features.changeRequests ? (req && req.status === "pending" ? '<span class="request-status pending">Pending</span>' : '<button class="text-button" type="button" data-action="request-change" data-service="' + escAttr(item.service.id) + '" data-duty="' + escAttr(item.duty) + '">Request change</button>') : "";
-        return '<div class="duty-role-row"><div><strong>' + escapeHtml(item.duty) + "</strong><span>" + escapeHtml(item.department) + '</span></div><div><b>' + escapeHtml(state.selectedName) + '</b><small>You</small></div>' + changeControl + "</div>" + (requestOpen ? renderRequestForm(item.service, item.duty) : "");
-      }).join("") + "</div></article>").join("");
+    return grouped.sort((a, b) => a.date.localeCompare(b.date)).map((group) => {
+      const dateServices = servicesForDate(group.date).filter((service) => !service.standalone);
+      const labels = Array.from(new Set(dateServices.map((service) => service.worshipType || service.serviceLabel).filter(Boolean))).join(" / ");
+      const serviceCards = dateServices.filter((service) => group.items.some((item) => item.service.id === service.id)).map((service) => {
+        const items = group.items.filter((item) => item.service.id === service.id);
+        const teamOpen = state.openDutyTeams[service.id] === true;
+        return '<article class="duty-service-card" data-duty-service="' + escAttr(service.id) + '" data-service-id="' + escAttr(service.id) + '"><div class="duty-service-card-head"><div><p class="section-label">' + escapeHtml(service.worshipType || "Service") + "</p><h3>" + escapeHtml((service.serviceLabel || service.worshipType || "Service") + " worship") + '</h3></div><div class="duty-card-meta"><time>' + escapeHtml(formatTime(serviceTime(service))) + '</time><button class="text-button" type="button" data-action="open-duty-team" data-service="' + escAttr(service.id) + '" aria-expanded="' + String(teamOpen) + '">' + (teamOpen ? "Hide full team" : "View full team") + '</button></div></div>' +
+          '<div class="duty-role-list">' + renderDutyRoleGroups(items) + "</div>" + (teamOpen ? '<div class="full-team-panel"><p class="section-label">Complete team</p>' + renderCompleteTeam(service) + '</div>' : '') + "</article>";
+      }).join("");
+      return '<section class="duty-date-group" data-duty-date="' + escAttr(group.date) + '"><div class="duty-date-heading"><div><p class="section-label">' + escapeHtml(fullDate(group.date)) + '</p><h3>' + escapeHtml(labels || "Services") + '</h3></div><span>' + dateServices.length + " service" + (dateServices.length === 1 ? "" : "s") + '</span></div>' + serviceCards + '</section>';
+    }).join("");
   }
 
   function renderAlerts() {
@@ -617,8 +885,10 @@
 
   function renderDuty() {
     const pastControl = state.features.pastServices ? '<button class="text-button" type="button" data-action="toggle-past">' + (state.showPast ? "Hide past services" : "Show past services") + "</button>" : "";
-    return '<section class="prototype-page duty-page" data-prototype-screen="duty">' + renderHeading("Selected member", "My duties", { memberControl: true }) + renderNextDuty("open-presider") + renderDateStrip(state.selectedDate) +
-      '<section class="schedule personal-schedule" aria-labelledby="personal-title"><div class="schedule-heading"><div><p class="section-label">Personal schedule</p><h2 id="personal-title">Upcoming assignments</h2></div><div class="schedule-heading-actions">' + renderDepartmentSelect(state.dutyDepartment, "duty-department") + '<span class="schedule-count">' + myAssignments(state.selectedName, state.showPast && state.features.pastServices).length + " duties</span>" + pastControl + "</div></div>" +
+    const includePast = state.features.pastServices && (state.showPast || viewingPastCalendar());
+    const dutyCount = myAssignments(state.selectedName, includePast).filter((item) => !state.calendarDay || item.service.date === state.calendarDay).filter((item) => state.calendarDay || item.service.date.slice(0, 7) === state.calendarMonth).length;
+    return '<section class="prototype-page duty-page" data-prototype-screen="duty">' + renderHeading("Selected member", "My duties", { memberControl: true }) + renderNextDuty("open-presider") + renderMonthCalendar("duty") + renderDepartmentControls(state.dutyDepartment, "duty-department", "duty") +
+      '<section class="schedule personal-schedule" aria-labelledby="personal-title"><div class="schedule-heading"><div><p class="section-label">Personal schedule</p><h2 id="personal-title">Assignments by date</h2><p class="heading-subtitle">' + escapeHtml(selectedCalendarLabel()) + '</p></div><div class="schedule-heading-actions"><span class="schedule-count">' + dutyCount + " dut" + (dutyCount === 1 ? "y" : "ies") + " in view</span>" + pastControl + "</div></div>" +
       (state.requestMessage ? '<p class="prototype-notice success" data-request-success role="status">' + escapeHtml(state.requestMessage) + '</p>' : "") + '<div class="duty-list">' + renderDutyRows() + "</div></section>" + renderAlerts() + renderCalendarTools() + renderCopyFallback("Calendar text") + renderRequestsHistory() + "</section>";
   }
 
@@ -634,26 +904,37 @@
   function renderOutline(service, setlist) {
     const assignment = service.assignments || {};
     const prep = preparationEntries(setlist);
-    const prepHtml = prep.length ? '<div class="outline-group"><p class="outline-group-label">Preparation songs</p>' + prep.map((entry, position) => {
+    const prepRows = prep.length ? prep.map((entry, position) => {
       const outlineActions = REAL_MODE ? "" : '<span class="outline-actions">' +
         '<button class="icon-button" type="button" data-action="move-song" data-index="' + entry.index + '" data-direction="up"' + (position === 0 ? " disabled" : "") + '>Up</button>' +
         '<button class="icon-button" type="button" data-action="move-song" data-index="' + entry.index + '" data-direction="down"' + (position === prep.length - 1 ? " disabled" : "") + '>Down</button>' +
         '<button class="icon-button" type="button" data-action="remove-song" data-index="' + entry.index + '">Remove</button></span>';
-      return '<div class="outline-row"><span class="song-number">' + escapeHtml(entry.song.number) + '</span><span class="song-title">' + escapeHtml(entry.song.title) + '</span><span class="song-duration">' + formatDuration(entry.song.durationSec) + '</span>' +
+      return '<div class="outline-row"><span class="song-number">' + escapeHtml(songDisplayNumber(entry.song)) + '</span><span class="song-title">' + escapeHtml(entry.song.title) + '</span><span class="song-duration">' + formatDuration(entry.song.durationSec) + '</span>' +
         outlineActions + '</div>';
-    }).join("") + "</div>" : '<div class="service-empty">' + (REAL_MODE ? "No preparation songs in this saved plan." : "No preparation songs yet. Add one from the library.") + '</div>';
+    }).join("") : '<div class="service-empty">' + (REAL_MODE ? "No preparation songs in this saved plan." : "No preparation songs yet. Add one from the library.") + '</div>';
+    const prepHtml = '<details class="outline-group song-group preparation-group" data-song-group="preparation" open><summary class="outline-group-label">Preparation</summary><div class="outline-group-body">' + prepRows + '</div></details>';
+    const glorySong = songById(setlist.glorySong);
+    const thanksSong = songById(setlist.thanksSong);
+    const gloryText = glorySong ? songLabel(glorySong) + " " + glorySong.title : "Not assigned";
+    const thanksText = thanksSong ? songLabel(thanksSong) + " " + thanksSong.title : "Not assigned";
+    const gloryHtml = REAL_MODE
+      ? '<div class="read-only-field"><span class="field-label">Glory song</span><p>' + escapeHtml(gloryText) + '</p></div>'
+      : '<label class="field-label" for="glory-song-select">Glory song<select id="glory-song-select" data-change="glory-song">' + songOptions(setlist.glorySong, true) + '</select></label>';
+    const thanksHtml = REAL_MODE
+      ? '<div class="read-only-field"><span class="field-label">Thanks song</span><p>' + escapeHtml(thanksText) + '</p></div>'
+      : '<label class="field-label" for="thanks-song-select">Thanks song<select id="thanks-song-select" data-change="thanks-song">' + songOptions(setlist.thanksSong, true) + '</select></label>';
+    const glorySection = '<details class="outline-group song-group glory-group" data-song-group="glory" open><summary class="outline-group-label">Glory</summary><div class="outline-group-body">' + gloryHtml + '</div></details>';
+    const thanksSection = '<details class="outline-group song-group thanks-group" data-song-group="thanks" open><summary class="outline-group-label">Thanks</summary><div class="outline-group-body">' + thanksHtml + '</div></details>';
     const order = [
-      { label: "Glory song", note: songById(setlist.glorySong)?.title || "Not assigned" },
       { label: "Opening prayer", who: assignment.Sermon || "Not assigned" }
     ];
     if (service.worshipType === "Sabbath Day" && service.serviceLabel === "Morning") {
-      order.push({ label: "Thanks song", note: songById(setlist.thanksSong)?.title || "Not assigned" });
       order.push({ label: "Prayer of thanks", who: assignment["Prayer of Thanks"] || "Not assigned" });
     }
     order.push({ label: "Choir song", note: state.features.choirSong ? choirSongLabel(service) : "Choir song is off" });
     order.push({ label: "Sermon", who: assignment.Sermon || "Not assigned" });
     order.push({ label: "Closing prayer", who: assignment["Closing Prayer"] || "Not assigned" });
-    return prepHtml + '<div class="outline-group"><p class="outline-group-label">Order of worship</p>' + order.map((step, index) => '<div class="order-row"><span class="order-number">' + (index + 1) + '</span><span><strong>' + escapeHtml(step.label) + '</strong><small>' + escapeHtml(step.note || "") + '</small></span><span class="step-who">' + escapeHtml(step.who || "") + "</span></div>").join("") + "</div>";
+    return prepHtml + glorySection + thanksSection + '<div class="outline-group order-group" data-song-group="service-order"><p class="outline-group-label">Service order</p>' + order.map((step, index) => '<div class="order-row"><span class="order-number">' + (index + 1) + '</span><span><strong>' + escapeHtml(step.label) + '</strong><small>' + escapeHtml(step.note || "") + '</small></span><span class="step-who">' + escapeHtml(step.who || "") + "</span></div>").join("") + "</div>";
   }
 
   function renderSongPicker() {
@@ -668,26 +949,28 @@
       const stat = ensureSongStats(song.id);
       const history = songHistory(song.id);
       const addControl = REAL_MODE ? "" : '<button class="text-button" type="button" data-action="add-song" data-song="' + escAttr(song.id) + '">Add</button>';
-      return '<div class="song-library-row"><button class="song-open" type="button" data-action="toggle-song" data-song="' + escAttr(song.id) + '"><span>#' + escapeHtml(song.number) + " " + escapeHtml(song.title) + '</span><small>' + formatDuration(song.durationSec) + "</small></button>" + addControl + (open ? '<div class="song-detail"><p>' + escapeHtml(song.category) + " category, " + formatDuration(song.durationSec) + ".</p><p>" + stat.sungCount + " recorded uses" + (stat.lastSung ? ", last " + escapeHtml(stat.lastSung) : ", no recorded use") + '.</p><p>' + (history.length ? history.map((entry) => escapeHtml(entry.date + ", " + entry.service)).join("; ") : "No sung history yet.") + "</p></div>" : "") + "</div>";
+      return '<div class="song-library-row"><button class="song-open" type="button" data-action="toggle-song" data-song="' + escAttr(song.id) + '"><span>' + escapeHtml(songLabel(song)) + " " + escapeHtml(song.title) + '</span><small>' + formatDuration(song.durationSec) + "</small></button>" + addControl + (open ? '<div class="song-detail"><p>' + escapeHtml(song.category) + " category, " + formatDuration(song.durationSec) + ".</p><p>" + stat.sungCount + " recorded uses" + (stat.lastSung ? ", last " + escapeHtml(stat.lastSung) : ", no recorded use") + '.</p><p>' + (history.length ? history.map((entry) => escapeHtml(entry.date + ", " + entry.service)).join("; ") : "No sung history yet.") + "</p></div>" : "") + "</div>";
     }).join("") : '<p class="service-empty">No songs match this search.</p>') + "</div></div>";
   }
 
   function renderSetlistState(setlist) {
     if (REAL_MODE) {
       const stamp = setlist.confirmedAt || setlist.updatedAt || "";
-      const confirmed = setlist.confirmed === true || setlist.status === "confirmed" || setlist.status === "sung";
-      const status = setlist.status === "sung" ? "Sung" : setlist.status === "changed" ? "Changed" : confirmed ? "Confirmed" : "Read-only plan";
+      const confirmed = setlistIsConfirmed(setlist);
+      const status = setlistStatusLabel(setlist, "Read-only plan");
       const detail = stamp ? (setlist.confirmedAt ? "Confirmed " : "Updated ") + formatRecordTime(stamp) : "No confirmation timestamp recorded";
-      return '<div class="planner-state-bar"><span class="state-pill ' + (setlist.status === "sung" || confirmed ? "confirmed" : "") + '" data-save-state="read-only">' + escapeHtml(status) + '</span><span class="read-only-note">Read-only preview, ' + escapeHtml(detail) + "</span></div>";
+      const statusClass = setlist.status === "changed" ? "changed" : setlist.status === "sung" || confirmed ? "confirmed" : "";
+      return '<div class="planner-state-bar"><span class="state-pill ' + statusClass + '" data-save-state="read-only">' + escapeHtml(status) + '</span><span class="read-only-note">Read-only preview, ' + escapeHtml(detail) + "</span></div>";
     }
-    const status = state.saveState === "saving" ? "Saving" : state.saveState === "failed" ? "Save failed" : setlist.status === "changed" ? "Changed after confirmation" : setlist.status === "sung" ? "Sung" : setlist.confirmed ? "Confirmed" : state.saveState === "saved" ? "Saved locally" : "Ready to save";
+    const status = state.saveState === "saving" ? "Saving" : state.saveState === "failed" ? "Save failed" : setlistStatusLabel(setlist, state.saveState === "saved" ? "Saved locally" : "Not confirmed");
     const saveButton = state.saveState === "failed" ? '<button class="button-primary" type="button" data-action="retry-save">Retry save</button>' : '<button class="button-primary" type="button" data-action="save-setlist"' + (state.saveState === "saving" ? " disabled" : "") + ">Save changes</button>";
-    return '<div class="planner-state-bar"><span class="state-pill ' + (state.saveState === "failed" ? "failed" : setlist.status === "changed" ? "changed" : setlist.confirmed ? "confirmed" : "") + '" data-save-state="' + escapeHtml(state.saveState) + '">' + escapeHtml(status) + '</span><div class="button-row">' + saveButton + '<button class="text-button" type="button" data-action="confirm-songs">' + (setlist.confirmed ? "Confirm again" : "Confirm songs") + "</button></div></div>";
+    const statusClass = state.saveState === "failed" ? "failed" : setlist.status === "changed" ? "changed" : setlistIsConfirmed(setlist) ? "confirmed" : "";
+    return '<div class="planner-state-bar"><span class="state-pill ' + statusClass + '" data-save-state="' + escapeHtml(state.saveState) + '">' + escapeHtml(status) + '</span><div class="button-row">' + saveButton + '<button class="text-button" type="button" data-action="confirm-songs">' + (setlistIsConfirmed(setlist) ? "Confirm again" : "Confirm songs") + "</button></div></div>";
   }
 
   function renderPresiderHistory() {
     const rows = state.songs.flatMap((song) => songHistory(song.id).map((entry, index) => ({ song, entry, index })));
-    const historyRows = rows.map((row) => '<div class="history-row"><span>#' + escapeHtml(row.song.number) + " " + escapeHtml(row.song.title) + '</span><span>' + escapeHtml(row.entry.date + ", " + row.entry.service) + '</span>' + (REAL_MODE ? "" : '<button class="text-button" type="button" data-action="remove-history" data-song="' + escAttr(row.song.id) + '" data-history-index="' + row.index + '">Remove</button>') + "</div>").join("");
+    const historyRows = rows.map((row) => '<div class="history-row"><span>' + escapeHtml(songLabel(row.song) + " " + row.song.title) + '</span><span>' + escapeHtml(row.entry.date + ", " + row.entry.service) + '</span>' + (REAL_MODE ? "" : '<button class="text-button" type="button" data-action="remove-history" data-song="' + escAttr(row.song.id) + '" data-history-index="' + row.index + '">Remove</button>') + "</div>").join("");
     const backfill = REAL_MODE ? "" : '<div class="backfill-area">' + (state.backfillOpen ? '<form class="backfill-form" data-form="backfill"><label class="field-label">Song<select name="song">' + songOptions(state.backfillSong, false) + '</select></label><label class="field-label">Past date<input type="date" name="date" min="2026-09-01" max="2026-09-30" value="' + escAttr(state.backfillDate) + '" required></label><div class="button-row"><button class="button-secondary" type="submit">Add history</button><button class="text-button" type="button" data-action="close-backfill">Cancel</button></div></form>' : '<button class="text-button" type="button" data-action="open-backfill">Backfill a September date</button>') + "</div>";
     return '<section class="secondary-panel history-panel" aria-labelledby="song-history-title"><div class="panel-heading"><h2 id="song-history-title">Song history</h2><button class="text-button" type="button" data-action="toggle-history">' + (state.showHistory ? "Hide history" : "Show history") + "</button></div>" + (state.showHistory ? (rows.length ? '<div class="history-list">' + historyRows + "</div>" : '<p class="service-empty">No song history yet.</p>') : "") + backfill + "</section>";
   }
@@ -700,26 +983,57 @@
     return '<section class="runsheet-panel" aria-labelledby="runsheet-title"><div class="panel-heading"><h2 id="runsheet-title">Runsheet</h2><button class="text-button" type="button" data-action="close-runsheet">Close</button></div><ol>' + steps.map((step) => "<li>" + escapeHtml(step) + "</li>").join("") + "</ol><p>Preparation total: " + formatDuration(prepTotal(setlist)) + "</p></section>";
   }
 
+  function renderPresiderFilter() {
+    return '<label class="presider-filter" for="presider-filter"><span>Show</span><select id="presider-filter" data-change="presider-filter"><option value="mine"' + (state.presiderFilter === "mine" ? " selected" : "") + '>My presiding</option><option value="all"' + (state.presiderFilter === "all" ? " selected" : "") + '>All services</option></select></label>';
+  }
+
+  function renderPresiderServicePicker(options, selected) {
+    if (!options.length) return "";
+    return '<label class="selected-member service-picker" for="presider-service"><span>Service</span><select id="presider-service" data-change="presider-service">' + serviceOptions(selected, options) + '</select></label>';
+  }
+
+  function renderServiceInfo(service) {
+    const assignment = service.assignments || {};
+    const prayerRows = [
+      ["Prayer of thanks", assignment["Prayer of Thanks"] || "Not assigned"],
+      ["Closing prayer", assignment["Closing Prayer"] || "Not assigned"]
+    ];
+    const prayerMarkup = prayerRows.map((row) => '<div><dt>' + escapeHtml(row[0]) + '</dt><dd>' + escapeHtml(row[1]) + '</dd></div>').join("");
+    const choir = state.features.choirSong ? (REAL_MODE
+      ? '<div><dt>Choir song</dt><dd>' + escapeHtml(choirSongLabel(service)) + '</dd></div>'
+      : '<div><dt>Choir song</dt><dd><label class="sr-only" for="presider-choir-song">Choir song</label><select id="presider-choir-song" data-change="choir-song">' + songOptions(service.choirSong, true) + '</select></dd></div>') : "";
+    return '<section class="service-info" aria-labelledby="service-info-title"><div class="panel-heading"><h3 id="service-info-title">Service information</h3><span>Prayer and choir</span></div><dl class="service-info-grid">' + prayerMarkup + choir + '</dl></section>';
+  }
+
   function renderPresider() {
     const options = presiderServices(state.selectedName);
+    const selectedId = options.some((service) => service.id === state.selectedServiceId) ? state.selectedServiceId : options[0]?.id || "";
+    if (selectedId && selectedId !== state.selectedServiceId) state.selectedServiceId = selectedId;
+    const controls = '<div class="presider-controls">' + renderPresiderFilter() + renderPresiderServicePicker(options, selectedId) + '</div>';
+    const shell = (body) => '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true, control: controls }) + renderMonthCalendar("presider", true) + body + '</section>';
+    if (REAL_MODE && !state.selectedName && state.presiderFilter === "mine") {
+      return shell('<div class="state-card" data-presider-state="name-needed"><p class="state-marker">Name needed</p><h2>Choose your name first</h2><p>Use the shared member selector above to see services you preside.</p></div>');
+    }
     if (!state.features.songPicker) {
       const unavailableCopy = REAL_MODE ? "The saved song catalog is unavailable in this read-only payload." : "Turn on Presider song picker in Manage settings to prepare a fictional outline.";
       const settingsButton = REAL_MODE ? "" : '<button class="button-primary" type="button" data-action="open-manage-settings">Open settings</button>';
-      return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true }) + '<div class="state-card"><p class="state-marker">Song picker unavailable</p><h2>Presider tools are turned off</h2><p>' + unavailableCopy + "</p>" + settingsButton + "</div></section>";
+      return shell('<div class="state-card"><p class="state-marker">Song picker unavailable</p><h2>Presider tools are turned off</h2><p>' + unavailableCopy + "</p>" + settingsButton + "</div>");
     }
     if (!options.length) {
       const emptyCopy = REAL_MODE
         ? (state.selectedName ? state.selectedName + " has no saved Presider plan." : "Choose your name to inspect saved Presider plans.")
         : state.selectedName + " is not the Presider for an upcoming fictional service. Select another member above.";
-      return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true }) + '<div class="state-card"><p class="state-marker">No Presider duty</p><h2>Choose a member with a Presider duty</h2><p>' + escapeHtml(emptyCopy) + "</p></div></section>";
+      return shell('<div class="state-card" data-presider-state="empty"><p class="state-marker">No Presider duty</p><h2>Choose a service to review</h2><p>' + escapeHtml(emptyCopy) + "</p></div>");
     }
     const service = selectedPresiderService();
+    if (!service) return shell('<div class="state-card" data-presider-state="empty"><p class="state-marker">No service selected</p><h2>Choose a service to review</h2></div>');
     const setlist = currentSetlist();
     if (!setlist) {
       const noPlanCopy = REAL_MODE ? "No saved song plan for this service." : "The local setlist was deleted, but the service is still available.";
       const recreate = REAL_MODE ? "" : '<button class="button-primary" type="button" data-action="create-setlist">Recreate outline</button>';
-      const servicePicker = '<p class="selected-member service-picker"><label for="presider-service">Service</label><select id="presider-service" data-change="presider-service">' + serviceOptions(service.id, options) + "</select></p>";
-      return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true, control: servicePicker }) + '<div class="state-card"><p class="state-marker">No outline</p><h2>No outline for this service</h2><p>' + noPlanCopy + "</p>" + recreate + "</div></section>";
+      const assignment = service.assignments || {};
+      const noPlanContext = '<section class="presider-context" data-service-summary data-service-id="' + escAttr(service.id) + '"><p class="section-label">' + escapeHtml(service.worshipType || "Service") + '</p><h2>' + escapeHtml((service.serviceLabel || "Service") + " worship") + '</h2><dl class="service-facts"><div><dt>Date</dt><dd>' + escapeHtml(fullDate(service.date)) + '</dd></div><div><dt>Time</dt><dd>' + escapeHtml(formatTime(serviceTime(service))) + '</dd></div><div><dt>Presider</dt><dd>' + escapeHtml((assignment.Presider || service.presider || "Not listed")) + '</dd></div><div><dt>Choir song</dt><dd>' + escapeHtml(choirSongLabel(service)) + '</dd></div></dl></section>';
+      return shell('<div class="state-card" data-presider-state="no-plan"><p class="state-marker">No outline</p>' + noPlanContext + renderServiceInfo(service) + '<p>' + noPlanCopy + "</p>" + recreate + "</div>");
     }
     const deleteConfirm = REAL_MODE ? "" : (state.deleteSetlistConfirm ? '<div class="confirm-inline"><p>Delete this local setlist and keep the service?</p><button class="button-danger" type="button" data-action="delete-setlist-confirm">Delete setlist</button><button class="text-button" type="button" data-action="cancel-delete-setlist">Cancel</button></div>' : "");
     const sungConfirm = REAL_MODE ? "" : (state.markSungConfirm ? '<div class="confirm-inline"><p>Mark songs in this service as sung?</p><button class="button-primary" type="button" data-action="confirm-mark-sung">Mark sung</button><button class="text-button" type="button" data-action="cancel-mark-sung">Cancel</button></div>' : "");
@@ -731,22 +1045,14 @@
     const notes = REAL_MODE
       ? '<div class="read-only-field"><span class="field-label">Notes</span><p>' + escapeHtml(setlist.notes || "No notes recorded.") + "</p></div>"
       : '<label class="field-label" for="setlist-notes">Notes<textarea id="setlist-notes" data-change="setlist-notes" rows="3">' + escapeHtml(setlist.notes || "") + "</textarea></label>";
-    const choir = state.features.choirSong ? (REAL_MODE
-      ? '<div class="read-only-field"><span class="field-label">Choir song</span><p>' + escapeHtml(choirSongLabel(service)) + "</p></div>"
-      : '<label class="field-label">Choir song<select data-change="choir-song">' + songOptions(service.choirSong, true) + "</select></label>") : "";
-    const slots = REAL_MODE
-      ? '<div class="song-slots read-only-song-slots"><div class="read-only-field"><span class="field-label">Glory song</span><p>' + escapeHtml(songById(setlist.glorySong)?.title || "Not assigned") + '</p></div><div class="read-only-field"><span class="field-label">Thanks song</span><p>' + escapeHtml(songById(setlist.thanksSong)?.title || "Not assigned") + "</p></div></div>"
-      : '<div class="song-slots"><label class="field-label">Glory song<select data-change="glory-song">' + songOptions(setlist.glorySong, true) + '</select></label><label class="field-label">Thanks song<select data-change="thanks-song">' + songOptions(setlist.thanksSong, true) + "</select></label></div>";
     const copyButton = REAL_MODE ? "" : '<button class="text-button" type="button" data-action="copy-setlist">Copy outline</button>';
-    const presiderLabel = REAL_MODE
-      ? (setlist.presider || (service.assignments && service.assignments.Presider) || service.presider || "Not listed")
-      : (state.selectedName || "Choose your name");
+    const presiderLabel = setlist.presider || (service.assignments && service.assignments.Presider) || service.presider || "Not listed";
     const footer = REAL_MODE
       ? '<div class="outline-footer"><span class="read-only-note">Saved plan is read-only in this preview.</span></div>'
       : '<div class="outline-footer"><button class="button-secondary" type="button" data-action="mark-sung"' + (sung || !hasSongs ? " disabled" : "") + ">" + (sung ? "Sung" : "Mark service sung") + "</button>" + (hasHistory ? '<button class="text-button" type="button" data-action="undo-sung">Undo sung</button>' : "") + '<button class="button-danger" type="button" data-action="delete-setlist">Delete setlist</button></div>' + sungConfirm + undoConfirm + deleteConfirm;
-    return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true, control: '<p class="selected-member service-picker"><label for="presider-service">Service</label><select id="presider-service" data-change="presider-service">' + serviceOptions(service.id, options) + "</select></p>" }) +
-      '<section class="presider-intro"><div><p class="section-label">' + escapeHtml((service.worshipType ? service.worshipType + ", " : "") + compactDate(service.date)) + '</p><h2>' + escapeHtml(serviceName + " worship") + '</h2><p>' + escapeHtml(formatTime(serviceTime(service)) + ", Presider: " + presiderLabel) + "</p></div><div class=\"button-row\"><button class=\"button-secondary phone-song-trigger\" id=\"song-library-trigger\" type=\"button\" data-action=\"open-song-library\" aria-controls=\"song-library-panel\" aria-expanded=\"" + String(state.songLibraryOpen) + "\">Search songs</button><button class=\"button-secondary\" type=\"button\" data-action=\"open-runsheet\">View runsheet</button>" + copyButton + "</div></section>" +
-      renderSetlistState(setlist) + '<div class="presider-layout"><section class="outline-card" aria-labelledby="outline-title"><div class="panel-heading"><h2 id="outline-title">Service outline</h2><span>' + formatDuration(prepTotal(setlist)) + " preparation</span></div>" + notes + choir + slots + renderOutline(service, setlist) + footer + "</section>" + renderSongPicker() + "</div>" + renderRunsheet(service, setlist) + notice(state.songNotice, "success") + (REAL_MODE ? "" : renderCopyFallback("Outline text")) + renderPresiderHistory() + "</section>";
+    const statusText = setlistStatusLabel(setlist, "Not confirmed");
+    return shell('<section class="presider-intro" data-service-summary data-service-id="' + escAttr(service.id) + '"><div class="presider-summary"><p class="section-label">' + escapeHtml(service.worshipType || "Service") + '</p><h2>' + escapeHtml(serviceName + " worship") + '</h2><dl class="service-facts"><div><dt>Date</dt><dd data-service-date>' + escapeHtml(fullDate(service.date)) + '</dd></div><div><dt>Time</dt><dd>' + escapeHtml(formatTime(serviceTime(service))) + '</dd></div><div><dt>Presider</dt><dd data-service-presider>' + escapeHtml(presiderLabel) + '</dd></div><div><dt>Confirmation</dt><dd data-confirmation-state>' + escapeHtml(statusText) + '</dd></div></dl></div><div class="button-row"><button class="button-secondary phone-song-trigger" id="song-library-trigger" type="button" data-action="open-song-library" aria-controls="song-library-panel" aria-expanded="' + String(state.songLibraryOpen) + '">Search songs</button><button class="button-secondary" type="button" data-action="open-runsheet">View runsheet</button>' + copyButton + '</div></section>' +
+      renderSetlistState(setlist) + '<div class="presider-layout"><section class="outline-card" aria-labelledby="outline-title"><div class="panel-heading"><h2 id="outline-title">Service workspace</h2><span>' + formatDuration(prepTotal(setlist)) + ' preparation</span></div>' + notes + renderServiceInfo(service) + renderOutline(service, setlist) + footer + '</section>' + renderSongPicker() + '</div>' + renderRunsheet(service, setlist) + notice(state.songNotice, "success") + (REAL_MODE ? "" : renderCopyFallback("Outline text")) + renderPresiderHistory());
   }
 
 
@@ -783,10 +1089,12 @@
     const service = serviceById(state.selectedServiceId);
     if (!service) return '<section class="manage-section"><div class="state-card"><h2>No services</h2><p>Add a fictional service to continue.</p>' + renderAddService() + "</div></section>";
     const conflicts = state.features.conflictWarnings ? conflictRows(service) : [];
+    const selectedDepartment = state.departmentChoice || "All";
+    const visibleCategories = state.categories.filter((category) => selectedDepartment === "All" || category.name === selectedDepartment);
     const deletion = state.serviceDeleteId === service.id ? '<div class="confirm-inline"><p>Delete ' + escapeHtml(service.worshipType + ", " + service.serviceLabel) + " and its local assignments?</p><button class=\"button-danger\" type=\"button\" data-action=\"confirm-delete-service\">Delete service</button><button class=\"text-button\" type=\"button\" data-action=\"cancel-delete-service\">Cancel</button></div>" : "";
     return renderPendingRequests() + '<section class="manage-section" aria-labelledby="assignment-title"><div class="section-heading-row"><div><p class="section-label">Assignments</p><h2 id="assignment-title">Service team</h2></div><label class="selected-member service-picker"><span>Service</span><select data-change="manage-service">' + serviceOptions(service.id, state.services.slice().sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))) + "</select></label></div>" +
       '<div class="service-edit-grid"><label class="field-label">Worship type<select data-change="service-field" data-field="worshipType"><option' + (service.worshipType === "Sabbath Day" ? " selected" : "") + '>Sabbath Day</option><option' + (service.worshipType === "Third Day" ? " selected" : "") + '>Third Day</option></select></label><label class="field-label">Service label<input data-change="service-field" data-field="serviceLabel" value="' + escAttr(service.serviceLabel) + '"></label><label class="field-label">Date<input type="date" data-change="service-field" data-field="date" min="2026-09-01" max="2026-09-30" value="' + escAttr(service.date) + '"></label><label class="field-label">Time<input type="time" data-change="service-field" data-field="time" value="' + escAttr(service.time) + '"></label><label class="field-label field-wide">Notes<textarea data-change="service-field" data-field="notes" rows="2">' + escapeHtml(service.notes || "") + "</textarea></label>" + (state.features.choirSong ? '<label class=\"field-label\">Choir song<select data-change=\"service-field\" data-field=\"choirSong\">' + songOptions(service.choirSong, true) + "</select></label>" : "") + "</div>" +
-      '<div class="assignment-table"><div class="assignment-table-head"><span>Department</span><span>Duty</span><span>Assigned member</span></div>' + state.categories.map((category) => '<div class="department-group"><h3>' + escapeHtml(category.name) + "</h3>" + category.duties.map((duty) => {
+      '<div class="assignment-table"><div class="assignment-table-head"><span>Department</span><span>Duty</span><span>Assigned member</span></div>' + visibleCategories.map((category) => '<div class="department-group"><h3>' + escapeHtml(category.name) + "</h3>" + category.duties.map((duty) => {
         const has = Object.prototype.hasOwnProperty.call(service.assignments, duty);
         if (!has && !state.features.emptyDuties) return "";
         return '<label class="assignment-edit-row"><span>' + escapeHtml(category.name) + '</span><strong>' + escapeHtml(duty) + '</strong><select data-change="assignment" data-duty="' + escAttr(duty) + '">' + memberOptions(service.assignments[duty] || "", true) + "</select></label>";
@@ -982,6 +1290,15 @@
     return '<div class="manage-tabs" role="tablist" aria-label="Manage sections">' + tabs.map(([id, label]) => '<button type="button" role="tab" aria-selected="' + (state.manageTab === id ? "true" : "false") + '" class="' + (state.manageTab === id ? "active" : "") + '" data-action="manage-tab" data-tab="' + id + '">' + label + "</button>").join("") + "</div>";
   }
 
+  function renderManageDepartmentFirst() {
+    const selected = state.departmentChoice && state.categories.some((category) => category.name === state.departmentChoice)
+      ? state.departmentChoice
+      : state.categories[0]?.name || "";
+    state.departmentChoice = selected;
+    const options = state.categories.map((category) => '<option value="' + escAttr(category.name) + '"' + (category.name === selected ? " selected" : "") + '>' + escapeHtml(category.name) + '</option>').join("");
+    return '<section class="manage-department-first" data-manage-department-first aria-labelledby="manage-department-title"><div><p class="section-label">Start here</p><h2 id="manage-department-title">Choose a department</h2></div><label for="manage-department-choice">Department<select id="manage-department-choice" data-change="department-choice">' + options + '</select></label></section>';
+  }
+
   function renderSiteGate() {
     return '<section class="state-wrap" data-prototype-screen="manage"><div class="state-card access-gate"><p class="state-marker">Site passcode</p><h1 id="main-title" tabindex="-1">Site is locked</h1><p>Enter the fictional site passcode to continue this local review.</p><form data-form="site-unlock"><label class="field-label">Site passcode<input name="passcode" type="password" inputmode="numeric" autocomplete="off" required></label><div class="button-row"><button class="button-primary" type="submit">Unlock site</button><a class="text-button" href="?screen=home" data-nav="home">Return Home</a></div></form>' + notice(state.accessError, "error") + "</div></section>";
   }
@@ -992,7 +1309,7 @@
 
   function renderReadOnlyManage() {
     const service = serviceById(state.selectedServiceId);
-    const assignments = service ? assignmentEntries(service) : [];
+    const assignments = service ? assignmentEntries(service, state.departmentChoice || "All") : [];
     const assignmentBody = assignments.length
       ? assignments.map((row) => '<div class="assignment-read-only-row"><span>' + escapeHtml(row.category) + '</span><strong>' + escapeHtml(row.duty) + '</strong><span>' + escapeHtml(row.member || "Unassigned") + "</span></div>").join("")
       : '<p class="service-empty">No saved assignments for this service.</p>';
@@ -1009,10 +1326,10 @@
     const featureBody = Object.keys(state.features).length
       ? '<dl class="read-only-features">' + Object.entries(state.features).map(([key, value]) => '<div><dt>' + escapeHtml(key) + '</dt><dd>' + (value ? "On" : "Off") + "</dd></div>").join("") + "</dl>"
       : '<p class="service-empty">No feature settings are listed.</p>';
-    const servicePicker = '<label class="selected-member service-picker\"><span>Service</span><select data-change="presider-service">' + serviceOptions(service && service.id, state.services) + "</select></label>";
+    const servicePicker = '<label class="selected-member service-picker" for="manage-service"><span>Service</span><select id="manage-service" data-change="manage-service">' + serviceOptions(service && service.id, state.services) + "</select></label>";
     const serviceLabelText = service ? (service.worshipType ? service.worshipType + ", " : "") + (service.serviceLabel || "Service") + ", " + compactDate(service.date) : "No service selected";
-    return '<section class="prototype-page manage-page" data-prototype-screen="manage">' + renderHeading("Read-only preview", "Manage", { memberControl: true, control: servicePicker }) +
-      '<section class="manage-section\" aria-labelledby=\"read-only-assignments-title\"><div class=\"section-heading-row\"><div><p class=\"section-label\">Current records</p><h2 id=\"read-only-assignments-title\">Service assignments</h2><p class=\"heading-subtitle\">' + escapeHtml(serviceLabelText) + "</p></div></div><div class=\"assignment-table read-only-assignment-table\" tabindex=\"0\" role=\"region\" aria-label=\"Read-only service assignments\"><div class=\"assignment-table-head\"><span>Department</span><span>Duty</span><span>Assigned member</span></div>" + assignmentBody + "</div></section>" +
+    return '<section class="prototype-page manage-page" data-prototype-screen="manage">' + renderHeading("Read-only preview", "Manage", { memberControl: true }) + renderManageDepartmentFirst() +
+      '<section class="manage-section\" aria-labelledby=\"read-only-assignments-title\"><div class=\"section-heading-row\"><div><p class=\"section-label\">Current records</p><h2 id=\"read-only-assignments-title\">Service assignments</h2><p class=\"heading-subtitle\">' + escapeHtml(serviceLabelText) + "</p></div>" + servicePicker + "</div><div class=\"assignment-table read-only-assignment-table\" tabindex=\"0\" role=\"region\" aria-label=\"Read-only service assignments\"><div class=\"assignment-table-head\"><span>Department</span><span>Duty</span><span>Assigned member</span></div>" + assignmentBody + "</div></section>" +
       '<section class=\"manage-section\" aria-labelledby=\"read-only-requests-title\"><p class=\"section-label\">Current records</p><h2 id=\"read-only-requests-title\">Pending requests</h2><div class=\"request-admin-list\">' + requestBody + "</div></section>" +
       '<section class=\"manage-section\" aria-labelledby=\"read-only-people-title\"><p class=\"section-label\">Current records</p><h2 id=\"read-only-people-title\">People</h2>' + peopleBody + '<div class=\"roster-editor\"><div class=\"panel-heading\"><h3>Department roster</h3></div>' + departmentBody + "</div></section>" +
       '<section class=\"manage-section\" aria-labelledby=\"read-only-features-title\"><p class=\"section-label\">Preview state</p><h2 id=\"read-only-features-title\">Feature settings</h2>' + featureBody + "</section></section>";
@@ -1029,18 +1346,22 @@
     if (state.manageTab === "planning") body = renderPlanning();
     if (state.manageTab === "sync") body = state.features.sheetSync ? renderSync() : '<section class="manage-section"><div class="state-card"><h2>Schedule sync is off</h2><button class="button-secondary" type="button" data-action="open-manage-settings">Open settings</button></div></section>';
     if (state.manageTab === "settings") body = renderSettings();
-    return '<section class="prototype-page manage-page" data-prototype-screen="manage">' + renderHeading("For the team", "Manage", { memberControl: true }) + renderManageTabs() + body + "</section>";
+    return '<section class="prototype-page manage-page" data-prototype-screen="manage">' + renderHeading("For the team", "Manage", { memberControl: true }) + renderManageDepartmentFirst() + renderManageTabs() + body + "</section>";
   }
 
   function render() {
     const app = document.getElementById("app-main");
     if (!app) return;
+    const renderFocus = captureRenderFocus();
+    const scrollTop = Number.isFinite(window.scrollY) ? window.scrollY : window.pageYOffset;
     if (state.screen === "presider" && state.failNextSave) state.saveState = "failed";
     const content = state.siteLocked ? renderSiteGate() : SPECIAL.includes(state.screen) ? renderSpecial(state.screen) :
       state.screen === "home" ? renderHome() :
       state.screen === "duty" ? renderDuty() :
       state.screen === "presider" ? renderPresider() : renderManage();
     app.innerHTML = content;
+    const headerMember = document.getElementById("header-member-control");
+    if (headerMember) headerMember.innerHTML = renderMemberControl("header-member-select");
     document.querySelectorAll("nav a[data-nav]").forEach((link) => {
       const active = link.dataset.nav === state.screen;
       link.classList.toggle("active", active);
@@ -1048,13 +1369,15 @@
       else link.removeAttribute("aria-current");
     });
     document.title = state.screen === "home" ? "Worship schedule, LV Zion Worship Service" : state.screen.charAt(0).toUpperCase() + state.screen.slice(1) + ", LV Zion Worship Service";
+    restoreRenderFocus(renderFocus, scrollTop);
   }
 
   function markSetlistChanged() {
     const setlist = currentSetlist();
     if (!setlist) return;
-    setlist.status = setlist.confirmed ? "changed" : "planned";
-    state.saveState = setlist.confirmed ? "changed" : "ready";
+    const confirmed = setlistIsConfirmed(setlist);
+    setlist.status = confirmed ? "changed" : "planned";
+    state.saveState = confirmed ? "changed" : "ready";
   }
 
   function saveSetlist() {
@@ -1080,7 +1403,7 @@
     const song = songById(id);
     if (!setlist || !song) return;
     setlist.songs.push(id);
-    state.songNotice = "#" + song.number + " " + song.title + " added to the local outline.";
+    state.songNotice = songLabel(song) + " " + song.title + " added to the local outline.";
     markSetlistChanged();
     render();
   }
@@ -1190,7 +1513,11 @@
     state.nameMap = deepClone(BASE.nameMap || {});
     state.selectedName = BASE.members[0];
     state.selectedServiceId = BASE.services[0].id;
-    state.selectedDate = "2026-09-12";
+    state.calendarMonth = "2026-09";
+    state.calendarDay = "";
+    state.selectedDate = "";
+    state.openDutyTeams = {};
+    state.presiderFilter = "mine";
     state.manageUnlocked = true;
     state.siteLocked = false;
     state.accessError = "";
@@ -1324,8 +1651,15 @@
     else if (type === "open-song-library") openSongLibrary();
     else if (type === "close-song-library") closeSongLibrary();
     else if (type === "open-manage-settings") { state.manageTab = "settings"; navigate("manage"); }
-    else if (type === "select-date") { state.selectedDate = action.dataset.date; render(); }
+    else if (type === "select-date" || type === "calendar-day") { setCalendarSelection(action.dataset.date); render(); }
+    else if (type === "calendar-clear") { setCalendarSelection(""); render(); }
+    else if (type === "calendar-prev" || type === "calendar-next") {
+      state.calendarMonth = shiftMonth(state.calendarMonth, type === "calendar-next" ? 1 : -1);
+      setCalendarSelection("");
+      render();
+    }
     else if (type === "toggle-service") { state.expandedServices[action.dataset.service] = !state.expandedServices[action.dataset.service]; render(); }
+    else if (type === "open-duty-team") { state.openDutyTeams[action.dataset.service] = !state.openDutyTeams[action.dataset.service]; render(); }
     else if (type === "toggle-past") { state.showPast = !state.showPast; render(); }
     else if (type === "request-change") { state.requestOpen = { serviceId: action.dataset.service, duty: action.dataset.duty }; state.requestNote = ""; render(); }
     else if (type === "cancel-request") { state.requestOpen = null; state.requestNote = ""; render(); }
@@ -1442,16 +1776,31 @@
     const target = event.target;
     const change = target.dataset.change;
     if (!change) return;
-    if (REAL_MODE && !["member", "home-department", "duty-department", "presider-service"].includes(change)) return;
+    if (REAL_MODE && !["member", "home-department", "duty-department", "presider-service", "presider-filter", "manage-service", "department-choice"].includes(change)) return;
     if (change === "member") {
       state.selectedName = target.value;
       state.memberNotice = "";
       state.calendarMessage = "";
-      if (state.screen === "presider") state.selectedServiceId = presiderServices(state.selectedName)[0]?.id || state.selectedServiceId;
+      if (state.screen === "presider" && !state.calendarDay && state.presiderFilter === "mine" && state.selectedName) {
+        const nearestPresider = state.services.filter((service) => (REAL_MODE || !service.standalone || setlistById(service.id)) && service.date >= today && isPresider(state.selectedName, service)).sort(serviceSort)[0];
+        if (nearestPresider) state.calendarMonth = nearestPresider.date.slice(0, 7);
+      }
+      if (state.screen === "presider") state.selectedServiceId = presiderServices(state.selectedName)[0]?.id || "";
       render();
     } else if (change === "home-department") { state.homeDepartment = target.value; render(); }
     else if (change === "duty-department") { state.dutyDepartment = target.value; render(); }
-    else if (change === "presider-service") { state.selectedServiceId = target.value; state.saveState = currentSetlist()?.confirmed ? "saved" : "ready"; state.failNextSave = false; render(); }
+    else if (change === "presider-filter") {
+      state.presiderFilter = target.value === "all" ? "all" : "mine";
+      if (state.presiderFilter === "mine" && !state.calendarDay && state.selectedName) {
+        const nearestPresider = state.services.filter((service) => (REAL_MODE || !service.standalone || setlistById(service.id)) && service.date >= today && isPresider(state.selectedName, service)).sort(serviceSort)[0];
+        if (nearestPresider) state.calendarMonth = nearestPresider.date.slice(0, 7);
+      }
+      state.selectedServiceId = presiderServices(state.selectedName)[0]?.id || "";
+      state.saveState = setlistIsConfirmed(currentSetlist()) ? "saved" : "ready";
+      state.failNextSave = false;
+      render();
+    }
+    else if (change === "presider-service") { state.selectedServiceId = target.value; state.saveState = setlistIsConfirmed(currentSetlist()) ? "saved" : "ready"; state.failNextSave = false; render(); }
     else if (change === "manage-service") { state.selectedServiceId = target.value; state.serviceDeleteId = null; render(); }
     else if (change === "service-field") { updateServiceField(target.dataset.field, target.value); render(); }
     else if (change === "assignment") {
@@ -1579,7 +1928,7 @@
         } else {
           history.push({ date, service, by: "Backfill", markedAt: date + "T12:00:00", backfilled: true });
           writeSongHistory(song.id, history);
-          state.songNotice = "Backfilled history for #" + song.number + " locally.";
+          state.songNotice = "Backfilled history for " + songLabel(song) + " locally.";
         }
         state.backfillOpen = false;
         render();
