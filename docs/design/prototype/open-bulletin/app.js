@@ -159,6 +159,19 @@
     return stat && Array.isArray(stat.history) ? stat.history.slice() : songHistory(songId);
   }
 
+  function uniqueSetlistSongs(setlist) {
+    return Array.from(new Set((setlist && setlist.songs) || []));
+  }
+
+  function serviceSongsComplete(setlist) {
+    const songs = uniqueSetlistSongs(setlist);
+    return songs.length > 0 && songs.every((songId) => songHistory(songId).some((entry) => entry.service === setlist.id));
+  }
+
+  function hasServiceHistory(setlist) {
+    return state.songs.some((song) => songHistory(song.id).some((entry) => entry.service === setlist.id));
+  }
+
   function applySung(statsMap, setlist, options) {
     const opts = options || {};
     const service = setlist.id;
@@ -176,7 +189,11 @@
     const service = setlist.id;
     const changed = {};
     const removed = [];
-    Array.from(new Set(setlist.songs || [])).forEach((songId) => {
+    const songIds = new Set(setlist.songs || []);
+    Object.keys(statsMap || {}).forEach((songId) => {
+      if (historyForStats(statsMap, songId).some((entry) => entry.service === service)) songIds.add(songId);
+    });
+    Array.from(songIds).forEach((songId) => {
       const history = historyForStats(statsMap, songId);
       const nextHistory = history.filter((entry) => entry.service !== service);
       if (nextHistory.length === history.length) return;
@@ -598,12 +615,13 @@
     const setlist = currentSetlist();
     if (!setlist) return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true }) + '<div class="state-card"><p class="state-marker">No outline</p><h2>No outline for this service</h2><p>The local setlist was deleted, but the service is still available.</p><button class="button-primary" type="button" data-action="create-setlist">Recreate outline</button></div></section>';
     const deleteConfirm = state.deleteSetlistConfirm ? '<div class="confirm-inline"><p>Delete this local setlist and keep the service?</p><button class="button-danger" type="button" data-action="delete-setlist-confirm">Delete setlist</button><button class="text-button" type="button" data-action="cancel-delete-setlist">Cancel</button></div>' : "";
-    const sungConfirm = state.markSungConfirm ? '<div class="confirm-inline"><p>Mark every song occurrence in this service as sung?</p><button class="button-primary" type="button" data-action="confirm-mark-sung">Mark sung</button><button class="text-button" type="button" data-action="cancel-mark-sung">Cancel</button></div>' : "";
+    const sungConfirm = state.markSungConfirm ? '<div class="confirm-inline"><p>Mark songs in this service as sung?</p><button class="button-primary" type="button" data-action="confirm-mark-sung">Mark sung</button><button class="text-button" type="button" data-action="cancel-mark-sung">Cancel</button></div>' : "";
     const undoConfirm = state.undoSungConfirm ? '<div class="confirm-inline"><p>Undo the sung mark and restore the recorded counts?</p><button class="button-primary" type="button" data-action="confirm-undo-sung">Undo sung</button><button class="text-button" type="button" data-action="cancel-undo-sung">Cancel</button></div>' : "";
-    const sung = setlist.status === "sung" || (setlist.songs || []).some((songId) => songHistory(songId).some((entry) => entry.service === setlist.id));
+    const sung = serviceSongsComplete(setlist);
+    const hasHistory = hasServiceHistory(setlist);
     return '<section class="prototype-page presider-page" data-prototype-screen="presider">' + renderHeading("For the service", "Presider", { memberControl: true, control: '<p class="selected-member service-picker"><label for="presider-service">Service</label><select id="presider-service" data-change="presider-service">' + serviceOptions(service.id, options) + "</select></p>" }) +
       '<section class="presider-intro"><div><p class="section-label">' + escapeHtml(service.worshipType + ", " + compactDate(service.date)) + '</p><h2>' + escapeHtml(service.serviceLabel + " worship") + '</h2><p>' + escapeHtml(formatTime(service.time) + ", Presider: " + state.selectedName) + "</p></div><div class=\"button-row\"><button class=\"button-secondary phone-song-trigger\" id=\"song-library-trigger\" type=\"button\" data-action=\"open-song-library\" aria-controls=\"song-library-panel\" aria-expanded=\"" + String(state.songLibraryOpen) + "\">Search songs</button><button class=\"button-secondary\" type=\"button\" data-action=\"open-runsheet\">View runsheet</button><button class=\"text-button\" type=\"button\" data-action=\"copy-setlist\">Copy outline</button></div></section>" +
-      renderSetlistState(setlist) + '<div class="presider-layout"><section class="outline-card" aria-labelledby="outline-title"><div class="panel-heading"><h2 id="outline-title">Service outline</h2><span>' + formatDuration(prepTotal(setlist)) + " preparation</span></div><label class=\"field-label\" for=\"setlist-notes\">Notes<textarea id=\"setlist-notes\" data-change=\"setlist-notes\" rows=\"3\">" + escapeHtml(setlist.notes || "") + '</textarea></label>' + (state.features.choirSong ? '<label class="field-label">Choir song<select data-change="choir-song">' + songOptions(service.choirSong, true) + "</select></label>" : "") + '<div class="song-slots"><label class="field-label">Glory song<select data-change="glory-song">' + songOptions(setlist.glorySong, true) + '</select></label><label class="field-label">Thanks song<select data-change="thanks-song">' + songOptions(setlist.thanksSong, true) + "</select></label></div>" + renderOutline(service, setlist) + '<div class="outline-footer"><button class="button-secondary" type="button" data-action="mark-sung"' + (sung ? " disabled" : "") + '>' + (sung ? "Sung" : "Mark service sung") + "</button>" + (sung ? '<button class="text-button" type="button" data-action="undo-sung">Undo sung</button>' : "") + '<button class="button-danger" type="button" data-action="delete-setlist">Delete setlist</button></div>' + sungConfirm + undoConfirm + deleteConfirm + "</section>" + renderSongPicker() + "</div>" + renderRunsheet(service, setlist) + notice(state.songNotice, "success") + renderCopyFallback("Outline text") + renderPresiderHistory() + "</section>";
+      renderSetlistState(setlist) + '<div class="presider-layout"><section class="outline-card" aria-labelledby="outline-title"><div class="panel-heading"><h2 id="outline-title">Service outline</h2><span>' + formatDuration(prepTotal(setlist)) + " preparation</span></div><label class=\"field-label\" for=\"setlist-notes\">Notes<textarea id=\"setlist-notes\" data-change=\"setlist-notes\" rows=\"3\">" + escapeHtml(setlist.notes || "") + '</textarea></label>' + (state.features.choirSong ? '<label class="field-label">Choir song<select data-change="choir-song">' + songOptions(service.choirSong, true) + "</select></label>" : "") + '<div class="song-slots"><label class="field-label">Glory song<select data-change="glory-song">' + songOptions(setlist.glorySong, true) + '</select></label><label class="field-label">Thanks song<select data-change="thanks-song">' + songOptions(setlist.thanksSong, true) + "</select></label></div>" + renderOutline(service, setlist) + '<div class="outline-footer"><button class="button-secondary" type="button" data-action="mark-sung"' + (sung ? " disabled" : "") + '>' + (sung ? "Sung" : "Mark service sung") + "</button>" + (hasHistory ? '<button class="text-button" type="button" data-action="undo-sung">Undo sung</button>' : "") + '<button class="button-danger" type="button" data-action="delete-setlist">Delete setlist</button></div>' + sungConfirm + undoConfirm + deleteConfirm + "</section>" + renderSongPicker() + "</div>" + renderRunsheet(service, setlist) + notice(state.songNotice, "success") + renderCopyFallback("Outline text") + renderPresiderHistory() + "</section>";
   }
 
 
@@ -1086,7 +1104,8 @@
     if (new Set(payload.songs.map((song) => song.id)).size !== knownSongs.size) return false;
     if (Object.values(payload.departments).some((roster) => !Array.isArray(roster) || roster.some((member) => !members.includes(member)))) return false;
     for (const [id, setlist] of Object.entries(payload.setlists)) {
-      if (!serviceIds.has(id) || !isObject(setlist) || !Array.isArray(setlist.songs) || setlist.songs.some((songId) => !knownSongs.has(songId))) return false;
+      const service = payload.services.find((item) => item && item.id === id);
+      if (!service || !isObject(setlist) || setlist.id !== id || setlist.date !== service.date || setlist.worshipType !== service.worshipType || setlist.serviceLabel !== service.serviceLabel || !Array.isArray(setlist.songs) || setlist.songs.some((songId) => !knownSongs.has(songId))) return false;
     }
     if (payload.requests.some((request) => !isObject(request) || typeof request.name !== "string" || !members.includes(request.name))) return false;
     if (Object.entries(payload.songStats).some(([id, stat]) => !knownSongs.has(id) || !isObject(stat) || (stat.history !== undefined && (!Array.isArray(stat.history) || stat.history.some((entry) => !isObject(entry) || typeof entry.date !== "string" || typeof entry.service !== "string"))))) return false;
@@ -1427,7 +1446,7 @@
   function markSung() {
     const setlist = currentSetlist();
     if (!setlist) return;
-    const alreadySung = setlist.status === "sung" || (setlist.songs || []).some((songId) => songHistory(songId).some((entry) => entry.service === setlist.id));
+    const alreadySung = serviceSongsComplete(setlist);
     if (alreadySung) {
       state.markSungConfirm = null;
       state.songNotice = "This service is already marked sung locally.";

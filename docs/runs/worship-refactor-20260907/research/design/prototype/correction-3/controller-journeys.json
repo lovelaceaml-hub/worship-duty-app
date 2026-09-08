@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "checks": [
+    "New songs after marking are recorded once; prior pairs remain idempotent.",
+    "Undo after removing every outline song clears that service and preserves prior history.",
+    "Marker-bearing backups with mismatched identity, date, type, or label are rejected without mutation."
+  ],
+  "errors": []
+}

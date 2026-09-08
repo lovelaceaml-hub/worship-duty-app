@@ -34,12 +34,12 @@ export default {
   prototype: {
     artifactPath: "../open-bulletin/index.html",
     interactions: {
-      phone: { route: "/open-bulletin/index.html?screen=home", actionSelector: "[data-action='open-my-duties']", outcomeSelector: "[data-prototype-screen='duty']" },
-      desktop: { route: "/open-bulletin/index.html?screen=home", actionSelector: "[data-action='open-my-duties']", outcomeSelector: "[data-prototype-screen='duty']" },
+      phone: { route: "/open-bulletin/index.html?screen=home", actionSelector: "[data-nav='duty']", outcomeSelector: "[data-prototype-screen='duty']" },
+      desktop: { route: "/open-bulletin/index.html?screen=home", actionSelector: "[data-nav='duty']", outcomeSelector: "[data-prototype-screen='duty']" },
     },
   },
   primaryJourney: [
-    { route: "/open-bulletin/index.html?screen=home", actionSelector: "[data-action='open-my-duties']", outcomeSelector: "[data-prototype-screen='duty']" },
+    { route: "/open-bulletin/index.html?screen=home", actionSelector: "[data-nav='duty']", outcomeSelector: "[data-prototype-screen='duty']" },
     { route: "/open-bulletin/index.html?screen=duty", actionSelector: "[data-action='open-presider']", outcomeSelector: "[data-prototype-screen='presider']" },
     { route: "/open-bulletin/index.html?screen=presider", actionSelector: "[data-action='save-setlist']", outcomeSelector: "[data-save-state='saved']" },
     { route: "/open-bulletin/index.html?screen=manage", actionSelector: "[data-action='approve-request']", outcomeSelector: "[data-pending-count='0']" },
