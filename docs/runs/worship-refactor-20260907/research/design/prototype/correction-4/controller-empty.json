@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "checks": [
+    "Empty Mark control is disabled and a forced attempt preserves complete setlist metadata and song history.",
+    "Adding a song re-enables marking.",
+    "After marking and removing every song, Mark remains disabled and Undo remains reachable and clears the service."
+  ],
+  "axeViolations": 0,
+  "errors": []
+}

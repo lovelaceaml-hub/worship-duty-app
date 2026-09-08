@@ -13,3 +13,7 @@ Original references remain under docs/design/directions/open-bulletin/. The reje
 The approved project plan still requires Home with My next duty, grouped schedule, top navigation, My Duties, the service song workspace, and coordinator capabilities. Complete clickable phone/desktop journeys and state coverage remain required before production interface approval. Preserve passcodes, name selection, optional swiping, header-to-home, and existing feature switches.
 
 Original B is the selected direction. The typography-only preview is committed under docs/design/prototype/type-refinement. The complete prototype is not yet approved. No production interface change is authorized by this visual selection alone. Material visual changes return to Anthony. No religious imagery or emoji.
+
+## Complete candidate ready for approval
+
+The complete original-B prototype is at [Open Bulletin](design/prototype/open-bulletin/index.html), with [phone and desktop references](design/prototype/open-bulletin/screenshots/) and [state coverage](design/prototype/open-bulletin/STATE-COVERAGE.md). Native Sol review4 passed. Controller verification covers the broad journeys and corrected history/import/empty cases. The committed phone/desktop contract passed. Original directions and typography-only references remain unchanged. The [approval record](design/prototype/APPROVAL.md) is pending Anthony's response. These are reviewed candidate targets, not approved production references.

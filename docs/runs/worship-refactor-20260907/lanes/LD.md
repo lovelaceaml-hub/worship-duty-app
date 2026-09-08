@@ -1,13 +1,13 @@
 ---
 lane: LD
-title: Design
-state: running
+title: Design (approval pending)
+state: reviewed
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/design
-review: corrections-3
+review: Sol-pass
 depends_on: none
-updated: 2026-09-08T14:52Z
+updated: 2026-09-08T15:22Z
 ---
 
 # Lane LD: Local design directions
@@ -95,3 +95,7 @@ The plan Build log and Git state remain controller-owned. This lane did not muta
 ## Authoritative typography correction
 
 Anthony rejected the compact layout draft and clarified that he only wanted smaller oversized text. The original Open Bulletin layout is restored in docs/design/prototype/type-refinement. Root verified identical HTML and JavaScript to original B, and CSS differs only in font-size declarations. Phone and desktop have no horizontal overflow; original body text, palette, structure and spacing remain. Full prototype approval remains pending.
+
+## Reviewed complete prototype, 8 September 2026
+
+The complete candidate and all accepted corrections passed native Sol review4. Root verified nineteen broad views, nine earlier targeted journeys, the corrected history/import paths, and the final empty-state behavior. The committed phone/desktop artifact contract passed. Original B visual references remain unchanged. Implementation facts and source-bound evidence are under research/design/prototype/correction-3 and correction-4; final review is research/design-prototype-review4.md. Full prototype approval is pending Anthony's response to the presented question. Production UI work has not started.

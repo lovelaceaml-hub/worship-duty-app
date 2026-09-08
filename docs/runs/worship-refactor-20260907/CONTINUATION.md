@@ -1,35 +1,39 @@
 # Controller continuation checkpoint
 
-8 September 2026. Full plan is not complete.
+8 September 2026. The full refactor and redesign plan is not complete. The current independent work is complete; the next required product decision is Anthony's approval of the complete prototype.
 
-## Latest product authority
+## Authority and next action
 
-Anthony selected original Design B, Open Bulletin. He rejected the compact layout and clarified: "no. that looks dumb. I just didnt want huge text". Preserve original layout, spacing, white/blue palette and cards; reduce only oversized typography. The committed immutable anchor is docs/design/prototype/type-refinement. His latest "Just move on" authorizes continued routine correction work after the fifth-review decision. It is not a review waiver or approval of the complete prototype. The active plan still requires complete prototype approval before production UI implementation.
+Anthony selected original Design B, Open Bulletin. His correction was: "no. that looks dumb. I just didnt want huge text". Preserve the original layout, spacing, white/blue palette and cards, with smaller oversized typography only. Original directions and type-refinement references are immutable.
 
-## Live and backed up
+His "Just move on" authorized routine corrections after the Verification review decision. It did not waive reviews or approve a complete prototype. Root presented an async full-prototype approval question and queued the candidate browser through open_in_codex. No answer has been received. Do not infer approval from the preselected option, elapsed time, the queued tab, or the earlier Design B selection.
 
-Canonical: /Users/anthony/Projects/worship-duty-app, branch codex/worship-refactor-redesign. Last pushed checkpoint: 4832466. Local committed full prototype candidate: 507090d. Live runtime: 9247f75, Hosting stamp 20260908041730. All20 live runtime hashes matched staged bytes and the locked phone smoke passed. Foundation1/2/3, staged releases, confirmation correction, and seven deliberately changed backend functions remain live. No new production changes in this turn. Existing private GitHub destination lovelaceaml-hub/worship-duty-app was reverified private on8September.
+After Anthony approves, record his exact response and the committed candidate in docs/design/prototype/APPROVAL.md and freeze targets in the plan. Start the sequential shared screen-host seam from research/ui-architecture.md using one Luna writer/worktree, then launch the approved disjoint Member, Presider and Coordinator lanes. Root owns shared integration, Git and releases. No production UI work starts before the required prototype decision.
 
-## Active lanes
+## Reviewed and integrated
 
-- Verification: round8 passed native Sol high review with no actionable findings. Root independently passed 19 scenarios/17 views plus both baseline/canonical actual emulator runs, verified shutdown, copied the three frozen tests and compared SHA256s. Source is integrated canonical; safe docs/evidence commit and push are next. Receipt: research/verification/controller-review-round8.md. The legacy Manage exceptions remain for final UI work. No active Verification writer/reviewer remains.
-- Prototype: Luna /root/prototype_corrections is correcting three accepted native review2 gaps: new songs after sung, undo after removing a song, and imported setlist identity/date validation. Sole worktree /Users/anthony/Projects/worship-refactor-worktrees/design. Owns open-bulletin and new correction-3 evidence, plus explicit contract config correction. Canonical candidate507090d contains correction2, not these latest fixes. Review worktree /Users/anthony/Projects/worship-refactor-worktrees/design-review is clean at local0bd0ee7, ready for focused correction3 diff. Native review2 is finished; sanitized receipt research/design-prototype-review2.md. Contract runner failed waiting obsolete open-my-duties action; worker is updating config to actual My Duties navigation. Production UI and full prototype approval remain pending. Root owns shared PRODUCT-BRIEF/USER-JOURNEYS/DESIGN/UI-QUALITY/docs.
-- Member, Presider, Coordinator production UI and the sequential shared screen-host seam remain pending prototype approval. The next technical capsule is in research/ui-architecture.md. No new fan-out is needed before that gate.
+Verification lane: native Sol high review8 passed with no actionable findings. Root independently passed 19 fictional scenarios and 17 Axe views against canonical runtime, plus actual baseline/canonical emulator transactions with overlapping unique fixture documents. Three frozen tests were copied and SHA256-checked. The legacy Manage UI retains 33 exact baseline label/select-name findings per viewport; final redesign must resolve them. Test source and all sanitized historical/current evidence are committed and privately backed up at86b9b2b. Root stopped the emulator cleanly and verified no8193listener remained.
 
-## Verification status
+Prototype: all accepted findings are corrected. Native Sol high review4 passed with no actionable findings. Root verified broader phone/desktop journeys, corrected history/import paths, and final empty-state Mark/Undo behavior. The final app.js SHA256 is49a84ae67299326a6373e7aba9132fc87216356c24991f60f208f8a019a8df6a. The committed phone/desktop contract passed at candidate7a35db9 before the final empty guard; final contract validation follows the closing commit. HTML, styles and fixtures did not change in final history/empty corrections. No active source writer or reviewer remains. Final receipts are research/design-prototype-review4.md and research/design/prototype/correction-4. Approval record remains pending.
 
-Root independently passed round8 canonical 19 scenarios and 17 Axe views, zero unexpected traffic/browser errors, no expected regressions, phone 57.59ms/desktop 54.00ms. Retained evidence is research/verification/controller-round8. Native review8 passed the corrected suite. The current legacy Manage interface retains33 exact baseline label/select-name findings per viewport. Final redesign must resolve them. An earlier237.40ms desktop outlier remains in historical lane evidence.
+## Production and backup
 
-Root used Firestore-only emulator session35759 on127.0.0.1:8193, project demo-worship-refactor, temporary config /private/tmp/worship-emulator-round4/firebase.json. Corrected baseline and canonical transaction runs passed with real overlapping unique fictional documents. Root stopped the owned emulator cleanly and verified no8193listener remains. No Functions emulator, production data access, or database/rules change.
+Canonical repository: /Users/anthony/Projects/worship-duty-app, branch codex/worship-refactor-redesign. Existing verified private remote: https://github.com/lovelaceaml-hub/worship-duty-app. Only source and fictional/sanitized artifacts are backed up.
 
-## Integration and completion
+Last deployed runtime:9247f75, Hosting stamp20260908041730, with all20 runtime hashes matching staged bytes and the immediate locked phone smoke passed. Foundation1/2/3, staged release machinery, confirmation correction and seven deliberately changed backend functions remain the latest releases from this task. No production UI redesign or new deployment occurred during the prototype/test correction work. No rules, database migration, stronger authentication, or importer change.
 
-Canonical contains uncommitted root documentation, fictional test evidence, and the reviewed integrated tests. Preserve historical evidence and unrelated edits. Prototype correction2 is committed as a candidate. Copy latest correction3 only after source freezes; then focused native review, commit complete target and run contract validator. Present full prototype for Anthony's required approval. Never silently mark a candidate approved.
+The final reviewed prototype correction and closing docs are being committed and pushed after this checkpoint. Verify current Git HEAD/status and remote before making a fresh completion claim. Do not assume an older receipt's commit is current.
 
-Required final plan gates remain: production UI implementation, screen lifecycle, complete fidelity/accessibility/function/performance proof, native Sol and cumulative independent Opus high review, manual/contract/handoff updates, immediate production smoke, and private backup. No fixed soak window is required. Opus has not been launched.
+## Preserved worktrees and previews
 
-## Previews and ownership
+Design writer worktree: /Users/anthony/Projects/worship-refactor-worktrees/design. Source frozen.8099 serves its docs/design/prototype directory. Full candidate: http://127.0.0.1:8099/open-bulletin/index.html?screen=home. Typography-only anchor: http://127.0.0.1:8099/type-refinement/index.html. Never present the rejected compact /?screen=home draft as the current target.
 
-Keep root-owned local servers available: board http://127.0.0.1:8097, original directions http://127.0.0.1:8098, prototype server http://127.0.0.1:8099. User's stable typography-only tab is /type-refinement/index.html. Complete candidate is /open-bulletin/index.html. Never present rejected compact /?screen=home as the current target.8099 serves the original design worktree, not design-review.
+Frozen review worktree: /Users/anthony/Projects/worship-refactor-worktrees/design-review. Native review4 completed from local63a5fdd plus the exact small guard diff and controller proof. Verification worktree: /Users/anthony/Projects/worship-refactor-worktrees/verification, source frozen and integrated. Keep original evidence/worktrees available while the plan continues. No emulator remains running.
 
-Parent /Users/anthony/Projects/README.md has the Worship release row updated alongside unrelated pre-existing edits. Do not blanket stage it. Root owns integration/Git/docs and reviewers are read-only. Worker source changes use executor_luna with one writer per worktree.
+Keep root-owned previews available: board http://127.0.0.1:8097, original directions http://127.0.0.1:8098, prototype http://127.0.0.1:8099. The tab-open request returned queued, not proof of user viewing.
+
+Parent /Users/anthony/Projects/README.md contains this project's updated row alongside unrelated pre-existing edits. Do not blanket stage or push that parent repository. The separate Service preview, preaching app, and retired song app remain outside scope.
+
+## Remaining full-plan gates
+
+Production screen implementation and lifecycle extraction; complete production fidelity, accessibility, functional, offline and performance verification; native Sol and cumulative independent Opus high review; final user manual, contract, handoff and backup; relevant release preflight and immediate production smoke. No fixed soak window is required. Opus has not run because cumulative full-plan completion is not reached.
