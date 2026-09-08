@@ -348,8 +348,9 @@ function writeSetlistPatch(id, patch) {
   });
 }
 
-function updateSetlist(id, patch) {
+function updateSetlist(id, patch, options) {
   stampMeta(patch);
+  if (options && options.confirm) patch.confirmedAt = patch.updatedAt;
   if (fb) {
     applyLocalSetlistPatch(id, patch);
     writeSetlistPatch(id, patch);
@@ -412,9 +413,7 @@ function changedSinceConfirmed(sl) {
 function confirmSetlist(id) {
   const sl = state.setlists[id];
   if (!sl || !(sl.songs || []).length) return;
-  const patch = stampMeta({ confirmedBy: whoAmI() });
-  patch.confirmedAt = patch.updatedAt;
-  updateSetlist(id, patch);
+  updateSetlist(id, { confirmedBy: whoAmI() }, { confirm: true });
   render();
 }
 
