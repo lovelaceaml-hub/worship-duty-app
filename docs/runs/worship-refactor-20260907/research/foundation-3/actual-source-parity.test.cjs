@@ -149,6 +149,7 @@ test('actual browser script order exposes frozen member and coordinator domains'
     'src/core/constants.js?v=DEV',
     'src/core/state.js?v=DEV',
     'src/domain/schedule.js?v=DEV',
+    'src/domain/setlist.js?v=DEV',
     'src/domain/member.js?v=DEV',
     'src/domain/coordinator.js?v=DEV',
     'src/domain/sheet.js?v=DEV',
@@ -173,6 +174,7 @@ test('actual browser script order exposes frozen member and coordinator domains'
   ));
   assert(Object.isFrozen(sandbox.window.WorshipApp.core));
   assert(Object.isFrozen(sandbox.window.WorshipApp.domain.schedule));
+  assert(Object.isFrozen(sandbox.window.WorshipApp.domain.setlist));
   assert(Object.isFrozen(sandbox.window.WorshipApp.domain.member));
   assert(Object.isFrozen(sandbox.window.WorshipApp.domain.coordinator));
   assert(Object.isFrozen(sandbox.window.WorshipApp.domain.sheet));

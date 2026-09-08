@@ -61,6 +61,7 @@ test('browser namespaces load after frozen core constants', () => {
     'src/core/constants.js',
     'src/core/state.js',
     'src/domain/schedule.js',
+    'src/domain/setlist.js',
     'src/domain/member.js',
     'src/domain/coordinator.js',
     'src/domain/sheet.js',
@@ -75,6 +76,7 @@ test('browser namespaces load after frozen core constants', () => {
     ));
   assert(Object.isFrozen(sandbox.window.WorshipApp.core));
   assert(Object.isFrozen(sandbox.window.WorshipApp.domain.schedule));
+  assert(Object.isFrozen(sandbox.window.WorshipApp.domain.setlist));
   assert(Object.isFrozen(sandbox.window.WorshipApp.domain.member));
   assert(Object.isFrozen(sandbox.window.WorshipApp.domain.coordinator));
   assert(Object.isFrozen(sandbox.window.WorshipApp.domain.sheet));

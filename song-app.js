@@ -28,12 +28,15 @@
    - All styles are scoped under #song-root (song-app.css).
    ================================================================= */
 
+import './src/domain/setlist.js?v=DEV';
+
 /* Pure helpers shared with the Signal ingest daemon — single source of truth. */
 const {
   serviceIdFor, recompute, applySung, applyUndo,
   backfillServiceId, applyBackfill, removeHistoryEntry,
   totalDuration, countedSongIds
 } = window.SongLib;
+const SETLIST_DOMAIN = window.WorshipApp && window.WorshipApp.domain && window.WorshipApp.domain.setlist;
 
 /* ================= constants ================= */
 
@@ -405,10 +408,10 @@ function setlistReorder(id, songs) {
    later edit (including a song added from Signal) pushes updatedAt ahead and
    the list reads as changed since it was confirmed. */
 function isConfirmed(sl) {
-  return !!(sl && sl.confirmedAt && sl.confirmedAt >= (sl.updatedAt || 0));
+  return SETLIST_DOMAIN.isConfirmed(sl);
 }
 function changedSinceConfirmed(sl) {
-  return !!(sl && sl.confirmedAt && sl.confirmedAt < (sl.updatedAt || 0));
+  return SETLIST_DOMAIN.isChanged(sl);
 }
 function confirmSetlist(id) {
   const sl = state.setlists[id];
@@ -421,12 +424,14 @@ function confirmSetlist(id) {
    replaces the old Planned/Sung pill, which said "Planned" whether the service
    had 14 songs or none at all. */
 function songStatus(sl) {
-  const count = (sl && sl.songs || []).length;
-  if (sl && sl.status === 'sung') return { cls: 'sung', label: 'Sung' };
-  if (!count) return { cls: 'none', label: 'No songs yet' };
-  if (isConfirmed(sl)) return { cls: 'confirmed', label: 'Confirmed' };
-  if (changedSinceConfirmed(sl)) return { cls: 'planned', label: 'Changed' };
-  return { cls: 'planned', label: 'Songs picked' };
+  const presentation = {
+    sung: { cls: 'sung', label: 'Sung' },
+    empty: { cls: 'none', label: 'No songs yet' },
+    confirmed: { cls: 'confirmed', label: 'Confirmed' },
+    changed: { cls: 'planned', label: 'Changed' },
+    picked: { cls: 'planned', label: 'Songs picked' }
+  };
+  return presentation[SETLIST_DOMAIN.status(sl)];
 }
 function statusPill(sl) {
   const st = songStatus(sl);

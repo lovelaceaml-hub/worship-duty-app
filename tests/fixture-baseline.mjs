@@ -1419,7 +1419,7 @@ globalThis.__QA_PURE = {
   };
   sandbox.globalThis = sandbox;
   const foundationFiles = [
-    'src/core/constants.js', 'src/core/state.js', 'src/domain/schedule.js', 'src/domain/member.js', 'src/domain/coordinator.js', 'src/domain/sheet.js',
+    'src/core/constants.js', 'src/core/state.js', 'src/domain/schedule.js', 'src/domain/setlist.js', 'src/domain/member.js', 'src/domain/coordinator.js', 'src/domain/sheet.js',
     'src/services/storage.js', 'src/services/firebase.js', 'src/services/subscriptions.js'
   ];
   for (const relative of foundationFiles) {

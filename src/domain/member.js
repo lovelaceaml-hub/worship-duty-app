@@ -3,14 +3,23 @@
 /* Pure member selectors. Runtime catalogs, service IDs, and setlist records
    are supplied by callers so this module stays browser and storage free. */
 (function expose(root, factory) {
-  const api = Object.freeze(factory());
+  const browserSetlist = root && root.window && root.window.WorshipApp &&
+    root.window.WorshipApp.domain && root.window.WorshipApp.domain.setlist;
+  const setlistDomain = browserSetlist ||
+    (typeof module !== 'undefined' && module.exports && typeof require === 'function'
+      ? require('./setlist.js') : null);
+  const api = Object.freeze(factory(setlistDomain));
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root && root.window) {
     const app = root.window.WorshipApp || (root.window.WorshipApp = {});
     const domain = app.domain || (app.domain = {});
     domain.member = api;
   }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createMemberDomain() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createMemberDomain(setlistDomain) {
+  if (!setlistDomain || typeof setlistDomain.summary !== 'function') {
+    throw new Error('Member domain requires the setlist domain');
+  }
+
   function fallbackServiceId(service) {
     return service.date + '_' + String(service.service || '')
       .toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -68,18 +77,9 @@
     return (requests || []).filter(request => request.status === 'pending').length;
   }
 
-  /* Summarize a read-only setlist index for the member screen. A confirmed
-     list is current when its confirmation is at or after its last update. */
+  /* Compatibility wrapper for the extracted setlist summary rule. */
   function setlistSummary(setlists, id) {
-    const setlist = setlists && setlists[id];
-    if (!setlist) return null;
-    const count = (setlist.songs || []).length;
-    const confirmedAt = setlist.confirmedAt || 0;
-    return {
-      count,
-      confirmed: !!(count && confirmedAt && confirmedAt >= (setlist.updatedAt || 0)),
-      changed: !!(count && confirmedAt && confirmedAt < (setlist.updatedAt || 0))
-    };
+    return setlistDomain.summary(setlists, id);
   }
 
   return {

@@ -25,6 +25,7 @@ vm.createContext(browserSandbox);
   'src/core/constants.js',
   'src/core/state.js',
   'src/domain/schedule.js',
+  'src/domain/setlist.js',
   'src/domain/member.js',
   'src/domain/coordinator.js',
   'src/domain/sheet.js',
@@ -37,6 +38,7 @@ vm.createContext(browserSandbox);
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.core));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.services.state));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.schedule));
+assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.setlist));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.member));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.coordinator));
 assert.equal(browserSandbox.window.WorshipApp.domain.member.dutiesFor, undefined);
@@ -71,6 +73,7 @@ vm.createContext(appSandbox);
   'src/core/constants.js',
   'src/core/state.js',
   'src/domain/schedule.js',
+  'src/domain/setlist.js',
   'src/domain/member.js',
   'src/domain/coordinator.js',
   'src/domain/sheet.js',
