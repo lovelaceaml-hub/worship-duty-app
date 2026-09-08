@@ -7,27 +7,33 @@ const vm = require('node:vm');
 
 const sourceRoot = path.resolve(__dirname, '../../../../../');
 const core = require(path.join(sourceRoot, 'src/core/constants.js'));
+const stateService = require(path.join(sourceRoot, 'src/core/state.js'));
 const schedule = require(path.join(sourceRoot, 'src/domain/schedule.js'));
 const sheet = require(path.join(sourceRoot, 'src/domain/sheet.js'));
 const storage = require(path.join(sourceRoot, 'src/services/storage.js'));
 const firebase = require(path.join(sourceRoot, 'src/services/firebase.js'));
+const subscriptions = require(path.join(sourceRoot, 'src/services/subscriptions.js'));
 
 const browserSandbox = { window: {} };
 vm.createContext(browserSandbox);
 [
   'src/core/constants.js',
+  'src/core/state.js',
   'src/domain/schedule.js',
   'src/domain/sheet.js',
   'src/services/storage.js',
-  'src/services/firebase.js'
+  'src/services/firebase.js',
+  'src/services/subscriptions.js'
 ].forEach(relativePath => {
   vm.runInContext(fs.readFileSync(path.join(sourceRoot, relativePath), 'utf8'), browserSandbox, { filename: relativePath });
 });
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.core));
+assert(Object.isFrozen(browserSandbox.window.WorshipApp.services.state));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.schedule));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.domain.sheet));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.services.storage));
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.services.firebase));
+assert(Object.isFrozen(browserSandbox.window.WorshipApp.services.subscriptions));
 
 const appLocalStorage = {
   values: new Map(),
@@ -51,10 +57,12 @@ const appSandbox = {
 vm.createContext(appSandbox);
 [
   'src/core/constants.js',
+  'src/core/state.js',
   'src/domain/schedule.js',
   'src/domain/sheet.js',
   'src/services/storage.js',
-  'src/services/firebase.js'
+  'src/services/firebase.js',
+  'src/services/subscriptions.js'
 ].forEach(relativePath => {
   vm.runInContext(fs.readFileSync(path.join(sourceRoot, relativePath), 'utf8'), appSandbox, { filename: relativePath });
 });
@@ -62,10 +70,12 @@ const appSource = fs.readFileSync(path.join(sourceRoot, 'app.js'), 'utf8').repla
 vm.runInContext(appSource, appSandbox, { filename: 'app.js' });
 
 assert(Object.isFrozen(core));
+assert(Object.isFrozen(stateService));
 assert(Object.isFrozen(schedule));
 assert(Object.isFrozen(sheet));
 assert(Object.isFrozen(storage));
 assert(Object.isFrozen(firebase));
+assert(Object.isFrozen(subscriptions));
 
 const categories = [
   { name: 'Worship', duties: ['Presider', 'Prayer of Thanks'] },

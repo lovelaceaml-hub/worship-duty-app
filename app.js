@@ -8,7 +8,10 @@ const DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.schedule;
 const SHEET_DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.sheet;
 const STORAGE_SERVICE = APP_FOUNDATION.services && APP_FOUNDATION.services.storage;
 const FIREBASE_SERVICE = APP_FOUNDATION.services && APP_FOUNDATION.services.firebase;
-if (!CORE || !DOMAIN || !SHEET_DOMAIN || !STORAGE_SERVICE || !FIREBASE_SERVICE) {
+const STATE_SERVICE = (APP_FOUNDATION.services && APP_FOUNDATION.services.state) || APP_FOUNDATION.state;
+const SUBSCRIPTIONS_SERVICE = APP_FOUNDATION.services && APP_FOUNDATION.services.subscriptions;
+if (!CORE || !DOMAIN || !SHEET_DOMAIN || !STORAGE_SERVICE || !FIREBASE_SERVICE ||
+    !SUBSCRIPTIONS_SERVICE || typeof SUBSCRIPTIONS_SERVICE.createManager !== 'function') {
   throw new Error('WorshipApp foundation modules did not load');
 }
 
@@ -170,9 +173,35 @@ function sheetRowsToServices(rows, today) {
 }
 /* ================= state ================= */
 
-let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
+function createCompatStateStore(initial) {
+  let current = initial;
+  const readiness = { members: false, departments: false };
+  const hasOwn = Object.prototype.hasOwnProperty;
+  return Object.freeze({
+    get: () => current,
+    replace: next => { current = next; return current; },
+    setReady: (key, value) => {
+      if (!hasOwn.call(readiness, key)) return false;
+      readiness[key] = !!value;
+      return readiness[key];
+    },
+    areReady: keys => {
+      const requested = keys == null ? ['members', 'departments'] : (Array.isArray(keys) ? keys : [keys]);
+      return requested.every(key => hasOwn.call(readiness, key) && readiness[key]);
+    }
+  });
+}
+
+const stateStore = STATE_SERVICE && typeof STATE_SERVICE.createStore === 'function'
+  ? STATE_SERVICE.createStore({ members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] })
+  : createCompatStateStore({ members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] });
+let state = stateStore.get();
+function replaceState(next) { state = stateStore.replace(next); return state; }
+function setStateReady(key, value) { return stateStore.setReady(key, value); }
+function stateIsReady(keys) { return stateStore.areReady(keys); }
 let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
 let firebaseGateway = null;
+let subscriptionManager = null;
 
 /* Anonymous sign-in no longer blocks startup. Reads are open in
    firestore.rules, so making the whole app wait for a sign-in round trip
@@ -183,10 +212,6 @@ let authReady = Promise.resolve();
 function fbWrite(fn) {
   return firebaseGateway ? firebaseGateway.write(fn) : authReady.then(fn);
 }
-let settingsLoaded = false; // true once shared settings arrived (or local mode)
-let departmentsLoaded = false; // true once the departments doc arrived (or local mode)
-let membersLoaded = false; // true once the members doc arrived (or local mode)
-
 const ui = {
   tab: 'schedule',
   sub: 'services',
@@ -432,7 +457,7 @@ function mergeSheetServices(services) {
     currentServices: state.services,
     departments: state.departments,
     sheetServices: services,
-    departmentsLoaded,
+    departmentsLoaded: stateIsReady('departments'),
     categories: CATEGORIES
   });
   state.services = merge.services;
@@ -519,7 +544,7 @@ function autoSyncOnce() {
   // Roster auto-add (mergeSheetServices → addToDept) needs the members and
   // departments docs; if the sync fired before they land, new names silently
   // miss their department. Wait for both (bounded ~10s so we never stall).
-  if (fb && !(membersLoaded && departmentsLoaded) && autoSyncWaits < 20) {
+  if (fb && !stateIsReady(['members', 'departments']) && autoSyncWaits < 20) {
     autoSyncWaits++;
     setTimeout(autoSyncOnce, 500);
     return;
@@ -1428,7 +1453,7 @@ function renderManageData() {
    Returns { membersChanged, membersMerged, touchedServices, departmentsChanged }. */
 function applyNameMap(map) {
   const result = DOMAIN.applyNameMap(state, map);
-  state = result.state;
+  replaceState(result.state);
   return result;
 }
 /* Upcoming setlists, read only so My Duties can tell a presider whether the
@@ -1674,7 +1699,7 @@ function handleAct(act, el) {
   else if (act === 'sheet-sync') { syncFromSheet(true); }
   else if (act === 'reset') {
     if (confirm('Replace ALL current data with the original spreadsheet schedule?')) {
-      state = seedState();
+      replaceState(seedState());
       persistAll();
       afterDataChange();
     }
@@ -1852,7 +1877,7 @@ function handleChg(chg, el) {
           if (!obj.settings) obj.settings = { features: {}, pinHash: '' };
           if (!obj.departments) obj.departments = {};
           if (!Array.isArray(obj.requests)) obj.requests = [];
-          state = obj;
+          replaceState(obj);
           persistAll();
           afterDataChange();
           alert('Schedule imported.');
@@ -1940,6 +1965,83 @@ function pulse(event) {
   } catch (e) { /* private mode, quota, clock — all non-fatal */ }
 }
 
+function handleSubscriptionEvent(event) {
+  if (!event) return;
+  if (event.type === 'schedule-preview') {
+    state.services = event.services;
+    setSyncPill(true);
+    renderSoon();
+    return;
+  }
+  if (event.type === 'schedule-initial-empty') {
+    replaceState(loadLocal() || seedState());
+    persistAll();
+    setSyncPill(true);
+    afterDataChange();
+    scheduleSyncSoon();
+    return;
+  }
+  if (event.type === 'schedule-authoritative') {
+    state.services = event.services;
+    fb.knownIds = event.knownIds;
+    setSyncPill(true);
+    afterDataChange();
+    scheduleSyncSoon();
+    return;
+  }
+  if (event.type === 'schedule-error') {
+    const error = event.error || {};
+    addBanner('Could not connect to the shared database (' + error.code + '). Showing this device\'s copy.', true);
+    if (!state.services.length) { replaceState(loadLocal() || seedState()); render(); }
+    setSyncPill(false);
+    return;
+  }
+  if (event.type === 'members') {
+    if (event.exists) state.members = event.list || [];
+    setStateReady('members', true);
+    renderSoon();
+    return;
+  }
+  if (event.type === 'settings') {
+    if (event.exists) {
+      state.settings = Object.assign({ features: {}, pinHash: '' }, event.value || {});
+      renderSoon();
+    }
+    return;
+  }
+  if (event.type === 'departments') {
+    const map = event.exists ? (event.map || {}) : null;
+    if (!map || !Object.keys(map).length) {
+      state.departments = JSON.parse(JSON.stringify(DEPARTMENTS_SEED));
+      persistDepartments();
+    } else {
+      state.departments = map;
+    }
+    setStateReady('departments', true);
+    renderSoon();
+    return;
+  }
+  if (event.type === 'name-map') {
+    const map = event.exists ? (event.map || {}) : null;
+    if (!map || !Object.keys(map).length) {
+      sharedNameMap = NAME_UNIFY_MAP;
+      persistNameMap(NAME_UNIFY_MAP);
+    } else {
+      sharedNameMap = map;
+    }
+    return;
+  }
+  if (event.type === 'requests') {
+    state.requests = event.items;
+    renderSoon();
+    return;
+  }
+  if (event.type === 'setlists') {
+    setlistIndex = event.byId;
+    renderSoon();
+  }
+}
+
 async function initFirebase(config) {
   // Fetched together, not one after the other: these are two separate
   // downloads from Google's CDN and the second does not depend on the first.
@@ -2010,99 +2112,14 @@ async function initFirebase(config) {
       fb.deleteToken = msgMod.deleteToken;
     }
   } catch (e) { console.warn('FCM unavailable:', e); }
-  // Fast first paint. The last 30 days plus everything ahead is a small slice of
-  // the collection and is all any member ever looks at, so it is fetched as its
-  // own query in parallel with the full one below and painted the moment it
-  // lands. The full listener still owns the data: Manage edits past services and
-  // the sheet sync compares against every service, so history must be complete
-  // before either runs. This one only ever paints, never seeds, syncs or alerts.
-  let historyLoaded = false;
-  let unsubRecent = fsMod.onSnapshot(
-    fsMod.query(fsMod.collection(db, 'schedule'), fsMod.where('date', '>=', isoDaysAgo(30))),
-    snap => {
-      if (historyLoaded || snap.empty) return;
-      state.services = snap.docs.map(d => d.data());
-      setSyncPill(true);
-      renderSoon();
-    },
-    () => { /* the full listener below is what reports connection errors */ }
-  );
-  const takeOverFromRecent = () => {
-    historyLoaded = true;
-    if (unsubRecent) { unsubRecent(); unsubRecent = null; }
-  };
-
-  let firstSnapshot = true;
-  fsMod.onSnapshot(fsMod.collection(db, 'schedule'), snap => {
-    takeOverFromRecent();
-    if (firstSnapshot && snap.empty) {
-      firstSnapshot = false;
-      // brand-new database: upload the spreadsheet schedule once
-      state = loadLocal() || seedState();
-      persistAll();
-      setSyncPill(true); // data is now flowing — safe to claim "Live sync on"
-      afterDataChange();
-      scheduleSyncSoon();
-      return;
-    }
-    firstSnapshot = false;
-    state.services = snap.docs.map(d => d.data());
-    fb.knownIds = snap.docs.map(d => d.id);
-    setSyncPill(true); // data has landed — flip the pill to live now, not before
-    afterDataChange();
-    scheduleSyncSoon(); // auto-pull from the sheet once, shortly after real data lands
-  }, err => {
-    addBanner('Could not connect to the shared database (' + err.code + '). Showing this device\'s copy.', true);
-    if (!state.services.length) { state = loadLocal() || seedState(); render(); }
-    setSyncPill(false);
+  subscriptionManager = SUBSCRIPTIONS_SERVICE.createManager({
+    firebase: fsMod,
+    db,
+    recentSince: isoDaysAgo(30),
+    setlistsSince: todayISO(),
+    emit: handleSubscriptionEvent
   });
-  fsMod.onSnapshot(fsMod.doc(db, 'app', 'members'), snap => {
-    if (snap.exists()) state.members = snap.data().list || [];
-    membersLoaded = true;
-    renderSoon();
-  }, () => { /* connection errors are surfaced by the schedule listener */ });
-  fsMod.onSnapshot(fsMod.doc(db, 'app', 'settings'), snap => {
-    if (snap.exists()) {
-      state.settings = Object.assign({ features: {}, pinHash: '' }, snap.data());
-      renderSoon();
-    }
-  }, () => { /* connection errors are surfaced by the schedule listener */ });
-  fsMod.onSnapshot(fsMod.doc(db, 'app', 'departments'), snap => {
-    const map = snap.exists() ? (snap.data().map || {}) : null;
-    if (!map || !Object.keys(map).length) {
-      state.departments = JSON.parse(JSON.stringify(DEPARTMENTS_SEED));
-      persistDepartments();
-    } else {
-      state.departments = map;
-    }
-    departmentsLoaded = true;
-    renderSoon();
-  }, () => { /* connection errors are surfaced by the schedule listener */ });
-  fsMod.onSnapshot(fsMod.doc(db, 'app', 'nameMap'), snap => {
-    const map = snap.exists() ? (snap.data().map || {}) : null;
-    if (!map || !Object.keys(map).length) {
-      // brand-new doc: seed it once from the built-in map
-      sharedNameMap = NAME_UNIFY_MAP;
-      persistNameMap(NAME_UNIFY_MAP);
-    } else {
-      sharedNameMap = map;
-    }
-  }, () => { /* connection errors are surfaced by the schedule listener */ });
-  fsMod.onSnapshot(fsMod.collection(db, 'requests'), snap => {
-    state.requests = snap.docs.map(d => d.data());
-    renderSoon();
-  }, () => { /* connection errors are surfaced by the schedule listener */ });
-  // Upcoming setlists only: enough for the My Duties song indicator without
-  // pulling down every setlist the church has ever planned.
-  fsMod.onSnapshot(
-    fsMod.query(fsMod.collection(db, 'setlists'), fsMod.where('date', '>=', todayISO())),
-    snap => {
-      const map = {};
-      snap.docs.forEach(d => { map[d.id] = d.data(); });
-      setlistIndex = map;
-      renderSoon();
-    },
-    () => { /* the indicator just stays quiet; errors surface on the schedule listener */ });
+  subscriptionManager.start();
   if (notifyOn()) registerPush();
 }
 
@@ -2111,27 +2128,27 @@ function init() {
   if (window.FIREBASE_CONFIG) {
     // Paint the schedule this device saw last, right now, instead of a
     // "Loading…" placeholder. The live snapshot overwrites it moments later.
-    // membersLoaded / departmentsLoaded stay false on purpose: they gate the
+    // member and department readiness flags stay false on purpose: they gate the
     // sheet sync, which must not run against a cached roster.
     const cached = loadLocal();
     if (cached && cached.services && cached.services.length) {
-      state = cached;
+      replaceState(cached);
       render();
     } else {
       renderLoading();
     }
     initFirebase(window.FIREBASE_CONFIG).catch(() => {
       addBanner('Firebase config is invalid — running on this device only.', true);
-      state = loadLocal() || seedState();
-      departmentsLoaded = true;
-      membersLoaded = true;
+      replaceState(loadLocal() || seedState());
+      setStateReady('departments', true);
+      setStateReady('members', true);
       setSyncPill(false);
       afterDataChange();
     });
   } else {
-    state = loadLocal() || seedState();
-    departmentsLoaded = true;
-    membersLoaded = true;
+    replaceState(loadLocal() || seedState());
+    setStateReady('departments', true);
+    setStateReady('members', true);
     saveLocal();
     setSyncPill(false);
     afterDataChange();

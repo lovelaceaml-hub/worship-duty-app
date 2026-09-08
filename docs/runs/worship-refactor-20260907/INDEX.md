@@ -18,7 +18,7 @@ Coordinator: current Codex task with coordinator_terra supervision
 |---|---|---|---|---|---|---|
 | L0 | Architecture critique | reviewed | gpt-5.6-sol | /Users/anthony/Projects/worship-duty-app | architecture approved | none |
 | LF | Foundation | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation | Sol-pass | none |
-| LF2 | Foundation state and subscriptions | running | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-state | pending | LF,LR |
+| LF2 | Foundation state and subscriptions | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-state | Sol-pass | LF,LR |
 | LR | Release machinery | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/release | Sol-pass | none |
 | LD | Design | landed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | direction-choice-pending | none |
 | LV | Verification | running | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/verification | corrections-1 | none |
@@ -52,4 +52,4 @@ Coordinator: current Codex task with coordinator_terra supervision
 <!-- lane: LB state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/backend review: Sol-pass updated: 2026-09-08T01:51Z -->
 <!-- lane: LI state: running model: controller worktree: pending review: pending updated: 2026-09-08T00:42Z -->
 
-<!-- lane: LF2 state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-state review: pending updated: 2026-09-08T01:32Z -->
+<!-- lane: LF2 state: reviewed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-state review: Sol-pass updated: 2026-09-08T02:26Z -->
