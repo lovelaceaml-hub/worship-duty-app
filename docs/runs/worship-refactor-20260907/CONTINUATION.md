@@ -14,7 +14,7 @@ After Anthony approves, record his exact response and the committed candidate in
 
 Verification lane: native Sol high review8 passed with no actionable findings. Root independently passed 19 fictional scenarios and 17 Axe views against canonical runtime, plus actual baseline/canonical emulator transactions with overlapping unique fixture documents. Three frozen tests were copied and SHA256-checked. The legacy Manage UI retains 33 exact baseline label/select-name findings per viewport; final redesign must resolve them. Test source and all sanitized historical/current evidence are committed and privately backed up at86b9b2b. Root stopped the emulator cleanly and verified no8193listener remained.
 
-Prototype: all accepted findings are corrected. Native Sol high review4 passed with no actionable findings. Root verified broader phone/desktop journeys, corrected history/import paths, and final empty-state Mark/Undo behavior. The final app.js SHA256 is49a84ae67299326a6373e7aba9132fc87216356c24991f60f208f8a019a8df6a. The committed phone/desktop contract passed at candidate7a35db9 before the final empty guard; final contract validation follows the closing commit. HTML, styles and fixtures did not change in final history/empty corrections. No active source writer or reviewer remains. Final receipts are research/design-prototype-review4.md and research/design/prototype/correction-4. Approval record remains pending.
+Prototype: all accepted findings are corrected. Native Sol high review4 passed with no actionable findings. Root verified broader phone/desktop journeys, corrected history/import paths, and final empty-state Mark/Undo behavior. The final app.js SHA256 is49a84ae67299326a6373e7aba9132fc87216356c24991f60f208f8a019a8df6a. The final committed phone/desktop contract passed at candidate97069d0 after the empty guard. HTML, styles and fixtures did not change in final history/empty corrections. No active source writer or reviewer remains. Final receipts are research/design-prototype-review4.md and research/design/prototype/correction-4. Approval record remains pending.
 
 ## Production and backup
 
@@ -22,7 +22,7 @@ Canonical repository: /Users/anthony/Projects/worship-duty-app, branch codex/wor
 
 Last deployed runtime:9247f75, Hosting stamp20260908041730, with all20 runtime hashes matching staged bytes and the immediate locked phone smoke passed. Foundation1/2/3, staged release machinery, confirmation correction and seven deliberately changed backend functions remain the latest releases from this task. No production UI redesign or new deployment occurred during the prototype/test correction work. No rules, database migration, stronger authentication, or importer change.
 
-The final reviewed prototype correction and closing docs are being committed and pushed after this checkpoint. Verify current Git HEAD/status and remote before making a fresh completion claim. Do not assume an older receipt's commit is current.
+The final reviewed prototype source is committed at97069d0. Its contract passed after commit. Closing approval/contract receipts are being saved and pushed with this checkpoint. Verify current Git HEAD/status and remote before making a fresh completion claim. Do not assume an older receipt's commit is current.
 
 ## Preserved worktrees and previews
 

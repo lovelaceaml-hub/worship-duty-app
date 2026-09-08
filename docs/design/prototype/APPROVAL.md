@@ -13,3 +13,5 @@ Approval date: pending.
 Approved commit: pending.
 
 The full-prototype approval question was presented to Anthony on 8 September 2026 while the final technical review continued. No answer has been received. The preselected UI choice is not an approval.
+
+Reviewed candidate commit:97069d0a224f2f42ff3fbde6aa3ce049d7fc4c69. The final committed phone/desktop contract passed at this commit. Final app source hash:49a84ae67299326a6373e7aba9132fc87216356c24991f60f208f8a019a8df6a. Approval still awaits Anthony.
