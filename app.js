@@ -3,6 +3,8 @@
 /* ================= foundation contracts ================= */
 
 const APP_FOUNDATION = window.WorshipApp || {};
+const SCREEN_REGISTRY = APP_FOUNDATION.screens || (APP_FOUNDATION.screens = {});
+const SCREEN_UI = APP_FOUNDATION.ui || (APP_FOUNDATION.ui = {});
 const CORE = APP_FOUNDATION.core;
 const DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.schedule;
 const MEMBER_DOMAIN = APP_FOUNDATION.domain && APP_FOUNDATION.domain.member;
@@ -50,6 +52,14 @@ const DEPARTMENTS_SEED = {
    rewrites the 'DEV' token here, in index.html and in sw.js at release time, so
    long-lived browser caching can never serve a member a stale mix of files. */
 const ASSET_V = '?v=DEV';
+
+/* The shell owns navigation and lifecycle.  Screen modules are optional
+   buildless IIFEs, so a staged or unavailable module simply leaves its legacy
+   renderer in place until integration supplies it. */
+const SCREEN_BY_TAB = Object.freeze({ schedule: 'member', my: 'member', songs: 'presider', manage: 'coordinator' });
+const screenInstances = Object.create(null);
+let activeScreenName = '';
+const screenModuleFailures = Object.create(null);
 // Fallback site-passcode hash, used only on a brand-new device before app/
 // settings.sitePinHash is set. The live code is managed in Manage → Features
 // and its plaintext is intentionally not recorded here (see docs).
@@ -234,6 +244,10 @@ const ui = {
   tab: 'schedule',
   sub: 'services',
   me: localStorage.getItem('wds-me') || '',
+  theme: (function () {
+    const value = localStorage.getItem('wds-theme') || 'blue';
+    return ['blue', 'sage', 'sand'].indexOf(value) !== -1 ? value : 'blue';
+  })(),
   deptFilter: (function () {
     const v = localStorage.getItem('wds-dept') || 'All';
     return v === 'All' || CATEGORIES.some(c => c.name === v) ? v : 'All';
@@ -246,9 +260,158 @@ const ui = {
   rebaseline: false,
   syncing: false,
   reqForm: null, // { key, note } — in-progress "request a change" draft, survives re-render
+  memberRequestDraft: null,
   songSvc: null, // svcId deep-link target for the song picker (ui.tab === 'songs')
   songNav: false // one-shot: this render is an explicit navigation into the song picker (tab or button), not a background re-mount
 };
+
+function currentTheme() { return ui.theme || 'blue'; }
+
+function applyTheme() {
+  if (document && document.documentElement) document.documentElement.dataset.theme = currentTheme();
+}
+
+function screenNameForTab(tab) { return SCREEN_BY_TAB[tab] || ''; }
+
+function screenModuleFor(name) {
+  const registered = SCREEN_UI.screens && typeof SCREEN_UI.screens.get === 'function'
+    ? SCREEN_UI.screens.get(name)
+    : SCREEN_REGISTRY[name];
+  return registered && typeof registered.create === 'function' ? registered : null;
+}
+
+function screenStorage() {
+  return {
+    get(key, fallback) {
+      try {
+        const value = localStorage.getItem(key);
+        return value == null ? fallback : value;
+      } catch (e) { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem(key, String(value)); return true; } catch (e) { return false; }
+    },
+    remove(key) {
+      try { localStorage.removeItem(key); return true; } catch (e) { return false; }
+    },
+    json: getJSON
+  };
+}
+
+function screenDeps() {
+  const nameMap = unifiedNameMap;
+  return {
+    getState: () => state,
+    getUi: () => ui,
+    getSetlists: () => setlistIndex,
+    core: CORE,
+    scheduleDomain: DOMAIN,
+    memberDomain: MEMBER_DOMAIN,
+    coordinatorDomain: COORDINATOR_DOMAIN,
+    fmt: {
+      esc,
+      date: fmtDate,
+      time: fmtTime,
+      badge: dateBadge,
+      serviceId: svcId,
+      today: todayISO
+    },
+    feature: feat,
+    requestRender: render,
+    addBanner,
+    confirm: (...args) => window.confirm(...args),
+    storage: screenStorage(),
+    commands: {
+      persistService,
+      deleteService: persistDeleteService,
+      persistMembers,
+      persistSettings,
+      persistDepartments,
+      persistNameMap,
+      persistRequest,
+      resolveRequest,
+      persistAll,
+      saveService: (service, metadata) => assignmentGateway.saveService(service, metadata),
+      syncFromSheet,
+      registerPush,
+      unregisterPush,
+      subscribeCalendar: subscribeICS,
+      copyCalendarLink: copyICSLink,
+      exportBackup: () => handleAct('export', document.createElement('button')),
+      importBackup: el => handleChg('import-file', el),
+      applyNameMap,
+      setMember: value => handleChg('me', { value }),
+      clearAlerts: () => handleAct('clear-alerts', document.createElement('button')),
+      clearMemberRequestDraft: () => { ui.memberRequestDraft = null; },
+      enableNotifications: () => handleAct('notify-on', document.createElement('button')),
+      disableNotifications: () => handleAct('notify-off', document.createElement('button')),
+      submitRequest: request => {
+        const payload = request || {};
+        const svcIdValue = payload.svcId || payload.serviceId || '';
+        const duty = payload.duty || '';
+        ui.reqForm = { key: svcIdValue + ':' + duty, note: payload.note || '' };
+        const result = handleAct('req-submit', { dataset: { svc: svcIdValue, duty } });
+        ui.memberRequestDraft = null;
+        return result;
+      },
+      openPresider: id => {
+        ui.songSvc = id || null;
+        ui.songNav = true;
+        ui.tab = 'songs';
+        render();
+      }
+    },
+    legacy: {
+      renderSchedule,
+      renderMy,
+      renderManage,
+      renderSongs,
+      handleAct,
+      handleChg,
+      renderSecondaryPanel: panel => {
+        if (panel === 'planning') return renderManagePlanning();
+        if (panel === 'requests') return renderManageRequests();
+        if (panel === 'services') return renderManageServices();
+        if (panel === 'people') return renderManagePeople();
+        if (panel === 'features') return renderFeatures();
+        if (panel === 'data') return renderManageData();
+        return '';
+      }
+    },
+    nameMap
+  };
+}
+
+function screenInstanceFor(name) {
+  if (!name) return null;
+  if (screenInstances[name]) return screenInstances[name];
+  const module = screenModuleFor(name);
+  if (!module) return null;
+  try {
+    const instance = module.create(screenDeps());
+    if (!instance || typeof instance.render !== 'function' || typeof instance.handle !== 'function' ||
+        typeof instance.afterRender !== 'function' || typeof instance.destroy !== 'function') {
+      throw new Error('screen module must expose render, handle, afterRender and destroy');
+    }
+    screenInstances[name] = instance;
+    return instance;
+  } catch (e) {
+    if (!screenModuleFailures[name]) {
+      screenModuleFailures[name] = true;
+      console.warn('WorshipApp ' + name + ' screen failed to initialize:', e);
+    }
+    return null;
+  }
+}
+
+function destroyInactiveScreen(nextName) {
+  if (activeScreenName && activeScreenName !== nextName && screenInstances[activeScreenName]) {
+    try { screenInstances[activeScreenName].destroy(); } catch (e) {
+      console.warn('WorshipApp ' + activeScreenName + ' screen cleanup failed:', e);
+    }
+  }
+  activeScreenName = nextName || '';
+}
 
 function seedState() {
   return JSON.parse(JSON.stringify({
@@ -267,6 +430,25 @@ const storageGateway = STORAGE_SERVICE.createAdapter({
   getAuthReady: () => authReady,
   serviceId: svcId
 });
+const assignmentGateway = window.WorshipApp.services.assignments.create({
+  getFirebase: () => fb,
+  getAuthReady: () => authReady,
+  persistService,
+  serviceId: svcId,
+  afterDataChange,
+  getMe: () => ui.me,
+  persistLocalSetlist: change => {
+    if (songApp && songApp.updateLocalPresider) return songApp.updateLocalPresider(change);
+    const data = getJSON('nss-data-v1', null);
+    const plan = data && data.setlists && data.setlists[change.serviceId];
+    if (!plan) return;
+    plan.presider = change.presider || '';
+    plan.updatedAt = Math.max(Date.now(), Number(plan.updatedAt || 0) + 1, Number(plan.confirmedAt || 0) + 1);
+    plan.updatedBy = ui.me || '';
+    localStorage.setItem('nss-data-v1', JSON.stringify(data));
+  }
+});
+
 function saveLocal(value) { return storageGateway.saveLocal(value == null ? state : value); }
 function loadLocal() { return storageGateway.loadLocal(); }
 function persistService(svc) { return storageGateway.persistService(svc); }
@@ -662,9 +844,112 @@ function copyICSLink() {
 
 /* ================= rendering ================= */
 
+function captureViewSnapshot(view) {
+  if (!view) return null;
+  const controls = [];
+  view.querySelectorAll('input, select, textarea').forEach((control, index) => {
+    const key = control.dataset.preserveKey || control.id || control.name || ('control-' + index);
+    controls.push({
+      key,
+      value: control.value,
+      checked: control.checked,
+      selectionStart: typeof control.selectionStart === 'number' ? control.selectionStart : null,
+      selectionEnd: typeof control.selectionEnd === 'number' ? control.selectionEnd : null
+    });
+  });
+  const active = document.activeElement && view.contains(document.activeElement)
+    ? (document.activeElement.dataset.preserveKey || document.activeElement.id || document.activeElement.name || '')
+    : '';
+  return { scrollY: window.scrollY || 0, controls, active };
+}
+
+function restoreViewSnapshot(view, snapshot) {
+  if (!view || !snapshot) return;
+  const controls = Array.from(view.querySelectorAll('input, select, textarea'));
+  snapshot.controls.forEach(saved => {
+    const control = controls.find((candidate, index) =>
+      (candidate.dataset.preserveKey || candidate.id || candidate.name || ('control-' + index)) === saved.key);
+    if (!control) return;
+    if (control.type === 'checkbox' || control.type === 'radio') control.checked = saved.checked;
+    else if (document.activeElement !== control || control.value !== saved.value) control.value = saved.value;
+    if (document.activeElement === control && saved.selectionStart != null && typeof control.setSelectionRange === 'function') {
+      try { control.setSelectionRange(saved.selectionStart, saved.selectionEnd); } catch (e) { /* ignored */ }
+    }
+  });
+  if (snapshot.active) {
+    const target = controls.find((candidate, index) =>
+      (candidate.dataset.preserveKey || candidate.id || candidate.name || ('control-' + index)) === snapshot.active);
+    if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
+  }
+  if (typeof window.scrollTo === 'function') window.scrollTo({ top: snapshot.scrollY, behavior: 'auto' });
+}
+
+function renderPrimaryScreen(view, screenName) {
+  if (screenName === 'coordinator' && (!managerAccessAllowed() || !editorAccessAllowed())) return false;
+  const instance = screenInstanceFor(screenName);
+  if (!instance) return false;
+  const output = instance.render();
+  if (typeof output === 'string') view.innerHTML = output;
+  const root = view.querySelector('[data-screen="' + screenName + '"], [data-screen="manage"]') || view.firstElementChild || view;
+  instance.afterRender(root);
+  return true;
+}
+
+function renderLegacyScreen(view, screenName, html) {
+  const className = screenName === 'member' ? 'member-page' :
+    (screenName === 'coordinator' ? 'manage-page' : 'presider-page');
+  view.innerHTML = '<section class="' + className + '" data-screen="' + screenName + '">' + html + '</section>';
+}
+
+function renderHeaderControls() {
+  const holder = document.getElementById('header-member-control');
+  if (!holder) return;
+  if (document.activeElement && holder.contains(document.activeElement)) return;
+  const options = state.members.map(member =>
+    '<option value="' + esc(member) + '"' + (member === ui.me ? ' selected' : '') + '>' + esc(member) + '</option>'
+  ).join('');
+  holder.innerHTML = '<label class="ws-member-control" for="header-me-select">' +
+    '<span class="sr-only">Selected member</span>' +
+    '<select id="header-me-select" data-chg="me" aria-label="Selected member">' +
+    '<option value="">Choose your name</option>' + options + '</select></label>' +
+    '<label class="ws-theme-control" for="theme-select"><span class="sr-only">Theme</span>' +
+    '<select id="theme-select" data-chg="theme" aria-label="Theme">' +
+    ['blue', 'sage', 'sand'].map(theme => '<option value="' + theme + '"' + (theme === currentTheme() ? ' selected' : '') + '>' +
+      theme[0].toUpperCase() + theme.slice(1) + '</option>').join('') +
+    '</select></label>';
+}
+
+function configuredManagerNames() {
+  const configured = state.settings && state.settings.departmentManagers;
+  if (!configured || typeof configured !== 'object') return null;
+  const names = [];
+  Object.keys(configured).forEach(key => {
+    const value = configured[key];
+    if (Array.isArray(value)) value.forEach(name => { if (typeof name === 'string') names.push(name); });
+  });
+  return Array.from(new Set(names));
+}
+
+function managerAccessAllowed() {
+  const names = configuredManagerNames();
+  return !names || !names.length || (!!ui.me && names.indexOf(ui.me) !== -1);
+}
+
+function editorAccessAllowed() {
+  if (!feat('editorLock')) return true;
+  const pin = state.settings && state.settings.pinHash;
+  return !!pin && localStorage.getItem('wds-unlock') === pin;
+}
+
+function renderManagerSelectionRequired() {
+  return '<div class="card lock-box" data-screen="coordinator"><div class="lock-title">Choose a manager name</div>' +
+    '<p class="hint">Select your name in the header before opening Manage. Access still uses the existing editor passcode.</p></div>';
+}
+
 function render() {
   const nav = document.querySelector('nav.tabs');
   if (feat('siteLock') && !siteUnlocked()) {
+    destroyInactiveScreen('');
     nav.classList.toggle('hidden', true);
     document.getElementById('banners').innerHTML = '';
     document.getElementById('view').innerHTML = renderSiteLock();
@@ -673,6 +958,8 @@ function render() {
     return;
   }
   nav.classList.toggle('hidden', false);
+  applyTheme();
+  renderHeaderControls();
 
   // The Presider tab only exists for people with an upcoming Presider duty —
   // same rule as the "Plan songs" button in My Duties. If the viewer stops
@@ -692,15 +979,25 @@ function render() {
   tabManage.innerHTML = 'Manage' + (pendingRequestsCount() > 0 && ui.tab !== 'manage' ? '<span class="dot"></span>' : '');
 
   const view = document.getElementById('view');
+  const screenName = screenNameForTab(ui.tab);
+  destroyInactiveScreen(screenName);
   // A background Firestore snapshot calls render(); replacing innerHTML would
   // wipe whatever the editor is typing (service field, member name, sheet URL,
   // change-request note) and drop focus. Skip the view refresh while a text
   // input inside #view is focused — the next render() after they blur catches up.
   if (!viewHasFocusedInput(view)) {
-    if (ui.tab === 'schedule') view.innerHTML = renderSchedule();
-    else if (ui.tab === 'my') view.innerHTML = renderMy();
-    else if (ui.tab === 'songs') renderSongs(view);
-    else view.innerHTML = renderManage();
+    const snapshot = captureViewSnapshot(view);
+    const renderedByScreen = ui.tab === 'songs' ? false : renderPrimaryScreen(view, screenName);
+    if (!renderedByScreen) {
+      if (ui.tab === 'schedule') renderLegacyScreen(view, screenName, renderSchedule());
+      else if (ui.tab === 'my') renderLegacyScreen(view, screenName, renderMy());
+      else if (ui.tab === 'songs') {
+        renderLegacyScreen(view, screenName, '<div class="song-head"><button class="ghost" data-act="close-songs">← My Duties</button></div><div id="song-root"><div class="empty">Loading the song planner…</div></div>');
+        renderSongs(view);
+      }
+      else renderLegacyScreen(view, screenName, renderManage());
+    }
+    restoreViewSnapshot(view, snapshot);
     pulse('tab_' + ui.tab); // counts once per device per day — see pulse()
   }
   renderBanners();
@@ -975,9 +1272,22 @@ function songCtx() {
   ui.songNav = false;
   return {
     fb,
+    authReady,
     me: nameMap[ui.me] || ui.me,
+    schedule: state.services,
     nameMap,
     nav,
+    ui: {
+      requestChange: row => {
+        const svcIdValue = row && (row.id || row.serviceId || row.svcId);
+        if (!svcIdValue) return;
+        ui.memberRequestDraft = { svcId: svcIdValue, duty: (row && row.duty) || 'Presider' };
+        ui.tab = 'my';
+        ui.songSvc = null;
+        ui.songNav = false;
+        render();
+      }
+    },
     // Deep-link hint: the service whose Presider button was tapped (if any).
     service: svc ? { date: svc.date, worship: svc.worship, service: svc.service, time: svc.time } : null,
     onBack: () => { ui.tab = 'my'; ui.songSvc = null; render(); }
@@ -1056,6 +1366,7 @@ function pendingRequestsCount() {
 }
 
 function renderManage() {
+  if (!managerAccessAllowed()) return renderManagerSelectionRequired();
   if (feat('editorLock')) {
     const pin = state.settings.pinHash || '';
     if (!pin) return renderCreatePin();
@@ -1764,7 +2075,14 @@ function handleAct(act, el) {
 }
 
 function handleChg(chg, el) {
-  if (chg === 'me') {
+  if (chg === 'theme') {
+    const theme = ['blue', 'sage', 'sand'].indexOf(el.value) !== -1 ? el.value : 'blue';
+    ui.theme = theme;
+    localStorage.setItem('wds-theme', theme);
+    applyTheme();
+    render();
+  }
+  else if (chg === 'me') {
     ui.me = el.value;
     localStorage.setItem('wds-me', ui.me);
     ui.rebaseline = true;
@@ -1876,27 +2194,58 @@ function handleChg(chg, el) {
   }
 }
 
+function dispatchToActiveScreen(kind, token, el, event) {
+  const screenName = screenNameForTab(ui.tab);
+  const instance = screenInstanceFor(screenName);
+  if (!instance) return false;
+  try {
+    const handled = instance.handle(kind, token, el, event);
+    if (handled && typeof handled.then === 'function') {
+      // Screen contracts may return a promise for a write. The event has to be
+      // claimed synchronously so the legacy handler cannot race the write.
+      event.preventDefault();
+      event.stopPropagation();
+      handled.catch(error => console.warn('WorshipApp ' + screenName + ' screen action failed:', error));
+      return true;
+    }
+    if (handled === true) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
+  } catch (error) {
+    console.warn('WorshipApp ' + screenName + ' screen action failed:', error);
+  }
+  return false;
+}
+
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el || el.tagName === 'FORM') return;
   if (e.target.closest('[data-chg]')) return;
+  if (dispatchToActiveScreen('act', el.dataset.act, el, e)) return;
   handleAct(el.dataset.act, el);
 });
 document.addEventListener('submit', e => {
   if (!e.target.dataset.act) return;
   e.preventDefault();
+  if (dispatchToActiveScreen('submit', e.target.dataset.act, e.target, e)) return;
   handleAct(e.target.dataset.act, e.target);
 });
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-chg]');
-  if (el) handleChg(el.dataset.chg, el);
+  if (!el) return;
+  if (dispatchToActiveScreen('chg', el.dataset.chg, el, e)) return;
+  handleChg(el.dataset.chg, el);
 });
 /* Live-capture the change-request note as the member types, so a Firestore
    snapshot re-render mid-typing (see afterDataChange) can't lose the draft —
    'change' alone only fires on blur. */
 document.addEventListener('input', e => {
-  const el = e.target.closest('[data-chg="req-note"]');
-  if (el) handleChg('req-note', el);
+  const el = e.target.closest('[data-chg]');
+  if (!el) return;
+  if (dispatchToActiveScreen('input', el.dataset.chg, el, e)) return;
+  if (el.dataset.chg === 'req-note') handleChg('req-note', el);
 });
 
 /* ================= startup ================= */

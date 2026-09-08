@@ -24,6 +24,7 @@ export const BASE_RUNTIME_FILES = Object.freeze([
   'app.js',
   'seed-data.js',
   'firebase-config.js',
+  'styles.css',
   'song-app.js',
   'song-app.css',
   'song-seed.js',

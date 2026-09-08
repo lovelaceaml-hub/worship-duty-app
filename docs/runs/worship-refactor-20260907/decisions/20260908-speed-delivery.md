@@ -17,3 +17,7 @@ Before a risky external write, check the specific data-loss, access, notificatio
 ## User authority
 
 Source: Anthony's current message requesting removal of approval gates, unrestricted useful parallelism, task-based Luna effort, Astra control, optional Sol team leads and Gemini 3.8 Flash implementation. No additional product decision is pending before production implementation.
+
+## Persistence and task escalation
+
+Anthony instructed the controller not to stop until the app is complete. Track implementation failures by task, preserving completed work. After three unsuccessful Luna attempts, transfer that task to Terra. After two unsuccessful Terra attempts, transfer it to Sol. Count substantive implementation failures, not tool permission failures or harmless log warnings. No approval is needed for these model handoffs.

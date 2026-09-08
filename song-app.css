@@ -318,6 +318,122 @@
 #song-root .slot-row .dname { flex: 0 0 96px; color: var(--muted); font-size: 13px; }
 #song-root .slot-row .pill { font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #song-root .slot-row .pill.none { color: var(--faint); font-weight: 500; }
+
+/* ---- production Presider workspace ---- */
+#song-root .presider-page { max-width: 1120px; margin: 0 auto; padding: 4px 0 48px; color: var(--ink); }
+#song-root .presider-heading, #song-root .workspace-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin: 18px 0; }
+#song-root .presider-heading h1, #song-root .workspace-heading h1 { margin: 2px 0 4px; font-size: clamp(28px, 4vw, 42px); letter-spacing: -0.04em; }
+#song-root .presider-heading p, #song-root .workspace-heading p { margin: 0; color: var(--muted); }
+#song-root .ws-eyebrow { margin: 0; color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+#song-root .ws-date-title { color: var(--muted); font-size: 14px; }
+#song-root .presider-filter { display: flex; align-items: center; gap: 8px; min-width: 190px; color: var(--muted); font-size: 13px; font-weight: 700; }
+#song-root .presider-filter select { min-width: 150px; }
+#song-root .ws-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#song-root .ws-toolbar h2 { margin: 0; font-size: 18px; letter-spacing: -0.02em; }
+#song-root .ws-icon-button { width: 36px; height: 36px; padding: 0; border: 1px solid var(--glass-border); border-radius: 10px; background: var(--glass-strong); color: var(--accent); font: inherit; cursor: pointer; }
+#song-root .ws-calendar { margin: 18px 0 28px; padding: 14px; border: 1px solid var(--glass-border); border-radius: 18px; background: var(--glass); box-shadow: var(--shadow-soft), var(--specular); }
+#song-root .ws-calendar-weekdays, #song-root .ws-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+#song-root .ws-calendar-weekdays { margin: 14px 0 5px; color: var(--muted); font-size: 11px; font-weight: 800; text-align: center; text-transform: uppercase; }
+#song-root .ws-calendar-day { min-height: 38px; position: relative; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+#song-root .ws-calendar-day:hover, #song-root .ws-calendar-day:focus-visible { border-color: var(--accent); outline: none; }
+#song-root .ws-calendar-day.scheduledpresider { border-color: var(--accent); background: var(--accent-soft); font-weight: 800; }
+#song-root .ws-calendar-day.selected { box-shadow: inset 0 0 0 2px var(--accent-2); }
+#song-root .ws-calendar-day i { position: absolute; left: 50%; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); transform: translateX(-50%); }
+#song-root .ws-calendar-empty { pointer-events: none; }
+#song-root .presider-month-toolbar { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 0 10px; }
+#song-root .presider-month-toolbar h2 { margin: 0; font-size: 22px; letter-spacing: -0.03em; }
+#song-root .presider-month-toolbar span { color: var(--muted); font-size: 13px; }
+#song-root .presider-date-group { margin: 0 0 24px; scroll-margin-top: 18px; }
+#song-root .ws-date-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 20px 2px 8px; }
+#song-root .ws-date-heading h2 { margin: 2px 0; font-size: 22px; letter-spacing: -0.03em; }
+#song-root .ws-date-heading > span { color: var(--muted); font-size: 13px; }
+#song-root .ws-service-card, #song-root .ws-card { padding: 18px; margin: 10px 0; border: 1px solid var(--glass-border); border-radius: 18px; background: var(--glass); box-shadow: var(--shadow-soft), var(--specular); }
+#song-root .presider-service-card.personal-presider { border-left: 4px solid var(--accent); }
+#song-root .presider-service-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+#song-root .presider-service-header h3 { margin: 2px 0 0; font-size: 20px; letter-spacing: -0.025em; }
+#song-root .presider-service-header time { color: var(--muted); font-weight: 800; white-space: nowrap; }
+#song-root .presider-compact-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 16px 0 10px; padding: 10px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+#song-root .presider-compact-summary span { min-width: 0; display: grid; gap: 3px; }
+#song-root .presider-compact-summary small { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+#song-root .presider-compact-summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+#song-root .ws-badge { display: inline-flex; width: fit-content; padding: 3px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 800; }
+#song-root .ws-badge.sung, #song-root .ws-badge.saved { background: rgba(37, 126, 89, .13); color: var(--ok); }
+#song-root .ws-badge.failed { background: rgba(176, 71, 57, .13); color: var(--danger); }
+#song-root .presider-prayer-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+#song-root .presider-prayer-grid > div { display: grid; gap: 3px; }
+#song-root .presider-prayer-grid span { color: var(--muted); font-size: 12px; }
+#song-root .presider-prayer-grid strong { font-size: 14px; }
+#song-root .presider-service-order { margin-top: 14px; border-top: 1px solid var(--hairline); }
+#song-root .presider-service-order summary { padding: 12px 0 4px; color: var(--accent); cursor: pointer; font-weight: 800; }
+#song-root .presider-order-body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 8px 0 2px; }
+#song-root .outline-group { padding: 10px; border-radius: 12px; background: rgba(255, 255, 255, .27); }
+#song-root .outline-group h4 { margin: 0 0 6px; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+#song-root .presider-outline-row, #song-root .selected-song-row { display: grid; grid-template-columns: 74px 48px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 36px; border-bottom: 1px solid var(--hairline); font-size: 14px; }
+#song-root .presider-outline-row:last-child { border-bottom: 0; }
+#song-root .presider-outline-row time, #song-root .selected-song-row time { color: var(--muted); font-variant-numeric: tabular-nums; }
+#song-root .outline-role { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+#song-root .outline-number, #song-root .library-number { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+#song-root .outline-note { color: var(--muted); font-size: 12px; }
+#song-root .ws-link, #song-root .ws-slot-empty { border: 0; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 800; padding: 7px 0; text-align: left; }
+#song-root .ws-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+#song-root .ws-button { min-height: 38px; padding: 8px 13px; border: 1px solid var(--glass-border); border-radius: 10px; background: var(--glass-strong); color: var(--accent); cursor: pointer; font: inherit; font-size: 13px; font-weight: 800; }
+#song-root .ws-button.primary { border-color: transparent; background: var(--accent-grad); color: #fff; }
+#song-root .workspace-heading { align-items: flex-start; }
+#song-root .workspace-presider { margin-top: 8px !important; }
+#song-root .workspace-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
+#song-root .workspace-summary > div { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--glass-border); border-radius: 14px; background: var(--glass); }
+#song-root .workspace-summary strong { overflow: hidden; text-overflow: ellipsis; font-size: 20px; white-space: nowrap; }
+#song-root .workspace-summary span { color: var(--muted); font-size: 12px; }
+#song-root .workspace-actions { padding: 12px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+#song-root .workspace-notes { display: grid; gap: 5px; margin: 16px 0; color: var(--muted); font-size: 12px; font-weight: 800; }
+#song-root .workspace-notes textarea { width: 100%; resize: vertical; }
+#song-root .selected-songs-panel h2, #song-root .song-library-panel h2 { margin: 0; font-size: 20px; }
+#song-root .selected-song-list { margin-top: 10px; }
+#song-root .selected-song-row { grid-template-columns: 112px 48px minmax(0, 1fr) auto auto auto; padding: 5px 0; }
+#song-root .selected-song-row select, #song-root .library-role select { width: auto; min-width: 94px; padding: 7px 8px; border-radius: 8px; font-size: 13px; }
+#song-root .prep-move { display: flex; gap: 3px; }
+#song-root .prep-move .ws-icon-button, #song-root .selected-song-row > .ws-icon-button { width: 28px; height: 28px; border-radius: 8px; }
+#song-root .workspace-slot-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+#song-root .library-role { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 800; }
+#song-root .library-search { display: grid; gap: 6px; margin: 16px 0 10px; color: var(--muted); font-size: 12px; font-weight: 800; }
+#song-root .library-search input { font-size: 15px; }
+#song-root .library-categories { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+#song-root .ws-filter { padding: 7px 10px; border: 1px solid var(--glass-border); border-radius: 999px; background: var(--glass-strong); color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; }
+#song-root .ws-filter.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+#song-root .production-song-list { border-top: 1px solid var(--hairline); }
+#song-root .production-song-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 52px 58px 118px auto; align-items: center; gap: 10px; min-height: 48px; border-bottom: 1px solid var(--hairline); font-size: 13px; }
+#song-root .production-song-row > span { color: var(--muted); font-size: 12px; }
+#song-root .production-song-row strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#song-root .song-history { margin: 18px 0; color: var(--muted); }
+#song-root .song-history summary { cursor: pointer; font-weight: 800; }
+#song-root .song-history-body { padding: 12px 0; }
+#song-root .production-tools { margin: 18px 0; color: var(--muted); }
+#song-root .production-tools > summary, #song-root .production-insights > summary { cursor: pointer; font-weight: 800; }
+#song-root .production-tools-body { padding: 12px 0; }
+#song-root .production-insights { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+#song-root .song-history-item { padding: 7px 0; border-bottom: 1px solid var(--hairline); }
+#song-root .song-history-item summary { color: var(--ink); }
+#song-root .song-history-item ul { margin: 7px 0 0; padding-left: 20px; }
+#song-root .song-history-item li { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+#song-root .backfill-form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 12px 0; padding: 12px; border: 1px solid var(--glass-border); border-radius: 12px; background: var(--glass-strong); }
+#song-root .backfill-form label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 800; }
+#song-root .backfill-form select, #song-root .backfill-form input { width: auto; min-width: 180px; padding: 7px 8px; border-radius: 8px; font-size: 13px; }
+#song-root .ws-empty { margin: 14px 0; color: var(--muted); font-size: 14px; }
+
+@media (max-width: 700px) {
+  #song-root .presider-heading, #song-root .workspace-heading { display: grid; align-items: start; gap: 12px; }
+  #song-root .presider-filter { width: 100%; }
+  #song-root .presider-filter select { flex: 1; }
+  #song-root .presider-compact-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #song-root .presider-prayer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #song-root .presider-order-body { grid-template-columns: 1fr; }
+  #song-root .workspace-summary { grid-template-columns: repeat(2, 1fr); }
+  #song-root .selected-song-row { grid-template-columns: 84px 38px minmax(0, 1fr) auto; }
+  #song-root .selected-song-row time { grid-column: 3; grid-row: 2; }
+  #song-root .selected-song-row .prep-move { grid-column: 4; grid-row: 2; }
+  #song-root .production-song-row { grid-template-columns: 40px minmax(0, 1fr) 48px auto; padding: 7px 0; }
+  #song-root .production-song-row > span:nth-of-type(3), #song-root .production-song-row > span:nth-of-type(4) { display: none; }
+}
 #song-root .slot-row .linkish { margin-left: auto; padding: 0; font-size: 13px; flex: 0 0 auto; }
 
 /* ---- runsheet ---- */
@@ -404,4 +520,83 @@
   #song-root .ns-next { flex-basis: 100%; text-align: left; }
   #song-root .ns-tabs button { padding: 12px 2px 9px; font-size: 13px; }
   #song-root .card { padding: 17px 16px; }
+}
+
+/* Final production density and phone readability pass. */
+#song-root .presider-page { padding: 0 0 36px; }
+#song-root .presider-heading, #song-root .workspace-heading { margin: 12px 0; gap: 12px; }
+#song-root .presider-heading h1, #song-root .workspace-heading h1 { font-size: clamp(24px, 4vw, 34px); line-height: 1.08; }
+#song-root .presider-heading p, #song-root .workspace-heading p { font-size: 14px; }
+#song-root .ws-calendar { margin: 12px 0 18px; padding: 11px; border-radius: 14px; }
+#song-root .ws-calendar-weekdays { margin: 9px 0 4px; font-size: 10px; }
+#song-root .ws-calendar-day { min-height: 34px; border-radius: 8px; }
+#song-root .presider-month-toolbar { margin: 14px 0 8px; }
+#song-root .presider-month-toolbar h2, #song-root .ws-date-heading h2 { font-size: 19px; }
+#song-root .presider-date-group { margin-bottom: 16px; }
+#song-root .ws-service-card, #song-root .ws-card { padding: 14px; margin: 8px 0; border-radius: 14px; }
+#song-root .presider-service-header h3 { font-size: 18px; }
+#song-root .presider-compact-summary { gap: 7px; margin: 11px 0 8px; padding: 8px 0; }
+#song-root .presider-compact-summary strong { overflow: visible; text-overflow: clip; white-space: normal; line-height: 1.25; }
+#song-root [data-service-presider] { overflow-wrap: anywhere; }
+#song-root .workspace-summary { margin: 12px 0; gap: 8px; }
+#song-root .workspace-summary > div { padding: 11px; border-radius: 11px; }
+#song-root .workspace-summary strong { overflow: visible; text-overflow: clip; white-space: normal; font-size: 18px; line-height: 1.15; overflow-wrap: anywhere; }
+#song-root .workspace-actions { padding: 9px 0; }
+#song-root .workspace-notes { margin: 12px 0; }
+#song-root .selected-songs-panel h2, #song-root .song-library-panel h2 { font-size: 18px; }
+#song-root .selected-song-list { margin-top: 6px; }
+#song-root .production-song-row { grid-template-columns: 44px minmax(0, 1fr) 45px 52px 98px auto; gap: 7px; min-height: 42px; font-size: 12px; }
+#song-root .production-song-row > span { font-size: 11px; }
+#song-root .production-song-row strong { overflow: visible; text-overflow: clip; white-space: normal; line-height: 1.25; }
+#song-root .song-history, #song-root .production-tools { margin: 13px 0; }
+
+@media (max-width: 700px) {
+  #song-root .presider-heading, #song-root .workspace-heading { gap: 8px; }
+  #song-root .presider-heading h1, #song-root .workspace-heading h1 { font-size: 27px; }
+  #song-root .ws-calendar { margin: 10px 0 15px; padding: 10px; }
+  #song-root .ws-calendar-day { min-height: 33px; }
+  #song-root .presider-compact-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #song-root .presider-compact-summary > span { min-width: 0; }
+  #song-root .presider-compact-summary > span:last-child { grid-column: 1 / -1; }
+  #song-root .presider-prayer-grid { gap: 6px; margin: 9px 0; }
+  #song-root .workspace-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #song-root .workspace-summary > div:last-child { grid-column: 1 / -1; }
+  #song-root .selected-song-row { grid-template-columns: 76px 34px minmax(0, 1fr) auto; gap: 6px; }
+  #song-root .selected-song-row strong { overflow: visible; text-overflow: clip; white-space: normal; line-height: 1.25; }
+  #song-root .selected-song-row time { grid-column: 3; grid-row: 2; }
+  #song-root .selected-song-row .prep-move { grid-column: 4; grid-row: 2; }
+  #song-root .production-song-row { grid-template-columns: 37px minmax(0, 1fr) 58px auto; gap: 6px; padding: 7px 0; }
+  #song-root .production-song-row > span:nth-of-type(2) { grid-column: 3; grid-row: 1; }
+  #song-root .production-song-row > span:nth-of-type(3) { display: block; grid-column: 2; grid-row: 2; white-space: nowrap; }
+  #song-root .production-song-row > span:nth-of-type(4) { display: block; grid-column: 3; grid-row: 2; white-space: nowrap; }
+  #song-root .production-song-row > .ws-button { grid-column: 4; grid-row: 1 / span 2; }
+}
+
+@media (max-width: 430px) {
+  #song-root .presider-page { padding-bottom: 28px; }
+  #song-root .ws-calendar-day { min-height: 32px; }
+  #song-root .presider-service-header { gap: 8px; }
+  #song-root .presider-service-header time { font-size: 13px; }
+  #song-root .production-song-row { grid-template-columns: 35px minmax(0, 1fr) 54px auto; }
+  #song-root .production-song-row > span:nth-of-type(2) { grid-column: 3; grid-row: 1; }
+  #song-root .production-song-row > span:nth-of-type(3) { grid-column: 2; grid-row: 2; }
+  #song-root .production-song-row > span:nth-of-type(4) { grid-column: 2 / 4; grid-row: 3; }
+  #song-root .production-song-row > .ws-button { grid-column: 4; grid-row: 1 / span 3; }
+}
+
+/* Keep role, complete hymn number, title, duration, and every song action in
+   distinct tracks on narrow phones. */
+@media (max-width: 700px) {
+  #song-root .selected-song-row {
+    grid-template-columns: 94px 42px minmax(0, 1fr) 28px 28px;
+    gap: 6px;
+    align-items: center;
+  }
+
+  #song-root .selected-song-row > select { grid-column: 1; grid-row: 1; }
+  #song-root .selected-song-row > .outline-number { grid-column: 2; grid-row: 1; white-space: nowrap; }
+  #song-root .selected-song-row > strong { grid-column: 3; grid-row: 1; }
+  #song-root .selected-song-row > time { grid-column: 3; grid-row: 2; }
+  #song-root .selected-song-row > .prep-move { grid-column: 4 / 6; grid-row: 2; justify-self: end; }
+  #song-root .selected-song-row > .ws-icon-button { grid-column: 5; grid-row: 1; }
 }

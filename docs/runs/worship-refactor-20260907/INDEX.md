@@ -25,7 +25,7 @@ Production implementation starts immediately under [speed-delivery authority](de
 | LF2 | Foundation state and subscriptions | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-state | Sol-pass | LF,LR |
 | LF3 | Pure member and coordinator selectors | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-domain | Sol-pass | LF2 |
 | LR | Release machinery | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/release | Sol-pass | none |
-| LD | Design (approval pending) | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | Sol-pass | none |
+| LD | Design references | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | Sol-pass | none |
 | LDP | Local read-only preview server | merged | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/real-preview-server | Sol-pass | LD |
 | LV | Verification | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/verification | Sol-pass | none |
 | LM | Member experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
@@ -108,3 +108,7 @@ Astra controls integration. Sol leads shared interface coordination. The five in
 
 <!-- lane: PT state: running model: gemini-3.8-flash-medium worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-themes review: proportional updated: 2026-09-08 -->
 
+
+## Current production integration
+
+See [integration log](logs/20260908-production-integration.md) and [manager configuration](logs/20260908-manager-configuration.md). PM, PP, PC, PS and PT are integrated locally. PA passed ten focused checks. PJ, PR and PX are active in separate worktrees. LNR is correcting review2 recovery findings. Astra owns sequential integration and release.

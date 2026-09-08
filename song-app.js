@@ -107,6 +107,8 @@ const state = {
     me: '', pendingEditorAction: null, editorGate: null, pinError: '',
     showBackfill: false, backfillSong: '', backfillDate: '',
     showPresiderMgr: false, newPresiderName: '',
+    presiderFilter: 'mine', presiderMonth: '', presiderMonthTouched: false, presiderDay: '', workspaceService: null,
+    songRole: 'prep', saveState: 'ready', saveServiceId: '', saveError: '', lastFailedPatch: null,
     helpDismissed: (typeof localStorage !== 'undefined' && localStorage.getItem('nss-help-dismissed') === '1')
   }
 };
@@ -339,15 +341,33 @@ function createSetlistIfAbsent(doc) {
    document is missing, and tells the presider when a change really could not
    be saved instead of failing in silence. */
 function writeSetlistPatch(id, patch) {
+  state.ui.saveState = 'saving';
+  state.ui.saveServiceId = id;
+  state.ui.saveError = '';
+  if (root) render();
   const run = () => fb.updateDoc(fb.doc(fb.db, 'setlists', id), patch).catch(err => {
     const base = state.setlists[id];
     if (!base) throw err;
     return fb.setDoc(fb.doc(fb.db, 'setlists', id), Object.assign({}, base, patch));
   });
   const pending = setlistCreates[id];
-  return (pending ? pending.then(run) : run()).catch(err => {
+  return (pending ? pending.then(run) : run()).then(result => {
+    state.ui.saveState = 'saved';
+    state.ui.saveServiceId = id;
+    if (state.ui.lastFailedPatch && state.ui.saveServiceId === id) {
+      state.ui.lastFailedPatch = null;
+      state.ui.saveError = '';
+    }
+    if (root) render();
+    return result;
+  }).catch(err => {
+    state.ui.saveState = 'failed';
+    state.ui.saveServiceId = id;
+    state.ui.saveError = 'Could not save this service. Retry when your connection is ready.';
+    state.ui.lastFailedPatch = Object.assign({}, patch);
     console.warn('Could not save the setlist change:', err);
-    alert('That change could not be saved. Check your connection and try again.');
+    if (root) render();
+    return null;
   });
 }
 
@@ -359,6 +379,9 @@ function updateSetlist(id, patch, options) {
     writeSetlistPatch(id, patch);
   } else {
     state.setlists[id] = Object.assign({}, state.setlists[id], patch);
+    state.ui.saveState = 'saved';
+    state.ui.saveServiceId = id;
+    state.ui.saveError = '';
     saveLocal(); render();
   }
 }
@@ -369,7 +392,7 @@ function setlistAddSong(id, songId) {
     const patch = stampMeta({ songs: songs });
     applyLocalSetlistPatch(id, patch);
     writeSetlistPatch(id, patch);
-  } else if (sl) { sl.songs = songs; stampMeta(sl); saveLocal(); render(); }
+  } else if (sl) { sl.songs = songs; stampMeta(sl); state.ui.saveState = 'saved'; state.ui.saveServiceId = id; state.ui.saveError = ''; saveLocal(); render(); }
 }
 function setlistRemoveSongAt(id, index) {
   const sl = state.setlists[id];
@@ -389,7 +412,7 @@ function setlistRemoveSongAt(id, index) {
     render();
   } else {
     sl.songs = songs; Object.assign(sl, clear);
-    stampMeta(sl); saveLocal(); render();
+    stampMeta(sl); state.ui.saveState = 'saved'; state.ui.saveServiceId = id; state.ui.saveError = ''; saveLocal(); render();
   }
 }
 function setlistReorder(id, songs) {
@@ -398,7 +421,7 @@ function setlistReorder(id, songs) {
     applyLocalSetlistPatch(id, patch);
     writeSetlistPatch(id, patch);
     render();
-  } else { state.setlists[id].songs = songs.slice(); stampMeta(state.setlists[id]); saveLocal(); render(); }
+  } else { state.setlists[id].songs = songs.slice(); stampMeta(state.setlists[id]); state.ui.saveState = 'saved'; state.ui.saveServiceId = id; state.ui.saveError = ''; saveLocal(); render(); }
 }
 
 /* ================= confirmation state ================= */
@@ -669,12 +692,13 @@ function removePresider(name) {
 }
 
 async function deleteSetlistById(id) {
+  if (state.ui.workspaceService === id) state.ui.workspaceService = null;
+  if (state.ui.currentSetlist === id) state.ui.currentSetlist = null;
   if (fb) {
     try { await fb.deleteDoc(fb.doc(fb.db, 'setlists', id)); }
     catch (err) { console.warn('deleteSetlistById failed:', err); alert('Could not delete. Check your connection and try again.'); }
   } else {
     delete state.setlists[id];
-    if (state.ui.currentSetlist === id) state.ui.currentSetlist = null;
     saveLocal(); render();
   }
 }
@@ -732,10 +756,10 @@ function filteredSongs() {
   const q = state.ui.search.trim().toLowerCase();
   const cat = state.ui.category;
   let list = state.songs.filter(s => {
-    if (cat === 'Appendix') { if (!s.id.startsWith('appx-')) return false; }
+    if (cat === 'Appendix') { if (!(s.id && s.id.startsWith('appx-')) && s.category !== 'Appendix') return false; }
     else if (cat !== 'All' && s.category !== cat) return false;
     if (!q) return true;
-    return s.title.toLowerCase().indexOf(q) !== -1 || String(s.number).toLowerCase().indexOf(q) !== -1;
+    return String(s.title || '').toLowerCase().indexOf(q) !== -1 || String(s.number).toLowerCase().indexOf(q) !== -1 || dispNumber(s).toLowerCase().indexOf(q) !== -1;
   });
   const sort = state.ui.sort;
   list = list.slice().sort((a, b) => {
@@ -750,8 +774,8 @@ function filteredSongs() {
 
 const LIB_PAGE_SIZE = 100;
 function paginateSongs(list) {
-  const appendix = list.filter(s => s.id.startsWith('appx-'));
-  const numbered = list.filter(s => !s.id.startsWith('appx-'));
+  const appendix = list.filter(s => (s.id && s.id.startsWith('appx-')) || s.category === 'Appendix');
+  const numbered = list.filter(s => !((s.id && s.id.startsWith('appx-')) || s.category === 'Appendix'));
   const pages = [];
   for (let i = 0; i < numbered.length; i += LIB_PAGE_SIZE) {
     const chunk = numbered.slice(i, i + LIB_PAGE_SIZE);
@@ -908,15 +932,6 @@ function renderTabBody() {
     case 'insights': return renderInsights();
     default: return renderHome();
   }
-}
-
-function render() {
-  if (!root) return;
-  if (rootHasFocusedInput()) return;
-  if (state.ui.editorGate) { root.innerHTML = renderHeader() + '<div class="ns-view">' + renderEditorGate() + '</div>'; return; }
-  if (state.ui.runsheet) { root.innerHTML = '<div class="ns-view">' + renderRunsheet() + '</div>'; return; }
-  root.innerHTML = renderHeader() + renderTabs() + '<div class="ns-view">' + renderTabBody() + '</div>';
-  if (state.ui.tab === 'library') setupLibPaging();
 }
 
 function setSyncPill() { /* no-op in the merged app; the host owns the sync indicator */ }
@@ -1383,7 +1398,7 @@ function renderCoverageBar(row) {
     '<span class="cov-count tnum">' + row.sung + ' / ' + row.total + '</span>' +
     '</div>';
 }
-function renderInsights() {
+function renderInsights(includePresiderTools) {
   const least = leastSungSongs();
   const overdue = longestSinceSungSongs();
   const coverage = categoryCoverage();
@@ -1398,7 +1413,7 @@ function renderInsights() {
     '<p class="hint">Every sung-history entry, one row per song per date. Keep a copy — it is the only backup of the sung record.</p>' +
     '<button class="ghost sm" data-song-act="export-csv">Export history (CSV)</button></div>';
   html += renderBackfillCard();
-  html += renderPresiderCard();
+  if (includePresiderTools !== false) html += renderPresiderCard();
   return html;
 }
 function renderBackfillCard() {
@@ -1565,11 +1580,334 @@ async function syncCatalog() {
   console.log('Catalog sync: adopted live catalog (' + catalog.length + ' songs).');
 }
 
+/* ================= production Presider surface =================
+   The host still owns navigation and Firebase. This composition keeps the
+   existing setlist persistence helpers above as the only write path. */
+
+function productionMonthKey(value) {
+  if (/^\d{4}-\d{2}$/.test(String(value || ''))) return String(value);
+  const d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1);
+}
+function productionMonthTitle(key) {
+  const parts = String(key || '').split('-');
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+  return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+function productionShiftMonth(key, amount) {
+  const parts = String(key || productionMonthKey()).split('-');
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1 + amount, 1);
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1);
+}
+function productionDateLabel(iso) {
+  return new Date(String(iso || '') + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+function productionTimeLabel(value) {
+  const raw = String(value || '');
+  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return raw || 'Time not listed';
+  const h = Number(m[1]);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return hour + ':' + m[2] + ' ' + suffix;
+}
+function productionChoirLabel(value) {
+  if (!value) return 'Not assigned';
+  if (typeof value === 'object') {
+    const id = value.catalogId || value.songId || value.id;
+    if (id && state.songById[id]) return '#' + state.songById[id].number + ' ' + state.songById[id].title;
+    return String(value.title || value.label || value.name || 'Not assigned');
+  }
+  return state.songById[value] ? '#' + state.songById[value].number + ' ' + state.songById[value].title : String(value);
+}
+function productionServiceRows() {
+  const map = {};
+  (state.schedule || []).forEach(s => {
+    if (!s || !s.date || !s.service) return;
+    const id = s.id || serviceIdFor(s.date, s.service);
+    map[id] = {
+      id: id, date: s.date, session: s.service, worship: s.worship || '',
+      time: s.time || s.time24 || '', assignments: s.assignments || {},
+      choirSong: s.choirSong || '', setlist: state.setlists[id] || state.setlists[serviceIdFor(s.date, s.service)] || null
+    };
+  });
+  Object.keys(state.setlists || {}).forEach(id => {
+    const sl = state.setlists[id];
+    if (!sl || !sl.date) return;
+    if (!map[id]) map[id] = {
+      id: id, date: sl.date, session: sl.serviceLabel || 'Service', worship: sl.worshipType || '',
+      time: sl.time || '', assignments: {}, choirSong: '', setlist: sl
+    };
+    else map[id].setlist = sl;
+  });
+  return Object.keys(map).map(id => map[id]).filter(s => s.date && s.session).sort((a, b) =>
+    String(a.date).localeCompare(String(b.date)) || String(a.time).localeCompare(String(b.time)) || String(a.session).localeCompare(String(b.session))
+  );
+}
+function productionActualPresider(row) {
+  return (row.assignments && row.assignments.Presider) || (row.setlist && row.setlist.presider) || 'Not assigned';
+}
+function productionIsMyPresider(row) {
+  const me = state.ui.me;
+  return !!me && canonName(productionActualPresider(row)) === canonName(me);
+}
+function productionEnsureMonth() {
+  if (state.ui.presiderMonth) return state.ui.presiderMonth;
+  const today = todayISO();
+  const rows = productionServiceRows();
+  const firstMine = rows.find(row => row.date >= today && productionIsMyPresider(row));
+  if (rows.length) state.ui.presiderMonth = productionMonthKey(firstMine ? firstMine.date : today);
+  return state.ui.presiderMonth || productionMonthKey(today);
+}
+function productionMonthRows() {
+  const month = productionEnsureMonth();
+  const rows = productionServiceRows().filter(row => String(row.date).slice(0, 7) === month);
+  if (state.ui.presiderFilter === 'all') return rows;
+  return rows.filter(productionIsMyPresider);
+}
+function productionSongEntries(sl) {
+  if (!sl) return [];
+  const out = [];
+  (sl.songs || []).forEach((id, index) => {
+    if (id === sl.glorySong || id === sl.thanksSong) return;
+    const song = state.songById[id];
+    if (song) out.push({ id: id, index: index, role: 'Preparation', song: song });
+  });
+  if (sl.glorySong && state.songById[sl.glorySong]) out.push({ id: sl.glorySong, index: -1, role: 'Glory', song: state.songById[sl.glorySong] });
+  if (sl.thanksSong && state.songById[sl.thanksSong]) out.push({ id: sl.thanksSong, index: -1, role: 'Thanks', song: state.songById[sl.thanksSong] });
+  return out;
+}
+function productionSongSummary(sl) {
+  const entries = productionSongEntries(sl);
+  return { count: entries.length, duration: entries.reduce((sum, entry) => sum + (Number(entry.song.durationSec) || 0), 0) };
+}
+function productionStatus(sl) {
+  if (!sl || !(sl.songs || []).length) return 'No songs yet';
+  if (sl.status === 'sung') return 'Sung';
+  if (changedSinceConfirmed(sl)) return 'Changed';
+  if (isConfirmed(sl)) return 'Confirmed';
+  return 'Not confirmed';
+}
+function productionStatusClass(sl) {
+  const status = productionStatus(sl);
+  return status.toLowerCase().replace(/\s+/g, '-');
+}
+function productionCalendar() {
+  const month = productionEnsureMonth();
+  const parts = month.split('-');
+  const year = Number(parts[0]);
+  const monthIndex = Number(parts[1]) - 1;
+  const first = new Date(year, monthIndex, 1);
+  const count = new Date(year, monthIndex + 1, 0).getDate();
+  const marked = {};
+  productionServiceRows().forEach(row => { if (String(row.date).slice(0, 7) === month && productionIsMyPresider(row)) marked[row.date] = true; });
+  const cells = [];
+  for (let i = 0; i < first.getDay(); i++) cells.push('<span class="ws-calendar-day ws-calendar-empty" aria-hidden="true"></span>');
+  for (let day = 1; day <= count; day++) {
+    const iso = year + '-' + pad(monthIndex + 1) + '-' + pad(day);
+    const active = state.ui.presiderDay === iso;
+    cells.push('<button class="ws-calendar-day' + (marked[iso] ? ' scheduledpresider' : '') + (active ? ' selected' : '') + '" data-song-act="presider-day" data-date="' + esc(iso) + '" aria-label="' + esc(productionDateLabel(iso) + (marked[iso] ? ', scheduled Presider date' : '')) + '"' + (active ? ' aria-current="date"' : '') + '><span>' + day + '</span>' + (marked[iso] ? '<i aria-hidden="true"></i>' : '') + '</button>');
+  }
+  return '<section class="ws-calendar presider-calendar" aria-labelledby="presider-calendar-title"><div class="ws-toolbar"><button class="ws-icon-button" data-song-act="presider-month-prev" aria-label="Previous month">&lsaquo;</button><h2 id="presider-calendar-title">' + esc(productionMonthTitle(month)) + '</h2><button class="ws-icon-button" data-song-act="presider-month-next" aria-label="Next month">&rsaquo;</button></div><div class="ws-calendar-weekdays">' + ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => '<span>' + d + '</span>').join('') + '</div><div class="ws-calendar-grid">' + cells.join('') + '</div></section>';
+}
+function productionPrayerSummary(row) {
+  const a = row.assignments || {};
+  const opening = a['Opening Prayer'] || 'Not assigned';
+  return '<div class="presider-prayer-grid" aria-label="Prayer and choir"><div><span>Opening</span><strong>' + esc(opening) + '</strong></div><div><span>Thanks</span><strong>' + esc(a['Prayer of Thanks'] || 'Not assigned') + '</strong></div><div><span>Closing</span><strong>' + esc(a['Closing Prayer'] || 'Not assigned') + '</strong></div><div class="presider-choir-row"><span>Choir</span><strong>' + esc(productionChoirLabel(row.choirSong)) + '</strong></div></div>';
+}
+function productionOutline(row, sl) {
+  const prep = productionSongEntries(sl).filter(entry => entry.role === 'Preparation');
+  const prepRows = prep.length ? prep.map(entry => '<div class="presider-outline-row"><span class="outline-role">Prep</span><span class="outline-number">' + esc(dispNumber(entry.song)) + '</span><strong>' + esc(entry.song.title) + '</strong><time>' + fmtDur(entry.song.durationSec) + '</time></div>').join('') : '<p class="ws-empty">No preparation songs selected.</p>';
+  const slot = (role, id) => {
+    const song = id && state.songById[id];
+    return '<div class="presider-outline-row"><span class="outline-role">' + role + '</span>' + (song ? '<span class="outline-number">' + esc(dispNumber(song)) + '</span><strong>' + esc(song.title) + '</strong><time>' + fmtDur(song.durationSec) + '</time>' : '<button class="ws-link" data-song-act="add-song-role" data-role="' + role.toLowerCase() + '" data-id="' + esc(row.id) + '">Select ' + role + '</button>') + '</div>';
+  };
+  return '<details class="presider-service-order"' + (state.ui.expandedService === row.id ? ' open' : '') + '><summary data-song-act="view-service" data-id="' + esc(row.id) + '" aria-label="View order of worship">View</summary><div class="presider-order-body"><div class="outline-group"><h4>Preparation</h4>' + prepRows + '</div><div class="outline-group"><h4>Glory</h4>' + slot('Glory', sl && sl.glorySong) + '</div><div class="outline-group"><h4>Thanks</h4>' + slot('Thanks', sl && sl.thanksSong) + '</div><div class="outline-group"><h4>Choir</h4><div class="presider-outline-row"><span class="outline-role">Choir</span><strong>' + esc(productionChoirLabel(row.choirSong)) + '</strong><span class="outline-note">Service song</span></div></div></div></details>';
+}
+function productionActions(row) {
+  return '<div class="presider-action-row ws-actions" aria-label="Service actions"><button class="ws-button primary" data-song-act="open-workspace" data-id="' + esc(row.id) + '">Select Songs</button><button class="ws-button" data-song-act="order-workspace" data-id="' + esc(row.id) + '">Order of Worship</button><button class="ws-button" data-song-act="copy-text" data-id="' + esc(row.id) + '">Copy Text</button><button class="ws-button" data-song-act="request-change" data-id="' + esc(row.id) + '">Request Change</button></div>';
+}
+function productionServiceCard(row) {
+  const sl = row.setlist;
+  const summary = productionSongSummary(sl);
+  const status = productionStatus(sl);
+  const mine = productionIsMyPresider(row);
+  const serviceLabel = row.session || row.worship || 'Service';
+  return '<article class="presider-service-card ws-service-card' + (mine ? ' personal-presider' : '') + '" data-testid="presider-service" data-service-summary data-service-id="' + esc(row.id) + '"><header class="presider-service-header"><div><p class="ws-eyebrow">' + esc(row.worship || 'Worship service') + '</p><h3>' + esc(serviceLabel) + '</h3><p class="ws-date-title">' + esc(productionDateLabel(row.date)) + '</p></div><time>' + esc(productionTimeLabel(row.time)) + '</time></header><div class="presider-compact-summary"><span><small>Time</small><strong>' + esc(productionTimeLabel(row.time)) + '</strong></span><span><small>Session</small><strong>' + esc(serviceLabel) + '</strong></span><span><small>Presider</small><strong data-service-presider>' + esc(productionActualPresider(row)) + '</strong></span><span><small>Count</small><strong>' + summary.count + '</strong></span><span><small>Duration</small><strong>' + esc(fmtDur(summary.duration)) + '</strong></span><span><small>Status</small><strong class="ws-badge ' + productionStatusClass(sl) + '" data-confirmation-state>' + esc(status) + '</strong></span></div>' + productionPrayerSummary(row) + productionOutline(row, sl) + productionActions(row) + '</article>';
+}
+function productionHistory(sl) {
+  if (!sl) return '';
+  const items = productionSongEntries(sl).map(entry => {
+    const st = statFor(entry.id);
+    const history = (st.history || []).map(h => '<li>' + esc(fmtDate(h.date) + ' · ' + (h.service || '')) + '<button class="ws-link" data-song-act="remove-history" data-id="' + esc(entry.id) + '" data-service="' + esc(h.service || '') + '">Remove</button></li>').join('');
+    return '<details class="song-history-item"><summary>' + esc(dispNumber(entry.song) + ' ' + entry.song.title) + '</summary><p>' + (history ? '<ul>' + history + '</ul>' : 'No sung history yet.') + '</p></details>';
+  }).join('');
+  const backfill = state.ui.showBackfill ? '<span class="outline-note">Backfill form is open in Tools below.</span>' : '<button class="ws-button" data-song-act="open-backfill">Backfill history</button>';
+  return '<details class="song-history"><summary>Song history and tools</summary><div class="song-history-body">' + (items || '<p class="ws-empty">No songs selected.</p>') + '<div class="ws-actions"><button class="ws-button" data-song-act="export-csv">Export history</button>' + backfill + (sl.status === 'sung' ? '<button class="ws-button" data-song-act="undo-sung" data-id="' + esc(sl.id) + '">Undo sung</button>' : '<button class="ws-button" data-song-act="mark-sung" data-id="' + esc(sl.id) + '"' + (!(sl.songs || []).length ? ' disabled' : '') + '>Mark sung</button>') + '</div></div></details>';
+}
+function productionTools(sl) {
+  return '<details class="production-tools"><summary>Insights, catalog, and Presider tools</summary><div class="production-tools-body"><div class="ws-actions"><button class="ws-button" data-song-act="sync-catalog">Refresh catalog</button>' + (sl ? '<button class="ws-button" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete setlist</button>' : '') + '</div>' + renderBackfillCard() + renderPresiderCard() + '<details class="production-insights"><summary>Open Insights</summary>' + renderInsights(false) + '</details></div></details>';
+}
+function productionSaveState(sl) {
+  const id = sl && sl.id;
+  if (state.ui.saveServiceId !== id) return '';
+  if (state.ui.saveState === 'saving') return '<span class="ws-badge saving">Saving</span>';
+  if (state.ui.saveState === 'saved') return '<span class="ws-badge saved">Saved</span>';
+  if (state.ui.saveState === 'failed') return '<span class="ws-badge failed">Save failed</span><button class="ws-link" data-song-act="retry-save" data-id="' + esc(id) + '">Retry</button>';
+  return '';
+}
+function productionWorkspace(row) {
+  let sl = row.setlist;
+  if (!sl) return '<section class="presider-page song-workspace" data-screen="presider" data-service-id="' + esc(row.id) + '"><header class="workspace-heading"><div><p class="ws-eyebrow">Selected service</p><h1>Song workspace</h1><p class="ws-date-title">' + esc(productionDateLabel(row.date)) + '</p></div><button class="ws-button" data-song-act="close-workspace">Back to services</button></header><div class="ws-card state-card"><h2>No song plan yet</h2><p class="ws-empty">Create the plan for this service before selecting songs.</p><button class="ws-button primary" data-song-act="create-workspace-plan" data-id="' + esc(row.id) + '">Create plan</button></div></section>';
+  state.ui.currentSetlist = sl && sl.id;
+  const summary = productionSongSummary(sl);
+  const prep = productionSongEntries(sl).filter(entry => entry.role === 'Preparation');
+  const selectedRows = productionSongEntries(sl).map(entry => {
+    const roleValue = entry.role === 'Preparation' ? 'prep' : entry.role.toLowerCase();
+    const move = entry.role === 'Preparation' ? '<span class="prep-move"><button class="ws-icon-button" data-song-act="prep-up" data-index="' + entry.index + '" aria-label="Move preparation song up">&uarr;</button><button class="ws-icon-button" data-song-act="prep-down" data-index="' + entry.index + '" aria-label="Move preparation song down">&darr;</button></span>' : '';
+    return '<div class="selected-song-row"><select aria-label="Role for ' + esc(entry.song.title) + '" data-song-chg="song-role" data-song-id="' + esc(entry.id) + '" data-index="' + entry.index + '"><option value="prep"' + (roleValue === 'prep' ? ' selected' : '') + '>Prep</option><option value="glory"' + (roleValue === 'glory' ? ' selected' : '') + '>Glory</option><option value="thanks"' + (roleValue === 'thanks' ? ' selected' : '') + '>Thanks</option></select><span class="outline-number">' + esc(dispNumber(entry.song)) + '</span><strong>' + esc(entry.song.title) + '</strong><time>' + fmtDur(entry.song.durationSec) + '</time>' + move + '<button class="ws-icon-button" data-song-act="remove-workspace-song" data-song-id="' + esc(entry.id) + '" data-index="' + entry.index + '" aria-label="Remove ' + esc(entry.song.title) + '">&times;</button></div>';
+  }).join('');
+  const missing = (role, id) => id && state.songById[id] ? '' : '<button class="ws-slot-empty" data-song-act="add-song-role" data-role="' + role.toLowerCase() + '">Add ' + role + ' song</button>';
+  const libraryRole = state.ui.songRole || 'prep';
+  return '<section class="presider-page song-workspace" data-screen="presider" data-testid="song-workspace" data-service-id="' + esc(row.id) + '" aria-labelledby="song-workspace-title"><header class="workspace-heading"><div><p class="ws-eyebrow">Selected service</p><h1 id="song-workspace-title">' + esc(row.session || 'Service') + '</h1><p class="ws-date-title">' + esc(productionDateLabel(row.date) + ' · ' + productionTimeLabel(row.time)) + '</p><p class="workspace-presider">Actual Presider: <strong data-service-presider>' + esc(productionActualPresider(row)) + '</strong></p></div><button class="ws-button" data-song-act="close-workspace">Back to services</button></header><div class="workspace-summary"><div><strong>' + summary.count + '</strong><span>selected songs</span></div><div><strong>' + esc(fmtDur(summary.duration)) + '</strong><span>Prep, Glory, Thanks</span></div><div><strong>' + esc(productionChoirLabel(row.choirSong)) + '</strong><span>Choir, service only</span></div></div><div class="workspace-actions ws-actions"><span class="ws-badge ' + productionStatusClass(sl) + '" data-confirmation-state>' + esc(productionStatus(sl)) + '</span>' + productionSaveState(sl) + '<button class="ws-button primary" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' + (isConfirmed(sl) && !changedSinceConfirmed(sl) ? 'Confirm Again' : 'Confirm Songs') + '</button></div><label class="workspace-notes">Notes<textarea data-song-chg="workspace-notes" rows="2" placeholder="Service notes">' + esc(sl.notes || '') + '</textarea></label><section class="selected-songs-panel ws-card" aria-labelledby="selected-songs-title"><div class="ws-toolbar"><div><p class="ws-eyebrow">Selected songs</p><h2 id="selected-songs-title">Prep, Glory, Thanks</h2></div><span>' + summary.count + ' songs · ' + esc(fmtDur(summary.duration)) + '</span></div><div class="selected-song-list">' + (selectedRows || '<p class="ws-empty">No songs selected yet.</p>') + '</div><div class="workspace-slot-actions"><button class="ws-slot-empty" data-song-act="add-song-role" data-role="glory">' + (sl.glorySong ? 'Change Glory song' : 'Add Glory song') + '</button><button class="ws-slot-empty" data-song-act="add-song-role" data-role="thanks">' + (sl.thanksSong ? 'Change Thanks song' : 'Add Thanks song') + '</button></div></section><section class="song-library-panel ws-card" data-testid="song-library" aria-labelledby="song-library-title"><div class="ws-toolbar"><div><p class="ws-eyebrow">Song library</p><h2 id="song-library-title">Browse and add</h2></div><label class="library-role">Add as<select data-song-chg="library-role"><option value="prep"' + (libraryRole === 'prep' ? ' selected' : '') + '>Prep</option><option value="glory"' + (libraryRole === 'glory' ? ' selected' : '') + '>Glory</option><option value="thanks"' + (libraryRole === 'thanks' ? ' selected' : '') + '>Thanks</option></select></label></div>' + productionLibrary() + '</section>' + productionHistory(sl) + productionTools(sl) + '</section>';
+}
+function productionLibrary() {
+  const cats = ['All', 'Appendix'].concat(categoriesInSeed().filter(category => category !== 'Appendix'));
+  const list = filteredSongs();
+  return '<label class="library-search" for="production-library-search">Search by number, title, or title word<input id="production-library-search" type="search" data-song-chg="search" value="' + esc(state.ui.search || '') + '" placeholder="Search number or title" autocomplete="off"></label><div class="library-categories" role="toolbar" aria-label="Song categories">' + cats.map(category => '<button class="ws-filter' + (state.ui.category === category ? ' active' : '') + '" data-song-act="set-category" data-cat="' + esc(category) + '">' + esc(category) + '</button>').join('') + '</div><div class="production-song-list">' + (list.length ? list.map(song => { const st = statFor(song.id); return '<article class="production-song-row" data-song-id="' + esc(song.id) + '"><span class="library-number">' + esc(dispNumber(song)) + '</span><strong>' + esc(song.title) + '</strong><span>' + fmtDur(song.durationSec) + '</span><span>' + (st.timesSung || 0) + ' sung</span><span>' + esc(st.lastSung ? 'Last ' + fmtDate(st.lastSung) : 'Never sung') + '</span><button class="ws-button primary" data-song-act="add-library-song" data-id="' + esc(song.id) + '">Add</button></article>'; }).join('') : '<p class="ws-empty">No songs match this search.</p>') + '</div>';
+}
+function productionHome() {
+  const month = productionEnsureMonth();
+  const rows = productionMonthRows();
+  const groups = {};
+  rows.forEach(row => { (groups[row.date] ||= []).push(row); });
+  const dates = Object.keys(groups).sort();
+  const body = dates.length ? dates.map(date => '<section class="presider-date-group ws-date-card' + (state.ui.presiderDay === date ? ' jump-target' : '') + '" data-testid="presider-date-group" data-date="' + esc(date) + '"><header class="ws-date-heading"><div><p class="ws-eyebrow">' + esc(groups[date].map(row => row.worship).filter(Boolean).filter((v, i, all) => all.indexOf(v) === i).join(' / ') || 'Service day') + '</p><h2>' + esc(productionDateLabel(date)) + '</h2></div><span>' + groups[date].length + ' service' + (groups[date].length === 1 ? '' : 's') + '</span></header>' + groups[date].map(productionServiceCard).join('') + '</section>').join('') : '<div class="ws-empty state-card">No services match this Presider view for ' + esc(productionMonthTitle(month)) + '.</div>';
+  return '<section class="presider-page" data-screen="presider" aria-labelledby="presider-page-title"><header class="presider-heading"><div><p class="ws-eyebrow">Service planning</p><h1 id="presider-page-title">Presider</h1><p>Prepare the service, then confirm the songs everyone should use.</p></div><label class="presider-filter" for="presider-filter"><span>Show</span><select id="presider-filter" data-song-chg="presider-filter"><option value="mine"' + (state.ui.presiderFilter !== 'all' ? ' selected' : '') + '>My presiding</option><option value="all"' + (state.ui.presiderFilter === 'all' ? ' selected' : '') + '>All services</option></select></label></header>' + productionCalendar() + '<div class="presider-month-toolbar"><h2>' + esc(productionMonthTitle(month)) + '</h2><span>' + (state.ui.presiderFilter === 'all' ? 'All services' : 'My presiding dates') + '</span></div><div class="presider-month-list" data-testid="presider-month-list" aria-label="Presider services for ' + esc(productionMonthTitle(month)) + '">' + body + '</div></section>';
+}
+function render() {
+  if (!root) return;
+  if (rootHasFocusedInput()) return;
+  if (state.ui.editorGate) { root.innerHTML = '<section class="presider-page" data-screen="presider">' + renderHeader() + renderEditorGate() + '</section>'; return; }
+  if (state.ui.runsheet) { root.innerHTML = '<section class="presider-page" data-screen="presider">' + renderRunsheet() + '</section>'; return; }
+  const workspaceId = state.ui.workspaceService || null;
+  if (workspaceId) {
+    const row = productionServiceRows().find(item => item.id === workspaceId);
+    root.innerHTML = row ? productionWorkspace(row) : productionHome();
+    return;
+  }
+  root.innerHTML = productionHome();
+  if (state.ui.presiderDay) {
+    setTimeout(() => { const target = root && root.querySelector('.presider-date-group[data-date="' + state.ui.presiderDay + '"]'); if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 0);
+  }
+}
+
+function movePreparationSong(index, direction) {
+  const sl = currentSetlist();
+  if (!sl) return;
+  const prep = (sl.songs || []).map((id, i) => ({ id: id, index: i })).filter(entry => entry.id !== sl.glorySong && entry.id !== sl.thanksSong);
+  const pos = prep.findIndex(entry => entry.index === index);
+  const next = pos + direction;
+  if (pos < 0 || next < 0 || next >= prep.length) return;
+  const swap = prep[pos].id; prep[pos].id = prep[next].id; prep[next].id = swap;
+  const special = (sl.songs || []).filter(id => id === sl.glorySong || id === sl.thanksSong);
+  setlistReorder(sl.id, prep.map(entry => entry.id).concat(special));
+}
+function copyProductionText(id) {
+  const row = productionServiceRows().find(item => item.id === id);
+  if (!row) return;
+  const sl = row.setlist;
+  const lines = [productionDateLabel(row.date) + ' · ' + row.session, 'Presider: ' + productionActualPresider(row)];
+  productionSongEntries(sl).forEach(entry => lines.push(entry.role + ': #' + entry.song.number + ' ' + entry.song.title));
+  if (row.choirSong) lines.push('Choir: ' + productionChoirLabel(row.choirSong));
+  const value = lines.join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).catch(() => window.prompt('Copy this service text:', value));
+  else window.prompt('Copy this service text:', value);
+}
+
 /* ================= dispatch ================= */
 
 function handleAct(act, el) {
   switch (act) {
     case 'back': if (ctx && ctx.onBack) ctx.onBack(); break;
+    case 'open-workspace': {
+      const row = productionServiceRows().find(item => item.id === el.dataset.id);
+      if (row) {
+        const id = row.setlist ? row.setlist.id : ensureSetlist(row.date, row.worship || WORSHIP_TYPES[0], row.session, 'schedule');
+        state.ui.currentSetlist = id;
+        state.ui.workspaceService = row.id;
+        state.ui.songRole = 'prep';
+        state.ui.search = '';
+        state.ui.category = 'All';
+        render();
+      }
+      break;
+    }
+    case 'close-workspace': state.ui.workspaceService = null; state.ui.currentSetlist = null; state.ui.songRole = 'prep'; render(); break;
+    case 'create-workspace-plan': {
+      const row = productionServiceRows().find(item => item.id === el.dataset.id);
+      if (row) {
+        const id = ensureSetlist(row.date, row.worship || WORSHIP_TYPES[0], row.session, 'schedule');
+        state.ui.currentSetlist = id;
+        state.ui.workspaceService = row.id;
+        render();
+      }
+      break;
+    }
+    case 'presider-month-prev': state.ui.presiderMonth = productionShiftMonth(productionEnsureMonth(), -1); state.ui.presiderMonthTouched = true; state.ui.presiderDay = ''; render(); break;
+    case 'presider-month-next': state.ui.presiderMonth = productionShiftMonth(productionEnsureMonth(), 1); state.ui.presiderMonthTouched = true; state.ui.presiderDay = ''; render(); break;
+    case 'presider-day': state.ui.presiderDay = el.dataset.date || ''; render(); break;
+    case 'view-service': state.ui.expandedService = state.ui.expandedService === el.dataset.id ? null : el.dataset.id; render(); break;
+    case 'order-workspace': state.ui.runsheet = el.dataset.id; render(); break;
+    case 'add-song-role': state.ui.songRole = String(el.dataset.role || 'prep').toLowerCase(); state.ui.search = ''; if (el.dataset.id) state.ui.workspaceService = el.dataset.id; render(); break;
+    case 'add-library-song': {
+      const sl = currentSetlist();
+      const sid = el.dataset.id;
+      const role = state.ui.songRole || 'prep';
+      if (!sl || !sid) break;
+      if (role === 'glory' || role === 'thanks') {
+        const patch = {}; patch[role === 'glory' ? 'glorySong' : 'thanksSong'] = sid;
+        if ((sl.songs || []).indexOf(sid) === -1) sl.songs = (sl.songs || []).concat(sid);
+        updateSetlist(sl.id, Object.assign({ songs: (sl.songs || []).slice() }, patch));
+      } else if ((sl.songs || []).indexOf(sid) === -1) setlistAddSong(sl.id, sid);
+      render();
+      break;
+    }
+    case 'remove-workspace-song': {
+      const sl = currentSetlist();
+      if (sl) {
+        const index = Number(el.dataset.index);
+        if (index >= 0) setlistRemoveSongAt(sl.id, index);
+        else {
+          const sid = el.dataset.songId;
+          const patch = {};
+          if (sl.glorySong === sid) patch.glorySong = null;
+          if (sl.thanksSong === sid) patch.thanksSong = null;
+          const songs = (sl.songs || []).filter(songId => songId !== sid);
+          updateSetlist(sl.id, Object.assign({ songs: songs }, patch));
+        }
+      }
+      break;
+    }
+    case 'prep-up': movePreparationSong(Number(el.dataset.index), -1); break;
+    case 'prep-down': movePreparationSong(Number(el.dataset.index), 1); break;
+    case 'request-change': {
+      const row = productionServiceRows().find(item => item.id === el.dataset.id);
+      if (ctx && ctx.ui && typeof ctx.ui.requestChange === 'function') ctx.ui.requestChange(row || null);
+      else if (ctx && typeof ctx.requestChange === 'function') ctx.requestChange(row || null);
+      else {
+        try { window.dispatchEvent(new CustomEvent('worship-request-change', { detail: row || null })); } catch (ignore) {}
+        if (ctx && ctx.onBack) ctx.onBack();
+      }
+      break;
+    }
+    case 'copy-text': copyProductionText(el.dataset.id); break;
+    case 'retry-save': {
+      const id = el.dataset.id || state.ui.saveServiceId;
+      if (id === state.ui.saveServiceId && state.ui.lastFailedPatch) writeSetlistPatch(id, state.ui.lastFailedPatch);
+      break;
+    }
+    case 'sync-catalog': syncCatalog(); break;
     case 'tab':
       state.ui.tab = el.dataset.tab; state.ui.runsheet = null; state.ui.pickSlot = null; render(); break;
     case 'go-home':
@@ -1599,7 +1937,7 @@ function handleAct(act, el) {
     case 'build-for': {
       let id = el.dataset.id || (el.dataset.date && serviceIdFor(el.dataset.date, el.dataset.label || SERVICE_LABELS[0]));
       if (!state.setlists[id]) id = ensureSetlist(el.dataset.date, el.dataset.worship || WORSHIP_TYPES[0], el.dataset.label || SERVICE_LABELS[0], 'schedule');
-      state.ui.currentSetlist = id; state.ui.tab = 'library'; state.ui.search = ''; state.ui.pickSlot = null; render(); break;
+      state.ui.currentSetlist = id; state.ui.workspaceService = id; state.ui.tab = 'library'; state.ui.search = ''; state.ui.pickSlot = null; render(); break;
     }
     case 'quick-add': {
       if (state.ui.pickSlot) { assignSlotSong(el.dataset.id); break; }
@@ -1612,7 +1950,7 @@ function handleAct(act, el) {
     case 'set-category': state.ui.category = el.dataset.cat; state.ui.libPage = 0; state.ui.libMore = 0; render(); break;
     case 'lib-page': goToLibPage(Number(el.dataset.page)); break;
     case 'lib-more': appendNextLibGroup(); break;
-    case 'confirm-songs': confirmSetlist(el.dataset.id); break;
+    case 'confirm-songs': confirmSetlist(el.dataset.id || state.ui.currentSetlist || state.ui.workspaceService); break;
     case 'toggle-song': state.ui.expandedSong = (state.ui.expandedSong === el.dataset.id) ? null : el.dataset.id; render(); break;
     case 'add-to-setlist': addSongToCurrent(el.dataset.id); break;
     case 'start-setlist': {
@@ -1748,6 +2086,27 @@ function debounce(key, fn, ms) { clearTimeout(debounceTimers[key]); debounceTime
 
 function handleChg(chg, el) {
   switch (chg) {
+    case 'presider-filter': state.ui.presiderFilter = el.value === 'all' ? 'all' : 'mine'; state.ui.presiderDay = ''; render(); break;
+    case 'library-role': state.ui.songRole = el.value || 'prep'; render(); break;
+    case 'song-role': {
+      const sl = currentSetlist();
+      const sid = el.dataset.songId;
+      const role = el.value || 'prep';
+      if (!sl || !sid) break;
+      const songs = (sl.songs || []).slice();
+      if (songs.indexOf(sid) === -1) songs.push(sid);
+      const patch = { songs: songs };
+      if (role === 'glory') { patch.glorySong = sid; if (sl.thanksSong === sid) patch.thanksSong = null; }
+      else if (role === 'thanks') { patch.thanksSong = sid; if (sl.glorySong === sid) patch.glorySong = null; }
+      else { if (sl.glorySong === sid) patch.glorySong = null; if (sl.thanksSong === sid) patch.thanksSong = null; }
+      updateSetlist(sl.id, patch);
+      break;
+    }
+    case 'workspace-notes': {
+      const sl = currentSetlist();
+      if (sl) debounce('workspace-notes:' + sl.id, () => updateSetlist(sl.id, { notes: el.value }), 450);
+      break;
+    }
     case 'search': state.ui.search = el.value; state.ui.libPage = 0; state.ui.libMore = 0; render(); break;
     case 'sort': state.ui.sort = el.value; state.ui.libPage = 0; state.ui.libMore = 0; render(); break;
     case 'b-service': {
@@ -1816,14 +2175,22 @@ function wireRoot() {
     const el = e.target.closest('[data-song-chg]');
     if (!el) return;
     const chg = el.dataset.songChg;
-    if (chg === 'search') { state.ui.search = el.value; state.ui.libPage = 0; state.ui.libMore = 0; renderLibraryInPlace(); }
-    else if (chg === 'b-notes') handleChg('b-notes', el);
+    if (chg === 'search') {
+      state.ui.search = el.value; state.ui.libPage = 0; state.ui.libMore = 0;
+      if (state.ui.workspaceService) {
+        const caret = el.selectionStart;
+        el.blur(); render();
+        const next = root && root.querySelector('#production-library-search');
+        if (next) { next.focus(); try { next.setSelectionRange(caret, caret); } catch (ignore) {} }
+      } else renderLibraryInPlace();
+    }
+    else if (chg === 'b-notes' || chg === 'workspace-notes') handleChg(chg, el);
   });
   root.addEventListener('change', e => {
     const el = e.target.closest('[data-song-chg]');
     if (!el) return;
     const chg = el.dataset.songChg;
-    if (chg === 'search' || chg === 'b-notes') return;
+    if (chg === 'search' || chg === 'b-notes' || chg === 'workspace-notes') return;
     handleChg(chg, el);
   });
 
@@ -1936,7 +2303,7 @@ function subscribe() {
   unsubs.push(fb.onSnapshot(fb.collection(fb.db, 'schedule'), snap => {
     state.schedule = snap.docs.map(d => {
       const data = d.data();
-      return { id: d.id, date: data.date, service: data.service, worship: data.worship, assignments: data.assignments || {}, choirSong: data.choirSong || '' };
+      return { id: d.id, date: data.date, service: data.service, worship: data.worship, time: data.time || data.time24 || '', time24: data.time24 || data.time || '', assignments: data.assignments || {}, choirSong: data.choirSong || '' };
     });
     state._scheduleLoaded = true;
     maybeSyncPresiderSchedule();
@@ -1960,7 +2327,17 @@ export function mount(rootEl, context) {
   ctx = context || {};
   fb = ctx.fb || null;
   state.nameMap = Object.assign({}, state.nameMap, (ctx.nameMap || {}));
+  if (ctx.me && state.ui.me && ctx.me !== state.ui.me && !state.ui.presiderMonthTouched) state.ui.presiderMonth = '';
   state.ui.me = ctx.me || state.ui.me || '';
+  if (Array.isArray(ctx.schedule)) {
+    state.schedule = ctx.schedule.map(item => Object.assign({}, item, {
+      assignments: item.assignments || {},
+      choirSong: item.choirSong || '',
+      time: item.time || item.time24 || '',
+      time24: item.time24 || item.time || ''
+    }));
+    state._scheduleLoaded = true;
+  }
 
   if (!_catalogLoaded) { loadCatalog(); _catalogLoaded = true; syncCatalog(); }
   if (!_subscribed) {
@@ -1982,11 +2359,26 @@ export function mount(rootEl, context) {
       const id = serviceIdFor(svc.date, svc.service);
       if (!state.setlists[id]) ensureSetlist(svc.date, svc.worship || WORSHIP_TYPES[0], svc.service, 'schedule');
       state.ui.currentSetlist = id;
+      state.ui.workspaceService = id;
       state.ui.tab = 'library';
     } else {
+      state.ui.workspaceService = null;
       state.ui.tab = 'home';
     }
   }
 
+  productionEnsureMonth();
+
   render();
+}
+
+// Keep the existing local fallback in sync with manager reassignment.
+export function updateLocalPresider(change) {
+  if (fb) return;
+  const plan = state.setlists[change.serviceId];
+  if (!plan) return;
+  plan.presider = change.presider || '';
+  plan.updatedAt = Math.max(Date.now(), Number(plan.updatedAt || 0) + 1, Number(plan.confirmedAt || 0) + 1);
+  plan.updatedBy = state.ui.me || '';
+  saveLocal();
 }

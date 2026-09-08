@@ -59,6 +59,7 @@ async function makeFixture() {
       '<!doctype html><html><head>',
       '<link rel="manifest" href="manifest.json">',
       '<link rel="icon" href="icon.svg">',
+      '<link rel="stylesheet" href="styles.css?v=DEV">',
       '</head><body>',
       '<script src="seed-data.js?v=DEV"></script>',
       '<script src="firebase-config.js?v=DEV"></script>',
@@ -81,6 +82,7 @@ async function makeFixture() {
     ].join('\n'),
     'seed-data.js': 'window.SEED_DATA = { members: [] };',
     'firebase-config.js': 'window.FIREBASE_CONFIG = { projectId: "fictional" };',
+    'styles.css': 'body { color: #123456; }',
     'song-app.js': 'export function mount() { return null; }',
     'song-app.css': 'body { background-image: url("icon.svg"); }',
     'song-seed.js': 'window.SONG_SEED = [];',
@@ -142,7 +144,8 @@ test('stages only runtime files, stamps references, and preserves source bytes',
       assert.deepEqual(staged.validation.files, [
         'app.js', 'firebase-config.js', 'firebase.json', 'icon.svg', 'index.html',
         'manifest.json', 'seed-data.js', 'song-app.css', 'song-app.js',
-        'song-lib.js', 'song-seed.js', 'src/core/nested.js', 'src/core/runtime.js', 'sw.js'
+        'song-lib.js', 'song-seed.js', 'src/core/nested.js', 'src/core/runtime.js',
+        'styles.css', 'sw.js'
       ]);
       const stagedIndex = await readFile(path.join(staged.stageDir, 'index.html'), 'utf8');
       const stagedApp = await readFile(path.join(staged.stageDir, 'app.js'), 'utf8');
@@ -150,6 +153,7 @@ test('stages only runtime files, stamps references, and preserves source bytes',
       const stagedServiceWorker = await readFile(path.join(staged.stageDir, 'sw.js'), 'utf8');
       assert.match(stagedIndex, new RegExp(`app\\.js\\?v=${STAMP}`));
       assert.match(stagedIndex, new RegExp(`manifest\\.json\\?v=${STAMP}`));
+      assert.match(stagedIndex, new RegExp(`styles\\.css\\?v=${STAMP}`));
       assert.match(stagedApp, new RegExp(`ASSET_V\\s*=\\s*['"]\\?v=${STAMP}`));
       assert.match(stagedApp, /https:\/\/cdn\.example\/lib\.js\?v=1\.2\.3/);
       assert.match(stagedApp, /import\('\.\/src\/core\/runtime\.js' \+ ASSET_V\)/);

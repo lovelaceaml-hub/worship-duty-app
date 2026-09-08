@@ -1,15 +1,14 @@
 ---
 lane: PT
-title: Production themes
-state: running
-model: gemini-3.8-flash-medium
-runner: Antigravity
-worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-themes
-review: proportional controller review
-depends_on: none
+title: Themes and responsive polish
+state: integrated
+model: Gemini 3.8 Flash medium, Terra high
+worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-polish
+review: affected integration checks
 updated: 2026-09-08
 ---
+# Themes and responsive polish
 
-# Production themes
+Read first: /Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/INDEX.md.
 
-Effort: medium. Astra controller, Sol team lead. Production starts immediately under decisions/20260908-speed-delivery.md and decisions/20260908-production-contract.md. No prototype/stage approval gate. Other writers run concurrently with explicit file ownership. No live data or worker deployment.
+Current status: integrated. Controller owns integration, release, records, and completion. See the current production integration log for verified evidence. Source and tests contain fictional fixtures only. No production-start approval gate applies.

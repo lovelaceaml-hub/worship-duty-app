@@ -1,15 +1,14 @@
 ---
 lane: PM
-title: Production Member
-state: running
-model: gpt-5.6-luna
-runner: Codex
+title: Member experience
+state: integrated
+model: Luna high
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-member
-review: proportional controller review
-depends_on: none
+review: affected integration checks
 updated: 2026-09-08
 ---
+# Member experience
 
-# Production Member
+Read first: /Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/INDEX.md.
 
-Effort: medium. Astra controller, Sol team lead. Production starts immediately under decisions/20260908-speed-delivery.md and decisions/20260908-production-contract.md. No prototype/stage approval gate. Other writers run concurrently with explicit file ownership. No live data or worker deployment.
+Current status: integrated. Controller owns integration, release, records, and completion. See the current production integration log for verified evidence. Source and tests contain fictional fixtures only. No production-start approval gate applies.
