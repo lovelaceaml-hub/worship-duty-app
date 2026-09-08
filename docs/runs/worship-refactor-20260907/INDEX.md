@@ -18,8 +18,9 @@ Coordinator: current Codex task with coordinator_terra supervision
 |---|---|---|---|---|---|---|
 | L0 | Architecture critique | reviewed | gpt-5.6-sol | /Users/anthony/Projects/worship-duty-app | architecture approved | none |
 | LF | Foundation | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation | Sol-pass | none |
+| LF2 | Foundation state and subscriptions | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-state | pending | LF,LR |
 | LR | Release machinery | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/release | Sol-pass | none |
-| LD | Design | running | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | pending | none |
+| LD | Design | landed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | direction-choice-pending | none |
 | LV | Verification | running | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/verification | pending | none |
 | LM | Member experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
 | LP | Presider experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
@@ -43,7 +44,7 @@ Coordinator: current Codex task with coordinator_terra supervision
 <!-- lane: L0 state: reviewed model: gpt-5.6-sol worktree: /Users/anthony/Projects/worship-duty-app review: architecture approved updated: 2026-09-08T00:39Z -->
 <!-- lane: LF state: reviewed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation review: Sol-pass updated: 2026-09-08T01:29Z -->
 <!-- lane: LR state: reviewed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/release review: Sol-pass updated: 2026-09-08T01:29Z -->
-<!-- lane: LD state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/design review: pending updated: 2026-09-08T00:31Z -->
+<!-- lane: LD state: landed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/design review: direction-choice-pending updated: 2026-09-08T01:31Z -->
 <!-- lane: LV state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/verification review: pending updated: 2026-09-08T00:31Z -->
 <!-- lane: LM state: planned model: gpt-5.6-luna worktree: pending review: pending updated: 2026-09-08T00:42Z -->
 <!-- lane: LP state: planned model: gpt-5.6-luna worktree: pending review: pending updated: 2026-09-08T00:42Z -->

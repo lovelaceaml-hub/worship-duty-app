@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Open Bulletin direction for the worship service schedule.">
+  <title>Open Bulletin, worship service</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="bulletin-shell">
+    <header class="topbar">
+      <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="7" /><path d="M12 5v14M5 12h14" /></svg></span><span>LV Zion Worship Service</span></a>
+      <span class="sample-label">Fictional sample data</span>
+      <nav aria-label="Primary navigation">
+        <a class="active" href="index.html" aria-current="page">Home</a>
+        <a href="#my-duties">My Duties</a>
+        <a href="#presider">Presider</a>
+        <a href="#manage">Manage</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="compact-heading" aria-labelledby="bulletin-title">
+        <div>
+          <p class="kicker">Sabbath Day schedule</p>
+          <h1 id="bulletin-title">Worship schedule</h1>
+        </div>
+        <p class="selected-member">Selected member: B. Daniel Reed</p>
+      </section>
+
+      <section class="next-duty" id="my-duties" aria-labelledby="next-duty-title">
+        <div class="next-duty-header"><p class="section-label" id="next-duty-title">My next duty</p><span class="date-chip"><span class="full-date">Sabbath Day, Saturday, September 12, 2026</span><span class="short-date">Sabbath Day, Sat Sep 12</span></span></div>
+        <div class="next-duty-content">
+          <div><h2>Presider</h2><p>Worship department, B. Daniel Reed.</p></div>
+          <div class="duty-time"><span>9</span><small>:00 AM</small></div>
+          <button class="text-button" type="button" data-action="duty" aria-expanded="false" aria-controls="duty-note">Show duty note</button>
+        </div>
+        <p class="duty-note" id="duty-note" hidden>Duty: Presider. Department: Worship. Selected member: B. Daniel Reed.</p>
+      </section>
+
+      <div class="date-strip" aria-label="Service dates"><span class="date-strip-label">Dates</span><span class="date-strip-item selected">Sabbath Day, Saturday, September 12, 2026</span><span class="date-strip-item">Third Day, Tuesday, September 15, 2026</span><span class="date-strip-item">Worship, Usher Sisters, Usher Brothers, Lobby</span><span class="date-strip-item">Translation, Media, Parking Lot, Offering</span></div>
+
+      <section class="schedule" id="presider" aria-labelledby="schedule-title">
+        <div class="schedule-heading"><div><p class="section-label">Upcoming schedule</p><h2 id="schedule-title"><span class="full-date">Sabbath Day, Saturday, September 12</span><span class="short-date">Sabbath Day, Sat Sep 12</span></h2></div><p>Three service times.</p></div>
+        <div class="service-grid">
+          <article class="service-card nearest">
+            <div class="service-card-top"><time datetime="2026-09-12T09:00">9:00 AM</time><span class="service-status">Nearest service</span></div>
+            <h3>Morning worship</h3>
+            <p class="presider-line">Worship department</p>
+            <div class="service-people"><span>Presider</span><strong>B. Daniel Reed</strong><span>Sermon</span><strong>S. Mira Lane</strong><span>Prayer of Thanks</span><strong>B. Elias Park</strong><span>Closing Prayer</span><strong>B. Daniel Reed</strong><span>Usher Door</span><strong>S. Mira Lane</strong><span>Usher Front</span><strong>B. Elias Park</strong><span>Usher Back</span><strong>S. Mira Lane</strong><span>Usher #1</span><strong>B. Elias Park</strong><span>Usher #2</span><strong>B. Daniel Reed</strong><span>Lobby Security</span><strong>S. Mira Lane</strong><span>Lobby</span><strong>B. Daniel Reed</strong><span>Translation</span><strong>S. Mira Lane</strong></div>
+            <details open>
+              <summary>Department list</summary>
+              <p class="details-copy">Worship, Usher Sisters, Usher Brothers, Lobby, Translation, Media, Parking Lot, Offering.</p>
+            </details>
+          </article>
+
+          <article class="service-card">
+            <div class="service-card-top"><time datetime="2026-09-12T15:00">3:00 PM</time><span class="service-status">Afternoon</span></div>
+            <h3>Afternoon worship</h3>
+            <p class="presider-line">Worship department</p>
+            <div class="service-people"><span>Presider</span><strong>B. Elias Park</strong><span>Sermon</span><strong>S. Mira Lane</strong><span>Offering</span><strong>B. Daniel Reed</strong></div>
+            <details>
+              <summary>Service notes</summary>
+              <p class="details-copy">Worship and service team assignments.</p>
+            </details>
+          </article>
+
+          <article class="service-card">
+            <div class="service-card-top"><time datetime="2026-09-12T20:00">8:00 PM</time><span class="service-status">Evening</span></div>
+            <h3>Evening worship</h3>
+            <p class="presider-line">Worship department</p>
+            <div class="service-people"><span>Presider</span><strong>S. Mira Lane</strong><span>Closing Prayer</span><strong>B. Elias Park</strong><span>Media</span><strong>B. Daniel Reed</strong></div>
+            <details>
+              <summary>Service notes</summary>
+              <p class="details-copy">Worship and service team assignments.</p>
+            </details>
+          </article>
+        </div>
+      </section>
+
+      <section class="quick-links" id="manage" aria-label="Quick actions">
+        <a href="#my-duties"><span>For you</span><strong>My Duties</strong><small>See every assignment</small></a>
+        <a href="#presider"><span>For the service</span><strong>Presider</strong><small>Prepare one service</small></a>
+        <a href="#manage"><span>For the team</span><strong>Manage</strong><small>Review people and requests</small></a>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

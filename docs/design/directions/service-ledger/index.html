@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Service Ledger direction for the worship service schedule.">
+  <title>Service Ledger, worship service</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ledger-shell">
+    <header class="topbar">
+      <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M5 5h14M5 10h14M5 15h9M5 19h14" /></svg></span><span>LV Zion Worship Service</span></a>
+      <span class="sample-label">Fictional sample data</span>
+      <nav aria-label="Primary navigation">
+        <a class="active" href="index.html" aria-current="page">Home</a>
+        <a href="#my-duties">My Duties</a>
+        <a href="#presider">Presider</a>
+        <a href="#manage">Manage</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="intro-block" aria-labelledby="ledger-title">
+        <div>
+          <p class="kicker">Sabbath Day schedule</p>
+          <h1 id="ledger-title">Upcoming worship</h1>
+        </div>
+        <p class="selected-member">Selected member: B. Daniel Reed</p>
+      </section>
+
+      <section class="next-duty" id="my-duties" aria-labelledby="next-duty-title">
+        <div class="section-label" id="next-duty-title">My next duty</div>
+        <div class="next-duty-body">
+          <div>
+            <p class="next-date"><span class="full-date">Sabbath Day, Saturday, September 12, 2026</span><span class="short-date">Sabbath Day, Sat Sep 12</span></p>
+            <h2>Presider</h2>
+          </div>
+          <div class="next-time"><strong>9:00</strong><span>AM</span></div>
+          <div class="next-meta"><span>Worship department</span><span>B. Daniel Reed</span></div>
+          <button class="outline-button" type="button" data-action="duty" aria-expanded="false" aria-controls="duty-note">Show duty note</button>
+        </div>
+        <p class="duty-note" id="duty-note" hidden>Duty: Presider. Department: Worship. Selected member: B. Daniel Reed.</p>
+      </section>
+
+      <div class="ledger-workspace">
+        <aside class="date-rail" aria-label="Service dates">
+          <p class="rail-label">Date rail</p>
+          <button class="date-button selected" type="button" data-date="Sabbath Day Saturday September 12" aria-pressed="true"><span>Sab</span><strong>12</strong><small>Sep</small></button>
+          <button class="date-button" type="button" data-date="Third Day Tuesday September 15" aria-pressed="false"><span>3rd</span><strong>15</strong><small>Sep</small></button>
+          <button class="date-button" type="button" data-date="Sabbath Day Saturday September 19" aria-pressed="false"><span>Sab</span><strong>19</strong><small>Sep</small></button>
+          <button class="date-button" type="button" data-date="Third Day Tuesday September 22" aria-pressed="false"><span>3rd</span><strong>22</strong><small>Sep</small></button>
+          <p class="rail-status" aria-live="polite" data-date-status>Showing Saturday September 12</p>
+          <p class="rail-secondary">Third Day, Tuesday, September 15, 2026</p>
+        </aside>
+
+        <section class="schedule" aria-labelledby="schedule-title">
+          <div class="schedule-heading"><div><p class="section-label">Upcoming schedule</p><h2 id="schedule-title"><span class="full-date">Sabbath Day, Saturday, September 12</span><span class="short-date">Sabbath Day, Sat Sep 12</span></h2></div><span class="service-count">3 services</span></div>
+
+          <article class="service-row nearest" id="presider">
+            <div class="service-time"><strong>9:00</strong><span>AM</span></div>
+            <div class="service-main">
+              <div class="row-heading"><div><span class="service-tag">Nearest service</span><h3>Morning worship</h3></div><span class="row-number">01</span></div>
+              <p class="service-subtitle">Worship department</p>
+              <details open>
+                <summary>Department duties</summary>
+                <div class="service-details">
+                  <div><span>Worship, Presider</span><strong>B. Daniel Reed</strong></div><div><span>Worship, Sermon</span><strong>S. Mira Lane</strong></div><div><span>Worship, Prayer of Thanks</span><strong>B. Elias Park</strong></div><div><span>Worship, Closing Prayer</span><strong>B. Daniel Reed</strong></div>
+                  <div><span>Usher Sisters, Usher Door / Usher Front</span><strong>S. Mira Lane / B. Elias Park</strong></div><div><span>Usher Sisters, Usher Back</span><strong>S. Mira Lane</strong></div>
+                  <div><span>Usher Brothers, Usher #1 / Usher #2</span><strong>B. Elias Park / B. Daniel Reed</strong></div><div><span>Usher Brothers, Lobby Security</span><strong>S. Mira Lane</strong></div>
+                  <div><span>Lobby, Lobby</span><strong>B. Daniel Reed</strong></div><div><span>Translation, Translation</span><strong>S. Mira Lane</strong></div>
+                  <div><span>Media, Media</span><strong>B. Elias Park</strong></div><div><span>Parking Lot, Parking Lot / Offering, Offering</span><strong>B. Daniel Reed / S. Mira Lane</strong></div>
+                </div>
+              </details>
+            </div>
+          </article>
+
+          <article class="service-row">
+            <div class="service-time"><strong>3:00</strong><span>PM</span></div>
+            <div class="service-main">
+              <div class="row-heading"><div><span class="service-tag">Afternoon</span><h3>Afternoon worship</h3></div><span class="row-number">02</span></div>
+              <p class="service-subtitle">Worship department</p>
+              <div class="compact-assignment"><span>Sermon</span><strong>B. Elias Park</strong></div>
+            </div>
+          </article>
+
+          <article class="service-row">
+            <div class="service-time"><strong>8:00</strong><span>PM</span></div>
+            <div class="service-main">
+              <div class="row-heading"><div><span class="service-tag">Evening</span><h3>Evening worship</h3></div><span class="row-number">03</span></div>
+              <p class="service-subtitle">Worship department</p>
+              <div class="compact-assignment"><span>Closing Prayer</span><strong>B. Daniel Reed</strong></div>
+            </div>
+          </article>
+        </section>
+      </div>
+
+      <section class="quick-links" id="manage" aria-label="Quick actions">
+        <a href="#my-duties"><span>01</span><strong>My Duties</strong><small>View your full assignment list</small></a>
+        <a href="#presider"><span>02</span><strong>Presider</strong><small>Open a service workspace</small></a>
+        <a href="#manage"><span>03</span><strong>Manage</strong><small>Review schedule and requests</small></a>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
