@@ -1,30 +1,33 @@
-# UI Quality Report
+# Worship Service UI quality status
 
-## Release and evidence
+Current checkpoint: 7 September 2026. Runtime confirmation fix `8acf332` is live at Hosting release `20260908030600`. The complete refactor and redesign are still in progress. Original B with smaller display typography is selected; complete prototype approval and final design fidelity/accessibility gates remain pending.
 
-- **App / version / date:** LV Zion Worship Service, WATV-inspired rebuild, 2026-07-18
-- **Tester:** Codex automated and manual browser review
-- **Browser and device / viewport:** Chromium at 1440×1000 and mobile Chromium at 360×800
-- **Primary journey evidence:** `npm run test:ui` against local preview and `UI_BASE_URL=https://lv-zion-duties.web.app npm run test:ui` after release; screenshots and JSON are written to `/tmp/worship-duty-ui-evidence` for local inspection only, because the live schedule contains personal congregation assignments that must not enter Git
+## Fictional functional verification
 
-## Quality gate
+The UI command tests a loopback server with fictional members, services, songs and passcodes. It intercepts Firebase modules/configuration/seed files before navigation, blocks external traffic, and ignores UI_BASE_URL. Supplying the live app URL does not turn this command into production verification. Never report its result as a live smoke check.
 
-| Check | Result | Evidence / issue | Owner / follow-up |
-| --- | --- | --- | --- |
-| Primary journey completes on desktop | Pass | Schedule, My Duties, Presider Home, Library search/empty result, Services, Insights, header Home, and Manage lock all loaded | — |
-| Primary journey completes on phone | Pass | Same read-only journey completed at 360×800 with fixed bottom navigation | — |
-| Empty, loading, error, and success states | Partial | Site lock and Library empty state exercised; explicit loading/song-load error paths preserved and source-reviewed but network failure was not forced | Future non-production fault-injection test |
-| Keyboard-only completion and visible focus | Pass | Header returned to Schedule with Enter; a Library song row expanded with Enter; switch-track focus and global focus styles source-reviewed | — |
-| WCAG 2.2 AA manual review | Pass | Semantic landmarks, labels, adequate targets, reduced motion, non-color active states, and phone reflow reviewed | — |
-| Automated axe scan | Pass | Zero violations on lock, Schedule, My Duties, Presider Home, Library, Services, Insights, and Manage lock at both app viewports | — |
-| Visual screenshots reviewed | Pass | Temporary desktop/phone Schedule and Presider screenshots visually inspected, then excluded from Git | — |
-| Long content and narrow screens | Pass | Full upcoming schedule rendered without horizontal page overflow at 360px | — |
+```sh
+WORSHIP_EVIDENCE_ROOT=/private/tmp/worship-current-qa npm --prefix /Users/anthony/Projects/worship-duty-app run test:ui
+```
 
-## No-instructions usability test
+The command writes fixture-baseline.json, fixture-baseline.md and screenshots under the explicit evidence directory. Without the override it writes current evidence under the project's docs/runs/worship-refactor-20260907/research/verification/current directory. Original baseline evidence is retained separately. Reports identify fixture-only mode, source digest, viewport, network isolation and known baseline findings.
 
-The automated journey used a realistic first-time goal—find an upcoming presider and inspect that service's song workspace—without implementation-specific navigation instructions. It completed on desktop and phone with no wrong turn or false completion. It intentionally did not save, reorder, or mark songs on the live production database. Representative congregation testing is still required before describing the design as validated with members.
+Root independently passed 15 functional scenarios against deployed source using the corrected round 4 suite: entry/passcodes, member and coordinator edits, keyboard navigation, draft/search/scroll preservation, delayed auth, explicit initial snapshot race, advancing-clock song confirmation, save errors and parsing contracts. These results are in [controller browser evidence](runs/worship-refactor-20260907/research/confirmation-fix/controller-browser/fixture-baseline.json). The Verification lane remains under correction and native review to restore all prior Library/Services/Insights assertions and enforce new accessibility regressions across every captured surface.
 
-## Decision
+## Accessibility status
 
-- **Release decision:** Ready for a visual-only Hosting release; no production data writes were used for QA.
-- **Known limitations:** client-side passcodes are not strong authentication; this rebuild does not change that architecture. Local QA also records the pre-existing failed Firebase anonymous-auth request (HTTP 400); reads and the tested views still work, and this Hosting-only redesign does not change rules or authentication.
+Full accessibility approval is pending. Manage has pre-existing critical label and select-name findings in fictional baseline captures. My Duties also has a manual-review incomplete result. Clean scans of other named surfaces do not erase these findings. No full WCAG or all-screen accessibility pass is claimed.
+
+The current nonvisual refactor may retain precisely documented existing baseline defects. The final redesigned interface must resolve them. Regression guards must check every captured surface and all impacts, reject new violations, and expose any narrow baseline exceptions in results. A functional pass or baseline exception is not a final accessibility approval.
+
+## Production verification is separate
+
+Hosting releases go through /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh and its allowlisted staging directory. Before release, run the relevant fictional, domain, transaction, and release checks. After deployment, compare every public runtime file hash with its staged byte hash, then inspect the live locked interface in an isolated browser with Firebase disabled and fictional empty data. Do not select real members, load live records into captures, or write production data for QA.
+
+Latest immediate production evidence: [18 matching runtime hashes](runs/worship-refactor-20260907/research/hosting-release-20260908030600.json) and [locked phone screen](runs/worship-refactor-20260907/research/hosting-ui-smoke-20260908030600.json). Actual service-worker release update, rollback, warmed offline recovery and foreign-origin denial passed separately. None of these results is produced by UI_BASE_URL or proves the full redesigned production journeys.
+
+## Completion status
+
+Foundation and the compatibility fix are live. Complete clickable prototype, approved references, redesigned member/presider/coordinator interfaces, final functional/fidelity/accessibility/performance verification, cumulative native Sol and Opus reviews, documentation and backup remain tracked in [the active plan](PLAN-REFACTOR-REDESIGN.md).
+
+The [July report](design/archive/UI-QUALITY-2026-07-18.md) is historical only. Its live QA command, bottom-navigation description, output path and release verdict are superseded by this report.
