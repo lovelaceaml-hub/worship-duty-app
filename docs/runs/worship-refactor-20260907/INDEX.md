@@ -18,7 +18,7 @@ Coordinator: current Codex task with coordinator_terra supervision
 |---|---|---|---|---|---|---|
 | L0 | Architecture critique | reviewed | gpt-5.6-sol | /Users/anthony/Projects/worship-duty-app | architecture approved | none |
 | LF | Foundation | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation | Sol-pass | none |
-| LF2 | Foundation state and subscriptions | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-state | pending | LF,LR |
+| LF2 | Foundation state and subscriptions | running | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-state | pending | LF,LR |
 | LR | Release machinery | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/release | Sol-pass | none |
 | LD | Design | landed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | direction-choice-pending | none |
 | LV | Verification | running | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/verification | pending | none |

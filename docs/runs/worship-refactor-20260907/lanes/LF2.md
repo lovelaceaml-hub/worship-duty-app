@@ -1,13 +1,13 @@
 ---
 lane: LF2
 title: Foundation state and subscriptions
-state: planned
+state: running
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-state
 review: pending
 depends_on: LF,LR
-updated: 2026-09-08T01:30Z
+updated: 2026-09-08T01:32Z
 ---
 
 # Foundation 2 work order
