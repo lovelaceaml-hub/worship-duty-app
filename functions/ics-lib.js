@@ -65,15 +65,15 @@ function dutiesForMember(services, member, nameMap) {
  * -2h, matching the in-app download. `services` should already be limited
  * to the window the feed exposes (the function queries date >= today-30d).
  */
-function buildIcsForMember(services, member, nameMap) {
+function buildIcsForMember(services, member, nameMap, stampDate) {
   const duties = dutiesForMember(services, member, nameMap);
-  const stamp = icsStamp(new Date());
+  const stamp = icsStamp(stampDate || new Date());
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//LV Zion//Worship Duties//EN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:' + icsEscape('LV Zion Duties — ' + canonName(member, nameMap)),
+    'X-WR-CALNAME:' + icsEscape('LV Zion Duties: ' + canonName(member, nameMap)),
     'X-WR-TIMEZONE:America/Los_Angeles',
     'REFRESH-INTERVAL;VALUE=DURATION:PT12H',
     'X-PUBLISHED-TTL:PT12H'

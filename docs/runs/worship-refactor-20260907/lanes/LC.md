@@ -2,12 +2,12 @@
 lane: LC
 title: Coordinator experience
 state: planned
-model: pending
-runner: pending
+model: gpt-5.6-luna
+runner: coordinator
 worktree: pending
 review: pending
-depends_on: pending
-updated: 2026-09-08T00:29Z
+depends_on: "LF,LD"
+updated: 2026-09-08T00:42Z
 ---
 
 # LC: Coordinator experience

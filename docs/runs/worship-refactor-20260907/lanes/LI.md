@@ -1,13 +1,13 @@
 ---
 lane: LI
 title: Integration and completion
-state: planned
-model: pending
-runner: pending
+state: running
+model: controller
+runner: coordinator
 worktree: pending
 review: pending
-depends_on: pending
-updated: 2026-09-08T00:29Z
+depends_on: "LF,LR,LV,LD,LB,LM,LP,LC"
+updated: 2026-09-08T00:42Z
 ---
 
 # LI: Integration and completion

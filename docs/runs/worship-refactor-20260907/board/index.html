@@ -249,7 +249,7 @@
       <dt>Runner</dt><dd>coordinator</dd>
       <dt>Coordinator</dt><dd>current Codex task with coordinator_terra supervision</dd>
     </dl>
-    
+
       <table class="baselines-table">
         <thead><tr><th>Repo</th><th>Path</th><th>Branch</th><th>Baseline HEAD</th></tr></thead>
         <tbody>
@@ -260,24 +260,24 @@
 
   <div class="lanes-wrap">
     <div class="lanes-scroll">
-      <div class="lanes-inner" style="min-width: 2000px;">
-        <div class="lanes-row" style="grid-template-columns: repeat(10, 1fr);">
+      <div class="lanes-inner" style="min-width: 1800px;">
+        <div class="lanes-row" style="grid-template-columns: repeat(9, 1fr);">
 
     <div class="lane-col " data-lane="L0">
-      <div class="lane-card state-running">
+      <div class="lane-card state-reviewed">
         <div class="lane-head">
           <span class="lane-id">L0</span>
-          <span class="lane-state">running</span>
+          <span class="lane-state">reviewed</span>
         </div>
         <h3 class="lane-title">Architecture critique</h3>
         <dl class="lane-meta">
           <dt>Model</dt><dd>gpt-5.6-sol</dd>
           <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-duty-app</dd>
-          <dt>Review</dt><dd>pending</dd>
+          <dt>Review</dt><dd>architecture approved</dd>
           <dt>Depends on</dt><dd>none</dd>
-          <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:39Z</dd>
         </dl>
-        
+
       </div>
     </div>
 
@@ -295,7 +295,7 @@
           <dt>Depends on</dt><dd>none</dd>
           <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
         </dl>
-        
+
       </div>
     </div>
 
@@ -313,7 +313,7 @@
           <dt>Depends on</dt><dd>none</dd>
           <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
         </dl>
-        
+
       </div>
     </div>
 
@@ -331,7 +331,7 @@
           <dt>Depends on</dt><dd>none</dd>
           <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
         </dl>
-        
+
       </div>
     </div>
 
@@ -349,25 +349,7 @@
           <dt>Depends on</dt><dd>none</dd>
           <dt>Updated</dt><dd>2026-09-08T00:31Z</dd>
         </dl>
-        
-      </div>
-    </div>
 
-    <div class="lane-col " data-lane="LM">
-      <div class="lane-card state-planned">
-        <div class="lane-head">
-          <span class="lane-id">LM</span>
-          <span class="lane-state">planned</span>
-        </div>
-        <h3 class="lane-title">Member experience</h3>
-        <dl class="lane-meta">
-          <dt>Model</dt><dd>pending</dd>
-          <dt>Worktree</dt><dd class="mono">pending</dd>
-          <dt>Review</dt><dd>pending</dd>
-          <dt>Depends on</dt><dd>none</dd>
-          <dt>Updated</dt><dd>2026-09-08T00:29Z</dd>
-        </dl>
-        
       </div>
     </div>
 
@@ -379,13 +361,13 @@
         </div>
         <h3 class="lane-title">Presider experience</h3>
         <dl class="lane-meta">
-          <dt>Model</dt><dd>pending</dd>
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
           <dt>Worktree</dt><dd class="mono">pending</dd>
           <dt>Review</dt><dd>pending</dd>
-          <dt>Depends on</dt><dd>none</dd>
-          <dt>Updated</dt><dd>2026-09-08T00:29Z</dd>
+          <dt>Depends on</dt><dd>LF, LD</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:42Z</dd>
         </dl>
-        
+
       </div>
     </div>
 
@@ -397,54 +379,79 @@
         </div>
         <h3 class="lane-title">Coordinator experience</h3>
         <dl class="lane-meta">
-          <dt>Model</dt><dd>pending</dd>
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
           <dt>Worktree</dt><dd class="mono">pending</dd>
           <dt>Review</dt><dd>pending</dd>
-          <dt>Depends on</dt><dd>none</dd>
-          <dt>Updated</dt><dd>2026-09-08T00:29Z</dd>
+          <dt>Depends on</dt><dd>LF, LD</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:42Z</dd>
         </dl>
-        
+
       </div>
     </div>
 
     <div class="lane-col " data-lane="LB">
-      <div class="lane-card state-running">
+      <div class="lane-card state-reviewed">
         <div class="lane-head">
           <span class="lane-id">LB</span>
-          <span class="lane-state">running</span>
+          <span class="lane-state">reviewed</span>
         </div>
         <h3 class="lane-title">Backend</h3>
         <dl class="lane-meta">
           <dt>Model</dt><dd>gpt-5.6-luna</dd>
           <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/backend</dd>
-          <dt>Review</dt><dd>pending</dd>
+          <dt>Review</dt><dd>Sol-pass</dd>
           <dt>Depends on</dt><dd>L0</dd>
-          <dt>Updated</dt><dd>2026-09-08T00:32Z</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:58Z</dd>
         </dl>
-        
+
       </div>
     </div>
 
     <div class="lane-col " data-lane="LI">
-      <div class="lane-card state-planned">
+      <div class="lane-card state-running">
         <div class="lane-head">
           <span class="lane-id">LI</span>
-          <span class="lane-state">planned</span>
+          <span class="lane-state">running</span>
         </div>
         <h3 class="lane-title">Integration and completion</h3>
         <dl class="lane-meta">
-          <dt>Model</dt><dd>pending</dd>
+          <dt>Model</dt><dd>controller</dd>
           <dt>Worktree</dt><dd class="mono">pending</dd>
           <dt>Review</dt><dd>pending</dd>
-          <dt>Depends on</dt><dd>none</dd>
-          <dt>Updated</dt><dd>2026-09-08T00:29Z</dd>
+          <dt>Depends on</dt><dd>LF, LR, LV, LD, LB, LM, LP, LC</dd>
+          <dt>Updated</dt><dd>2026-09-08T00:42Z</dd>
         </dl>
-        
+
       </div>
     </div>
         </div>
-        
-        
+
+    <div class="arrows-gap">
+      <svg class="arrows-svg" aria-hidden="true">
+        <defs>
+          <marker id="arrowhead" viewBox="0 0 10 10" refX="5" refY="8" markerWidth="6" markerHeight="6" markerUnits="userSpaceOnUse" orient="auto">
+            <path d="M0,0 L10,0 L5,10 z" class="dep-arrowhead" />
+          </marker>
+        </defs>
+        <line x1="16.666666666666664%" y1="4%" x2="16.666666666666664%" y2="96%" vector-effect="non-scaling-stroke" class="dep-arrow" marker-end="url(#arrowhead)" />
+        <line x1="38.88888888888889%" y1="4%" x2="38.88888888888889%" y2="96%" vector-effect="non-scaling-stroke" class="dep-arrow" marker-end="url(#arrowhead)" />
+      </svg>
+    </div>
+
+    <div class="integration-lane state-planned" data-lane="LM">
+      <div class="lane-head">
+        <span class="lane-id">LM</span>
+        <span class="lane-state">planned</span>
+      </div>
+      <h3 class="lane-title">Member experience (integration)</h3>
+      <dl class="lane-meta lane-meta-row">
+        <dt>Model</dt><dd>gpt-5.6-luna</dd>
+        <dt>Review</dt><dd>pending</dd>
+        <dt>Depends on</dt><dd>LF, LD</dd>
+        <dt>Updated</dt><dd>2026-09-08T00:42Z</dd>
+      </dl>
+
+    </div>
       </div>
     </div>
   </div>
@@ -452,7 +459,7 @@
   <div class="panels">
     <section class="decisions-panel">
       <h2>Decisions</h2>
-      
+
         <div class="decision-card">
           <h4>Local design directions</h4>
           <p>Anthony&#39;s exact correction: &quot;no need to use stitch.&quot;</p>
@@ -462,7 +469,7 @@
     <section class="event-log">
       <h2>Event log</h2>
       <ul>
-        
+
         <li class="log-entry">
           <span class="file-tag mono">2026-09-08T00-31Z-LD-anthony-selected-local-design-tools.md</span>
           <strong>2026-09-08T00:31Z LD Anthony selected local design tools</strong>
@@ -478,6 +485,24 @@
         <li class="log-entry">
           <span class="file-tag mono">2026-09-08T00-32Z-LB-backend-contracts-frozen-and-extraction-started.md</span>
           <strong>2026-09-08T00:32Z LB Backend contracts frozen and extraction started</strong>
+          <p></p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T00-39Z-L0-architecture-approved-with-compatibility-invariant.md</span>
+          <strong>2026-09-08T00:39Z L0 Architecture approved with compatibility invariants</strong>
+          <p></p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T00-55Z-LB-backend-extraction-integrated-with-ten-passing-che.md</span>
+          <strong>2026-09-08T00:55Z LB Backend extraction integrated with ten passing checks and Sol review pending</strong>
+          <p></p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">2026-09-08T00-58Z-LB-sol-review-passed-with-no-actionable-findings.md</span>
+          <strong>2026-09-08T00:58Z LB Sol review passed with no actionable findings</strong>
           <p></p>
         </li>
       </ul>
