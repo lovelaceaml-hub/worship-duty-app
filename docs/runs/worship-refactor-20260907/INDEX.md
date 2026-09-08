@@ -4,7 +4,11 @@ Plan ID: worship-refactor-20260907
 Plan file: /Users/anthony/Projects/worship-duty-app/docs/PLAN-REFACTOR-REDESIGN.md
 Runner: coordinator
 Started: 2026-09-08T00:29Z
-Coordinator: current Codex task with coordinator_terra supervision
+Controller: GPT-6 Astra high, with optional Sol team leads and existing Terra supervision
+
+## Current delivery
+
+Production implementation starts immediately under [speed-delivery authority](decisions/20260908-speed-delivery.md). No prototype/stage approval or artificial lane/size cap. Use task-appropriate Luna effort or Gemini 3.8 Flash and necessary affected checks.
 
 ## Baselines
 
@@ -67,3 +71,40 @@ Coordinator: current Codex task with coordinator_terra supervision
 <!-- lane: LF3 state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-domain review: Sol-pass updated: 2026-09-08T04:19Z -->
 
 <!-- lane: LDP state: merged model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/real-preview-server review: Sol-pass updated: 2026-09-08T16:32Z -->
+
+## Current revision 2
+
+Read [service layout revision 2](decisions/20260908-service-layout-v2.md). LSU UI and LST verification run in isolated worktrees; LMC investigates manager contracts read-only. Root integrates sequentially.
+
+<!-- lane: LSU state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/service-layout-v2 review: pending updated: 2026-09-08 -->
+
+<!-- lane: LST state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/service-layout-tests-v2 review: pending updated: 2026-09-08 -->
+
+<!-- lane: LMC state: reviewed model: gpt-5.6-sol worktree: /Users/anthony/Projects/worship-refactor-worktrees/manager-contract-v2 review: pending updated: 2026-09-08 -->
+
+## Historical identity correction
+
+[LNR approved capsule](decisions/20260908-identity-correction.md). This nonvisual compatibility lane runs alongside the prototype, with root-only live execution after review.
+
+<!-- lane: LNR state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/identity-correction review: pending updated: 2026-09-08 -->
+
+## Foundation setlist state
+
+[LF4 capsule](decisions/20260908-setlist-domain.md) consolidates existing pure song status calculations without visible changes. It runs independently of local UI revision and backend identity correction.
+
+<!-- lane: LF4 state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-setlist-state review: pending updated: 2026-09-08 -->
+
+## Immediate production lanes
+
+Astra controls integration. Sol leads shared interface coordination. The five independent production writers started together at baseline b44bec7. Native runtime hard ceiling is 100 concurrent agents including root; no smaller project cap applies. Gemini uses its installed CLI runtime.
+
+<!-- lane: PM state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-member review: proportional updated: 2026-09-08 -->
+
+<!-- lane: PP state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-presider review: proportional updated: 2026-09-08 -->
+
+<!-- lane: PC state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-manage review: proportional updated: 2026-09-08 -->
+
+<!-- lane: PS state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-shell review: proportional updated: 2026-09-08 -->
+
+<!-- lane: PT state: running model: gemini-3.8-flash-medium worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-themes review: proportional updated: 2026-09-08 -->
+

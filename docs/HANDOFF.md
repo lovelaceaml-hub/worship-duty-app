@@ -1,5 +1,11 @@
 # LV Zion Worship Service — Handoff Document
 
+Current authority, 8 September 2026: production implementation is authorized now. Anthony removed prototype, six-stage and routine approval gates. Astra controls delivery; Sol may lead teams; Luna effort follows task needs and Gemini 3.8 Flash may implement. No artificial limit on useful parallelism or lane size. See runs/worship-refactor-20260907/decisions/20260908-speed-delivery.md. Earlier approval-pending text below is historical and superseded.
+
+
+Current work: service-layout revision 2 is in progress after Anthony requested date disclosures, weekday colors, compact duty tables, month-list Presider cards, a song workspace, department management and selectable themes. Previous verified candidate 02cd552 is privately backed up. Read docs/runs/worship-refactor-20260907/decisions/20260908-service-layout-v2.md. All six policy answers are recorded in the revision decision. Production UI approval remains pending. LNR builds the authorized historical correction safeguards, and LF4 consolidates pure song status rules without visible changes.
+
+
 Current local design revision: Anthony requested a broader palette, shared month calendars, grouped personal duties, prominent header member selection and a simpler Presider workspace. See [acceptance and ownership](runs/worship-refactor-20260907/decisions/20260908-calendar-redesign.md). The local revision is integrated and verified. LDU and LVC are frozen; native Sol high review passed. [Current fictional references](design/prototype/open-bulletin/screenshots/calendar-20260908/README.md) and [verification receipts](runs/worship-refactor-20260907/research/calendar-redesign/) define the candidate. Production UI approval remains pending.
 
 Local preview update, 8 September 2026: Anthony requested real information after identifying repeated team rows. The duplication is corrected. A separate loopback preview at http://127.0.0.1:8100/?screen=home reads current allowlisted records into memory, with mutations disabled and no production client initialization. Source and test artifacts contain no real records. The local-preview correction passed native Sol review3, the separate browser delta review, fictional phone/desktop checks and actual read-only smoke. Source commit 2c4c24b is privately backed up. Complete prototype approval remains pending.

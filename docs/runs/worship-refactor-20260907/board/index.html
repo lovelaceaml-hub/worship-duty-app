@@ -247,7 +247,7 @@
     <dl>
       <dt>Plan</dt><dd class="mono">/Users/anthony/Projects/worship-duty-app/docs/PLAN-REFACTOR-REDESIGN.md</dd>
       <dt>Runner</dt><dd>coordinator</dd>
-      <dt>Coordinator</dt><dd>current Codex task with coordinator_terra supervision</dd>
+      <dt>Coordinator</dt><dd>pending</dd>
     </dl>
 
       <table class="baselines-table">
@@ -260,8 +260,8 @@
 
   <div class="lanes-wrap">
     <div class="lanes-scroll">
-      <div class="lanes-inner" style="min-width: 3200px;">
-        <div class="lanes-row" style="grid-template-columns: repeat(16, 1fr);">
+      <div class="lanes-inner" style="min-width: 5200px;">
+        <div class="lanes-row" style="grid-template-columns: repeat(26, 1fr);">
 
     <div class="lane-col " data-lane="L0">
       <div class="lane-card state-reviewed">
@@ -312,6 +312,24 @@
           <dt>Review</dt><dd>Sol-pass</dd>
           <dt>Depends on</dt><dd>LF2</dd>
           <dt>Updated</dt><dd>2026-09-08T04:19Z</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LF4">
+      <div class="lane-card state-unknown">
+        <div class="lane-head">
+          <span class="lane-id">LF4</span>
+          <span class="lane-state">ready-for-review</span>
+        </div>
+        <h3 class="lane-title">Setlist domain extraction</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/foundation-setlist-state</dd>
+          <dt>Review</dt><dd>pending, root-owned native gpt-5.6-sol high</dd>
+          <dt>Depends on</dt><dd>LF3</dd>
+          <dt>Updated</dt><dd>2026-09-08T21:47Z</dd>
         </dl>
 
       </div>
@@ -550,6 +568,168 @@
 
       </div>
     </div>
+
+    <div class="lane-col " data-lane="LSU">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">LSU</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Service list and song workspace</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/service-layout-v2</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LST">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">LST</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Service layout fictional verification</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/service-layout-tests-v2</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>LSU</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LMC">
+      <div class="lane-card state-reviewed">
+        <div class="lane-head">
+          <span class="lane-id">LMC</span>
+          <span class="lane-state">reviewed</span>
+        </div>
+        <h3 class="lane-title">Manager contract critique</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-sol</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/manager-contract-v2</dd>
+          <dt>Review</dt><dd>controller-adjudicated</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LNR">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">LNR</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">LNR</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/identity-correction</dd>
+          <dt>Review</dt><dd>pending</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="PM">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">PM</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Production Member</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/production-member</dd>
+          <dt>Review</dt><dd>proportional controller review</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="PP">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">PP</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Production Presider</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/production-presider</dd>
+          <dt>Review</dt><dd>proportional controller review</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="PC">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">PC</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Production Manage</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/production-manage</dd>
+          <dt>Review</dt><dd>proportional controller review</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="PS">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">PS</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Production shell</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/production-shell</dd>
+          <dt>Review</dt><dd>proportional controller review</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="PT">
+      <div class="lane-card state-running">
+        <div class="lane-head">
+          <span class="lane-id">PT</span>
+          <span class="lane-state">running</span>
+        </div>
+        <h3 class="lane-title">Production themes</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gemini-3.8-flash-medium</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/production-themes</dd>
+          <dt>Review</dt><dd>proportional controller review</dd>
+          <dt>Depends on</dt><dd>none</dd>
+          <dt>Updated</dt><dd>2026-09-08</dd>
+        </dl>
+
+      </div>
+    </div>
         </div>
 
 
@@ -588,9 +768,39 @@
         </div>
 
         <div class="decision-card">
+          <h4>Historical identity correction</h4>
+          <p>Owner authorized one title correction across all existing and historical Worship Service records. Exact identity values remain only in the owner conversation and provider data, never source, fixtures, commands, filenames, logs, screenshots or board.</p>
+          <span class="file-tag mono">20260908-identity-correction.md</span>
+        </div>
+
+        <div class="decision-card">
+          <h4>Immediate production interface contract</h4>
+          <p>Owner authorized production implementation without design/prototype/stage gates. Astra controller, Sol team lead, Luna task effort, Gemini3.8Flash implementation. All production lanes start concurrently. Read-first canonical run INDEX: /Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/INDEX.md. Latest detailed requirements: /Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/decisions/20260908-service-layout-v2.md. No real personal data in new source/tests/docs.</p>
+          <span class="file-tag mono">20260908-production-contract.md</span>
+        </div>
+
+        <div class="decision-card">
           <h4>Local real-data preview authority</h4>
           <p>Anthony reported duplicated team assignments in the Home prototype and requested: &quot;I need to see it with real information and data&quot;. This authorizes local display of current Worship Service records for design review. It does not approve the complete prototype or authorize production interface changes.</p>
           <span class="file-tag mono">20260908-real-data-preview.md</span>
+        </div>
+
+        <div class="decision-card">
+          <h4>Service layout revision 2</h4>
+          <p>Authorized local prototype revision from Anthony on 8 September 2026. Baseline: 02cd552. Production implementation is authorized by the later speed-delivery decision. Do not store real manager names or records in source, fixtures, logs, screenshots or board. All six initial questions are answered below. No design or prototype approval gate applies; use necessary affected checks.</p>
+          <span class="file-tag mono">20260908-service-layout-v2.md</span>
+        </div>
+
+        <div class="decision-card">
+          <h4>Setlist domain extraction</h4>
+          <p>The approved Foundation lane continues with one nonvisual increment while the revised prototype is completed. The planner_sol max critic approved the source-grounded capsule on 8 September 2026.</p>
+          <span class="file-tag mono">20260908-setlist-domain.md</span>
+        </div>
+
+        <div class="decision-card">
+          <h4>Delivery authority: 8 September 2026</h4>
+          <p>Anthony explicitly removed prototype, design-stage and routine approval gates and authorized production implementation now. This decision supersedes conflicting earlier project, plan, skill and lane instructions. Design references guide implementation; they are not prerequisites or a separate permission step. Do not wait for all six design stages, another direction selection, full-prototype approval, a frozen design milestone or an extra production confirmation.</p>
+          <span class="file-tag mono">20260908-speed-delivery.md</span>
         </div>
     </section>
     <section class="event-log">
@@ -820,9 +1030,27 @@
         </li>
 
         <li class="log-entry">
+          <span class="file-tag mono">20260908-LSU-path-recovery.md</span>
+          <strong>LSU path recovery</strong>
+          <p>Controller detected an unintended worktree-root index.html edit before integration. LSU was interrupted. Root verified the intended prototype target and other production source were unchanged, moved the candidate HTML into the assigned prototype folder and restored the accidental root edit exactly from baseline 02cd552. Git status then showed only the owned prototype index. LSU resumed with full absolute paths and a parent-path assertion before every write. Canonical production source and all live services were unaffected.</p>
+        </li>
+
+        <li class="log-entry">
           <span class="file-tag mono">20260908-calendar-preview-visible.md</span>
           <strong>Revised local candidate visible</strong>
           <p>LDU source candidate is integrated into canonical prototype browser files. The existing loopback8100 preview now serves it with current records in memory only. Controller passed aggregate phone/desktop checks, and opened the preview through Codex (queued, not proof of user viewing). Native source review1 returned three accepted findings; final correction and LVC interaction checks continue. No production deployment, database write or full-prototype approval occurred.</p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">20260908-production-start.md</span>
+          <strong>Production implementation started</strong>
+          <p>Owner removed prototype/stage approval gates and artificial parallelism limits. Astra controller, Sol interface lead, Luna medium Member lane, Luna high Presider/Manage/shell lanes, Gemini3.8Flash medium themes lane. Five isolated worktrees at b44bec7 start concurrently. Global shared skill edit was rejected by automatic approval review as exceeding this project; authoritative project overrides are applied, other projects unchanged.</p>
+        </li>
+
+        <li class="log-entry">
+          <span class="file-tag mono">20260908-service-layout-v2-start.md</span>
+          <strong>Revision 2 started</strong>
+          <p>Previous reviewed candidate 02cd552 is present on the verified private remote feature branch. LSU and LST are active with disjoint ownership; LMC is read-only. Manager policy answers remain pending. No production writes or UI release.</p>
         </li>
 
         <li class="log-entry">

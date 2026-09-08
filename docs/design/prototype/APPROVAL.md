@@ -1,5 +1,11 @@
 # Complete prototype approval record
 
+Current authority, 8 September 2026: production implementation is authorized now. Anthony removed prototype, six-stage and routine approval gates. Astra controls delivery; Sol may lead teams; Luna effort follows task needs and Gemini 3.8 Flash may implement. No artificial limit on useful parallelism or lane size. See /Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/decisions/20260908-speed-delivery.md. Earlier approval-pending text below is historical and superseded.
+
+
+Current candidate status: revision 2 is in development in response to Anthony's detailed service and song layouts. Prior calendar references are historical evidence, not approval of this new revision. All six policy clarifications are settled: existing passcodes/names, supplied manager mapping, proposal then explicit assignment save, historical title correction, service disclosure cutoff at 30 minutes, and custom choir titles stored only on a service. See the revision decision for the sanitized record.
+
+
 Candidate: original Design B, Open Bulletin, with smaller oversized typography. The separate original directions and type-refinement anchor are retained unchanged.
 
 Status: awaiting Anthony's full-prototype approval. The user's "Just move on" authorized routine correction work; it did not explicitly approve this complete candidate. No production interface release is authorized by this record alone.

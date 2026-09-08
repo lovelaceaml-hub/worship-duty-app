@@ -1,10 +1,10 @@
 # Screen architecture decision
 
-Planner Sol max read-only critique, task WR-UI-ARCH-2, accepted on 7 September 2026. Foundation 3 can start without visual changes. Production UI waits for the approved, committed compact B prototype.
+Planner Sol max read-only critique, task WR-UI-ARCH-2, accepted on 7 September 2026. Foundation 3 can start without visual changes. Production UI starts immediately under the 8 September speed-delivery authority.
 
 ## Shared seam
 
-Keep app.js as the composition root and app-lifetime owner of authoritative state/subscriptions. After prototype approval, one isolated integration writer owns app.js, index.html, src/core/screen-host.js, src/ui/** and shared shell services. Freeze createScreen(deps) returning mount(root, model, meta), update(model, meta), unmount(meta). Inject frozen semantic dispatch/effect/formatter dependencies. Events contain type and primitive-ID payloads, never raw Firebase or DOM nodes. Reasons: navigation, data, action, resume. Presider navigation has a one-shot token so snapshots cannot reopen another workspace.
+Keep app.js as the composition root and app-lifetime owner of authoritative state/subscriptions. In parallel with screen writers, one isolated integration writer owns app.js, index.html, src/core/screen-host.js, src/ui/** and shared shell services. Freeze createScreen(deps) returning mount(root, model, meta), update(model, meta), unmount(meta). Inject frozen semantic dispatch/effect/formatter dependencies. Events contain type and primitive-ID payloads, never raw Firebase or DOM nodes. Reasons: navigation, data, action, resume. Presider navigation has a one-shot token so snapshots cannot reopen another workspace.
 
 Cache one instance per screen. Mount only on activation; same-screen snapshots preserve root identity. Unmount removes local listeners/observers but never stops app or song subscriptions. No pagehide teardown. Preserve draft text, caret, focus identity and owned scroll on input; queue background reconciliation while an editable is focused and reconcile on focusout. Do not retain stale service references because snapshots replace objects. Header-to-home may request scroll top; background refreshes preserve scroll.
 
@@ -29,4 +29,4 @@ Keep song-lib.js/song-seed.js importer surfaces, Firebase rules/functions, data 
 
 ## Review and delivery
 
-Foundation 3 runs now. Shared lifecycle seam follows approved prototype, then the three UI lanes run independently. Integrate coherent screens sequentially and retire only their replaced legacy handlers. Accepted lane findings are corrected in integration; cumulative integration review determines completion, per the approved plan. Native Sol reviews and final Opus high through the required isolated launcher remain required. No direct Claude invocation or production UI approval is implied by this architecture decision.
+Foundation 3 runs now. Shared lifecycle integration and the three UI lanes run concurrently against a quick agreed interface. Integrate coherent screens sequentially and retire only their replaced legacy handlers. Accepted lane findings are corrected in integration; cumulative integration review determines completion, per the approved plan. Native Sol reviews and final Opus high through the required isolated launcher remain required. No direct Claude invocation or production UI approval is implied by this architecture decision.

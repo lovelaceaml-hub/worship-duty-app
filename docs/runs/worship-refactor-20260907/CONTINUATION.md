@@ -1,5 +1,11 @@
 # Controller continuation checkpoint
 
+Current authority, 8 September 2026: production implementation is authorized now. Anthony removed prototype, six-stage and routine approval gates. Astra controls delivery; Sol may lead teams; Luna effort follows task needs and Gemini 3.8 Flash may implement. No artificial limit on useful parallelism or lane size. See /Users/anthony/Projects/worship-duty-app/docs/runs/worship-refactor-20260907/decisions/20260908-speed-delivery.md. Earlier approval-pending text below is historical and superseded.
+
+
+Current active work: service-layout revision 2. Baseline 02cd552 is committed and verified on the private remote. LSU and LST run in isolated worktrees with LMC read-only contract critique. See decisions/20260908-service-layout-v2.md. Complete this local revision and its required review before presenting it. Do not deploy production UI or mutate real manager/name data from this checkpoint.
+
+
 ## Latest checkpoint: calendar redesign verified
 
 Anthony requested broader layout and color changes, shared month calendars, prominent header name selection, grouped personal duties, a simpler Presider workspace and department-first Manage. This local revision is complete, pending Anthony's full-prototype approval for production. The canonical and fictional8099 previews now use the same updated browser source. Current-records8100 remains memory-only and read-only. All fully enabled checks, final reference Axe views, real aggregate smoke and native Sol high review2 passed. Source hashes are frozen in research/calendar-redesign/source-manifest.json. Both new Luna writers and their coordinator are terminal; no test server remains. Root-owned8100,8099,8098 and8097 previews are preserved.
