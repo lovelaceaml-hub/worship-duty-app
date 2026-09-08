@@ -260,8 +260,8 @@
 
   <div class="lanes-wrap">
     <div class="lanes-scroll">
-      <div class="lanes-inner" style="min-width: 2400px;">
-        <div class="lanes-row" style="grid-template-columns: repeat(12, 1fr);">
+      <div class="lanes-inner" style="min-width: 2600px;">
+        <div class="lanes-row" style="grid-template-columns: repeat(13, 1fr);">
 
     <div class="lane-col " data-lane="L0">
       <div class="lane-card state-reviewed">
@@ -354,18 +354,36 @@
     </div>
 
     <div class="lane-col " data-lane="LD">
-      <div class="lane-card state-reviewed">
+      <div class="lane-card state-running">
         <div class="lane-head">
           <span class="lane-id">LD</span>
-          <span class="lane-state">reviewed</span>
+          <span class="lane-state">running</span>
         </div>
         <h3 class="lane-title">Design (approval pending)</h3>
         <dl class="lane-meta">
           <dt>Model</dt><dd>gpt-5.6-luna</dd>
           <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/design</dd>
-          <dt>Review</dt><dd>Sol-pass</dd>
+          <dt>Review</dt><dd>correction-pending</dd>
           <dt>Depends on</dt><dd>none</dd>
-          <dt>Updated</dt><dd>2026-09-08T15:22Z</dd>
+          <dt>Updated</dt><dd>2026-09-08T15:35Z</dd>
+        </dl>
+
+      </div>
+    </div>
+
+    <div class="lane-col " data-lane="LDP">
+      <div class="lane-card state-landed">
+        <div class="lane-head">
+          <span class="lane-id">LDP</span>
+          <span class="lane-state">landed</span>
+        </div>
+        <h3 class="lane-title">Local read-only preview server</h3>
+        <dl class="lane-meta">
+          <dt>Model</dt><dd>gpt-5.6-luna</dd>
+          <dt>Worktree</dt><dd class="mono">/Users/anthony/Projects/worship-refactor-worktrees/real-preview-server</dd>
+          <dt>Review</dt><dd>Sol-retry</dd>
+          <dt>Depends on</dt><dd>LD</dd>
+          <dt>Updated</dt><dd>2026-09-08T16:24Z</dd>
         </dl>
 
       </div>
@@ -507,6 +525,12 @@
           <h4>Local design directions</h4>
           <p>Anthony&#39;s exact correction: &quot;no need to use stitch.&quot;</p>
           <span class="file-tag mono">20260907-local-design.md</span>
+        </div>
+
+        <div class="decision-card">
+          <h4>Local real-data preview authority</h4>
+          <p>Anthony reported duplicated team assignments in the Home prototype and requested: &quot;I need to see it with real information and data&quot;. This authorizes local display of current Worship Service records for design review. It does not approve the complete prototype or authorize production interface changes.</p>
+          <span class="file-tag mono">20260908-real-data-preview.md</span>
         </div>
     </section>
     <section class="event-log">

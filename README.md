@@ -6,6 +6,8 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 
 ## Quick links
 
+- **Local design review:** [Current records, view-only](http://127.0.0.1:8100/?screen=home). This local preview reads current assignments, saved song plans, requests and rosters into memory. It cannot save changes. The fictional prototype remains available for deterministic tests and design references. [Local preview notes](docs/design/prototype/REAL-DATA-PREVIEW.md).
+
 - **Active refactor:** [Approved plan](docs/PLAN-REFACTOR-REDESIGN.md), [design directions](docs/design/directions/index.html), and [lane board](docs/runs/worship-refactor-20260907/board/index.html). The compatible Foundation 3 and confirmation fix are live at stamp `20260908041730`. State, subscription lifecycle, and member/coordinator selectors are extracted and reviewed. Anthony selected original Open Bulletin (direction B) with smaller display text; the compact layout draft was rejected. The [complete clickable prototype](docs/design/prototype/open-bulletin/index.html) is available with [phone and desktop references](docs/design/prototype/open-bulletin/screenshots/) and [state coverage](docs/design/prototype/open-bulletin/STATE-COVERAGE.md). Prototype review and the committed interaction checks passed. Anthony's full-prototype approval is pending.
 
 - **Website:** https://lv-zion-duties.web.app — share this link with members

@@ -12,4 +12,6 @@ Verification includes syntax checks, backend contract tests, tests/release/*.tes
 
 Source and sanitized docs use the existing private GitHub repository after private visibility is verified. New design artifacts use fictional content only. Never publish source seeds, app configuration records, credentials, or member screenshots in the lane board. Review and backup gates must pass before calling work complete.
 
+Local design-review exception authorized by Anthony on 8 September 2026: scripts/real-preview.cjs may read current allowlisted Worship Service records into memory and serve a loopback-only view at port 8100. Editing is disabled. Use aggregate-only checks, with no real data files, screenshots, logs, reviewer fixtures or published board content. The ordinary fictional QA suite and production interface approval gate remain unchanged. See docs/design/prototype/REAL-DATA-PREVIEW.md and the run decision for scope.
+
 Foundation boot order is explicit in index.html. Load every real src module before app.js; the subscription API is a required dependency checked before Firebase initialization. Keep full-schedule ownership, auth-independent reads, auth-sequenced host writes, and raw importer-compatible song writes unchanged. State readiness is separate from cached state. A partial subscription startup must cancel earlier listeners and permit restart.

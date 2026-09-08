@@ -1,6 +1,6 @@
 # Controller continuation checkpoint
 
-8 September 2026. The full refactor and redesign plan is not complete. The current independent work is complete; the next required product decision is Anthony's approval of the complete prototype.
+8 September 2026. Latest user steering: correct duplicated team rows and provide a real-data preview. The local GET-only preview is running at http://127.0.0.1:8100/?screen=home and holds records only in memory. Do not capture or commit its real data. Full-prototype approval remains pending. The full refactor and redesign plan is not complete. The real-data preview correction is integrated; native review retry and source backup are being finalized. Anthony's full-prototype approval remains the next product decision after reviewing these corrections.
 
 ## Authority and next action
 

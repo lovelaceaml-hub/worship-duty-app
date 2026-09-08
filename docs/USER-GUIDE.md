@@ -1,6 +1,6 @@
 # Welcome to LV Zion Worship Service
 
-Current version note (7 September 2026): the compatible Foundation update keeps the existing member and coordinator workflows. Original Open Bulletin with smaller display text is selected. The complete clickable prototype is in progress and awaits approval. Continue using the instructions below.
+Current version note (8 September 2026): the compatible Foundation update keeps the existing member and coordinator workflows. Original Open Bulletin with smaller display text is selected. The complete clickable prototype awaits approval. Anthony can review [current records in the local view-only prototype](http://127.0.0.1:8100/?screen=home): choose a name for personal duties, or open Presider with no name selected to browse saved plans. Edits and notifications are disabled in this local view. Continue using the instructions below.
 
 A simple guide to using the app — no technical background needed.
 
