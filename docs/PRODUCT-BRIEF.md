@@ -7,9 +7,9 @@ This local prototype gives members, presiders, and schedule coordinators a click
 ## Product moments
 
 1. Home shows the selected member, My next duty, the nearest expanded service, later services that open on request, real department labels, and personal highlighting.
-2. My Duties filters assignments by department and date, shows past services when enabled, opens a local calendar text preview, and submits a fictional change request with request history.
+2. My Duties filters assignments by department and date, shows past services when enabled, simulates calendar subscription and feed-link copying alongside a local calendar snapshot, and submits a fictional change request with request history.
 3. Presider is available only for an actual Presider assignment. It switches among the selected member's services, shows the canonical outline, keeps duplicate song occurrences independent, excludes Glory and Thanks from preparation duration, and supports song search, details, history, add, remove, reorder, save, retry, confirm, changed-after-confirmation, runsheet, copy, sung, undo, backfill, and deletion.
-4. Manage opens with pending requests and assignment editing. People supports add, rename, remove with future-duty impact confirmation, and department rosters. Planning derives conflicts, exemptions, workload, gaps, and a local suggestion. Sync and Settings cover the fictional sheet URL, local backup, restore, reset, human feature labels, passcode changes, and locks.
+4. Manage opens with pending requests and assignment editing. People supports add, rename, name-consolidation preview and confirmation, remove with future-duty impact confirmation, and department rosters. Planning derives conflicts, exemptions, workload, gaps, and a local suggestion. Sync and Settings cover the fictional sheet URL, strictly validated fictional backup imports, confirmed restore and reset, human feature labels, passcode changes, and route-wide locks.
 5. Empty, loading, offline, error, save-failure, and success routes provide visible recovery results through the review toolbar.
 
 ## Fixed fictional sample

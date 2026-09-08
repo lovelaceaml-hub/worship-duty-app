@@ -27,9 +27,10 @@ From /Users/anthony/Projects/worship-refactor-worktrees/design:
 
     node --check docs/design/prototype/open-bulletin/app.js
     node --check docs/design/prototype/open-bulletin/fixtures.js
+    node docs/runs/worship-refactor-20260907/research/design/prototype/correction-2/verify-prototype.cjs
     node docs/design/prototype/contract/scripts/design-contract.mjs
 
-The screenshot and browser checks use the installed Playwright package from /Users/anthony/Projects/worship-duty-app/node_modules/playwright. The prototype server is the existing loopback server on port 8099.
+The correction receipt uses the installed Playwright package from /Users/anthony/Projects/worship-duty-app/node_modules/playwright and the local axe package from /Users/anthony/Projects/worship-duty-app/node_modules/@axe-core/playwright. It installs loopback-only request routes before creating each page, uses fictional fixtures, and writes its results to /Users/anthony/Projects/worship-refactor-worktrees/design/docs/runs/worship-refactor-20260907/research/design/prototype/correction-2/results.json. The prototype server is the existing loopback server on port 8099.
 
 ## Scope and approval
 

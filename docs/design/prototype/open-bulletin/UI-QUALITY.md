@@ -4,7 +4,27 @@
 
 This receipt covers the local fictional prototype at http://127.0.0.1:8099/open-bulletin/index.html. The existing controller server was observed on loopback port 8099 with PID 92999, session 19894. No production source or external service was used.
 
-## Browser and screenshot verification
+## Correction 2 browser verification
+
+Command:
+
+    node docs/runs/worship-refactor-20260907/research/design/prototype/correction-2/verify-prototype.cjs
+
+The owned check used the installed Playwright package from /Users/anthony/Projects/worship-duty-app/node_modules/playwright and the local axe package from /Users/anthony/Projects/worship-duty-app/node_modules/@axe-core/playwright. Each browser context installed a route before page creation and aborted every non-loopback request. The check used fictional September 2026 fixtures only and did not restart the server.
+
+Results:
+
+- 9 of 9 bounded correction checks passed.
+- Phone search opened as a dialog, focused search, kept Tab inside the panel, returned focus after Escape and Close, and preserved the selected service and query.
+- Desktop retained the side library. Calendar feed subscription, reserved example URL copy, and one-time snapshot stayed local with no new page.
+- Name impact preview, Cancel, confirmed canonical consolidation, strict fictional backup rejection and acceptance, distinct reset and restore confirmations, and Cancel state preservation passed.
+- Site lock remained active after header navigation and Return Home until the fictional passcode was entered.
+- Planning conflicts, gaps, suggestions, workload, and service count followed the selected range.
+- Sung history passed duplicate occurrence, repeated mark idempotence, service date, cross-service undo, count and last date recomputation, and recreate-outline checks.
+- The open phone song panel and the checked desktop and phone views passed axe checks after the panel semantic fix. No page errors, console errors, or non-loopback requests were recorded.
+- 9 changed-view screenshots were captured at scroll position zero. Their exact paths are recorded in /Users/anthony/Projects/worship-refactor-worktrees/design/docs/runs/worship-refactor-20260907/research/design/prototype/correction-2/results.json.
+
+## Baseline browser and screenshot verification
 
 Command:
 

@@ -1,6 +1,7 @@
 /* Fictional September 2026 fixtures for the local prototype only. */
 (function exposeFixtures(root) {
-  const members = ["B. Daniel Reed", "S. Mira Lane", "B. Elias Park"];
+  const variantName = "B. Daniel R.";
+  const members = ["B. Daniel Reed", "S. Mira Lane", "B. Elias Park", variantName];
 
   const categories = [
     { name: "Worship", duties: ["Presider", "Sermon", "Prayer of Thanks", "Closing Prayer"] },
@@ -19,7 +20,7 @@
     "Usher #1": "B. Elias Park", "Usher #2": "B. Daniel Reed", "Lobby Security": "S. Mira Lane",
     "Lobby Desk #1": "B. Daniel Reed", "Lobby Desk #2": "B. Elias Park", "Translation #1": "S. Mira Lane", "Translation #2": "B. Elias Park",
     "Media Booth #1": "B. Elias Park", "Media Booth #2": "B. Daniel Reed", "Parking #1": "B. Daniel Reed", "Parking #2": "S. Mira Lane",
-    "Parking #3": "B. Elias Park", "Offering #1": "S. Mira Lane", "Offering #2": "B. Daniel Reed", "Offering #3": "B. Elias Park"
+    "Parking #3": "B. Elias Park", "Offering #1": "S. Mira Lane", "Offering #2": "B. Daniel Reed", "Offering #3": "B. Daniel R."
   };
 
   const services = [
@@ -93,5 +94,20 @@
     choirSong: true, songPicker: true, pastServices: true, emptyDuties: false, conflictWarnings: true, sheetSync: true, changeRequests: true
   };
 
-  root.WorshipPrototypeFixtures = Object.freeze({ members, categories, services, songs, setlists, requests, departments, songStats, features, passcodes: { editor: "2468", site: "1357" } });
+  root.WorshipPrototypeFixtures = Object.freeze({
+    members,
+    categories,
+    services,
+    songs,
+    setlists,
+    requests,
+    departments,
+    songStats,
+    features,
+    nameMap: { [variantName]: "B. Daniel Reed" },
+    backupMarker: "open-bulletin-fictional-backup",
+    fixtureId: "september-2026-fictional",
+    fixtureSignature: "open-bulletin-september-2026-v2",
+    passcodes: { editor: "2468", site: "1357" }
+  });
 })(window);

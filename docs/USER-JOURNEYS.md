@@ -10,7 +10,7 @@ The member sees the selected name, reads My next duty above the schedule, and us
 
 ## 2. Review the service lineup
 
-On Home, the nearest service is expanded with real department headings and duty rows. Later services start closed and open with data-action="toggle-service". The selected member is marked You with pale blue highlighting. The department filter changes the visible rows. The calendar action creates an actual local calendar text preview in a read-only text area. Copy calendar uses the same visible text and attempts the browser clipboard only as a local convenience.
+On Home, the nearest service is expanded with real department headings and duty rows. Later services start closed and open through native disclosure controls. The selected member is marked You with pale blue highlighting. The department filter changes the visible rows. The calendar action opens a local subscription simulation with a fictional feed link, Copy link, and a separate calendar snapshot. Copy actions attempt the browser clipboard as a local convenience. No real subscription or external request is made.
 
 ## 3. Request a duty change
 
@@ -22,17 +22,17 @@ The member chooses Request change for a personal role, enters an optional note, 
 
 Route: ?screen=presider.
 
-The Presider page is reachable only when the selected member has an actual Presider assignment. It switches among those services and shows Glory song, Opening prayer, Thanks song where applicable, Prayer of thanks, Choir song, Sermon, and Closing prayer. Preparation duration excludes Glory and Thanks. The song library supports search, category filters, details, history, Add, Up, Down, and Remove.
+The Presider page is reachable only when the selected member has an actual Presider assignment. It switches among those services and shows Glory song, Opening prayer, Thanks song where applicable, Prayer of thanks, Choir song, Sermon, and Closing prayer. Preparation duration excludes Glory and Thanks. The song library supports search, category filters, details, history, Add, Up, Down, and Remove. It remains beside the outline on desktop. On phones, Search songs opens a panel with focus management, an Escape action, and focus return to the opener.
 
 ## 5. Save, confirm, and record service history
 
-Save changes enters Saving and then Saved locally. The review route ?screen=presider&review=save-failure enters Save failed and Retry save returns to Saved locally. Confirm songs enters Confirmed. Editing a confirmed outline enters Changed after confirmation until it is confirmed again. Mark sung updates song counts and history for every occurrence, and Undo sung restores the prior counts. Runsheet and Copy outline expose real local text. Backfill adds a fictional history entry, and Delete setlist requires a visible confirmation.
+Save changes enters Saving and then Saved locally. The review route ?screen=presider&review=save-failure enters Save failed and Retry save returns to Saved locally. Confirm songs enters Confirmed. Editing a confirmed outline enters Changed after confirmation until it is confirmed again. Mark sung records each song once per service, even when the outline repeats it. Repeating Mark sung is idempotent. Undo sung affects the selected service and recomputes counts and the last-sung date from remaining history. Runsheet and Copy outline expose real local text. Backfill adds a fictional history entry. History deletion recomputes song statistics. Delete setlist requires a visible confirmation and leaves a Recreate outline recovery action.
 
 ## 6. Coordinate the roster
 
 Route: ?screen=manage.
 
-Manage starts with Assignments and the pending request band. The coordinator can edit assignment selects, add a blank service, edit date, time, label, worship type, notes, and choir song, acknowledge or reopen derived conflicts, delete a service with confirmation, add a person, rename a person, remove a person after future-duty impact confirmation, and edit department rosters. Planning shows derived conflict, workload, and coverage data across its window choices and applies a concrete suggestion. Sync edits the fictional Sheet URL, reports syncing and warning results, exports a local backup, imports a local JSON file, restores the sample, and resets local changes. Settings uses human feature labels, changes both fictional passcodes, and locks and unlocks the editor or site.
+Manage starts with Assignments and the pending request band. The coordinator can edit assignment selects, add a blank service, edit date, time, label, worship type, notes, and choir song, acknowledge or reopen derived conflicts, delete a service with confirmation, add a person, rename a person, preview and confirm name consolidation, remove a person after future-duty impact confirmation, and edit department rosters. Planning scopes derived conflicts, workload, and coverage to the selected window and applies a concrete suggestion. Sync edits the fictional Sheet URL, reports syncing and warning results, exports a local backup, imports only a validated prototype-marked fictional JSON backup, and requires distinct confirmation before restoring the sample or resetting local changes. Settings uses human feature labels, changes both fictional passcodes, and locks and unlocks the editor or site. The site lock gates every route, including navigation and Return Home.
 
 ## 7. Recover from route states
 
