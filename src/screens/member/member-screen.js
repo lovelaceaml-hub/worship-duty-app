@@ -214,11 +214,9 @@
       var entries = dutyEntries(service, { only: only }), html = '', byDepartment = {};
       entries.forEach(function (entry) { (byDepartment[entry.department] || (byDepartment[entry.department] = [])).push(entry); });
       categories.forEach(function (category) {
-        var isWorship = category.name === 'Worship';
-        var choirSong = isWorship && deps.feature && deps.feature('choirSong') !== false && service.choirSong ? (typeof service.choirSong === 'string' ? service.choirSong : (service.choirSong.title || service.choirSong.label || 'Assigned')) : '';
-        if (!byDepartment[category.name] && !choirSong) return;
+        if (!byDepartment[category.name]) return;
         if (only && !isDepartmentSelected(only, category.name)) return;
-        html += '<section class="ws-department-section" data-department-section="' + esc(category.name) + '"><h3><span class="ws-dot" style="background:' + esc(category.color) + '"></span>' + esc(category.name) + '</h3>' + (byDepartment[category.name] ? byDepartment[category.name].map(homeRow).join('') : '') + (choirSong ? '<div class="ws-duty-row ws-choir-row"><span class="ws-duty-name">Choir song</span><span class="ws-duty-person">' + esc(choirSong) + '</span></div>' : '') + '</section>';
+        html += '<section class="ws-department-section" data-department-section="' + esc(category.name) + '"><h3><span class="ws-dot" style="background:' + esc(category.color) + '"></span>' + esc(category.name) + '</h3>' + (byDepartment[category.name] ? byDepartment[category.name].map(homeRow).join('') : '') + '</section>';
       });
       if (byDepartment.Other && (!only || isDepartmentSelected(only, 'Other'))) html += '<section class="ws-department-section" data-department-section="Other"><h3>Other</h3>' + byDepartment.Other.map(homeRow).join('') + '</section>';
       return html || '<p class="ws-muted">No assigned duties are listed.</p>';
@@ -269,7 +267,6 @@
       var filter = activeDepartmentFilter();
       if (!filter) return true;
       return filter.some(function (name) {
-        if (name === 'Worship' && deps.feature && deps.feature('choirSong') !== false && service.choirSong) return true;
         return dutyEntries(service, { only:name }).length > 0;
       });
     }

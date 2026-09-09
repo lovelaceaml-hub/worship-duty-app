@@ -149,3 +149,5 @@ Anthony's latest detailed service layouts and six settled policy answers are aut
 - 2026-09-08: Anthony requested full-width layouts, a name-only header, appearance in settings, centered navigation, explicit Presider/Manage subtabs, a single month schedule with multi-department dropdown, and a compact service-aware song workspace based on the restored live layout. WS3 and HM3 use Luna high; PS3 uses Sol high after earlier escalation. Work remains local pending explicit approval.
 
 - 2026-09-08 full-width local revision: WS3/HM3/PS3 integrated. One outer gutter, member-only header, Settings appearance, centered tabs, Home multiselect and connected month, month-scoped duty tables, Manage sections and compact Presider tabs. No deploy or provider write. Native Sol review interrupted by usage limit, pending. User test approval and full-plan completion remain open.
+
+- 2026-09-08 owner correction: remove choir song details from Home only. Presider and choir management remain unchanged. Local preview only.

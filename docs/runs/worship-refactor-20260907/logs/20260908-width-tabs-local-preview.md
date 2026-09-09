@@ -9,3 +9,5 @@ Verification passed: fictional full journeys at390 and1440 pixels; separate430/1
 The native Sol review was launched against an isolated patch. It was interrupted by the provider usage limit before a verdict. No review pass is claimed and no review gate was waived. This is a privately backed-up local test candidate, not a release or full-plan completion. Anthony can review the local interface while that review remains pending. Full cumulative review and the historical identity correction remain open.
 
 Implemented-by: Codex/Luna high and Sol high, with Astra integration. Reviewed-by: Astra controller checks; native Sol pending due provider usage limit.
+
+Owner follow-up: Home now omits choir song titles. The focused fictional browser check passed: Home has no choir title while Presider retains it. Syntax and diff checks passed. No deployment or data changes. This tiny follow-up used Astra integration and controller inspection; the broader native review remains pending as above.

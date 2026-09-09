@@ -1372,7 +1372,7 @@ async function exerciseViewport(serverBaseURL, browser, name, viewport) {
   await page.locator('[data-department-section="Worship"]').first().waitFor({ timeout: 10000 });
   const filteredRows = await page.locator('[data-department-section="Worship"] [data-department-row]').count();
   assert.ok(filteredRows > 0, name + ': Home department filter must retain Worship rows');
-  assert.equal(await page.locator('[data-department-section="Worship"]').filter({ hasText: 'Fixture Choir Song' }).count() > 0, true, name + ': choir song must appear within Worship');
+  assert.equal(await page.locator('[data-member-view="home"]').filter({ hasText: 'Fixture Choir Song' }).count(), 0, name + ': Home must omit choir song details');
   await filter.locator('input[data-department="All"]').check();
   assert.equal(await filter.locator('input[data-department="Worship"]').isChecked(), false, name + ': All must clear individual department selections');
   await filter.locator('summary').click();

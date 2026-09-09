@@ -45,7 +45,7 @@ roster controls, and Blue, Sage, and Sand themes with one layout. It remains a
 candidate for explicit local user testing. It must not be described as
 deployed or as the current production workflow.
 
-The current local revision uses the available page width. Member selection is the only header control; Appearance is under the footer Settings button. Home has one date-grouped month schedule and a department dropdown that supports multiple choices, with All selected initially. Choir songs appear within Worship. My Duties uses the selected month and grouped duty rows. Manage opens to Schedule after the department choice, with Roster and the other tools in separate tabs. Presider uses compact service rows and visible sections for Services, Select Songs, Order of Worship, Library, and Insights. This describes the local candidate only.
+The current local revision uses the available page width. Member selection is the only header control; Appearance is under the footer Settings button. Home has one date-grouped month schedule and a department dropdown that supports multiple choices, with All selected initially. Home omits choir song titles; Presider retains choir details. My Duties uses the selected month and grouped duty rows. Manage opens to Schedule after the department choice, with Roster and the other tools in separate tabs. Presider uses compact service rows and visible sections for Services, Select Songs, Order of Worship, Library, and Insights. This describes the local candidate only.
 
 Root can start this read-only preview with:
 
