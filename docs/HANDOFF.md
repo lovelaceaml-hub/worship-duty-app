@@ -45,6 +45,8 @@ roster controls, and Blue, Sage, and Sand themes with one layout. It remains a
 candidate for explicit local user testing. It must not be described as
 deployed or as the current production workflow.
 
+The current local revision uses the available page width. Member selection is the only header control; Appearance is under the footer Settings button. Home has one date-grouped month schedule and a department dropdown that supports multiple choices, with All selected initially. Choir songs appear within Worship. My Duties uses the selected month and grouped duty rows. Manage opens to Schedule after the department choice, with Roster and the other tools in separate tabs. Presider uses compact service rows and visible sections for Services, Select Songs, Order of Worship, Library, and Insights. This describes the local candidate only.
+
 Root can start this read-only preview with:
 
 ```sh
@@ -111,3 +113,7 @@ deployment. Historical title correction, further
 function changes, and further data changes remain paused.
 
 The local preview simulates manager visibility so each department can be inspected. This does not represent or modify production manager access.
+
+## Full-width preview verification
+
+The revised local interface passed guarded fictional phone and desktop journeys, read-only preview checks, and current-record aggregate smoke checks with no writes, browser errors, external browser requests, or persistent records. The narrow native Sol review was interrupted by the provider usage limit and remains pending. The test candidate can be inspected locally, but this checkpoint is not a completed release or full-plan completion.

@@ -20,7 +20,7 @@
     const d = deps || {};
     const screen = {
       department: '',
-      panel: 'department',
+      panel: 'schedule',
       month: '',
       rosterMember: '',
       proposals: null,
@@ -418,13 +418,15 @@
     function panelTabs(state) {
       const pending = (state.requests || []).filter(item => item.status === 'pending').length;
       return [
-        ['department', 'Department'],
+        ['schedule', 'Schedule'],
+        ['roster', 'Roster'],
         ['planning', 'Planning'],
         ['requests', 'Requests' + (pending ? ' (' + pending + ')' : '')],
         ['services', 'Services'],
         ['people', 'People'],
         ['features', 'Features'],
-        ['data', 'Data & Sync']
+        ['data', 'Data & Sync'],
+        ['settings', 'Settings']
       ];
     }
 
@@ -435,13 +437,10 @@
     function renderDepartmentChoice(state) {
       const allowed = allowedDepartments(state);
       const selected = selectDepartment(selectedDepartment(state), state);
-      const map = configuredManagers(state);
       if (!allowed.length) {
         return '<div class="manage-department-first" data-manage-department-first><div><h2>No department access</h2><p class="ws-muted">Choose an authorized selected name before opening a department.</p></div></div>';
       }
-      const role = map ? (isAdmin(state) ? 'Admin access' : 'Department manager access') : 'Editor access';
       return '<div class="manage-department-first" data-manage-department-first>' +
-        '<div><h2>Department workspace</h2><p class="ws-muted">' + esc(role) + '</p></div>' +
         '<label for="manage-department-choice">Department<select id="manage-department-choice" data-chg="manage-department" aria-label="Manage department">' +
         allowed.map(name => '<option value="' + esc(name) + '"' + (name === selected ? ' selected' : '') + '>' + esc(name) + '</option>').join('') +
         '</select></label></div>';
@@ -534,13 +533,32 @@
     function renderDepartment(state) {
       const department = selectDepartment(selectedDepartment(state), state);
       if (!department) return '<div class="ws-card manage-card"><p class="ws-empty">Choose your name to see the departments you can manage.</p></div>';
+      return renderSchedule(state);
+    }
+
+    function renderSchedule(state) {
+      const department = selectDepartment(selectedDepartment(state), state);
+      if (!department) return '<div class="ws-card manage-card"><p class="ws-empty">Choose your name to see the departments you can manage.</p></div>';
       const month = setMonth(monthValue(state));
-      let html = '<div class="manage-department-toolbar"><h2>' + esc(department) + '</h2><div class="manage-month-control"><button type="button" class="ws-button ws-button-quiet" data-act="manage-month-prev" aria-label="Previous month">Previous</button><label for="manage-month">Month<input id="manage-month" type="month" value="' + esc(month) + '" data-chg="manage-month"></label><button type="button" class="ws-button ws-button-quiet" data-act="manage-month-next" aria-label="Next month">Next</button></div></div>';
-      html += renderRoster(state, department);
-      html += '<section class="manage-card manage-flat-section" aria-labelledby="manage-assignments-title"><div class="manage-section-heading"><h2 id="manage-assignments-title">Monthly assignments</h2><span class="ws-muted">' + esc(month) + '</span></div>' + renderAssignmentRows(state, department, month) + '</section>';
+      let html = '<div class="manage-department-toolbar"><div><p class="ws-kicker">Schedule</p><h2>' + esc(department) + '</h2></div><div class="manage-month-control"><button type="button" class="ws-button ws-button-quiet" data-act="manage-month-prev" aria-label="Previous month">Previous</button><label for="manage-month">Month<input id="manage-month" type="month" value="' + esc(month) + '" data-chg="manage-month"></label><button type="button" class="ws-button ws-button-quiet" data-act="manage-month-next" aria-label="Next month">Next</button></div></div>';
+      html += '<section class="manage-card manage-flat-section" aria-labelledby="manage-assignments-title"><div class="manage-section-heading"><div><p class="ws-kicker">Assignments</p><h2 id="manage-assignments-title">Monthly assignments</h2></div><span class="ws-muted">' + esc(month) + '</span></div>' + renderAssignmentRows(state, department, month) + '</section>';
       html += renderAutoAssignment(state, department, month);
       if (department === 'Choir') html += renderChoirSongs(state, month);
       return html;
+    }
+
+    function renderRosterPanel(state) {
+      const department = selectDepartment(selectedDepartment(state), state);
+      if (!department) return renderDepartment(state);
+      return '<div class="manage-panel-heading"><p class="ws-kicker">Roster</p><h2>' + esc(department) + '</h2></div>' + renderRoster(state, department);
+    }
+
+    function renderSettingsPanel(state) {
+      const appUi = readUi();
+      const theme = appUi.theme || 'blue';
+      return '<section class="manage-settings-panel" aria-labelledby="manage-settings-title"><p class="ws-kicker">Settings</p><h2 id="manage-settings-title">App settings</h2><p class="ws-muted">Appearance is available to every selected member from the Settings button at the bottom of the app.</p><label class="manage-settings-field" for="manage-theme-select"><span>Appearance</span><select id="manage-theme-select" data-chg="theme" aria-label="Appearance theme">' +
+        ['blue', 'sage', 'sand'].map(themeName => '<option value="' + themeName + '"' + (themeName === theme ? ' selected' : '') + '>' + themeName[0].toUpperCase() + themeName.slice(1) + '</option>').join('') +
+        '</select></label><button type="button" class="ws-button ws-button-quiet" data-act="settings-open">Open full Settings</button></section>';
     }
 
     function callLegacy(panel, state) {
@@ -560,7 +578,7 @@
     function renderSecondary(panel, state) {
       const legacy = callLegacy(panel, state);
       if (legacy) return '<section class="manage-legacy-panel" data-manage-legacy="' + esc(panel) + '">' + legacy + '</section>';
-      const labels = { planning: 'Planning', requests: 'Requests', services: 'Services', people: 'People', features: 'Features', data: 'Data & Sync' };
+      const labels = { planning: 'Planning', requests: 'Requests', services: 'Services', people: 'People', features: 'Features', data: 'Data & Sync', settings: 'Settings' };
       return '<section class="ws-card manage-card manage-legacy-missing"><p class="ws-kicker">' + esc(labels[panel] || panel) + '</p><h2>Existing panel adapter pending</h2><p class="ws-muted">The shell should inject the current ' + esc(labels[panel] || panel) + ' renderer here so its existing persistence and confirmation behavior stays available.</p></section>';
     }
 
@@ -570,11 +588,14 @@
       const current = selectedDepartment(state);
       if (allowed.indexOf(current) === -1 && current) selectDepartment(current, state);
       const tabs = panelTabs(state);
-      let html = '<section class="manage-page" data-screen="manage" aria-labelledby="manage-page-title">' +
+      let html = '<section class="manage-page" data-screen="manage" aria-label="Manage workspace">' +
         '<div class="manage-page-heading"><h1 id="manage-page-title">Manage</h1></div>' +
         renderNotice() + renderDepartmentChoice(state) +
         '<nav class="manage-tabs" aria-label="Manage sections">' + tabs.map(tab => '<button type="button" class="' + (screen.panel === tab[0] ? 'is-active' : '') + '" data-act="manage-panel" data-panel="' + esc(tab[0]) + '" aria-current="' + (screen.panel === tab[0] ? 'page' : 'false') + '">' + esc(tab[1]) + '</button>').join('') + '</nav>';
-      html += screen.panel === 'department' ? renderDepartment(state) : renderSecondary(screen.panel, state);
+      if (screen.panel === 'department' || screen.panel === 'schedule') html += renderSchedule(state);
+      else if (screen.panel === 'roster') html += renderRosterPanel(state);
+      else if (screen.panel === 'settings') html += renderSettingsPanel(state);
+      else html += renderSecondary(screen.panel, state);
       return html + '</section>';
     }
 

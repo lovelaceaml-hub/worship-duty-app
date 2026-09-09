@@ -181,3 +181,17 @@ test('mixed release loads the stamped setlist dependency without forcing an old 
   assert.equal(run.sandbox.__mixedReleaseApi.isConfirmed({ confirmedAt: 4, updatedAt: 4 }), true);
   assert.equal(run.reloads(), 0);
 });
+
+
+test('Thanks slots apply to Sabbath Morning and coincident feasts, excluding Early Morning and other services', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../song-app.js'), 'utf8');
+  const helper = source.slice(source.indexOf('function thanksApplies('), source.indexOf('function productionThanksApplies('));
+  const applies = vm.runInNewContext(helper + '; thanksApplies');
+  assert.equal(applies('Sabbath Day', 'Morning', {}), true);
+  assert.equal(applies('Tabernacles / Sabbath Day', 'Morning', {}), true);
+  assert.equal(applies('Sabbath Day', 'Early Morning', {}), false);
+  assert.equal(applies('Sabbath Day', 'Afternoon', {}), false);
+  assert.equal(applies('Third Day', 'Evening', {}), false);
+  assert.equal(applies('Feast Service', 'Morning', {}), false);
+  assert.equal(applies('Fixture Service', 'Morning', { 'Prayer of Thanks': 'Fictional Member' }), true);
+});

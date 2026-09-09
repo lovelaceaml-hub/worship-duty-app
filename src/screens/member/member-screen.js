@@ -17,12 +17,13 @@
       month: null,
       homeOpen: {},
       dutyOpen: {},
-      department: (ui().deptFilter || 'All'),
+      departments: initialDepartments(),
       requestKey: null,
       requestNote: '',
       requestSaving: false,
       requestError: '',
-      jumpDate: null
+      jumpDate: null,
+      departmentOpen: false
     };
 
     function esc(value) {
@@ -85,6 +86,43 @@
       while (out.length % 7) out.push(null);
       return out;
     }
+    function validDepartment(name) {
+      return name === 'All' || categories.some(function (category) { return (category.name || category) === name; });
+    }
+    function normalizeDepartments(value) {
+      var values = Array.isArray(value) ? value.slice() : String(value || '').split(',');
+      values = values.map(function (name) { return String(name || '').trim(); }).filter(validDepartment);
+      if (values.indexOf('All') !== -1 || !values.length) return ['All'];
+      return values.filter(function (name, index) { return values.indexOf(name) === index; });
+    }
+    function initialDepartments() {
+      var stored = '';
+      try {
+        if (deps.storage && typeof deps.storage.get === 'function') stored = deps.storage.get('wds-depts', '');
+      } catch (ignore) { stored = ''; }
+      if (stored) {
+        try { stored = JSON.parse(stored); } catch (ignoreJson) { /* legacy comma-separated fallback */ }
+      }
+      if (stored && (Array.isArray(stored) || typeof stored === 'string')) return normalizeDepartments(stored);
+      return normalizeDepartments(ui().deptFilters || ui().deptFilter || 'All');
+    }
+    function selectedDepartments() {
+      return normalizeDepartments(local.departments);
+    }
+    function isDepartmentSelected(filter, name) {
+      var values = normalizeDepartments(filter);
+      return values.indexOf('All') !== -1 || values.indexOf(name) !== -1;
+    }
+    function activeDepartmentFilter() {
+      var values = selectedDepartments();
+      return values.indexOf('All') !== -1 ? null : values;
+    }
+    function departmentSummary() {
+      var values = selectedDepartments();
+      if (values.indexOf('All') !== -1) return 'All';
+      if (values.length <= 2) return values.join(' + ');
+      return values.length + ' departments';
+    }
     function allAssignments(service) { return service && service.assignments || {}; }
     function dayServices(key) { return services().filter(function (s) { return s.date && s.date.slice(0,7) === key; }); }
     function serviceTitle(service) {
@@ -141,17 +179,20 @@
       return html + '</div></section>';
     }
     function departmentButtons() {
-      var names = [{ name:'All' }].concat(categories);
-      return '<div class="ws-departments" role="group" aria-label="Department filter">' + names.map(function (category) {
-        var name = category.name || category;
-        return '<button type="button" class="' + (local.department === name ? 'active' : '') + '" data-act="member-department" data-department="' + esc(name) + '">' + (category.color ? '<span class="ws-dot" style="background:' + esc(category.color) + '"></span>' : '') + esc(name) + '</button>';
-      }).join('') + '</div>';
+      var names = [{ name:'All' }].concat(categories), selected = selectedDepartments();
+      return '<details class="ws-department-filter"' + (local.departmentOpen ? ' open' : '') + '><summary data-act="member-department-toggle" aria-expanded="' + (local.departmentOpen ? 'true' : 'false') + '" aria-label="Filter schedule by department"><span>Departments</span><strong>' + esc(departmentSummary()) + '</strong></summary>' +
+        '<div class="ws-department-menu" role="group" aria-label="Department choices" aria-describedby="member-department-help">' +
+        names.map(function (category) {
+          var name = category.name || category;
+          var checked = selected.indexOf(name) !== -1;
+          return '<label class="ws-department-option" data-act="member-department" data-val="' + esc(name) + '" data-department="' + esc(name) + '"><input type="checkbox" data-chg="member-department" data-preserve-key="member-department-' + esc(name) + '" data-department="' + esc(name) + '"' + (checked ? ' checked' : '') + '><span>' + (category.color ? '<i class="ws-dot" style="background:' + esc(category.color) + '"></i>' : '<i class="ws-dot ws-dot-empty"></i>') + esc(name) + '</span></label>';
+        }).join('') + '<p id="member-department-help" class="ws-muted">Choose one or more departments.</p></div></details>';
     }
     function dutyEntries(service, options) {
       options = options || {};
       var assignments = allAssignments(service), entries = [], seen = {};
       categories.forEach(function (category) {
-        if (options.only && category.name !== options.only) return;
+        if (options.only && !isDepartmentSelected(options.only, category.name)) return;
         (category.duties || []).forEach(function (duty) {
           seen[duty] = true;
           var person = assignments[duty];
@@ -159,7 +200,7 @@
           entries.push({ duty: duty, person: person, department: category.name, color: category.color, service: service });
         });
       });
-      if (options.only && options.only !== 'Other') return entries;
+      if (options.only && !isDepartmentSelected(options.only, 'Other')) return entries;
       Object.keys(assignments).forEach(function (duty) {
         if (seen[duty] || !assignments[duty] || (options.personal && assignments[duty] !== options.name) || (options.excludeMe && assignments[duty] === options.name)) return;
         entries.push({ duty: duty, person: assignments[duty], department: 'Other', service: service });
@@ -173,10 +214,13 @@
       var entries = dutyEntries(service, { only: only }), html = '', byDepartment = {};
       entries.forEach(function (entry) { (byDepartment[entry.department] || (byDepartment[entry.department] = [])).push(entry); });
       categories.forEach(function (category) {
-        if (!byDepartment[category.name]) return;
-        html += '<section class="ws-department-section" data-department-section="' + esc(category.name) + '"><h3><span class="ws-dot" style="background:' + esc(category.color) + '"></span>' + esc(category.name) + '</h3>' + byDepartment[category.name].map(homeRow).join('') + '</section>';
+        var isWorship = category.name === 'Worship';
+        var choirSong = isWorship && deps.feature && deps.feature('choirSong') !== false && service.choirSong ? (typeof service.choirSong === 'string' ? service.choirSong : (service.choirSong.title || service.choirSong.label || 'Assigned')) : '';
+        if (!byDepartment[category.name] && !choirSong) return;
+        if (only && !isDepartmentSelected(only, category.name)) return;
+        html += '<section class="ws-department-section" data-department-section="' + esc(category.name) + '"><h3><span class="ws-dot" style="background:' + esc(category.color) + '"></span>' + esc(category.name) + '</h3>' + (byDepartment[category.name] ? byDepartment[category.name].map(homeRow).join('') : '') + (choirSong ? '<div class="ws-duty-row ws-choir-row"><span class="ws-duty-name">Choir song</span><span class="ws-duty-person">' + esc(choirSong) + '</span></div>' : '') + '</section>';
       });
-      if (byDepartment.Other) html += '<section class="ws-department-section" data-department-section="Other"><h3>Other</h3>' + byDepartment.Other.map(homeRow).join('') + '</section>';
+      if (byDepartment.Other && (!only || isDepartmentSelected(only, 'Other'))) html += '<section class="ws-department-section" data-department-section="Other"><h3>Other</h3>' + byDepartment.Other.map(homeRow).join('') + '</section>';
       return html || '<p class="ws-muted">No assigned duties are listed.</p>';
     }
     function personalActionLinks(service, name) {
@@ -205,7 +249,7 @@
     }
     function serviceCard(service, open, only, summaryOnly) {
       var id = serviceId(service), title = serviceTitle(service);
-      var body = summaryOnly ? '<p class="ws-muted">' + plural(dutyEntries(service).length, 'assigned duty') + '</p>' : '<div class="ws-service-groups">' + (service.choirSong ? '<p class="ws-muted">Choir: ' + esc(typeof service.choirSong === 'string' ? service.choirSong : (service.choirSong.title || service.choirSong.label || 'Assigned')) + '</p>' : '') + departmentGroups(service, only) + '</div>';
+      var body = summaryOnly ? '<p class="ws-muted">' + plural(dutyEntries(service).length, 'assigned duty') + '</p>' : '<div class="ws-service-groups">' + departmentGroups(service, only) + '</div>';
       return '<article class="ws-card ws-service-card ' + tone(service.date) + '" data-service-id="' + esc(id) + '"><button type="button" class="ws-service-head" data-act="member-service-toggle" data-service="' + esc(id) + '" aria-expanded="' + (open ? 'true' : 'false') + '"><span><strong>' + esc(title) + '</strong><small>' + esc(timeText(service.time || service.time24)) + '</small></span><span aria-hidden="true">' + (open ? '−' : '+') + '</span></button>' + (open ? '<div class="ws-service-body">' + body + (summaryOnly ? '' : serviceActions(service, ui().me, false)) + '</div>' : '') + '</article>';
     }
     function nextDutyCard() {
@@ -221,32 +265,42 @@
       if (!next) return '<section class="ws-card ws-next-duty" data-next-duty><p class="ws-kicker">My next duty</p><p class="ws-muted">No upcoming duty is assigned to you.</p></section>';
       return '<section class="ws-card ws-next-duty" data-next-duty><p class="ws-kicker">My next duty</p><h2>' + esc(next.service || next.serviceLabel || 'Service') + '</h2><p>' + esc(dateText(next.date)) + ' · ' + esc(timeText(next.time || next.time24)) + '</p><p>' + esc(nextEntries.map(function (entry) { return entry.duty; }).join(', ')) + '</p>' + serviceActions(next, me, false) + '</section>';
     }
-    function homeUpcoming(list) {
-      var upcoming = list.filter(function (service) { return service.date >= today(); }), dates = [];
-      upcoming.forEach(function (service) { if (dates.indexOf(service.date) === -1) dates.push(service.date); });
-      var html = '<section class="ws-schedule-section" data-schedule="upcoming"><div class="ws-section-heading"><h2>Upcoming schedule</h2><span class="ws-muted">' + upcoming.length + ' service' + (upcoming.length === 1 ? '' : 's') + '</span></div>';
-      if (!dates.length) return html + '<div class="ws-card ws-empty">No upcoming services in ' + esc(monthTitle(currentMonth())) + '.</div></section>';
-      var date = dates[0], day = upcoming.filter(function (service) { return service.date === date; });
-      return html + '<section class="ws-date-card ws-upcoming-date ' + tone(date) + '" data-date-group="' + esc(date) + '"><h3 class="ws-date-heading">' + esc(dateText(date)) + '</h3>' + day.map(function (service) { return serviceCard(service, true, local.department === 'All' ? null : local.department, true); }).join('') + '</section></section>';
+    function serviceMatchesFilter(service) {
+      var filter = activeDepartmentFilter();
+      if (!filter) return true;
+      return filter.some(function (name) {
+        if (name === 'Worship' && deps.feature && deps.feature('choirSong') !== false && service.choirSong) return true;
+        return dutyEntries(service, { only:name }).length > 0;
+      });
     }
-    function homeWholeMonth(list) {
-      var html = '<section class="ws-schedule-section ws-month-schedule" data-schedule="month" data-month-service-list><div class="ws-section-heading"><h2>Whole month</h2><span class="ws-muted">' + esc(monthTitle(currentMonth())) + '</span></div>';
-      if (!list.length) return html + '<div class="ws-card ws-empty">No services are listed for this month.</div></section>';
+    function homeDateServices(date) {
+      return dayServices(currentMonth()).filter(function (service) { return service.date === date && serviceMatchesFilter(service); });
+    }
+    function homeDateOpen(date) {
+      var day = homeDateServices(date);
+      return local.homeOpen[date] !== undefined ? local.homeOpen[date] === true : !day.length || !day.every(servicePastCutoff);
+    }
+    function homeServiceOpen(service) {
+      return local.homeOpen[serviceId(service)] !== undefined ? local.homeOpen[serviceId(service)] === true : !servicePastCutoff(service);
+    }
+    function homeMonthlySchedule(list) {
+      var filtered = list.filter(serviceMatchesFilter), html = '<section class="ws-schedule-section ws-month-schedule" data-schedule="month" data-month-service-list><div class="ws-section-heading"><h2>Monthly schedule</h2><span class="ws-muted">' + esc(monthTitle(currentMonth())) + '</span></div>';
+      if (!filtered.length) return html + '<div class="ws-card ws-empty">No services are listed for this month.</div></section>';
       var byDate = {};
-      list.forEach(function (service) { (byDate[service.date] || (byDate[service.date] = [])).push(service); });
+      filtered.forEach(function (service) { (byDate[service.date] || (byDate[service.date] = [])).push(service); });
       Object.keys(byDate).sort().forEach(function (date) {
-        var day = byDate[date], dateCutoff = day.every(servicePastCutoff), dateOpen = local.homeOpen[date] !== undefined ? local.homeOpen[date] : !dateCutoff;
-        html += '<section class="ws-date-card ' + tone(date) + '" data-date-group="' + esc(date) + '"><button type="button" class="ws-date-title" data-act="member-date-toggle" data-date="' + esc(date) + '" aria-expanded="' + (dateOpen ? 'true' : 'false') + '"><span>' + esc(dateText(date)) + '</span><span aria-hidden="true">' + (dateOpen ? '−' : '+') + '</span></button>' + (dateOpen ? day.map(function (service) {
-          var id = serviceId(service), open = local.homeOpen[id] !== undefined ? local.homeOpen[id] : !servicePastCutoff(service);
-          return '<div data-month-service data-service-id="' + esc(id) + '">' + serviceCard(service, open, local.department === 'All' ? null : local.department, false) + '</div>';
+        var day = byDate[date], dateOpen = homeDateOpen(date);
+        html += '<section class="ws-date-card ' + tone(date) + '" data-date-group="' + esc(date) + '"><button type="button" class="ws-date-title" data-act="member-date-toggle" data-date="' + esc(date) + '" aria-expanded="' + (dateOpen ? 'true' : 'false') + '"><span>' + esc(dateText(date)) + '</span><span class="ws-date-service-count">' + plural(day.length, 'service') + '</span><span aria-hidden="true">' + (dateOpen ? '−' : '+') + '</span></button>' + (dateOpen ? day.map(function (service) {
+          var id = serviceId(service), open = homeServiceOpen(service);
+          return '<div data-month-service data-service-id="' + esc(id) + '">' + serviceCard(service, open, activeDepartmentFilter(), false) + '</div>';
         }).join('') : '') + '</section>';
       });
       return html + '</section>';
     }
     function home() {
       var key = currentMonth(), list = dayServices(key), selected = {};
-      list.forEach(function (service) { selected[serviceId(service)] = true; });
-      var html = '<div class="member-page" data-screen="member"><div class="ws-heading"><h1>Home</h1></div>' + renderCalendar('home', selected) + departmentButtons() + nextDutyCard() + homeUpcoming(list) + homeWholeMonth(list);
+      list.filter(serviceMatchesFilter).forEach(function (service) { selected[serviceId(service)] = true; });
+      var html = '<div class="member-page" data-screen="member" data-member-view="home"><div class="member-workspace-layout member-home-layout"><aside class="member-sidebar">' + renderCalendar('home', selected) + departmentButtons() + nextDutyCard() + '</aside><div class="member-main">' + homeMonthlySchedule(list) + '</div></div>';
       return html + '</div>';
     }
     function memberTools() {
@@ -260,7 +314,7 @@
       return html;
     }
     function dutyTable(entries, label) {
-      return '<div class="ws-table-scroll"><table class="ws-duty-table"><caption class="sr-only">' + esc(label) + '</caption><thead><tr><th scope="col">Time</th><th scope="col">Worship</th><th scope="col">Duty</th><th scope="col">Person</th></tr></thead><tbody>' + entries.map(function (entry) {
+      return '<div class="ws-table-scroll" tabindex="0" role="region" aria-label="' + esc(label) + '"><table class="ws-duty-table"><caption class="sr-only">' + esc(label) + '</caption><thead><tr><th scope="col">Time</th><th scope="col">Worship</th><th scope="col">Duty</th><th scope="col">Person</th></tr></thead><tbody>' + entries.map(function (entry) {
         var service = entry.service;
         return '<tr data-department-row data-duty="' + esc(entry.duty) + '"><td>' + esc(timeText(service.time || service.time24)) + '</td><td>' + esc(sessionTitle(service)) + '</td><td>' + esc(entry.duty) + '</td><td class="' + (entry.person === ui().me ? 'is-me' : '') + '">' + esc(entry.person) + (entry.person === ui().me ? ' (You)' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>';
@@ -280,18 +334,18 @@
     }
     function myDuties() {
       var me = ui().me || '', assigned = services().filter(function (service) {
-        return !me || dutyEntries(service, { personal:true, name:me }).length;
+        return service.date && service.date.slice(0,7) === currentMonth() && (!me || dutyEntries(service, { personal:true, name:me }).length);
       });
       var selected = {};
       assigned.forEach(function (service) { selected[serviceId(service)] = true; });
-      var html = '<div class="member-page" data-screen="member"><div class="ws-heading"><h1>My Duties</h1></div>' + renderCalendar('duties', selected) + memberTools();
-      if (!me) return html + '<div class="ws-card ws-empty">Choose your name in the header to see your duties.</div></div>';
-      if (!assigned.length) return html + '<div class="ws-card ws-empty">You have no assigned duties.</div></div>';
+      var html = '<div class="member-page" data-screen="member" data-member-view="duties"><div class="member-workspace-layout member-duties-layout"><aside class="member-sidebar"><div class="ws-heading"><h1>My Duties</h1></div>' + renderCalendar('duties', selected) + memberTools() + '</aside><div class="member-main">';
+      if (!me) return html + '<div class="ws-card ws-empty">Choose your name in the header to see your duties.</div></div></div></div>';
+      if (!assigned.length) return html + '<div class="ws-card ws-empty">You have no assigned duties this month.</div></div></div></div>';
       var byDate = {};
       assigned.forEach(function (service) { (byDate[service.date] || (byDate[service.date] = [])).push(service); });
       Object.keys(byDate).sort().forEach(function (date) { html += myDutyDate(byDate[date], me); });
       html += requests();
-      return html + '</div>';
+      return html + '</div></div></div>';
     }
     function requests() {
       var me = ui().me, reqs = member.requestsForMember ? member.requestsForMember(state().requests || [], me) : (state().requests || []).filter(function (request) { return request.name === me; });
@@ -301,16 +355,44 @@
     function render() { return (ui().tab === 'my' || ui().screen === 'my' || ui().screen === 'duty') ? myDuties() : home(); }
     function refresh() { if (typeof deps.requestRender === 'function') deps.requestRender(); }
     function command(name, value) { var fn = deps.commands && deps.commands[name]; if (typeof fn === 'function') return fn(value); return undefined; }
-    function handle(kind, token, element) {
+    function setDepartments(name, checked) {
+      var values = selectedDepartments().filter(function (item) { return item !== 'All'; });
+      if (name === 'All') values = checked ? [] : values;
+      else if (checked && values.indexOf(name) === -1) values.push(name);
+      else if (!checked) values = values.filter(function (item) { return item !== name; });
+      local.departments = values.length ? values : ['All'];
+      var currentUi = ui();
+      currentUi.deptFilters = local.departments.slice();
+      currentUi.deptFilter = local.departments.length === 1 ? local.departments[0] : local.departments.slice();
+      if (deps.commands && deps.commands.setDepartmentFilter) deps.commands.setDepartmentFilter(currentUi.deptFilter);
+      if (deps.storage && deps.storage.set) {
+        deps.storage.set('wds-depts', JSON.stringify(local.departments));
+        deps.storage.set('wds-dept', local.departments.length === 1 ? local.departments[0] : 'All');
+      }
+    }
+    function handle(kind, token, element, event) {
       if (!token) return false;
       if (kind === 'chg' && token === 'member-name') { if (deps.commands && deps.commands.setMember) deps.commands.setMember(element.value); else if (ui()) ui().me = element.value; refresh(); return true; }
+      if (kind === 'chg' && token === 'member-department') {
+        setDepartments(element.dataset.department || 'All', !!element.checked); refresh(); return true;
+      }
       if (kind === 'input' && token === 'member-request-note') { local.requestNote = element.value; return true; }
       if (kind === 'act') {
         if (token === 'member-calendar-prev' || token === 'member-calendar-next') { local.month = monthShift(currentMonth(), token.endsWith('prev') ? -1 : 1); local.jumpDate = null; refresh(); return true; }
         if (token === 'member-calendar-day') { local.month = String(element.dataset.date).slice(0,7); local.homeOpen[element.dataset.date] = true; local.dutyOpen[element.dataset.date] = true; local.jumpDate = element.dataset.date; refresh(); return true; }
-        if (token === 'member-department') { local.department = element.dataset.department || 'All'; if (deps.commands && deps.commands.setDepartmentFilter) deps.commands.setDepartmentFilter(local.department); else if (deps.storage && deps.storage.set) deps.storage.set('wds-dept', local.department); refresh(); return true; }
-        if (token === 'member-service-toggle') { var id = element.dataset.service; local.homeOpen[id] = !(local.homeOpen[id] === true); refresh(); return true; }
-        if (token === 'member-date-toggle') { var date = element.dataset.date; local.homeOpen[date] = !(local.homeOpen[date] === true); refresh(); return true; }
+        if (token === 'member-department') {
+          var checkbox = element && element.querySelector ? element.querySelector('input[type="checkbox"]') : (element && element.type === 'checkbox' ? element : null);
+          if (!checkbox) return true;
+          var clickedInput = event && event.target && (event.target === checkbox || (event.target.closest && event.target.closest('input[type="checkbox"]') === checkbox));
+          var checked = clickedInput ? !!checkbox.checked : !checkbox.checked;
+          checkbox.checked = checked;
+          setDepartments(element.dataset.department || checkbox.dataset.department || 'All', checked);
+          refresh();
+          return true;
+        }
+        if (token === 'member-department-toggle') { local.departmentOpen = !local.departmentOpen; refresh(); return true; }
+        if (token === 'member-service-toggle') { var id = element.dataset.service, targetService = services().find(function (service) { return serviceId(service) === id; }); local.homeOpen[id] = !homeServiceOpen(targetService || { date: today(), time: '' }); refresh(); return true; }
+        if (token === 'member-date-toggle') { var date = element.dataset.date; local.homeOpen[date] = !homeDateOpen(date); refresh(); return true; }
         if (token === 'member-full-team') { var dutyDate = element.dataset.date; local.dutyOpen[dutyDate] = !(local.dutyOpen[dutyDate] === true); refresh(); return true; }
         if (token === 'member-clear-alerts') { command('clearAlerts'); refresh(); return true; }
         if (token === 'member-notify-on') { command('enableNotifications'); refresh(); return true; }

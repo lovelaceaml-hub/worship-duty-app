@@ -126,7 +126,9 @@ test('actual current runtime boots from fictional loopback data and blocks mutat
   assert.match(await page.locator('#runtime-preview-label').innerText(), /Read-only preview/);
 
   await page.locator('#header-me-select').selectOption({ label: 'Fictional Member' });
-  await page.locator('#theme-select').selectOption('sage');
+  await page.locator('[data-act="settings-open"]').first().click();
+  await page.locator('#settings-theme-select').selectOption('sage');
+  await page.locator('.settings-close[data-act="settings-close"]').click();
   await page.locator('#tab-presider').click();
   const presiderPage = page.locator('[aria-labelledby="presider-page-title"]');
   await presiderPage.waitFor();
@@ -139,12 +141,20 @@ test('actual current runtime boots from fictional loopback data and blocks mutat
   const blockedSongAction = page.locator('[data-song-act="confirm-songs"]').first();
   await blockedSongAction.click();
   assert.match(await page.locator('#banners').innerText(), /Read-only preview: changes are disabled/);
-  await page.locator('[data-song-act="close-workspace"]').click();
+  await page.locator('[data-song-act="presider-tab"][data-tab="services"]').click();
   await presiderPage.waitFor();
   const outline = page.locator('[data-song-act="view-service"]').first();
   if (await outline.count()) {
     await outline.click();
     assert.equal(await page.locator('[data-testid="presider-month-list"]').count(), 1);
+  }
+  await page.locator('[data-song-act="open-workspace"]').first().click();
+  await page.locator('#presider-panel-select').waitFor();
+  const service = await page.locator('#presider-service').inputValue();
+  for (const tab of ['order', 'library', 'insights', 'services']) {
+    await page.locator('[data-song-act="presider-tab"][data-tab="' + tab + '"]').click();
+    await page.locator('#presider-panel-' + tab).waitFor();
+    assert.equal(await page.locator('#presider-service').inputValue(), service);
   }
   await page.locator('#tab-manage').click();
   await page.locator('[data-act="manage-panel"][data-panel="services"]').click();

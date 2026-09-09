@@ -6,7 +6,8 @@ duties, presider song planning, and coordinator updates.
 ## Quick links
 
 - **Website:** [lv-zion-duties.web.app](https://lv-zion-duties.web.app)
-- **Status:** Live on the restored production layout. A flatter redesign is a local preview awaiting user testing.
+- **Status:** Live on the restored production layout. The full-width redesign remains a local preview awaiting user testing.
+- **Local test:** [Current-records preview](http://127.0.0.1:8101/), read-only and not deployed.
 - **Docs:**
   - [Handoff](docs/HANDOFF.md), current state and next work
   - [User Manual](docs/USER-MANUAL.md), current production instructions and preview notes

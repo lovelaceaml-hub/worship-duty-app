@@ -31,7 +31,7 @@
     --r-lg: 14px;
     --r-md: 10px;
     --sans: "Avenir Next", Avenir, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --gutter: 22px;
+    --gutter: clamp(14px, 2.8vw, 34px);
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -41,7 +41,7 @@
     -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   }
   body::before { content: ""; display: block; height: 5px; background: var(--brand-blue); }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 0 var(--gutter) 72px; }
+  .wrap { width: 100%; max-width: none; margin: 0; padding: 0 var(--gutter) 72px; }
   button, input, select, textarea { font: inherit; }
   button { touch-action: manipulation; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -54,10 +54,6 @@
   header.app .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--brand-blue-deep); }
   .header-home .app-title { display: block; margin: 0; font-weight: 650; font-size: clamp(28px, 5vw, 38px); letter-spacing: -0.025em; line-height: 1.12; color: var(--brand-blue-dark); }
   header.app .sub { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
-  .sync-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 650; box-shadow: var(--shadow-soft); }
-  .sync-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
-  .sync-pill.live { color: var(--ok); }
-  .sync-pill.live::before { background: var(--ok); box-shadow: 0 0 0 3px rgba(22,115,76,0.12); }
 
   nav.tabs { position: sticky; top: 0; z-index: 50; display: flex; margin: 0 0 22px; background: rgba(243,246,248,0.96); border-bottom: 1px solid var(--line); }
   nav.tabs button { flex: 1; position: relative; min-height: 54px; padding: 15px 8px 12px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font-size: 14px; font-weight: 650; cursor: pointer; }
@@ -498,9 +494,10 @@ h1, h2, h3, h4, p {
 /* App Shell and Layout Primitives */
 .app-shell,
 .bulletin-shell {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 0 var(--gutter) 60px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 
 .wrap {
@@ -1857,4 +1854,145 @@ nav.tabs {
   #header-member-control #header-me-select { width: 150px; }
   #header-member-control #theme-select { width: 64px; }
   #sync-pill, .sync-pill { font-size: 0.62rem; }
+}
+
+/* Full-width shell revision. Screens own their content width, while the
+   outer page keeps a small readable gutter on every viewport. */
+.wrap {
+  width: 100%;
+  max-width: none;
+  padding-inline: var(--gutter);
+}
+
+header.app {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+#header-member-control {
+  border-color: var(--border);
+}
+
+#header-member-control .ws-theme-control,
+#header-member-control #theme-select,
+#sync-pill,
+.sync-pill {
+  display: none !important;
+}
+
+#header-member-control #header-me-select {
+  width: min(220px, 34vw);
+}
+
+nav.tabs {
+  justify-content: center;
+}
+
+nav.tabs button {
+  flex: 1 1 0;
+  max-width: 180px;
+  justify-content: center;
+  text-align: center;
+}
+
+.app-footer {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0 0;
+}
+
+.settings-link {
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-link:hover,
+.settings-link:focus-visible {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.settings-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-dialog-head h2,
+.manage-settings-panel h2,
+.manage-panel-heading h2 {
+  margin: 0;
+  color: var(--text-heading);
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+
+.settings-close {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-dialog-copy,
+.settings-dialog-note,
+.manage-settings-panel .ws-muted,
+.manage-panel-heading .ws-muted {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.settings-dialog-copy {
+  margin: 12px 0 18px;
+}
+
+.settings-dialog-note {
+  margin: 14px 0 0;
+}
+
+.settings-field,
+.manage-settings-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-heading);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.settings-field select,
+.manage-settings-field select {
+  max-width: 260px;
+}
+
+.manage-panel-heading {
+  margin: 4px 0 14px;
+}
+
+.manage-panel-heading .ws-muted {
+  margin: 6px 0 0;
+}
+
+@media (max-width: 640px) {
+  nav.tabs button {
+    max-width: none;
+  }
+
+  #header-member-control #header-me-select {
+    width: min(210px, calc(100vw - 46px));
+  }
+
 }

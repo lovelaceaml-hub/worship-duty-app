@@ -9,16 +9,16 @@
   const documentObject = windowObject && windowObject.document;
   const PREVIEW_MESSAGE = 'Read-only preview: changes are disabled. Your choices stay in memory only.';
   const allowedActions = new Set([
-    'home', 'tab', 'sub', 'expand', 'toggle-past', 'dept-filter', 'open-songs', 'close-songs',
+    'home', 'tab', 'sub', 'settings-open', 'settings-close', 'expand', 'toggle-past', 'dept-filter', 'open-songs', 'close-songs',
     'member-calendar-day', 'member-calendar-next', 'member-calendar-prev', 'member-date-toggle',
-    'member-department', 'member-full-team', 'member-open-presider', 'member-service-toggle',
+    'member-department', 'member-department-toggle', 'member-full-team', 'member-open-presider', 'member-service-toggle',
     'manage-panel', 'manage-month-prev', 'manage-month-next', 'req-open-service',
     'close-workspace', 'open-workspace', 'order-workspace', 'view-service', 'exit-runsheet', 'presider-day',
-    'presider-month-prev', 'presider-month-next', 'set-category', 'close-backfill'
+    'presider-month-prev', 'presider-month-next', 'presider-tab', 'set-category', 'close-backfill'
   ]);
   const allowedChanges = new Set([
-    'me', 'theme', 'dept-filter', 'manage-department', 'manage-month', 'presider-filter',
-    'presider-month', 'presider-day', 'search', 'sort', 'library-role', 'outline'
+    'me', 'theme', 'member-department', 'dept-filter', 'manage-department', 'manage-month', 'presider-filter',
+    'presider-month', 'presider-day', 'presider-service', 'search', 'sort', 'library-role', 'outline'
   ]);
 
   function isObject(value) {
@@ -299,8 +299,10 @@
     label.setAttribute('role', 'status');
     label.textContent = 'Read-only preview. Manager access is simulated for viewing.';
     label.setAttribute('aria-label', 'Read-only preview. Manager access is simulated for viewing and does not reflect production authorization.');
-    label.style.cssText = 'background:#132238;color:#fff;font:700 13px/1.3 system-ui,sans-serif;letter-spacing:.04em;padding:9px 16px;text-align:center;position:relative;z-index:20';
-    documentObject.body.insertBefore(label, documentObject.body.firstChild);
+    label.style.cssText = 'color:var(--muted,#4e6782);font:12px/1.4 system-ui,sans-serif;padding:4px 0';
+    const footer = documentObject.querySelector('.app-footer');
+    if (footer) footer.appendChild(label);
+    else documentObject.body.appendChild(label);
   }
 
   function showFailure(error) {

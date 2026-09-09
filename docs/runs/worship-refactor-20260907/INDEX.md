@@ -114,3 +114,9 @@ Astra controls integration. Sol leads shared interface coordination. The five in
 ## Current production integration
 
 See [integration log](logs/20260908-production-integration.md) and [manager configuration](logs/20260908-manager-configuration.md). PM, PP, PC, PS, PT, PA, PJ, PR and PX are integrated locally. The repository integration passed fictional phone and desktop journeys after the fixture asset map was extended for static dependencies. LNR passed review3 and two emulator checks, but remains unapplied. FL and RP prepare the flat read-only local test. Astra owns integration; further production changes require preview approval.
+
+## Current full-width revision
+
+Read [latest requested changes](decisions/20260908-width-tabs-revision.md). WS3, HM3 and PS3 are integrated from their isolated worktrees. Root owns shared integration, fixture updates and preview safeguards. Old production remains live; no deployment is authorized.
+
+Local preview verification passed. Native Sol review is pending after a provider usage-limit interruption. See the [revision checkpoint](logs/20260908-width-tabs-local-preview.md). This is not full-plan completion.

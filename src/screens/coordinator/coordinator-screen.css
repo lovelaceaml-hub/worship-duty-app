@@ -1,7 +1,7 @@
 /* Coordinator Manage screen. Shared .ws-* primitives come from styles.css. */
 .manage-page {
-  max-width: 1160px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 8px 0 72px;
 }
 

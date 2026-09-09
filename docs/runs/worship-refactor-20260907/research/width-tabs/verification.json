@@ -1,0 +1,65 @@
+{
+  "fixtureRun": {
+    "id": "fixture-run-3999ee2a-a242-40ca-8ab1-8a6f59019fb6",
+    "status": "passed",
+    "startedAt": "2026-09-09T01:13:00.228Z",
+    "completedAt": "2026-09-09T01:13:20.028Z",
+    "screenshotsRoot": "/private/tmp/worship-width-v3-final3/screenshots/fixture-run-3999ee2a-a242-40ca-8ab1-8a6f59019fb6"
+  },
+  "sourceSnapshotIntegrity": {
+    "digestStableAfterTemporaryEdit": true,
+    "temporaryDiskDigestChanged": true,
+    "servedIndexMatchesSnapshot": true,
+    "servedAppPrefixMatchesSnapshot": true,
+    "helperEvaluationSource": "same immutable snapshot bytes"
+  },
+  "scenarios": [
+    "axeGuard",
+    "launchCleanup",
+    "seededSchedule",
+    "manualDutyMerge",
+    "yearBoundaries",
+    "authWait",
+    "siteLock",
+    "manageJourney",
+    "managerContracts",
+    "requestFailure",
+    "memberJourney",
+    "presiderRemount",
+    "domFocus",
+    "scheduleSnapshot",
+    "keyboard",
+    "libraryEmpty",
+    "servicesJourney",
+    "insightsJourney",
+    "songCreateBeforeSnapshot",
+    "confirmation",
+    "saveErrors"
+  ],
+  "viewports": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "timings": {
+        "navigationMs": 46.77,
+        "readyMs": 81.91,
+        "presiderMs": 679.31
+      }
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "timings": {
+        "navigationMs": 59.2,
+        "readyMs": 104.79,
+        "presiderMs": 630.51
+      }
+    }
+  ],
+  "review": "Native Sol pending: provider usage limit interrupted the isolated review",
+  "production": "Unchanged, restored old design; no deployment"
+}

@@ -78,6 +78,7 @@ const NAME_UNIFY_MAP = {
 
 /* Live copy of app/nameMap; null until the snapshot arrives (or in local mode). */
 let sharedNameMap = null;
+let settingsOpener = null;
 function flattenMappedName(name, map) {
   const original = String(name || '');
   let current = original;
@@ -271,6 +272,7 @@ const ui = {
   expanded: {},
   showPast: false,
   banners: [],
+  settingsOpen: false,
   pinError: '',
   sitePinError: '',
   rebaseline: false,
@@ -925,8 +927,11 @@ function restoreViewSnapshot(view, snapshot) {
     const control = controls.find((candidate, index) =>
       (candidate.dataset.preserveKey || candidate.id || candidate.name || ('control-' + index)) === saved.key);
     if (!control) return;
-    if (control.type === 'checkbox' || control.type === 'radio') control.checked = saved.checked;
-    else if (document.activeElement !== control || control.value !== saved.value) control.value = saved.value;
+    const isMemberDepartmentControl = control.dataset && control.dataset.chg === 'member-department';
+    if (!isMemberDepartmentControl) {
+      if (control.type === 'checkbox' || control.type === 'radio') control.checked = saved.checked;
+      else if (document.activeElement !== control || control.value !== saved.value) control.value = saved.value;
+    }
     if (document.activeElement === control && saved.selectionStart != null && typeof control.setSelectionRange === 'function') {
       try { control.setSelectionRange(saved.selectionStart, saved.selectionEnd); } catch (e) { /* ignored */ }
     }
@@ -966,12 +971,36 @@ function renderHeaderControls() {
   holder.innerHTML = '<label class="ws-member-control" for="header-me-select">' +
     '<span class="sr-only">Selected member</span>' +
     '<select id="header-me-select" data-chg="me" aria-label="Selected member">' +
-    '<option value="">Choose your name</option>' + options + '</select></label>' +
-    '<label class="ws-theme-control" for="theme-select"><span class="sr-only">Theme</span>' +
-    '<select id="theme-select" data-chg="theme" aria-label="Theme">' +
+    '<option value="">Choose your name</option>' + options + '</select></label>';
+}
+
+function renderSettings() {
+  const root = document.getElementById('settings-root');
+  if (!root) return;
+  if (!ui.settingsOpen) {
+    root.innerHTML = '';
+    return;
+  }
+  root.innerHTML = '<div class="global-settings-backdrop" data-act="settings-close">' +
+    '<section class="global-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title" data-settings-dialog>' +
+    '<div class="settings-dialog-head"><div><p class="ws-kicker">This device</p><h2 id="settings-title">Settings</h2></div>' +
+    '<button type="button" class="settings-close" data-act="settings-close" aria-label="Close settings">Close</button></div>' +
+    '<p class="settings-dialog-copy">Choose the appearance that feels easiest to read. This choice stays on this device.</p>' +
+    '<label class="settings-field" for="settings-theme-select"><span>Appearance</span><select id="settings-theme-select" data-chg="theme" aria-label="Appearance theme">' +
     ['blue', 'sage', 'sand'].map(theme => '<option value="' + theme + '"' + (theme === currentTheme() ? ' selected' : '') + '>' +
       theme[0].toUpperCase() + theme.slice(1) + '</option>').join('') +
-    '</select></label>';
+    '</select></label>' +
+    '<p class="settings-dialog-note">Your selected member is ' + esc(ui.me || 'not set yet') + '.</p>' +
+    '</section></div>';
+}
+
+function closeSettings() {
+  ui.settingsOpen = false;
+  renderSettings();
+  if (settingsOpener && document.contains(settingsOpener) && typeof settingsOpener.focus === 'function') {
+    settingsOpener.focus();
+  }
+  settingsOpener = null;
 }
 
 function configuredManagerNames() {
@@ -1004,15 +1033,22 @@ function renderManagerSelectionRequired() {
 function render() {
   const nav = document.querySelector('nav.tabs');
   if (feat('siteLock') && !siteUnlocked()) {
+    ui.settingsOpen = false;
     destroyInactiveScreen('');
     nav.classList.toggle('hidden', true);
     document.getElementById('banners').innerHTML = '';
     document.getElementById('view').innerHTML = renderSiteLock();
+    const footer = document.querySelector('.app-footer');
+    if (footer) footer.hidden = true;
+    const settingsRoot = document.getElementById('settings-root');
+    if (settingsRoot) settingsRoot.innerHTML = '';
     const input = document.getElementById('site-pin-input');
     if (input) input.focus();
     return;
   }
   nav.classList.toggle('hidden', false);
+  const footer = document.querySelector('.app-footer');
+  if (footer) footer.hidden = false;
   applyTheme();
   renderHeaderControls();
 
@@ -1058,6 +1094,7 @@ function render() {
     pulse('tab_' + ui.tab); // counts once per device per day — see pulse()
   }
   renderBanners();
+  renderSettings();
 }
 
 /* Placeholder shown between page load and the first Firestore snapshot, so the
@@ -1555,6 +1592,16 @@ function handleAct(act, el) {
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+  else if (act === 'settings-open') {
+    settingsOpener = el || document.activeElement;
+    ui.settingsOpen = true;
+    render();
+    const select = document.getElementById('settings-theme-select');
+    if (select) select.focus();
+  }
+  else if (act === 'settings-close') {
+    closeSettings();
+  }
   else if (act === 'tab') {
     ui.tab = el.dataset.tab;
     if (ui.tab === 'my') localStorage.setItem('wds-unread-' + ui.me, '0');
@@ -1983,6 +2030,7 @@ function dispatchToActiveScreen(kind, token, el, event) {
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el || el.tagName === 'FORM') return;
+  if (el.dataset.act === 'settings-close' && e.target.closest('[data-settings-dialog]') && !e.target.closest('.settings-close')) return;
   if (e.target.closest('[data-chg]')) return;
   if (dispatchToActiveScreen('act', el.dataset.act, el, e)) return;
   handleAct(el.dataset.act, el);
@@ -2008,11 +2056,34 @@ document.addEventListener('input', e => {
   if (dispatchToActiveScreen('input', el.dataset.chg, el, e)) return;
   if (el.dataset.chg === 'req-note') handleChg('req-note', el);
 });
+document.addEventListener('keydown', e => {
+  if (!ui.settingsOpen) return;
+  if (e.key === 'Escape') {
+    closeSettings();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const dialog = document.querySelector('[data-settings-dialog]');
+  if (!dialog) return;
+  const focusable = Array.from(dialog.querySelectorAll('button, select, input, textarea, [href], [tabindex]:not([tabindex="-1"])'))
+    .filter(item => !item.disabled && item.getClientRects().length);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+});
 
 /* ================= startup ================= */
 
 function setSyncPill(live) {
   const pill = document.getElementById('sync-pill');
+  if (!pill) return;
   pill.textContent = live ? 'Live sync on' : 'This device only';
   pill.classList.toggle('live', !!live);
 }

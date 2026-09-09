@@ -1249,7 +1249,7 @@ async function exerciseManagerJourneys(serverBaseURL, browser) {
   assert.deepEqual(afterChoirEdit.assignments, beforeChoirEdit.assignments, 'Choir title editing must not mutate duty assignments');
   assert.deepEqual(afterChoirEdit.songLibrary, beforeChoirEdit.songLibrary, 'custom Choir title must remain outside the fictional song library');
   await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await page.locator('[data-screen="member"] h1', { hasText: 'Home' }).waitFor({ timeout: 10000 });
+  await page.locator('[data-member-view="home"]').waitFor({ timeout: 10000 });
   const axeAfterChoir = await captureAxe(page, 'manager-after-choir-phone');
   await closeFixtureRun(run);
   return {
@@ -1307,11 +1307,38 @@ async function exerciseSiteLock(serverBaseURL, browser) {
   return { locked, unlocked, feature: unlockedState.feature, network: run.external, consoleErrors: run.consoleErrors };
 }
 
+async function assertRequestedLayout(page, name, viewport) {
+  assert.equal(await page.locator('header #theme-select').count(), 0, name + ': appearance must be outside the header');
+  assert.equal(await page.locator('#sync-pill:visible').count(), 0, name + ': the live/device status box must be absent');
+  assert.equal(await page.locator('#header-member-control select').count(), 1, name + ': only member selection belongs in the header');
+  const layout = await page.evaluate(() => {
+    const nav = [...document.querySelectorAll('nav.tabs > button')].filter(button => button.getClientRects().length);
+    return {
+      pageWidth: document.querySelector('#view').getBoundingClientRect().width,
+      nav: nav.map(button => {
+        const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode()) && !node.textContent.trim()) {}
+        const rect = button.getBoundingClientRect();
+        if (!node) return { centered: false };
+        const range = document.createRange(); range.selectNodeContents(node);
+        const text = range.getBoundingClientRect();
+        return { centered: Math.abs((rect.left + rect.right - text.left - text.right) / 2) < 4 };
+      })
+    };
+  });
+  assert.ok(layout.nav.every(item => item.centered), name + ': main navigation labels must be horizontally centered');
+  if (viewport.width >= 1000) assert.ok(layout.pageWidth >= viewport.width - 80, name + ': the main page must use available desktop width');
+}
+
 async function exerciseViewport(serverBaseURL, browser, name, viewport) {
   const run = await launchFixturePage(serverBaseURL, browser, 'firebase', viewport, { authDelayMs: 80 });
   const { page } = run;
   assert.equal(await page.locator('nav.tabs button.active').getAttribute('data-tab'), 'schedule', name + ': Schedule must be the initial active view');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), true, name + ': page must not have horizontal overflow');
+  await assertRequestedLayout(page, name, viewport);
+  assert.equal(await page.getByRole('heading', { name: 'Home', exact: true }).count(), 0, name + ': Home must not repeat its navigation title');
+  assert.equal(await page.getByRole('heading', { name: 'Whole month', exact: true }).count(), 0, name + ': the month must be one connected schedule');
   const scheduleEvidence = await captureAxe(page, name + '-schedule');
   await selectJordan(page);
   const myEvidence = await captureAxe(page, name + '-my-duties');
@@ -1328,12 +1355,29 @@ async function exerciseViewport(serverBaseURL, browser, name, viewport) {
   await teamToggle.focus();
   await page.keyboard.press('Enter');
   await dutyDate.locator('[data-full-team]').waitFor({ timeout: 10000 });
+  await page.locator('[data-act="member-calendar-next"]').click();
+  assert.equal(await page.locator('[data-duty-date]').count(), 0, name + ': My Duties must filter to the selected month');
+  await page.locator('[data-act="member-calendar-prev"]').click();
+  await page.locator('[data-duty-date]').first().waitFor();
   await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await page.locator('[data-screen="member"] h1', { hasText: 'Home' }).waitFor({ timeout: 10000 });
-  await page.locator('[data-act="member-department"][data-department="Worship"]').click();
+  await page.locator('[data-member-view="home"]').waitFor({ timeout: 10000 });
+  const filter = page.locator('.ws-department-filter');
+  await filter.locator('summary').click();
+  await filter.locator('input[data-chg="member-department"][data-department="Worship"]').check();
+  assert.equal(await filter.locator('input[data-department="All"]').isChecked(), false, name + ': a specific department must clear All');
+  assert.equal(await filter.getAttribute('open') !== null, true, name + ': dropdown must stay open for multiple selections');
+  await filter.locator('input[data-department="Usher Sisters"]').check();
+  assert.equal(await filter.locator('input[data-department="Worship"]').isChecked(), true, name + ': choosing a second department must preserve the first');
+  await page.locator('[data-department-section="Usher Sisters"]').first().waitFor();
   await page.locator('[data-department-section="Worship"]').first().waitFor({ timeout: 10000 });
   const filteredRows = await page.locator('[data-department-section="Worship"] [data-department-row]').count();
   assert.ok(filteredRows > 0, name + ': Home department filter must retain Worship rows');
+  assert.equal(await page.locator('[data-department-section="Worship"]').filter({ hasText: 'Fixture Choir Song' }).count() > 0, true, name + ': choir song must appear within Worship');
+  await filter.locator('input[data-department="All"]').check();
+  assert.equal(await filter.locator('input[data-department="Worship"]').isChecked(), false, name + ': All must clear individual department selections');
+  await filter.locator('summary').click();
+  const scheduleIds = await page.locator('[data-member-view="home"] .ws-service-card[data-service-id]').evaluateAll(nodes => nodes.map(node => node.dataset.serviceId));
+  assert.equal(new Set(scheduleIds).size, scheduleIds.length, name + ': services must occur once in the connected monthly schedule');
   const monthHeading = page.locator('.ws-calendar h2').first();
   const initialMonth = await monthHeading.innerText();
   await page.locator('[data-act="member-calendar-next"]').click();
@@ -1356,6 +1400,13 @@ async function exerciseViewport(serverBaseURL, browser, name, viewport) {
   await page.locator('.presider-date-group[data-date="' + secondDate + '"].jump-target').waitFor({ timeout: 10000 });
   await page.locator('[data-song-act="open-workspace"]').first().click();
   await page.locator('[data-testid="song-workspace"]').waitFor({ timeout: 15000 });
+  assert.equal(await page.locator('.presider-tabs [role="tab"]').count(), 5, name + ': Presider must expose its five workspace sections');
+  const selectedService = await page.locator('#presider-service').inputValue();
+  for (const section of ['order', 'library', 'insights', 'select']) {
+    await page.locator('[data-song-act="presider-tab"][data-tab="' + section + '"]').click();
+    await page.locator('#presider-panel-' + section).waitFor();
+    assert.equal(await page.locator('#presider-service').inputValue(), selectedService, name + ': section navigation must retain the selected service');
+  }
   const songSnapshot = await exerciseSongSnapshot(page, name);
   await page.locator('#production-library-search').fill('Fixture Morning Song');
   await page.locator('.production-song-row').first().waitFor({ timeout: 10000 });
@@ -1367,7 +1418,7 @@ async function exerciseViewport(serverBaseURL, browser, name, viewport) {
   await page.locator('#production-library-search').fill('Fixture phrase with no matching song');
   await page.getByText('No songs match this search.', { exact: true }).waitFor({ timeout: 10000 });
   const libraryEmptyEvidence = await captureAxe(page, name + '-library-empty');
-  await page.getByRole('button', { name: 'Back to services', exact: true }).click();
+  await page.locator('[data-song-act="presider-tab"][data-tab="services"]').click();
   await page.locator('.presider-month-list').waitFor({ timeout: 10000 });
   await page.locator('[data-song-act="order-workspace"]').first().click();
   await page.getByText('Order of worship', { exact: true }).waitFor({ timeout: 10000 });
@@ -1490,7 +1541,7 @@ async function exerciseSaveError(serverBaseURL, browser) {
   await page.locator('[data-confirmation-state]').filter({ hasText: 'Confirmed' }).waitFor({ timeout: 10000 });
   const retried = await page.evaluate(() => window.__QA_FIREBASE_CONTROL.writes.filter(write => write.collection === 'setlists').length);
   assert.ok(retried >= 1, 'retry must reach the fictional setlist write boundary after the failure clears');
-  await page.getByRole('button', { name: 'Back to services', exact: true }).click();
+  await page.locator('[data-song-act="presider-tab"][data-tab="services"]').click();
   await page.locator('[data-testid="presider-month-list"]').waitFor({ timeout: 10000 });
   await page.locator('[data-song-act="open-workspace"]').first().click();
   await page.locator('[data-testid="song-workspace"]').waitFor({ timeout: 10000 });
