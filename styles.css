@@ -1894,6 +1894,8 @@ nav.tabs button {
   text-align: center;
 }
 
+.app-footer[hidden] { display: none; }
+
 .app-footer {
   display: flex;
   justify-content: center;

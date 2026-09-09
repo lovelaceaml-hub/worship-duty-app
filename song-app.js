@@ -367,6 +367,7 @@ function applyLocalSetlistPatch(id, patch) {
    whenever the picker was opened before the first snapshot arrived. That was
    the "sometimes it doesn't save" case. */
 function createSetlistIfAbsent(doc) {
+  if (!productionCanMutate(doc && doc.id)) return Promise.resolve(null);
   const repository = songRepository;
   const gateway = firebaseGateway;
   const p = repository.runTransaction(async tx => {
@@ -389,6 +390,7 @@ function createSetlistIfAbsent(doc) {
    document is missing, and tells the presider when a change really could not
    be saved instead of failing in silence. */
 function writeSetlistPatch(id, patch) {
+  if (!productionCanMutate(id)) return Promise.resolve(null);
   const repository = songRepository;
   const version = Number(patch.updatedAt) || now();
   pendingPatchOverlays[id] = {
@@ -432,6 +434,7 @@ function writeSetlistPatch(id, patch) {
 }
 
 function updateSetlist(id, patch, options) {
+  if (!productionCanMutate(id)) return false;
   stampMeta(patch, id);
   if (options && options.confirm) patch.confirmedAt = patch.updatedAt;
   if (fb) {
@@ -446,6 +449,7 @@ function updateSetlist(id, patch, options) {
   }
 }
 function setlistAddSong(id, songId) {
+  if (!productionCanMutate(id)) return false;
   const sl = state.setlists[id];
   const songs = ((sl && sl.songs) || []).concat(songId);
   if (fb) {
@@ -455,6 +459,7 @@ function setlistAddSong(id, songId) {
   } else if (sl) { sl.songs = songs; stampMeta(sl); state.ui.saveState = 'saved'; state.ui.saveServiceId = id; state.ui.saveError = ''; saveLocal(); render(); }
 }
 function setlistRemoveSongAt(id, index) {
+  if (!productionCanMutate(id)) return false;
   const sl = state.setlists[id];
   if (!sl) return;
   const songs = (sl.songs || []).slice();
@@ -476,6 +481,7 @@ function setlistRemoveSongAt(id, index) {
   }
 }
 function setlistReorder(id, songs) {
+  if (!productionCanMutate(id)) return false;
   if (fb) {
     const patch = stampMeta({ songs: songs.slice() }, id);
     applyLocalSetlistPatch(id, patch);
@@ -497,6 +503,7 @@ function changedSinceConfirmed(sl) {
   return SETLIST_DOMAIN.isChanged(sl);
 }
 function confirmSetlist(id) {
+  if (!productionCanMutate(id)) return false;
   const sl = state.setlists[id];
   if (!sl || !(sl.songs || []).length) return;
   updateSetlist(id, { confirmedBy: whoAmI() }, { confirm: true });
@@ -525,6 +532,7 @@ function statusPill(sl) {
 
 function ensureSetlist(date, worshipType, serviceLabel, source) {
   const id = serviceIdFor(date, serviceLabel);
+  if (!productionCanMutate(id)) return null;
   if (!state.setlists[id]) {
     const doc = stampMeta({
       id: id, date: date, worshipType: worshipType, serviceLabel: serviceLabel,
@@ -548,6 +556,7 @@ function currentSetlist() {
 /* ================= mark-as-sung / undo (write side) ================= */
 
 async function markSetlistSung(id) {
+  if (!editorUnlocked()) return false;
   const local = state.setlists[id];
   if (!local) return;
   if (local.status === 'sung') { render(); return; }
@@ -586,6 +595,7 @@ async function markSetlistSung(id) {
   }
 }
 async function undoSetlistSung(id) {
+  if (!editorUnlocked()) return false;
   const local = state.setlists[id];
   if (!local) return;
   if (!fb) {
@@ -664,7 +674,7 @@ function serviceOrder(worship, serviceLabel, assignments, songNotes) {
   const n = songNotes || {};
   const steps = [
     { step: 'Glory song', note: n.glory || 'stand & sing' },
-    { step: 'Opening prayer', who: a['Opening Prayer'] || '' }
+    { step: 'Opening prayer', who: a['Opening Prayer'] || a.Sermon || '' }
   ];
   if (thanksApplies(worship, serviceLabel, a)) {
     steps.push({ step: 'Thanks song', note: n.thanks || '' });
@@ -759,6 +769,7 @@ function syncPresiderSchedule() {
     });
 }
 function addPresider(name) {
+  if (!editorUnlocked()) return false;
   name = String(name || '').trim();
   if (!name) return;
   if (state.presiders.indexOf(name) !== -1) return;
@@ -766,11 +777,13 @@ function addPresider(name) {
   else { state.presiders.push(name); state.presiders.sort(); saveLocal(); render(); }
 }
 function removePresider(name) {
+  if (!editorUnlocked()) return false;
   if (songRepository && songRepository.isRemote()) songRepository.removeArrayValue('app', 'presiders', 'names', name);
   else { state.presiders = state.presiders.filter(n => n !== name); saveLocal(); render(); }
 }
 
 async function deleteSetlistById(id) {
+  if (!productionCanMutate(id)) return false;
   if (state.ui.workspaceService === id) state.ui.workspaceService = null;
   if (state.ui.currentSetlist === id) state.ui.currentSetlist = null;
   if (fb) {
@@ -785,6 +798,7 @@ async function deleteSetlistById(id) {
 /* ================= backfill (editor-gated) ================= */
 
 async function backfillSong(songId, date) {
+  if (!editorUnlocked()) return false;
   const by = whoAmI() || 'Backfill';
   const markedAt = now();
   if (!fb) {
@@ -804,6 +818,7 @@ async function backfillSong(songId, date) {
   }
 }
 async function removeHistoryEntryById(songId, service) {
+  if (!editorUnlocked()) return false;
   if (!fb) {
     const r = removeHistoryEntry(state.stats, songId, service);
     if (r.removed) delete state.stats[songId];
@@ -1213,12 +1228,30 @@ function productionServiceRows() {
     String(a.date).localeCompare(String(b.date)) || String(a.time).localeCompare(String(b.time)) || String(a.session).localeCompare(String(b.session))
   );
 }
+function productionRowFor(value) {
+  const id = typeof value === 'string' ? value : value && value.id;
+  const rows = productionServiceRows();
+  const found = id && rows.find(row => row.id === id || serviceIdFor(row.date, row.session) === id);
+  return found || null;
+}
+function productionAssignedPresider(row) {
+  const assignment = row && row.assignments && row.assignments.Presider;
+  return assignment ? String(assignment) : '';
+}
+function productionCanMutate(value) {
+  if (editorUnlocked()) return true;
+  const row = productionRowFor(value);
+  const assigned = productionAssignedPresider(row);
+  const me = state.ui.me;
+  return !!(me && assigned && canonName(assigned) === canonName(me));
+}
 function productionActualPresider(row) {
-  return (row.assignments && row.assignments.Presider) || (row.setlist && row.setlist.presider) || 'Not assigned';
+  return productionAssignedPresider(row) || 'Not assigned';
 }
 function productionIsMyPresider(row) {
   const me = state.ui.me;
-  return !!me && canonName(productionActualPresider(row)) === canonName(me);
+  const assigned = productionAssignedPresider(row);
+  return !!me && !!assigned && canonName(assigned) === canonName(me);
 }
 function productionEnsureMonth() {
   if (state.ui.presiderMonth) return state.ui.presiderMonth;
@@ -1250,7 +1283,14 @@ function productionSongSummary(sl) {
   const ids = sl ? countedSongIds(sl) : [];
   return { count: ids.length, duration: totalDuration(ids, state.songById) };
 }
+function productionSnapshotNotice() {
+  if (state._snapshotError) return '<div class="song-snapshot-notice" role="status" data-testid="song-snapshot-status">Song updates are unavailable. Previously loaded information is retained. ' + (songRepository && songRepository.isRemote() ? '<button class="ws-link" data-song-act="retry-song-snapshots">Retry loading</button>' : 'Reload to try online access again.') + '</div>';
+  if (songRepository && songRepository.isRemote() && !state._setlistsLoaded) return '<p class="song-snapshot-notice" role="status" data-testid="song-snapshot-status">Loading song plans...</p>';
+  return '';
+}
 function productionStatus(sl) {
+  if (!sl && state._snapshotError) return 'Updates unavailable';
+  if (!sl && songRepository && songRepository.isRemote() && !state._setlistsLoaded) return 'Loading songs';
   if (!sl || !(sl.songs || []).length) return 'No songs yet';
   if (sl.status === 'sung') return 'Sung';
   if (changedSinceConfirmed(sl)) return 'Changed';
@@ -1267,7 +1307,7 @@ function productionSaveState(sl) {
   if (!save) return '';
   if (save.state === 'saving') return '<span class="ws-badge saving">Saving</span>';
   if (save.state === 'saved') return '<span class="ws-badge saved">Saved</span>';
-  if (save.state === 'failed') return '<span class="ws-badge failed">Save failed</span><button class="ws-link" data-song-act="retry-save" data-id="' + esc(id) + '">Retry</button>';
+  if (save.state === 'failed') return '<span class="ws-badge failed">Save failed</span><button class="ws-link" data-song-act="retry-save" data-id="' + esc(id) + '"' + (productionCanMutate(id) ? '' : ' disabled') + '>Retry</button>';
   return '';
 }
 function productionSelectedRow() {
@@ -1317,12 +1357,12 @@ function productionServiceChooser(row) {
 function productionContext(row) {
   if (!row) return '<div class="presider-context empty-context">Choose a service to work on its songs and order.</div>';
   const sl = row.setlist;
-  return '<div class="presider-context" data-service-id="' + esc(row.id) + '"><div><h2>' + esc((row.worship || 'Service') + ' | ' + productionDateLabel(row.date)) + '</h2><p>' + esc(row.session + ' | ' + productionTimeLabel(row.time)) + '</p></div><div class="context-presider"><span>Presider</span><strong data-service-presider>' + esc(productionActualPresider(row)) + '</strong></div><div class="context-state"><span class="ws-badge ' + productionStatusClass(sl) + '" data-confirmation-state>' + esc(productionStatus(sl)) + '</span>' + productionSaveState(sl) + '</div></div>';
+  return '<div class="presider-context" data-service-id="' + esc(row.id) + '"><div><h2>' + esc((row.worship || 'Service') + ' | ' + productionDateLabel(row.date)) + '</h2><p>' + esc(row.session + ' | ' + productionTimeLabel(row.time)) + '</p></div><div class="context-presider"><span>Presider</span><strong data-service-presider>' + esc(productionActualPresider(row)) + '</strong></div><div class="context-state"><span class="ws-badge ' + productionStatusClass(sl) + '" data-confirmation-state>' + esc(productionStatus(sl)) + '</span>' + productionSaveState(sl, row) + '</div></div>';
 }
 function productionPrayerSummary(row) {
   const a = row.assignments || {};
   const pieces = [
-    '<span><b>Opening:</b> ' + esc(a['Opening Prayer'] || 'Not assigned') + '</span>'
+    '<span><b>Opening:</b> ' + esc(a['Opening Prayer'] || a.Sermon || 'Not assigned') + '</span>'
   ];
   if (productionThanksApplies(row, row.setlist)) pieces.push('<span><b>Thanks:</b> ' + esc(a['Prayer of Thanks'] || 'Not assigned') + '</span>');
   pieces.push('<span><b>Closing:</b> ' + esc(a['Closing Prayer'] || 'Not assigned') + '</span>');
@@ -1330,39 +1370,45 @@ function productionPrayerSummary(row) {
   return '<div class="presider-prayer-line" aria-label="Prayer assignments">' + pieces.join('<i aria-hidden="true">|</i>') + '</div>' + choir;
 }
 function productionOutline(row, sl) {
+  const canMutate = productionCanMutate(row);
   const prep = productionSongEntries(sl, row).filter(entry => entry.role === 'Preparation');
   const prepRows = prep.length ? prep.map(entry => '<div class="presider-outline-row"><span class="outline-role">Prep</span><span class="outline-number">' + esc(dispNumber(entry.song)) + '</span><strong>' + esc(entry.song.title) + '</strong><time>' + fmtDur(entry.song.durationSec) + '</time></div>').join('') : '<p class="ws-empty">No preparation songs selected.</p>';
   const slot = (role, id) => {
     const song = id && state.songById[id];
-    return '<div class="presider-outline-row"><span class="outline-role">' + role + '</span>' + (song ? '<span class="outline-number">' + esc(dispNumber(song)) + '</span><strong>' + esc(song.title) + '</strong><time>' + fmtDur(song.durationSec) + '</time>' : '<button class="ws-link" data-song-act="add-song-role" data-role="' + role.toLowerCase() + '" data-id="' + esc(row.id) + '">Select ' + role + '</button>') + '</div>';
+    return '<div class="presider-outline-row"><span class="outline-role">' + role + '</span>' + (song ? '<span class="outline-number">' + esc(dispNumber(song)) + '</span><strong>' + esc(song.title) + '</strong><time>' + fmtDur(song.durationSec) + '</time>' : '<button class="ws-link" data-song-act="add-song-role" data-role="' + role.toLowerCase() + '" data-id="' + esc(row.id) + '"' + (canMutate ? '' : ' disabled') + '>Select ' + role + '</button>') + '</div>';
   };
   const open = state.ui.expandedService !== row.id;
   const thanks = productionThanksApplies(row, sl) ? '<div class="outline-group special-slot"><h3>Thanks</h3>' + slot('Thanks', sl && sl.thanksSong) + '</div>' : '';
-  return '<details class="presider-service-order"' + (open ? ' open' : '') + '><summary data-song-act="view-service" data-id="' + esc(row.id) + '">' + (open ? 'Hide song outline' : 'Show song outline') + '</summary><div class="presider-order-body"><div class="outline-group preparation-group"><h3>Preparation</h3>' + prepRows + '</div><div class="outline-group special-slot"><h3>Glory</h3>' + slot('Glory', sl && sl.glorySong) + '</div>' + thanks + '</div></details>';
+  const choir = row.choirSong ? '<div class="outline-group special-slot choir-slot"><div class="presider-outline-row"><span class="outline-role">Choir</span><strong class="choir-outline-title">' + esc(productionChoirLabel(row.choirSong)) + '</strong></div></div>' : '';
+  return '<details class="presider-service-order"' + (open ? ' open' : '') + '><summary data-song-act="view-service" data-id="' + esc(row.id) + '">' + (open ? 'Hide song outline' : 'Show song outline') + '</summary><div class="presider-order-body"><div class="outline-group preparation-group"><h3>Preparation</h3>' + prepRows + '</div><div class="outline-group special-slot"><h3>Glory</h3>' + slot('Glory', sl && sl.glorySong) + '</div>' + thanks + choir + '</div></details>';
 }
 function productionActions(row) {
-  return '<div class="presider-action-row ws-actions" aria-label="Service actions"><button class="ws-button primary" data-song-act="open-workspace" data-id="' + esc(row.id) + '">Select Songs</button><button class="ws-button" data-song-act="order-workspace" data-id="' + esc(row.id) + '">Order of Worship</button><button class="ws-button" data-song-act="copy-text" data-id="' + esc(row.id) + '">Copy Text</button><button class="ws-button" data-song-act="request-change" data-id="' + esc(row.id) + '">Request Change</button></div>';
+  const canMutate = productionCanMutate(row);
+  const openDisabled = !row.setlist && !canMutate ? ' disabled' : '';
+  return '<div class="presider-action-row ws-actions" aria-label="Service actions"><button class="ws-button primary" data-song-act="open-workspace" data-id="' + esc(row.id) + '"' + openDisabled + '>Select Songs</button><button class="ws-button" data-song-act="order-workspace" data-id="' + esc(row.id) + '">Order of Worship</button><button class="ws-button" data-song-act="copy-text" data-id="' + esc(row.id) + '">Copy Text</button><button class="ws-button" data-song-act="request-change" data-id="' + esc(row.id) + '">Request Change</button></div>';
 }
 function productionServiceCard(row) {
   const sl = row.setlist;
   const summary = productionSongSummary(sl);
   const mine = productionIsMyPresider(row);
-  return '<article class="presider-service-card ws-service-card' + (mine ? ' personal-presider' : '') + '" data-testid="presider-service" data-service-summary data-service-id="' + esc(row.id) + '"><header class="presider-service-header"><h3>' + esc((row.worship || 'Service') + ' | ' + productionDateLabel(row.date)) + '</h3><strong data-service-presider>' + esc(productionActualPresider(row)) + '</strong></header><div class="presider-facts-scroll" tabindex="0" role="region" aria-label="Service details"><div class="presider-compact-summary"><span><small>Time</small><strong>' + esc(productionTimeLabel(row.time)) + '</strong></span><span><small>Session</small><strong>' + esc(row.session || 'Service') + '</strong></span><span><small>Presider</small><strong>' + esc(productionActualPresider(row)) + '</strong></span><span><small>Songs</small><strong>' + summary.count + '</strong></span><span><small>Total</small><strong>' + esc(fmtDur(summary.duration)) + '</strong></span><span><small>Status</small><strong class="ws-badge ' + productionStatusClass(sl) + '" data-confirmation-state>' + esc(productionStatus(sl)) + '</strong>' + productionSaveState(sl) + '</span></div></div>' + productionPrayerSummary(row) + productionOutline(row, sl) + productionActions(row) + '</article>';
+  return '<article class="presider-service-card ws-service-card' + (mine ? ' personal-presider' : '') + '" data-testid="presider-service" data-service-summary data-service-id="' + esc(row.id) + '"><header class="presider-service-header"><h3>' + esc((row.worship || 'Service') + ' | ' + productionDateLabel(row.date)) + '</h3><strong data-service-presider>' + esc(productionActualPresider(row)) + '</strong></header><div class="presider-facts-scroll" tabindex="0" role="region" aria-label="Service details"><div class="presider-compact-summary"><span><small>Time</small><strong>' + esc(productionTimeLabel(row.time)) + '</strong></span><span><small>Session</small><strong>' + esc(row.session || 'Service') + '</strong></span><span><small>Presider</small><strong>' + esc(productionActualPresider(row)) + '</strong></span><span><small>Songs</small><strong>' + summary.count + '</strong></span><span><small>Total</small><strong>' + esc(fmtDur(summary.duration)) + '</strong></span><span><small>Status</small><strong class="ws-badge ' + productionStatusClass(sl) + '" data-confirmation-state>' + esc(productionStatus(sl)) + '</strong>' + productionSaveState(sl, row) + '</span></div></div>' + productionPrayerSummary(row) + productionOutline(row, sl) + productionActions(row) + '</article>';
 }
 function productionHistory(sl, row) {
   if (!sl) return '<section class="song-history"><h2>Selected song history</h2><p class="ws-empty">Create a song plan to see service history.</p></section>';
   const items = productionSongEntries(sl, row).map(entry => {
     const st = statFor(entry.id);
-    const history = (st.history || []).map(h => '<li>' + esc(fmtDate(h.date) + ' | ' + (h.service || '')) + '<button class="ws-link" data-song-act="remove-history" data-id="' + esc(entry.id) + '" data-service="' + esc(h.service || '') + '">Remove</button></li>').join('');
+    const history = (st.history || []).map(h => '<li>' + esc(fmtDate(h.date) + ' | ' + (h.service || '')) + '<button class="ws-link" data-song-act="remove-history" data-id="' + esc(entry.id) + '" data-service="' + esc(h.service || '') + '"' + (editorUnlocked() ? '' : ' disabled') + '>Remove</button></li>').join('');
     return '<details class="song-history-item"><summary>' + esc(dispNumber(entry.song) + ' ' + entry.song.title) + '</summary>' + (history ? '<ul>' + history + '</ul>' : '<p>No sung history yet.</p>') + '</details>';
   }).join('');
   return '<section class="song-history"><h2>Selected song history</h2>' + (items || '<p class="ws-empty">No songs selected.</p>') + '</section>';
 }
 function productionSelectedRowHtml(entry, row) {
+  const canMutate = productionCanMutate(row);
+  const disabled = canMutate ? '' : ' disabled';
   const roleValue = entry.role === 'Preparation' ? 'prep' : entry.role.toLowerCase();
   const thanksOption = productionThanksApplies(row, row.setlist) ? '<option value="thanks"' + (roleValue === 'thanks' ? ' selected' : '') + '>Thanks</option>' : '';
-  const move = entry.role === 'Preparation' ? '<span class="prep-move"><button class="ws-icon-button" data-song-act="prep-up" data-index="' + entry.index + '" aria-label="Move ' + esc(entry.song.title) + ' up">&uarr;</button><button class="ws-icon-button" data-song-act="prep-down" data-index="' + entry.index + '" aria-label="Move ' + esc(entry.song.title) + ' down">&darr;</button></span>' : '<span class="prep-move" aria-hidden="true"></span>';
-  return '<div class="selected-song-row"><select aria-label="Role for ' + esc(entry.song.title) + '" data-song-chg="song-role" data-song-id="' + esc(entry.id) + '" data-index="' + entry.index + '"><option value="prep"' + (roleValue === 'prep' ? ' selected' : '') + '>Prep</option><option value="glory"' + (roleValue === 'glory' ? ' selected' : '') + '>Glory</option>' + thanksOption + '</select><span class="outline-number">' + esc(dispNumber(entry.song)) + '</span><strong title="' + esc(entry.song.title) + '">' + esc(entry.song.title) + '</strong><time>' + fmtDur(entry.song.durationSec) + '</time>' + move + '<button class="ws-icon-button remove-song" data-song-act="remove-workspace-song" data-song-id="' + esc(entry.id) + '" data-index="' + entry.index + '" aria-label="Remove ' + esc(entry.song.title) + '">&times;</button></div>';
+  const move = entry.role === 'Preparation' ? '<span class="prep-move"><button class="ws-icon-button" data-song-act="prep-up" data-index="' + entry.index + '" aria-label="Move ' + esc(entry.song.title) + ' up"' + disabled + '>&uarr;</button><button class="ws-icon-button" data-song-act="prep-down" data-index="' + entry.index + '" aria-label="Move ' + esc(entry.song.title) + ' down"' + disabled + '>&darr;</button></span>' : '<span class="prep-move" aria-hidden="true"></span>';
+  return '<div class="selected-song-row"><select aria-label="Role for ' + esc(entry.song.title) + '" data-song-chg="song-role" data-song-id="' + esc(entry.id) + '" data-index="' + entry.index + '"' + disabled + '><option value="prep"' + (roleValue === 'prep' ? ' selected' : '') + '>Prep</option><option value="glory"' + (roleValue === 'glory' ? ' selected' : '') + '>Glory</option>' + thanksOption + '</select><span class="outline-number">' + esc(dispNumber(entry.song)) + '</span><strong title="' + esc(entry.song.title) + '">' + esc(entry.song.title) + '</strong><time>' + fmtDur(entry.song.durationSec) + '</time>' + move + '<button class="ws-icon-button remove-song" data-song-act="remove-workspace-song" data-song-id="' + esc(entry.id) + '" data-index="' + entry.index + '" aria-label="Remove ' + esc(entry.song.title) + '"' + disabled + '>&times;</button></div>';
 }
 function productionNoService() {
   return '<div class="ws-card state-card" data-presider-state="empty"><h2>Choose a service</h2><p class="ws-empty">Select a service above or open one from the Services tab.</p></div>';
@@ -1370,7 +1416,9 @@ function productionNoService() {
 function productionSelectView(row) {
   if (!row) return productionNoService();
   const sl = row.setlist;
-  if (!sl) return '<div class="ws-card state-card" data-presider-state="no-plan"><h2>No song plan yet</h2><p class="ws-empty">Create the plan for ' + esc(productionActualPresider(row)) + ' before selecting songs.</p><button class="ws-button primary" data-song-act="create-workspace-plan" data-id="' + esc(row.id) + '">Create plan</button></div>';
+  const canMutate = productionCanMutate(row);
+  if (!sl && ((songRepository && songRepository.isRemote() && !state._setlistsLoaded) || state._snapshotError)) return '<p class="ws-empty">The song plan is not available yet. Wait for loading or retry above before creating a plan.</p>';
+  if (!sl) return '<div class="ws-card state-card" data-presider-state="no-plan"><h2>No song plan yet</h2><p class="ws-empty">Create the plan for ' + esc(productionActualPresider(row)) + ' before selecting songs.</p>' + (canMutate ? '<button class="ws-button primary" data-song-act="create-workspace-plan" data-id="' + esc(row.id) + '">Create plan</button>' : '<p class="compact-notice" role="status">View only. Only the assigned Presider or editor can create this song plan.</p>') + '</div>';
   state.ui.currentSetlist = sl.id;
   const summary = productionSongSummary(sl);
   const entries = productionSongEntries(sl, row);
@@ -1378,25 +1426,30 @@ function productionSelectView(row) {
   const glory = entries.find(entry => entry.role === 'Glory');
   const thanks = entries.find(entry => entry.role === 'Thanks');
   const prepRows = prep.length ? prep.map(entry => productionSelectedRowHtml(entry, row)).join('') : '<p class="ws-empty">No preparation songs selected.</p>';
-  const slot = (role, entry) => '<section class="selected-slot"><h3>' + role + '</h3>' + (entry ? productionSelectedRowHtml(entry, row) : '<button class="ws-slot-empty" data-song-act="add-song-role" data-role="' + role.toLowerCase() + '">Select ' + role + ' song</button>') + '</section>';
+  const slot = (role, entry) => '<section class="selected-slot"><h3>' + role + '</h3>' + (entry ? productionSelectedRowHtml(entry, row) : '<button class="ws-slot-empty" data-song-act="add-song-role" data-role="' + role.toLowerCase() + '"' + (canMutate ? '' : ' disabled') + '>Select ' + role + ' song</button>') + '</section>';
   const confirmLabel = isConfirmed(sl) && !changedSinceConfirmed(sl) ? 'Confirm Again' : 'Confirm Songs';
   const thanksSlot = productionThanksApplies(row, sl) ? slot('Thanks', thanks) : '';
-  return '<div class="select-songs-view"><div class="selection-summary"><strong>' + summary.count + ' song' + (summary.count === 1 ? '' : 's') + '</strong><span class="tnum">' + esc(fmtDur(summary.duration)) + '</span><button class="ws-button primary" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' + confirmLabel + '</button></div><label class="workspace-notes">Service notes<textarea data-song-chg="workspace-notes" rows="2" placeholder="Service notes">' + esc(sl.notes || '') + '</textarea></label><section class="selected-songs-panel" aria-labelledby="selected-songs-title"><div class="ws-toolbar"><h2 id="selected-songs-title">Preparation</h2><button class="ws-link" data-song-act="add-song-role" data-role="prep">Add preparation song</button></div><div class="selected-song-list">' + prepRows + '</div></section>' + slot('Glory', glory) + thanksSlot + productionLibraryView(row) + '</div>';
+  const notice = canMutate ? '' : '<p class="compact-notice" role="status">View only. Only the assigned Presider or editor can change this song plan.</p>';
+  return '<div class="select-songs-view">' + notice + '<div class="selection-summary"><strong>' + summary.count + ' song' + (summary.count === 1 ? '' : 's') + '</strong><span class="tnum">' + esc(fmtDur(summary.duration)) + '</span><button class="ws-button primary" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '"' + (canMutate ? '' : ' disabled') + '>' + confirmLabel + '</button></div><label class="workspace-notes">Service notes<textarea data-song-chg="workspace-notes" rows="2" placeholder="Service notes"' + (canMutate ? '' : ' readonly') + '>' + esc(sl.notes || '') + '</textarea></label><section class="selected-songs-panel" aria-labelledby="selected-songs-title"><div class="ws-toolbar"><h2 id="selected-songs-title">Preparation</h2><button class="ws-link" data-song-act="add-song-role" data-role="prep"' + (canMutate ? '' : ' disabled') + '>Add preparation song</button></div><div class="selected-song-list">' + prepRows + '</div></section>' + slot('Glory', glory) + thanksSlot + productionLibraryView(row) + '</div>';
 }
 function productionLibrary(row) {
   const cats = ['All', 'Appendix'].concat(categoriesInSeed().filter(category => category !== 'Appendix'));
   const sortOpts = SORTS.map(s => '<option value="' + s[0] + '"' + (state.ui.sort === s[0] ? ' selected' : '') + '>' + s[1] + '</option>').join('');
   const list = filteredSongs();
   const sl = row && row.setlist;
-  return '<label class="library-search" for="production-library-search"><span class="sr-only">Search by number, title, or title word</span><input id="production-library-search" type="search" data-song-chg="search" value="' + esc(state.ui.search || '') + '" placeholder="Search number, title, or word" autocomplete="off"></label><div class="library-categories" role="toolbar" aria-label="Song categories">' + cats.map(category => '<button class="ws-filter' + (state.ui.category === category ? ' active' : '') + '" data-song-act="set-category" data-cat="' + esc(category) + '">' + esc(category) + '</button>').join('') + '</div><div class="library-sort-row"><label class="library-sort">Sort<select data-song-chg="sort">' + sortOpts + '</select></label><span>' + list.length + ' songs</span></div><div class="production-song-list">' + (list.length ? list.map(song => { const st = statFor(song.id); const history = (st.history || []).map(h => '<li>' + esc(fmtDate(h.date) + ' | ' + (h.service || '')) + '<button class="ws-link" data-song-act="remove-history" data-id="' + esc(song.id) + '" data-service="' + esc(h.service || '') + '">Remove</button></li>').join(''); const historyBlock = '<details class="catalog-history"><summary>History</summary>' + (history ? '<ul>' + history + '</ul>' : '<p>No sung history yet.</p>') + '</details>'; return '<article class="library-song-block" data-song-id="' + esc(song.id) + '"><div class="production-song-row"><span class="library-number">' + esc(dispNumber(song)) + '</span><span class="dot-c" title="' + esc(song.category) + '" style="background:' + catColor(song.category) + '"></span><strong title="' + esc(song.title) + '">' + esc(song.title) + '</strong><span class="tnum">' + fmtDur(song.durationSec) + '</span><span class="tnum">' + (st.timesSung || 0) + 'x</span><span class="library-last" title="Last sung">' + esc(relTime(st.lastSung)) + '</span><button class="ws-icon-button add-library" data-song-act="add-library-song" data-id="' + esc(song.id) + '" aria-label="Add ' + esc(song.title) + '"' + (sl ? '' : ' disabled') + '>+</button></div>' + historyBlock + '</article>'; }).join('') : '<p class="ws-empty">No songs match this search.</p>') + '</div>';
+  const canMutate = productionCanMutate(row);
+  const addDisabled = sl && canMutate ? '' : ' disabled';
+  const historyDisabled = editorUnlocked() ? '' : ' disabled';
+  return '<label class="library-search" for="production-library-search"><span class="sr-only">Search by number, title, or title word</span><input id="production-library-search" type="search" data-song-chg="search" value="' + esc(state.ui.search || '') + '" placeholder="Search number, title, or word" autocomplete="off"></label><div class="library-categories" role="toolbar" aria-label="Song categories">' + cats.map(category => '<button class="ws-filter' + (state.ui.category === category ? ' active' : '') + '" data-song-act="set-category" data-cat="' + esc(category) + '">' + esc(category) + '</button>').join('') + '</div><div class="library-sort-row"><label class="library-sort">Sort<select data-song-chg="sort">' + sortOpts + '</select></label><span>' + list.length + ' songs</span></div><div class="production-song-list">' + (list.length ? list.map(song => { const st = statFor(song.id); const history = (st.history || []).map(h => '<li>' + esc(fmtDate(h.date) + ' | ' + (h.service || '')) + '<button class="ws-link" data-song-act="remove-history" data-id="' + esc(song.id) + '" data-service="' + esc(h.service || '') + '"' + historyDisabled + '>Remove</button></li>').join(''); const historyBlock = '<details class="catalog-history"><summary>History</summary>' + (history ? '<ul>' + history + '</ul>' : '<p>No sung history yet.</p>') + '</details>'; return '<article class="library-song-block" data-song-id="' + esc(song.id) + '"><div class="production-song-row"><span class="library-number">' + esc(dispNumber(song)) + '</span><span class="dot-c" title="' + esc(song.category) + '" style="background:' + catColor(song.category) + '"></span><strong title="' + esc(song.title) + '">' + esc(song.title) + '</strong><span class="tnum">' + fmtDur(song.durationSec) + '</span><span class="tnum">' + (st.timesSung || 0) + 'x</span><span class="library-last" title="Last sung">' + esc(relTime(st.lastSung)) + '</span><button class="ws-icon-button add-library" data-song-act="add-library-song" data-id="' + esc(song.id) + '" aria-label="Add ' + esc(song.title) + '"' + addDisabled + '>+</button></div>' + historyBlock + '</article>'; }).join('') : '<p class="ws-empty">No songs match this search.</p>') + '</div>';
 }
 function productionLibraryView(row) {
   if (!row) return productionNoService();
   const sl = row.setlist;
+  const canMutate = productionCanMutate(row);
   const role = state.ui.songRole || 'prep';
   const thanksOption = productionThanksApplies(row, sl) ? '<option value="thanks"' + (role === 'thanks' ? ' selected' : '') + '>Thanks</option>' : '';
-  const setup = sl ? '' : '<div class="compact-notice">Create this service plan before adding songs. <button class="ws-link" data-song-act="create-workspace-plan" data-id="' + esc(row.id) + '">Create plan</button></div>';
-  return '<section class="song-library-panel" data-testid="song-library" aria-labelledby="song-library-title"><div class="ws-toolbar library-heading"><h2 id="song-library-title">Song library</h2><label class="library-role">Add as<select data-song-chg="library-role"><option value="prep"' + (role === 'prep' ? ' selected' : '') + '>Preparation</option><option value="glory"' + (role === 'glory' ? ' selected' : '') + '>Glory</option>' + thanksOption + '</select></label></div>' + setup + productionLibrary(row) + '</section>';
+  const setup = sl ? '' : '<div class="compact-notice">Create this service plan before adding songs. <button class="ws-link" data-song-act="create-workspace-plan" data-id="' + esc(row.id) + '"' + (canMutate ? '' : ' disabled') + '>Create plan</button></div>';
+  return '<section class="song-library-panel" data-testid="song-library" aria-labelledby="song-library-title"><div class="ws-toolbar library-heading"><h2 id="song-library-title">Song library</h2><label class="library-role">Add as<select data-song-chg="library-role"' + (canMutate ? '' : ' disabled') + '><option value="prep"' + (role === 'prep' ? ' selected' : '') + '>Preparation</option><option value="glory"' + (role === 'glory' ? ' selected' : '') + '>Glory</option>' + thanksOption + '</select></label></div>' + setup + productionLibrary(row) + '</section>';
 }
 function productionOrderView(row) {
   if (!row) return productionNoService();
@@ -1404,14 +1457,17 @@ function productionOrderView(row) {
 }
 function productionInsightsView(row) {
   const sl = row && row.setlist;
-  const serviceActions = sl ? '<section class="ws-card service-tools"><div class="ws-toolbar"><h2>Service actions</h2><span class="ws-badge ' + productionStatusClass(sl) + '">' + esc(productionStatus(sl)) + '</span></div><div class="ws-actions"><button class="ws-button" data-song-act="export-csv">Export history</button><button class="ws-button" data-song-act="open-backfill">Backfill history</button>' + (sl.status === 'sung' ? '<button class="ws-button" data-song-act="undo-sung" data-id="' + esc(sl.id) + '">Undo sung</button>' : '<button class="ws-button" data-song-act="mark-sung" data-id="' + esc(sl.id) + '"' + (!(sl.songs || []).length ? ' disabled' : '') + '>Mark sung</button>') + '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete setlist</button></div></section>' : '';
+  const canMutate = productionCanMutate(row);
+  const editor = editorUnlocked();
+  const serviceActions = sl ? '<section class="ws-card service-tools"><div class="ws-toolbar"><h2>Service actions</h2><span class="ws-badge ' + productionStatusClass(sl) + '">' + esc(productionStatus(sl)) + '</span></div><div class="ws-actions"><button class="ws-button" data-song-act="export-csv">Export history</button><button class="ws-button" data-song-act="open-backfill"' + (editor ? '' : ' disabled') + '>Backfill history</button>' + (sl.status === 'sung' ? '<button class="ws-button" data-song-act="undo-sung" data-id="' + esc(sl.id) + '"' + (editor ? '' : ' disabled') + '>Undo sung</button>' : '<button class="ws-button" data-song-act="mark-sung" data-id="' + esc(sl.id) + '"' + (!(sl.songs || []).length || !editor ? ' disabled' : '') + '>Mark sung</button>') + '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '"' + (canMutate ? '' : ' disabled') + '>Delete setlist</button></div></section>' : '';
   return serviceActions + productionHistory(sl, row) + '<section class="insights-tools"><div class="ws-toolbar"><h2>Library insights</h2><button class="ws-button" data-song-act="sync-catalog">Refresh catalog</button></div>' + renderInsights(false) + '</section>';
 }
 function productionManualPlan() {
-  if (!state.ui.manualService) return '<button class="ws-link" data-song-act="manual-service">Plan another date</button>';
+  const canMutate = editorUnlocked();
+  if (!state.ui.manualService) return '<button class="ws-link" data-song-act="manual-service"' + (canMutate ? '' : ' disabled') + '>Plan another date</button>';
   const worshipOpts = WORSHIP_TYPES.map(w => '<option>' + esc(w) + '</option>').join('');
   const labelOpts = SERVICE_LABELS.map(l => '<option>' + esc(l) + '</option>').join('');
-  return '<div class="ws-card manual-plan"><h2>Plan a manual service</h2><div class="manual-plan-fields"><label for="b-date">Date<input type="date" id="b-date" value="' + esc(todayISO()) + '"></label><label for="b-worship">Worship type<select id="b-worship">' + worshipOpts + '</select></label><label for="b-label">Service<select id="b-label">' + labelOpts + '</select></label></div><div class="ws-actions"><button class="ws-button primary" data-song-act="start-setlist">Start this setlist</button><button class="ws-link" data-song-act="cancel-manual-service">Cancel</button></div></div>';
+  return '<div class="ws-card manual-plan"><h2>Plan a manual service</h2><div class="manual-plan-fields"><label for="b-date">Date<input type="date" id="b-date" value="' + esc(todayISO()) + '"></label><label for="b-worship">Worship type<select id="b-worship">' + worshipOpts + '</select></label><label for="b-label">Service<select id="b-label">' + labelOpts + '</select></label></div><div class="ws-actions"><button class="ws-button primary" data-song-act="start-setlist"' + (canMutate ? '' : ' disabled') + '>Start this setlist</button><button class="ws-link" data-song-act="cancel-manual-service">Cancel</button></div></div>';
 }
 function productionServicesView() {
   const month = productionEnsureMonth();
@@ -1434,11 +1490,15 @@ function productionHome() {
   const active = ['services', 'select', 'order', 'library', 'insights'].indexOf(state.ui.tab) === -1 ? 'services' : state.ui.tab;
   state.ui.tab = active;
   const context = active === 'services' ? '' : productionContext(row);
-  return '<section class="presider-page song-workspace" data-screen="presider"' + (row ? ' data-service-id="' + esc(row.id) + '"' : '') + ' aria-labelledby="presider-page-title"><header class="presider-heading"><h1 id="presider-page-title">Presider</h1><label class="presider-filter" for="presider-filter"><span>Show</span><select id="presider-filter" aria-label="Show services" data-song-chg="presider-filter"><option value="mine"' + (state.ui.presiderFilter !== 'all' ? ' selected' : '') + '>My presiding</option><option value="all"' + (state.ui.presiderFilter === 'all' ? ' selected' : '') + '>All services</option></select></label></header>' + productionTabs() + productionServiceChooser(row) + context + '<div class="presider-tab-panel" id="presider-panel-' + active + '" role="tabpanel" data-testid="' + (active === 'services' ? 'presider-month-list-panel' : 'song-workspace') + '">' + productionTabBody(row) + '</div></section>';
+  return '<section class="presider-page song-workspace" data-screen="presider"' + (row ? ' data-service-id="' + esc(row.id) + '"' : '') + ' aria-labelledby="presider-page-title"><header class="presider-heading"><h1 id="presider-page-title">Presider</h1><label class="presider-filter" for="presider-filter"><span>Show</span><select id="presider-filter" aria-label="Show services" data-song-chg="presider-filter"><option value="mine"' + (state.ui.presiderFilter !== 'all' ? ' selected' : '') + '>My presiding</option><option value="all"' + (state.ui.presiderFilter === 'all' ? ' selected' : '') + '>All services</option></select></label></header>' + '<div data-snapshot-notices>' + productionSnapshotNotice() + '</div>' + productionTabs() + productionServiceChooser(row) + context + '<div class="presider-tab-panel" id="presider-panel-' + active + '" role="tabpanel" data-testid="' + (active === 'services' ? 'presider-month-list-panel' : 'song-workspace') + '">' + productionTabBody(row) + '</div></section>';
 }
 function render() {
   if (!root) return;
-  if (rootHasFocusedInput()) return;
+  if (rootHasFocusedInput()) {
+    const notices = root.querySelector('[data-snapshot-notices]');
+    if (notices) notices.innerHTML = productionSnapshotNotice();
+    return;
+  }
   if (state.ui.editorGate) { root.innerHTML = '<section class="presider-page" data-screen="presider">' + renderHeader() + renderEditorGate() + '</section>'; return; }
   root.innerHTML = productionHome();
   if (state.ui.tab === 'services' && state.ui.presiderDay) {
@@ -1476,7 +1536,9 @@ function handleAct(act, el) {
     case 'open-workspace': {
       const row = productionServiceRows().find(item => item.id === el.dataset.id);
       if (row) {
+        if (!row.setlist && !productionCanMutate(row)) { render(); break; }
         const id = row.setlist ? row.setlist.id : ensureSetlist(row.date, row.worship || WORSHIP_TYPES[0], row.session, 'schedule');
+        if (!id) { render(); break; }
         state.ui.currentSetlist = id;
         state.ui.workspaceService = row.id;
         state.ui.tab = 'select';
@@ -1491,7 +1553,9 @@ function handleAct(act, el) {
     case 'create-workspace-plan': {
       const row = productionServiceRows().find(item => item.id === el.dataset.id);
       if (row) {
+        if (!productionCanMutate(row)) { render(); break; }
         const id = ensureSetlist(row.date, row.worship || WORSHIP_TYPES[0], row.session, 'schedule');
+        if (!id) { render(); break; }
         state.ui.currentSetlist = id;
         state.ui.workspaceService = row.id;
         state.ui.tab = 'select';
@@ -1503,6 +1567,12 @@ function handleAct(act, el) {
     case 'presider-month-next': state.ui.presiderMonth = productionShiftMonth(productionEnsureMonth(), 1); state.ui.presiderMonthTouched = true; state.ui.presiderDay = ''; render(); break;
     case 'presider-day': state.ui.presiderDay = el.dataset.date || ''; render(); break;
     case 'view-service': state.ui.expandedService = state.ui.expandedService === el.dataset.id ? null : el.dataset.id; render(); break;
+    case 'retry-song-snapshots': {
+      if (subscriptionStop) { subscriptionStop(); subscriptionStop = null; }
+      subscribe();
+      render();
+      break;
+    }
     case 'presider-tab': {
       const tab = el.dataset.tab;
       if (['services', 'select', 'order', 'library', 'insights'].indexOf(tab) !== -1) state.ui.tab = tab;
@@ -1519,12 +1589,16 @@ function handleAct(act, el) {
       render();
       break;
     }
-    case 'add-song-role': state.ui.songRole = String(el.dataset.role || 'prep').toLowerCase(); state.ui.search = ''; if (el.dataset.id) state.ui.workspaceService = el.dataset.id; state.ui.tab = 'select'; render(); break;
+    case 'add-song-role': {
+      const serviceId = el.dataset.id || state.ui.workspaceService || state.ui.currentSetlist;
+      if (!productionCanMutate(serviceId)) { render(); break; }
+      state.ui.songRole = String(el.dataset.role || 'prep').toLowerCase(); state.ui.search = ''; if (el.dataset.id) state.ui.workspaceService = el.dataset.id; state.ui.tab = 'select'; render(); break;
+    }
     case 'add-library-song': {
       const sl = currentSetlist();
       const sid = el.dataset.id;
       const role = state.ui.songRole || 'prep';
-      if (!sl || !sid) break;
+      if (!sl || !sid || !productionCanMutate(sl.id)) break;
       if (role === 'glory' || role === 'thanks') {
         const patch = {}; patch[role === 'glory' ? 'glorySong' : 'thanksSong'] = sid;
         if ((sl.songs || []).indexOf(sid) === -1) sl.songs = (sl.songs || []).concat(sid);
@@ -1535,7 +1609,7 @@ function handleAct(act, el) {
     }
     case 'remove-workspace-song': {
       const sl = currentSetlist();
-      if (sl) {
+      if (sl && productionCanMutate(sl.id)) {
         const index = Number(el.dataset.index);
         if (index >= 0) setlistRemoveSongAt(sl.id, index);
         else {
@@ -1549,8 +1623,8 @@ function handleAct(act, el) {
       }
       break;
     }
-    case 'prep-up': movePreparationSong(Number(el.dataset.index), -1); break;
-    case 'prep-down': movePreparationSong(Number(el.dataset.index), 1); break;
+    case 'prep-up': if (productionCanMutate(state.ui.currentSetlist)) movePreparationSong(Number(el.dataset.index), -1); break;
+    case 'prep-down': if (productionCanMutate(state.ui.currentSetlist)) movePreparationSong(Number(el.dataset.index), 1); break;
     case 'request-change': {
       const row = productionServiceRows().find(item => item.id === el.dataset.id);
       if (ctx && ctx.ui && typeof ctx.ui.requestChange === 'function') ctx.ui.requestChange(row || null);
@@ -1565,17 +1639,22 @@ function handleAct(act, el) {
     case 'retry-save': {
       const id = el.dataset.id;
       const save = id && saveStates[id];
-      if (save && save.state === 'failed' && save.retryPayload) writeSetlistPatch(id, save.retryPayload);
+      if (productionCanMutate(id) && save && save.state === 'failed' && save.retryPayload) writeSetlistPatch(id, save.retryPayload);
       break;
     }
     case 'sync-catalog': syncCatalog(); break;
     case 'set-category': state.ui.category = el.dataset.cat; render(); break;
-    case 'confirm-songs': confirmSetlist(el.dataset.id || state.ui.currentSetlist || state.ui.workspaceService); break;
+    case 'confirm-songs': {
+      const id = el.dataset.id || state.ui.currentSetlist || state.ui.workspaceService;
+      if (productionCanMutate(id)) confirmSetlist(id);
+      break;
+    }
     case 'start-setlist': {
       const date = root.querySelector('#b-date').value || todayISO();
       const worship = root.querySelector('#b-worship').value;
       const label = root.querySelector('#b-label').value;
       state.ui.currentSetlist = ensureSetlist(date, worship, label, 'manual');
+      if (!state.ui.currentSetlist) { render(); break; }
       state.ui.workspaceService = state.ui.currentSetlist;
       state.ui.tab = 'select';
       state.ui.manualService = false; render(); break;
@@ -1594,7 +1673,8 @@ function handleAct(act, el) {
     }
     case 'delete-setlist': {
       const id = el.dataset.id;
-      requireEditor(() => { if (confirm('Delete this setlist? This cannot be undone (sung history for its songs is untouched).')) deleteSetlistById(id); else render(); });
+      if (productionCanMutate(id) && confirm('Delete this setlist? This cannot be undone (sung history for its songs is untouched).')) deleteSetlistById(id);
+      else render();
       break;
     }
     case 'unlock-editor': {
@@ -1682,12 +1762,12 @@ function handleChg(chg, el) {
       render();
       break;
     }
-    case 'library-role': state.ui.songRole = el.value || 'prep'; render(); break;
+    case 'library-role': if (productionCanMutate(state.ui.workspaceService || state.ui.currentSetlist)) { state.ui.songRole = el.value || 'prep'; render(); } break;
     case 'song-role': {
       const sl = currentSetlist();
       const sid = el.dataset.songId;
       const role = el.value || 'prep';
-      if (!sl || !sid) break;
+      if (!sl || !sid || !productionCanMutate(sl.id)) break;
       const songs = (sl.songs || []).slice();
       if (songs.indexOf(sid) === -1) songs.push(sid);
       const patch = { songs: songs };
@@ -1699,7 +1779,7 @@ function handleChg(chg, el) {
     }
     case 'workspace-notes': {
       const sl = currentSetlist();
-      if (sl) {
+      if (sl && productionCanMutate(sl.id)) {
         const id = sl.id;
         const value = String(el.value || '');
         debounce('workspace-notes:' + id, () => updateSetlist(id, { notes: value }), 450);
@@ -1766,9 +1846,11 @@ function wireRoot() {
 function subscribe() {
   if (!songRepository || !songRepository.isRemote()) return;
   let fellBack = false;
-  function fallbackToLocal(err) {
+  function fallbackToLocal(err, source) {
+    state._snapshotError = source || 'all';
     if (err && err.code !== 'permission-denied') {
       console.warn('song snapshot error (staying in Firebase mode):', err);
+      render();
       return;
     }
     if (fellBack) return;
@@ -1783,6 +1865,7 @@ function subscribe() {
   }
   subscriptionStop = songRepository.startSubscriptions({
     setlists(map, changes) {
+      if (state._snapshotError === 'setlists' || state._snapshotError === 'all') state._snapshotError = '';
       state.setlists = mergePendingSetlists(map);
       const firstLoad = !state._setlistsLoaded;
       state._setlistsLoaded = true;
@@ -1795,6 +1878,7 @@ function subscribe() {
       render();
     },
     stats(map, changes) {
+      if (state._snapshotError === 'stats') state._snapshotError = '';
       const firstLoad = !state._statsLoaded;
       state.stats = map;
       state._statsLoaded = true;
@@ -1816,13 +1900,15 @@ function subscribe() {
       }
       render();
     },
-    settings(value) { state.settings = value || {}; render(); },
-    presiders(value) { state.presiders = Array.isArray(value) ? value.slice() : []; render(); },
+    settings(value) { if (state._snapshotError === 'settings') state._snapshotError = ''; state.settings = value || {}; render(); },
+    presiders(value) { if (state._snapshotError === 'presiders') state._snapshotError = ''; state.presiders = Array.isArray(value) ? value.slice() : []; render(); },
     nameMap(value) {
+      if (state._snapshotError === 'nameMap') state._snapshotError = '';
       state.nameMap = Object.assign({}, (ctx && ctx.nameMap) || {}, value || {});
       render();
     },
     schedule(value) {
+      if (state._snapshotError === 'schedule') state._snapshotError = '';
       state.schedule = Array.isArray(value) ? value : [];
       state._scheduleLoaded = true;
       maybeSyncPresiderSchedule();

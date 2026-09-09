@@ -137,6 +137,7 @@
       return command.apply(null, [name].concat(args)).catch(error => {
         setNotice('Could not save that change. Try again.', 'error');
         addBanner('Could not save the Manage change.', true);
+        refresh();
         return Promise.reject(error);
       });
     }
@@ -245,7 +246,6 @@
     }
 
     function departmentDuties(department, state) {
-      if (department === 'Choir') return ['Choir'];
       const category = categories(state).find(item => item.name === department);
       return category && Array.isArray(category.duties) ? category.duties.slice() : [];
     }
@@ -285,7 +285,6 @@
     }
 
     function departmentForDuty(duty, state) {
-      if (duty === 'Choir') return 'Choir';
       const category = categories(state).find(item => Array.isArray(item.duties) && item.duties.indexOf(duty) !== -1);
       return category ? category.name : '';
     }
@@ -683,7 +682,8 @@
         }
         const previous = service.assignments && service.assignments[duty] || '';
         if (service.assignments) delete service.assignments[duty];
-        const metadata = duty === 'Presider' && previous ? { previousPresider: previous } : null;
+        const metadata = previous
+          ? { assignmentChanges: { [duty]: { previous, desired: '' } } } : null;
         saveService(service, metadata).then(() => notifySaved('Assignment removed.')).catch(() => {});
         return true;
       }
@@ -708,7 +708,6 @@
           return true;
         }
         const applied = [];
-        const metadataByService = {};
         const unresolved = proposal.unresolved.slice();
         proposal.items.forEach(item => {
           const reason = isStaleProposal(Object.assign({ month: proposal.month }, item), department, state);
@@ -720,17 +719,41 @@
           if (!service.assignments) service.assignments = {};
           const previous = service.assignments[item.duty] || '';
           service.assignments[item.duty] = item.member;
-          if (item.duty === 'Presider' && previous !== item.member) {
-            metadataByService[serviceId(service)] = { previousPresider: previous };
+          let entry = applied.find(value => value.service === service);
+          if (!entry) {
+            entry = { service, changes: {}, items: [] };
+            applied.push(entry);
           }
-          if (applied.indexOf(service) === -1) applied.push(service);
+          entry.changes[item.duty] = { previous, desired: item.member };
+          entry.items.push(item);
         });
-        screen.proposals = { month: proposal.month, department, items: [], unresolved };
-        return Promise.all(applied.map(service => saveService(service, metadataByService[serviceId(service)]))).then(() => {
-          setNotice(applied.length ? 'Proposals saved. Existing assignments were preserved.' : 'No proposals could be saved.', applied.length ? 'success' : 'error');
+        return Promise.all(applied.map(entry => saveService(entry.service, { assignmentChanges: entry.changes })
+          .then(() => ({ ok: true, entry }))
+          .catch(error => ({ ok: false, entry, error })))).then(results => {
+          const failedItems = [];
+          results.forEach(result => {
+            if (result.ok) return;
+            const entry = result.entry;
+            entry.items.forEach(item => {
+              const change = entry.changes[item.duty];
+              if (!entry.service.assignments) entry.service.assignments = {};
+              const current = entry.service.assignments[item.duty] || '';
+              if (current === change.desired) {
+                if (change.previous) entry.service.assignments[item.duty] = change.previous;
+                else delete entry.service.assignments[item.duty];
+              }
+              failedItems.push(Object.assign({}, item, { reason: 'Could not save this proposal. Try again.' }));
+            });
+          });
+          screen.proposals = { month: proposal.month, department, items: failedItems, unresolved };
+          if (failedItems.length) {
+            setNotice(results.some(result => result.ok) ? 'Some proposals were saved. Review the remaining proposals.' : 'No proposals were saved. Review and try again.', 'error');
+          } else {
+            setNotice(applied.length ? 'Proposals saved. Existing assignments were preserved.' : 'No proposals could be saved.', applied.length ? 'success' : 'error');
+          }
           refresh();
           return true;
-        }).catch(() => true);
+        });
       }
       if (token === 'manage-choir-suggest') {
         const service = serviceForId(element.dataset.service, state);
@@ -747,6 +770,7 @@
     }
 
     function handleChange(token, element, eventKind) {
+      if (eventKind === 'input') return token.startsWith('manage-');
       const state = readState();
       if (token === 'manage-department') {
         selectDepartment(element.value, state);
@@ -807,8 +831,9 @@
         if (!service.assignments) service.assignments = {};
         if (element.value) service.assignments[duty] = element.value;
         else delete service.assignments[duty];
-        const metadata = duty === 'Presider' && current !== (element.value || '')
-          ? { previousPresider: current } : null;
+        const desired = element.value || '';
+        if (current === desired) return true;
+        const metadata = { assignmentChanges: { [duty]: { previous: current, desired } } };
         saveService(service, metadata).then(() => notifySaved('Assignment saved.')).catch(() => {});
         return true;
       }

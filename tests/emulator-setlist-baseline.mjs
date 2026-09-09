@@ -44,7 +44,7 @@ async function discoverRuntimeFiles(directory, prefix = '') {
 }
 
 async function readSourceSnapshot(sourceRoot = SOURCE_ROOT) {
-  const rootRuntimeFiles = ['index.html', 'app.js', 'song-app.js', 'song-app.css', 'song-lib.js', 'sw.js', 'manifest.json'];
+  const rootRuntimeFiles = ['styles.css', 'index.html', 'app.js', 'song-app.js', 'song-app.css', 'song-lib.js', 'sw.js', 'manifest.json'];
   const srcRuntimeFiles = await discoverRuntimeFiles(path.join(sourceRoot, 'src'), 'src');
   const files = Array.from(new Set(rootRuntimeFiles.concat(srcRuntimeFiles))).sort();
   const bytes = new Map();
@@ -119,7 +119,11 @@ async function loadCreateSetlist(sourceSnapshot, adapter, state, pendingSetlists
   const source = sourceSnapshot.bytes.get('song-app.js')?.toString('utf8');
   assert.ok(source, 'setlist evaluator must use song-app.js from the immutable source snapshot');
   const functionSource = extractFunction(source, 'createSetlistIfAbsent');
+  const ownershipSource = functionSource.includes('productionCanMutate')
+    ? ['editorPinHash', 'editorUnlocked', 'canonName', 'productionServiceRows', 'productionRowFor', 'productionAssignedPresider', 'productionCanMutate'].map(name => extractFunction(source, name)).join('\n')
+    : '';
   const sandbox = {
+    window: {},
     __QA_FB: adapter,
     __QA_STATE: state,
     __QA_PENDING: pendingSetlists,
@@ -131,9 +135,16 @@ async function loadCreateSetlist(sourceSnapshot, adapter, state, pendingSetlists
     Promise, setTimeout, clearTimeout
   };
   sandbox.globalThis = sandbox;
+  vm.runInNewContext(sourceSnapshot.bytes.get('song-lib.js').toString('utf8'), sandbox, { filename: 'song-lib.js.emulator-evaluator' });
+  const repositorySource = sourceSnapshot.bytes.get('src/services/song-repository.js');
+  if (repositorySource) vm.runInNewContext(repositorySource.toString('utf8'), sandbox, { filename: 'song-repository.js.emulator-evaluator' });
   vm.runInNewContext([
     'const fb = globalThis.__QA_FB;',
+    'const firebaseGateway = { firebase: fb, ref: (collection, id) => fb.doc(fb.db, collection, id), write: operation => operation() };',
+    'const songRepository = globalThis.window.WorshipApp?.services?.songRepository?.createSongRepository({ gateway: firebaseGateway });',
     'const state = globalThis.__QA_STATE;',
+    'const NAME_UNIFY_MAP = {}; const EDITOR_UNLOCK_KEY = \'fixture-editor-unlock\';',
+    ownershipSource,
     'const pendingSetlists = globalThis.__QA_PENDING;',
     'const setlistCreates = globalThis.__QA_CREATES;',
     'const alert = globalThis.alert;',
@@ -202,6 +213,8 @@ async function runScenario(sourceSnapshot, label) {
     [existingId]: existingLocal,
     [missingId]: latestLocal
   } };
+  state.ui = { me: 'Fictional Owner' };
+  state.schedule = [existingId, missingId].map(id => ({ id, date: existingServer.date, service: existingServer.serviceLabel || 'Morning', assignments: { Presider: 'Fictional Owner' } }));
   let sandbox;
 
   try {

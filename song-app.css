@@ -1065,3 +1065,14 @@
   #song-root .production-song-row { grid-template-columns: 36px 6px minmax(0, 1fr) 34px 25px 48px 30px; gap: 4px; }
   #song-root .production-song-row .library-last { font-size: 10px; }
 }
+
+#song-root .song-snapshot-notice { margin: 6px 0; padding: 8px 0; color: var(--text); font-size: 13px; }
+#song-root .choir-outline-title { grid-column: 2 / -1; }
+#song-root button:disabled, #song-root select:disabled { opacity: .52; cursor: default; }
+#song-root textarea[readonly] { cursor: default; }
+#song-root .ws-link:disabled, #song-root .ws-slot-empty:disabled { color: var(--muted); }
+
+/* Keep service facts on one compact line inside their scroll region. */
+#song-root .presider-compact-summary { width: max-content; min-width: 100%; }
+#song-root .presider-compact-summary > span { flex: 0 0 auto; }
+#song-root .presider-compact-summary .ws-badge { white-space: nowrap; overflow-wrap: normal; }

@@ -116,4 +116,18 @@ The local preview simulates manager visibility so each department can be inspect
 
 ## Full-width preview verification
 
-The revised local interface passed guarded fictional phone and desktop journeys, read-only preview checks, and current-record aggregate smoke checks with no writes, browser errors, external browser requests, or persistent records. The narrow native Sol review was interrupted by the provider usage limit and remains pending. The test candidate can be inspected locally, but this checkpoint is not a completed release or full-plan completion.
+The revised local interface passed guarded fictional phone and desktop journeys, read-only preview checks, and current-record aggregate smoke checks with no writes, browser errors, external browser requests, or persistent records. The earlier narrow native Sol review was interrupted by a provider usage limit. The final cumulative Opus review now covers that scope and all corrections. No Sol pass is claimed for the interrupted attempt.
+
+## Local completion candidate, deployment excluded
+
+Completed local work includes explicit song-plan loading and failed-update recovery, a complete Presider choir outline, and a runnable historical-correction rollback command. The correction remains unapplied. The [identity correction runbook](IDENTITY-CORRECTION-RUNBOOK.md) documents hidden identity entry, dry-run, apply prerequisites, provider-only backup, and conflict-safe rollback. Older broad deployment commands in IMPLEMENTATION and PLAYBOOK were corrected.
+
+Local validation includes guarded phone/desktop journeys, Node contracts, real demo-project Firestore transactions, prepared correction and rollback, release staging, and installed-app update/offline/rollback behavior. The cumulative isolated Opus review covers the full candidate, including the narrower UI review interrupted by the Codex CLI usage limit. No Sol pass is claimed for that interrupted attempt. The final cumulative verdict is NO_MATERIAL_FINDINGS, recorded in the completion receipt.
+
+The only planned external steps are a later explicitly authorized Hosting/function release, provider privacy preflight, historical correction execution, and immediate production smoke checks. These are excluded from the current task. Production remains source `9247f75`, Hosting `20260908235000`.
+
+Cumulative corrections: retain legacy Sermon assignment as the opening-prayer fallback; restrict song mutations to current assigned presiders or unlocked song editors; save explicit duty proposals atomically with previous-value checks; keep Choir titles outside assignment keys. The local write tests exercise these contracts in fictional fixtures and the demo Firestore emulator.
+
+## Final local handoff
+
+All local implementation, checks and cumulative review are complete. See the [completion receipt](runs/worship-refactor-20260907/logs/20260908-local-completion.md). Deployment, provider writes and historical correction execution remain excluded. Refresh the [read-only local test](http://127.0.0.1:8101/) for owner inspection.

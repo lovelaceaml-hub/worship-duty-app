@@ -1,7 +1,7 @@
 ---
 lane: LF4
 title: Setlist domain extraction
-state: ready-for-review
+state: integrated
 model: gpt-5.6-luna
 runner: Codex
 worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-setlist-state
@@ -81,3 +81,5 @@ pending. Keep LF4 ownership active for any bounded correction; do not release
 ownership until root directs the next iteration.
 
 Implemented-by: Codex/gpt-5.6-luna · Reviewed-by: pending LF4 native Sol high
+
+Current local completion record: Pure setlist logic and repository extraction are integrated in the local candidate. No deployment.

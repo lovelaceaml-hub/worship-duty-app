@@ -7,7 +7,13 @@ const assignments = require('../src/services/assignments.js');
 const setlist = require('../src/domain/setlist.js');
 
 function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
+  if (Array.isArray(value)) return value.map(clone);
+  if (value && typeof value === 'object') {
+    const output = {};
+    Object.keys(value).forEach(key => { output[key] = clone(value[key]); });
+    return output;
+  }
+  return value;
 }
 
 function snapshot(value) {
@@ -17,7 +23,7 @@ function snapshot(value) {
   };
 }
 
-function makeFirebase({ schedule, plan } = {}) {
+function makeFirebase({ schedule, plan, withDeleteField = true } = {}) {
   const docs = {
     schedule: schedule === undefined ? undefined : clone(schedule),
     setlists: plan === undefined ? undefined : clone(plan)
@@ -50,8 +56,11 @@ function makeFirebase({ schedule, plan } = {}) {
         }
         const current = docs[write.ref.collection] || {};
         Object.keys(write.patch).forEach(key => {
-          if (key === 'assignments.Presider') {
-            current.assignments = Object.assign({}, current.assignments, { Presider: write.patch[key] });
+          if (key.indexOf('assignments.') === 0) {
+            const duty = key.slice('assignments.'.length);
+            current.assignments = Object.assign({}, current.assignments);
+            if (write.patch[key] && write.patch[key].__deleteField) delete current.assignments[duty];
+            else current.assignments[duty] = write.patch[key];
           } else {
             current[key] = write.patch[key];
           }
@@ -61,6 +70,7 @@ function makeFirebase({ schedule, plan } = {}) {
       return result;
     }
   };
+  if (withDeleteField) firebase.deleteField = () => ({ __deleteField: true });
   return { firebase, docs, reads, writes };
 }
 
@@ -177,6 +187,75 @@ test('updates the schedule but never creates a missing song plan', async () => {
   assert.deepEqual(fake.writes[0].patch, { 'assignments.Presider': 'New Presider' });
 });
 
+test('persists mixed Presider and sibling proposals in one transaction', async () => {
+  const fake = makeFirebase({ schedule: makeService('Old Presider'), plan: makePlan('Old Presider') });
+  const value = makeService('New Presider');
+  value.assignments.Sermon = 'New Singer';
+  const { service } = makeAdapter({ firebase: fake.firebase });
+
+  const result = await service.saveService(value, {
+    assignmentChanges: {
+      Presider: { previous: 'Old Presider', desired: 'New Presider' },
+      Sermon: { previous: '', desired: 'New Singer' }
+    }
+  });
+
+  assert.equal(result.status, 'saved');
+  assert.equal(fake.docs.schedule.assignments.Presider, 'New Presider');
+  assert.equal(fake.docs.schedule.assignments.Sermon, 'New Singer');
+  assert.equal(fake.docs.schedule.assignments['Media Booth #1'], 'Media Fixture');
+  assert.equal(fake.docs.setlists.presider, 'New Presider');
+  assert.equal(fake.writes.length, 2, 'schedule and plan updates commit from one transaction');
+  assert.deepEqual(fake.writes[0].patch, {
+    'assignments.Presider': 'New Presider',
+    'assignments.Sermon': 'New Singer'
+  });
+});
+
+test('rejects mixed proposals atomically when a sibling changed concurrently', async () => {
+  const stored = makeService('Old Presider');
+  stored.assignments.Sermon = 'Concurrent Singer';
+  const fake = makeFirebase({ schedule: stored, plan: makePlan('Old Presider') });
+  const value = makeService('New Presider');
+  value.assignments.Sermon = 'New Singer';
+  const { service } = makeAdapter({ firebase: fake.firebase });
+
+  await assert.rejects(
+    service.saveService(value, {
+      assignmentChanges: {
+        Presider: { previous: 'Old Presider', desired: 'New Presider' },
+        Sermon: { previous: '', desired: 'New Singer' }
+      }
+    }),
+    error => error.code === 'ASSIGNMENT_STALE'
+  );
+  assert.equal(fake.writes.length, 0, 'a conflict must leave every changed duty untouched');
+  assert.equal(value.assignments.Presider, 'Old Presider');
+  assert.equal(value.assignments.Sermon, 'Concurrent Singer');
+  assert.equal(fake.docs.schedule.assignments.Presider, 'Old Presider');
+  assert.equal(fake.docs.schedule.assignments.Sermon, 'Concurrent Singer');
+});
+
+test('preserves unrelated concurrent duties while applying explicit sibling patches', async () => {
+  const stored = makeService('Old Presider');
+  stored.assignments.Camera = 'Concurrent Camera';
+  const fake = makeFirebase({ schedule: stored });
+  const value = makeService('Old Presider');
+  value.assignments.Sermon = 'New Singer';
+  value.assignments.Camera = 'Stale Camera';
+  const { service } = makeAdapter({ firebase: fake.firebase });
+
+  const result = await service.saveService(value, {
+    assignmentChanges: { Sermon: { previous: '', desired: 'New Singer' } }
+  });
+
+  assert.equal(result.status, 'saved');
+  assert.equal(fake.docs.schedule.assignments.Sermon, 'New Singer');
+  assert.equal(fake.docs.schedule.assignments.Camera, 'Concurrent Camera');
+  assert.equal(fake.docs.schedule.assignments['Media Booth #1'], 'Media Fixture');
+  assert.deepEqual(fake.writes[0].patch, { 'assignments.Sermon': 'New Singer' });
+});
+
 test('rejects a stale previous presider without writing either record or keeping the optimistic name', async () => {
   const fake = makeFirebase({ schedule: makeService('Someone Else'), plan: makePlan('Someone Else') });
   const { service, calls } = makeAdapter({ firebase: fake.firebase });
@@ -222,6 +301,26 @@ test('clears the plan presider to the established blank value when Presider is r
   assert.equal(fake.docs.schedule.assignments['Media Booth #1'], 'Media Fixture');
 });
 
+test('deletes an assignment with a current-map fallback when deleteField is unavailable', async () => {
+  const fake = makeFirebase({
+    schedule: makeService('Old Presider'),
+    plan: makePlan('Old Presider'),
+    withDeleteField: false
+  });
+  const value = makeService('Old Presider');
+  delete value.assignments.Presider;
+  const { service } = makeAdapter({ firebase: fake.firebase });
+
+  await service.saveService(value, { previousPresider: 'Old Presider' });
+
+  assert.equal(fake.docs.schedule.assignments.Presider, undefined);
+  assert.equal(fake.docs.schedule.assignments['Media Booth #1'], 'Media Fixture');
+  assert.equal(Object.prototype.hasOwnProperty.call(fake.writes[0].patch, 'assignments.Presider'), false);
+  assert.deepEqual(fake.writes[0].patch.assignments, {
+    'Media Booth #1': 'Media Fixture'
+  });
+});
+
 test('non-Presider calls pass through whole-service persistence and refresh callback', async () => {
   const serviceValue = makeService('Old Presider');
   serviceValue.assignments['Media Booth #1'] = 'Another Fixture';
@@ -261,18 +360,20 @@ test('does not swallow auth, transaction, or ordinary persistence failures', asy
     authAdapter.service.saveService(makeService('New Presider'), { previousPresider: 'Old Presider' }),
     authError
   );
-  assert.equal(authAdapter.calls.after, 0);
+  assert.equal(authAdapter.calls.after, 1, 'auth failure refreshes the restored assignment');
 
   const transactionError = new Error('fictional transaction failure');
   const brokenFirebase = Object.assign({}, fake.firebase, {
     runTransaction() { return Promise.reject(transactionError); }
   });
   const transactionAdapter = makeAdapter({ firebase: brokenFirebase });
+  const transactionValue = makeService('New Presider');
   await assert.rejects(
-    transactionAdapter.service.saveService(makeService('New Presider'), { previousPresider: 'Old Presider' }),
+    transactionAdapter.service.saveService(transactionValue, { previousPresider: 'Old Presider' }),
     transactionError
   );
-  assert.equal(transactionAdapter.calls.after, 0);
+  assert.equal(transactionAdapter.calls.after, 1, 'transaction failure refreshes the restored assignment');
+  assert.equal(transactionValue.assignments.Presider, 'Old Presider');
 
   const persistenceError = new Error('fictional persistence failure');
   const passthroughAdapter = makeAdapter({ persistError: persistenceError });

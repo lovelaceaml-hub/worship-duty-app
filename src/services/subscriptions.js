@@ -30,6 +30,10 @@
     return !!(snapshot && snapshot.empty) || snapshotDocs(snapshot).length === 0;
   }
 
+  function snapshotFromCache(snapshot) {
+    return !!(snapshot && snapshot.metadata && snapshot.metadata.fromCache === true);
+  }
+
   function docData(doc) {
     if (!doc) return undefined;
     return typeof doc.data === 'function' ? doc.data() : doc.data;
@@ -91,11 +95,24 @@
           };
         }
 
-        function attach(query, next, error) {
+        function listen(query, next, error, includeMetadataChanges) {
+          const onSnapshot = firebase.onSnapshot;
+          if (includeMetadataChanges) {
+            return onSnapshot(query, { includeMetadataChanges: true }, next, error);
+          }
+          return onSnapshot(query, next, error);
+        }
+
+        function attach(query, next, error, includeMetadataChanges) {
           const entry = { active: true, unsubscribe: null };
           entries.push(entry);
           try {
-            entry.unsubscribe = firebase.onSnapshot(query, live(next), live(error || (() => {})));
+            entry.unsubscribe = listen(
+              query,
+              live(next),
+              live(error || (() => {})),
+              includeMetadataChanges
+            );
           } catch (registrationError) {
             entry.active = false;
             entries = entries.filter(item => item !== entry);
@@ -120,7 +137,7 @@
           entries.push(recentSlot);
           recentEntry = recentSlot;
           try {
-            recentSlot.unsubscribe = firebase.onSnapshot(
+            recentSlot.unsubscribe = listen(
               querySince(firebase, db, 'schedule', config.recentSince),
               live(snapshot => {
                 if (previewRetired || snapshotEmpty(snapshot)) return;
@@ -147,18 +164,20 @@
             snapshot => {
               retirePreview();
               const services = snapshotDocs(snapshot).map(docData);
-              if (firstFull && snapshotEmpty(snapshot)) {
+              if (firstFull && snapshotEmpty(snapshot) && !snapshotFromCache(snapshot)) {
                 firstFull = false;
                 emitEvent('schedule-initial-empty', {});
                 return;
               }
+              if (firstFull && snapshotEmpty(snapshot)) return;
               firstFull = false;
               emitEvent('schedule-authoritative', {
                 services,
                 knownIds: snapshotDocs(snapshot).map(doc => doc && doc.id)
               });
             },
-            error => emitEvent('schedule-error', { error })
+            error => emitEvent('schedule-error', { error }),
+            true
           );
 
           attach(

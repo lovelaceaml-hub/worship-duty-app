@@ -87,3 +87,36 @@ carry. Schedule edits do not require a new app release.
 ### Current local layout revision
 
 The current local revision uses the available page width. Member selection is the only header control; Appearance is under the footer Settings button. Home has one date-grouped month schedule and a department dropdown that supports multiple choices, with All selected initially. Home omits choir song titles; Presider retains choir details. My Duties uses the selected month and grouped duty rows. Manage opens to Schedule after the department choice, with Roster and the other tools in separate tabs. Presider uses compact service rows and visible sections for Services, Select Songs, Order of Worship, Library, and Insights. This describes the local candidate only.
+
+Local Presider now distinguishes loading song plans from an empty plan. If online updates fail, the last loaded information remains visible and Retry loading reconnects the subscriptions. Song save failures continue to use their separate Retry action. The expanded outline includes Choir; Home omits choir titles.
+
+
+## Using the local release candidate
+
+This section describes the [local preview](http://127.0.0.1:8101/), not the restored live interface. The preview displays current records in memory and disables saving. Its manager access is simulated for inspection.
+
+### Home and My Duties
+
+Choose your name at the top. Home shows the month calendar, your next duty, and one schedule grouped by date. Use the arrows to change month and a date to jump to its services. Future services start open; services starting more than 30 minutes ago start closed. Open Departments to select several departments, or select All to clear the individual choices. Choir titles are omitted on Home.
+
+My Duties uses the same month selection. Each date groups your duties with time, worship session, duty, and assigned person. View full team shows the other assignments. Calendar subscription, notifications, and change requests retain their existing meanings. Save and subscription actions are unavailable in the read-only preview.
+
+### Presider and song selection
+
+Presider starts with your presiding services. Switch My presiding to All services to browse the full month. Calendar dates highlight your presiding duties; choosing a date jumps to it without hiding the rest of the month. Each service shows its presider, songs, preparation duration, confirmation state, prayer assignments, and choir title.
+
+Choose Select Songs on a service, or choose a service in the selector. Services, Select Songs, Order of Worship, Library, and Insights are separate sections and retain your selected service. The outline lists preparation songs, Glory, applicable Thanks, and Choir. Early Morning and other services without Thanks omit that slot.
+
+In Select Songs, search by song number, title, or a word in the title. Appendix numbers appear as A followed by the number. Use the plus button to add a song, the role selector to change its purpose, the arrow buttons to reorder preparation songs, and the remove button to remove a selection. Empty Glory and Thanks slots offer a direct add action. Confirm Songs confirms the current selections; later edits show Changed and require reconfirmation. A failed save remains visible with Retry. Loading and failed online updates are displayed separately from an empty plan.
+
+### Manage
+
+Department managers choose a department first. Schedule shows monthly assignments; select an assigned person or the empty assignment control to change it. Roster manages department membership, duty qualifications, and availability. Auto assign creates a proposal for review. Nothing is persisted until Save proposal is chosen. Existing passcodes and selected names remain the access method.
+
+Choir managers select Choir, choose the service, and enter or select a suggested song title. A custom title belongs only to that service and is never added to the shared song library. Planning, Requests, Services, People, Features, Data & Sync, and Settings remain separate sections, subject to existing manager permissions and feature switches.
+
+### Appearance
+
+Choose Settings at the bottom of the app to select Blue, Sage, or Sand. Themes share the same layout. Appearance is stored as a device preference; in the local preview it remains memory-only.
+
+Local candidate access: all selected members can browse song plans. Only the service's currently assigned presider or an unlocked song editor can change its songs or confirmation. Schedule auto-assignment proposals save each service atomically; a conflicting edit remains for review instead of overwriting another manager's change. Choir titles are stored on the service and do not create an extra assignment duty.

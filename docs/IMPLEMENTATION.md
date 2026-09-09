@@ -381,31 +381,17 @@ Gated by the `songPicker` feature toggle.
 - `npx firebase-tools` available (no global install needed) and already
   authenticated on the deploying machine (`npx firebase-tools login` once).
 
-### 4.2 Deploying
+### 4.2 Release preparation and deployment
 
-From the app folder (`/Users/anthony/New/worship-duty-app`):
+Current scope is local completion only. No deployment or live record correction is authorized.
 
-```
-npx firebase-tools deploy
-```
+Validate the staged Hosting artifact without uploading:
 
-Deploys hosting + Firestore rules + Cloud Functions together, per
-`firebase.json`'s top-level config (`hosting.site`, `firestore.rules`,
-`functions.source`). To save time when only static files changed:
-
-```
-npx firebase-tools deploy --only hosting
+```sh
+bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh --dry-run
 ```
 
-Or to redeploy just the rules or just the functions:
-
-```
-npx firebase-tools deploy --only firestore:rules
-npx firebase-tools deploy --only functions
-```
-
-If npm cache permission errors appear, prefix the command with
-`npm_config_cache=/tmp/npmcache`.
+After a later explicit release authorization, Hosting uses the same script without `--dry-run`. It stamps every runtime module and stylesheet in a separate staging directory and leaves working source unchanged. Do not use a generic Firebase deployment. Deploy only explicitly reviewed function exports, and only when they changed. No Firestore rule change is included in this refactor. The prepared historical correction procedure is documented in [the identity correction runbook](IDENTITY-CORRECTION-RUNBOOK.md).
 
 ### 4.3 Seeding behavior
 

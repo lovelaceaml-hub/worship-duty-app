@@ -198,30 +198,25 @@ Manage → Data & Sync:
 
 ### 7. Deploying app changes
 
+Current status: deployment is excluded. The commands below are for a later authorized release. Historical extension briefs later in this document are not current instructions to deploy or change rules.
+
 Only needed when the app's code changes (not for schedule edits — those sync
 live through Firestore with no deploy). From the app folder:
 
 ```
-bash scripts/deploy.sh
+bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh
 ```
 
 **Always use this script for app-file changes.** Every local file is served
 with a one-year browser cache, which is only safe because its address carries a
 release stamp. The script is what writes that stamp, so it can never be
 forgotten: the files in the repo keep the placeholder `DEV`, the stamp exists
-only in the copy that is uploaded, and your working folder is put back exactly
-as it was afterwards, even if the deploy fails. It refuses to upload anything
+only in the staged copy; the working folder is never rewritten. It refuses to upload anything
 if a stamp is missing. It deploys **hosting only**.
 
-If `firestore.rules` or anything in `functions/` genuinely changed and was
-reviewed, deploy those separately and deliberately:
+Current work excludes deployment. Use `--dry-run` to prepare and validate Hosting locally. The script never temporarily rewrites working source.
 
-```
-npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only firestore
-npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only functions
-```
-
-Never run a bare `firebase deploy` here.
+A future release must list each changed function explicitly, rather than deploying the whole functions package. No permission-rule changes are included here. See [the identity correction runbook](IDENTITY-CORRECTION-RUNBOOK.md) for the separately authorized correction and rollback sequence. Never run a bare Firebase deploy here.
 
 Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
 `song-seed.js`, `song-app.css`) deploy with hosting automatically. If you edit
@@ -274,7 +269,7 @@ Code or similar) without needing to read or write code personally.
 3. Paste one of the five briefs below, whole, unedited (fill in nothing —
    they're self-contained).
 4. Tell the model: **it must update the relevant docs in `docs/` as part of
-   the change, then deploy (`npx firebase-tools deploy`) and verify the
+   the change, then deploy (`bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh`) and verify the
    change on the live site before calling the task done.**
 5. Once it reports done, open https://lv-zion-duties.web.app yourself and
    click through the change to confirm it looks and works right.
@@ -295,7 +290,7 @@ Code or similar) without needing to read or write code personally.
 
 ```
 Context: This is a static web app (no build step) for a congregation's
-worship duty schedule, in /Users/anthony/New/worship-duty-app. Firebase
+worship duty schedule, in /Users/anthony/Projects/worship-duty-app. Firebase
 project lv-zion-duties. Firestore rules currently live in
 firestore.rules and are wide open: `allow read, write: if true` on
 schedule/*, app/*, and tokens/*. There is no login — anyone with the
@@ -341,7 +336,7 @@ Constraints: this is a non-developer-owned app; keep the deployed
 experience as simple as possible for the ~45 congregation members. Don't
 introduce a build step or framework.
 
-Verification: after deploying (`npx firebase-tools deploy`), confirm on
+Verification: after deploying (`bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh`), confirm on
 the live site (https://lv-zion-duties.web.app) that (a) viewing works as
 intended per your documented decision, (b) editing without proper
 auth/role is rejected by Firestore itself (test by attempting a raw
@@ -354,7 +349,7 @@ end to end. Report exactly what you tested and the results.
 
 ```
 Context: This is a static web app (no build step) for a congregation's
-worship duty schedule, in /Users/anthony/New/worship-duty-app. Read
+worship duty schedule, in /Users/anthony/Projects/worship-duty-app. Read
 docs/HANDOFF.md, docs/FEATURES.md, docs/PLAYBOOK.md, and docs/DESIGN.md
 first. The Schedule tab (see `renderSchedule()` and `renderServiceList()`
 in app.js) currently only shows a flat chronological list of upcoming
@@ -389,7 +384,7 @@ reachable from the existing Schedule tab (e.g. a view toggle at the top
 Update docs/FEATURES.md (if a new toggle was added) and docs/HANDOFF.md's
 file map / architecture notes if relevant.
 
-Verification: deploy with `npx firebase-tools deploy --only hosting`,
+Verification: deploy with `bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh`,
 then open https://lv-zion-duties.web.app and confirm the month view
 renders correctly with real data, the print view looks correct via the
 browser's print preview, and the existing list view is unaffected.
@@ -400,7 +395,7 @@ Report what you tested.
 
 ```
 Context: This is a static web app (no build step) for a congregation's
-worship duty schedule, in /Users/anthony/New/worship-duty-app. Read
+worship duty schedule, in /Users/anthony/Projects/worship-duty-app. Read
 docs/HANDOFF.md, docs/FEATURES.md, docs/PLAYBOOK.md, and docs/DESIGN.md
 first. Members currently only view their duties on the My Duties tab
 (`renderMy()` in app.js) — there's no way for two members to trade duties
@@ -442,8 +437,8 @@ Update docs/FEATURES.md (new toggle), docs/HANDOFF.md (architecture:
 new collection, new/extended function), and docs/PLAYBOOK.md (a "how
 members request a swap" step, and a troubleshooting row if relevant).
 
-Verification: deploy with `npx firebase-tools deploy` (this touches
-functions and rules, not just hosting), then test on the live site with
+Verification: deploy with `bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh` (this touches
+Hosting only; separately authorize and verify any required backend or rule changes), then test on the live site with
 two different member names (two browser profiles or devices) that a
 swap request from one is visible to and actionable by the other, and
 that acceptance actually updates the schedule for everyone. Report what
@@ -454,7 +449,7 @@ you tested, including whether you verified the push notification fired.
 
 ```
 Context: This is a static web app (no build step) for a congregation's
-worship duty schedule, in /Users/anthony/New/worship-duty-app. Read
+worship duty schedule, in /Users/anthony/Projects/worship-duty-app. Read
 docs/HANDOFF.md, docs/FEATURES.md, docs/PLAYBOOK.md, and docs/DESIGN.md
 first. The app currently syncs from a published Google Sheet (see
 `syncFromSheet()`, `sheetRowsToServices()`, and `parseCSV()` in app.js).
@@ -549,6 +544,6 @@ Verification: use the browser preview tools to emulate
 prefers-color-scheme: dark (or your OS dark mode) against the deployed
 or local app, screenshot both the Schedule and My Duties tabs, and
 confirm text contrast and service-record legibility hold up. Deploy with
-`npx firebase-tools deploy --only hosting` and re-verify on the live
+`bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh` and re-verify on the live
 site. Report what you tested.
 ```

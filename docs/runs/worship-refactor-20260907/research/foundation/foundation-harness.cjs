@@ -19,20 +19,11 @@ assert.equal(member.dutiesFor, undefined);
 assert.equal(coordinator.workloadStats, undefined);
 assert.equal(coordinator.suggestSubs, undefined);
 
+const runtimeModules = Array.from(fs.readFileSync(path.join(sourceRoot, 'index.html'), 'utf8').matchAll(/<script[^>]*src=[\"'](src\/[^\"']+)[\"']/g), match => match[1].split('?')[0]);
+assert.ok(runtimeModules.includes('src/services/assignments.js'), 'entrypoint must include assignment persistence');
 const browserSandbox = { window: {} };
 vm.createContext(browserSandbox);
-[
-  'src/core/constants.js',
-  'src/core/state.js',
-  'src/domain/schedule.js',
-  'src/domain/setlist.js',
-  'src/domain/member.js',
-  'src/domain/coordinator.js',
-  'src/domain/sheet.js',
-  'src/services/storage.js',
-  'src/services/firebase.js',
-  'src/services/subscriptions.js'
-].forEach(relativePath => {
+runtimeModules.forEach(relativePath => {
   vm.runInContext(fs.readFileSync(path.join(sourceRoot, relativePath), 'utf8'), browserSandbox, { filename: relativePath });
 });
 assert(Object.isFrozen(browserSandbox.window.WorshipApp.core));
@@ -69,18 +60,7 @@ const appSandbox = {
   document: { addEventListener() {} }
 };
 vm.createContext(appSandbox);
-[
-  'src/core/constants.js',
-  'src/core/state.js',
-  'src/domain/schedule.js',
-  'src/domain/setlist.js',
-  'src/domain/member.js',
-  'src/domain/coordinator.js',
-  'src/domain/sheet.js',
-  'src/services/storage.js',
-  'src/services/firebase.js',
-  'src/services/subscriptions.js'
-].forEach(relativePath => {
+runtimeModules.forEach(relativePath => {
   vm.runInContext(fs.readFileSync(path.join(sourceRoot, relativePath), 'utf8'), appSandbox, { filename: relativePath });
 });
 const appSource = fs.readFileSync(path.join(sourceRoot, 'app.js'), 'utf8').replace(/\ninit\(\);\s*$/, '\n');

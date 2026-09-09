@@ -148,50 +148,111 @@
       });
     }
 
-    function firebasePresiderChange(service, previousPresider, desiredPresider, firebase) {
+    function assignmentValue(assignments, duty) {
+      return assignments && hasOwn(assignments, duty) ? normalizePresider(assignments[duty]) : '';
+    }
+
+    function normalizeAssignmentChanges(service, metadata) {
+      const changes = {};
+      const source = metadata && (metadata.assignmentChanges || metadata.changedAssignments);
+      if (source && typeof source === 'object') {
+        Object.keys(source).forEach(duty => {
+          const change = source[duty];
+          if (!change || typeof change !== 'object') return;
+          const previous = hasOwn(change, 'previous') ? change.previous : change.before;
+          const desired = hasOwn(change, 'desired') ? change.desired :
+            (hasOwn(change, 'next') ? change.next : change.value);
+          if (previous === undefined && desired === undefined) return;
+          changes[duty] = {
+            previous: normalizePresider(previous),
+            desired: normalizePresider(desired)
+          };
+        });
+      }
+      if (metadata && hasOwn(metadata, 'previousPresider') && !hasOwn(changes, 'Presider')) {
+        changes.Presider = {
+          previous: normalizePresider(metadata.previousPresider),
+          desired: normalizePresider(presiderFor(service))
+        };
+      }
+      return changes;
+    }
+
+    function restoreAssignments(service, changes, values) {
+      if (!service || !service.assignments) return;
+      Object.keys(changes || {}).forEach(duty => {
+        const value = values && hasOwn(values, duty) ? values[duty] : changes[duty].previous;
+        if (value) service.assignments[duty] = value;
+        else delete service.assignments[duty];
+      });
+    }
+
+    function firebaseAssignmentChange(service, changes, firebase) {
       const id = serviceId(service);
       const scheduleRef = firebase.doc(firebase.db, 'schedule', id);
       const setlistRef = firebase.doc(firebase.db, 'setlists', id);
+      const hasPresiderChange = hasOwn(changes, 'Presider');
+      const desiredPresider = hasPresiderChange ? changes.Presider.desired : '';
+      const previousPresider = hasPresiderChange ? changes.Presider.previous : '';
 
       return Promise.resolve().then(() => getAuthReady()).then(() => firebase.runTransaction(firebase.db, async transaction => {
-        /* Both reads happen inside the same transaction. This keeps a plan
-           and its schedule assignment from being committed for different
-           people when another manager edits the service concurrently. */
         const scheduleSnapshot = await transaction.get(scheduleRef);
-        const setlistSnapshot = await transaction.get(setlistRef);
         if (!snapshotExists(scheduleSnapshot)) {
           return { status: 'missing-schedule', changed: false };
         }
 
         const currentService = snapshotData(scheduleSnapshot);
-        const storedPresider = normalizePresider(presiderFor(currentService));
-        if (!isAllowedPresider(storedPresider, previousPresider, desiredPresider)) {
-          return { status: 'stale', changed: false, storedPresider };
-        }
-
-        const hasPlan = snapshotExists(setlistSnapshot);
-        const currentPlan = hasPlan ? snapshotData(setlistSnapshot) : null;
-        const storedPlanPresider = normalizePresider(currentPlan && currentPlan.presider);
-        /* A plan belonging to a third person is also stale. A missing legacy
-           presider field remains adoptable when the schedule guard passes. */
-        if (hasPlan && storedPlanPresider != null &&
-            !isAllowedPresider(storedPlanPresider, previousPresider, desiredPresider)) {
-          return { status: 'stale', changed: false, storedPresider, storedPlanPresider };
-        }
-
-        const scheduleChanged = storedPresider !== desiredPresider;
-        const planChanged = hasPlan && storedPlanPresider !== desiredPresider;
-        if (scheduleChanged) {
-          if (desiredPresider) {
-            transaction.update(scheduleRef, { 'assignments.Presider': desiredPresider });
-          } else if (typeof firebase.deleteField === 'function') {
-            transaction.update(scheduleRef, { 'assignments.Presider': firebase.deleteField() });
-          } else {
-            const assignments = Object.assign({}, currentService.assignments || {});
-            delete assignments.Presider;
-            transaction.update(scheduleRef, { assignments });
+        const storedAssignments = currentService.assignments || {};
+        const currentAssignments = {};
+        for (const duty of Object.keys(changes)) {
+          const change = changes[duty];
+          const stored = assignmentValue(storedAssignments, duty);
+          currentAssignments[duty] = stored;
+          if (!isAllowedPresider(stored, change.previous, change.desired)) {
+            return { status: 'stale', changed: false, storedAssignments: currentAssignments };
           }
         }
+
+        let setlistSnapshot;
+        let currentPlan = null;
+        let storedPlanPresider = '';
+        if (hasPresiderChange) {
+          /* The schedule and plan reads stay in one transaction so Presider
+             changes cannot commit for different people. */
+          setlistSnapshot = await transaction.get(setlistRef);
+          const hasPlan = snapshotExists(setlistSnapshot);
+          currentPlan = hasPlan ? snapshotData(setlistSnapshot) : null;
+          storedPlanPresider = normalizePresider(currentPlan && currentPlan.presider);
+          if (hasPlan && !isAllowedPresider(storedPlanPresider, previousPresider, desiredPresider)) {
+            return { status: 'stale', changed: false, storedAssignments: currentAssignments, storedPlanPresider };
+          }
+        }
+
+        const schedulePatch = {};
+        let fallbackAssignments = null;
+        let scheduleChanged = false;
+        Object.keys(changes).forEach(duty => {
+          const desired = changes[duty].desired;
+          if (currentAssignments[duty] === desired) return;
+          scheduleChanged = true;
+          const path = 'assignments.' + duty;
+          if (desired) schedulePatch[path] = desired;
+          else if (typeof firebase.deleteField === 'function') schedulePatch[path] = firebase.deleteField();
+          else {
+            if (!fallbackAssignments) fallbackAssignments = Object.assign({}, storedAssignments);
+            delete fallbackAssignments[duty];
+          }
+        });
+        if (scheduleChanged) {
+          transaction.update(scheduleRef, fallbackAssignments
+            ? { assignments: Object.assign(fallbackAssignments, Object.keys(schedulePatch).reduce((next, path) => {
+              next[path.slice('assignments.'.length)] = schedulePatch[path];
+              return next;
+            }, {})) }
+            : schedulePatch);
+        }
+        const hasPlan = hasPresiderChange && snapshotExists(setlistSnapshot);
+        const planChanged = hasPlan && storedPlanPresider !== desiredPresider;
         if (planChanged) {
           const planPatch = {
             presider: desiredPresider,
@@ -208,18 +269,13 @@
           planChanged,
           planExists: hasPlan
         };
-      })).then(result => {
+      })).catch(error => {
+        restoreAssignments(service, changes);
+        notifyAfterChange();
+        throw error;
+      }).then(result => {
         if (result && (result.status === 'stale' || result.status === 'missing-schedule')) {
-          if (service && service.assignments) {
-            if (result.status === 'stale') {
-              if (result.storedPresider) service.assignments.Presider = result.storedPresider;
-              else delete service.assignments.Presider;
-            } else if (previousPresider) {
-              service.assignments.Presider = previousPresider;
-            } else {
-              delete service.assignments.Presider;
-            }
-          }
+          restoreAssignments(service, changes, result.storedAssignments);
           notifyAfterChange();
           throw assignmentSaveError(result.status);
         }
@@ -228,22 +284,23 @@
       });
     }
 
-    function saveService(service, metadata) {
-      const desiredPresider = normalizePresider(presiderFor(service));
-      const hasPresiderMetadata = metadata && hasOwn(metadata, 'previousPresider');
-      const previousPresider = hasPresiderMetadata
-        ? normalizePresider(metadata.previousPresider)
-        : undefined;
-
-      /* Coordinator calls with metadata only for an actual Presider change.
-         Every other write keeps the established whole-service persistence. */
-      if (!hasPresiderMetadata || previousPresider === desiredPresider) {
+    function saveExplicitChanges(service, changes, firebase) {
+      if (!firebase) {
+        if (hasOwn(changes, 'Presider')) {
+          return localPresiderChange(service, changes.Presider.previous, changes.Presider.desired);
+        }
         return passThrough(service);
       }
+      return firebaseAssignmentChange(service, changes, firebase);
+    }
 
+    function saveService(service, metadata) {
+      const changes = normalizeAssignmentChanges(service, metadata);
+      if (!Object.keys(changes).length) {
+        return passThrough(service);
+      }
       const firebase = getFirebase();
-      if (!firebase) return localPresiderChange(service, previousPresider, desiredPresider);
-      return firebasePresiderChange(service, previousPresider, desiredPresider, firebase);
+      return saveExplicitChanges(service, changes, firebase);
     }
 
     return Object.freeze({ saveService });

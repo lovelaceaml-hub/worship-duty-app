@@ -6,11 +6,12 @@ duties, presider song planning, and coordinator updates.
 ## Quick links
 
 - **Website:** [lv-zion-duties.web.app](https://lv-zion-duties.web.app)
-- **Status:** Live on the restored production layout. The full-width redesign remains a local preview awaiting user testing.
+- **Status:** Live on the restored production layout. The full-width local release candidate is complete and verified; deployment is excluded.
 - **Local test:** [Current-records preview](http://127.0.0.1:8101/), read-only and not deployed.
 - **Docs:**
   - [Handoff](docs/HANDOFF.md), current state and next work
   - [User Manual](docs/USER-MANUAL.md), current production instructions and preview notes
+  - [Identity correction runbook](docs/IDENTITY-CORRECTION-RUNBOOK.md), prepared only
   - [Active plan](docs/PLAN-REFACTOR-REDESIGN.md), numbered plan and Build log
   - [All documents](docs/)
 
@@ -24,7 +25,7 @@ immediate fictional phone passcode smoke passed.
 The flatter redesign remains local and awaits user testing before another
 redesign deployment. Function and data changes are paused. Historical title
 correction has not executed. The earlier manager configuration remains in
-place. Final completion is still open.
+place. Local completion is recorded in the [completion receipt](docs/runs/worship-refactor-20260907/logs/20260908-local-completion.md).
 
 ## Current production app
 

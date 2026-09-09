@@ -1,25 +1,14 @@
 ---
 lane: LI
 title: Integration and completion
-state: running
-model: controller
+state: completed-local
+model: Astra high
 runner: coordinator
-worktree: pending
-review: pending
-depends_on: "LF,LR,LV,LD,LB,LM,LP,LC"
-updated: 2026-09-08T00:42Z
+worktree: /Users/anthony/Projects/worship-duty-app
+review: Astra and Opus high
+depends_on: all integrated lanes
+updated: 2026-09-08
 ---
+# Integration and completion
 
-# LI: Integration and completion
-
-## Work order
-
-(helper appends the work order it received)
-
-## Result
-
-(helper appends its result summary, changed files, verification evidence, limitations)
-
-## Review
-
-(coordinator appends)
+Local implementation, tests, release preparation, cumulative review, documentation and backup-safe source are complete. No deployment or live-record correction. See [completion receipt](../logs/20260908-local-completion.md) and [checks](../research/local-completion/README.md). Root owns the final private backup transaction.

@@ -145,7 +145,9 @@ function fakeFirebase(options) {
     query(collection, clause) {
       return { kind: 'query', collection, clause };
     },
-    onSnapshot(query, next, error) {
+    onSnapshot(query, optionsOrNext, nextOrError, maybeError) {
+      const next = typeof optionsOrNext === 'function' ? optionsOrNext : nextOrError;
+      const error = typeof optionsOrNext === 'function' ? nextOrError : maybeError;
       const registration = { query, next, error, unsubscribeCount: 0 };
       registrations.push(registration);
       calls.push(query);

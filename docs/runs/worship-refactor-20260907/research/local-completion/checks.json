@@ -1,0 +1,79 @@
+{
+  "scope": "local release candidate, no deployment or production writes",
+  "run": {
+    "id": "fixture-run-e26b58c3-e322-4efe-ad22-5c8d0833dcc9",
+    "status": "passed",
+    "startedAt": "2026-09-09T02:27:50.530Z",
+    "completedAt": "2026-09-09T02:28:08.200Z",
+    "screenshotsRoot": "/private/tmp/worship-completion-review4-ui/screenshots/fixture-run-e26b58c3-e322-4efe-ad22-5c8d0833dcc9"
+  },
+  "sourceSnapshotIntegrity": {
+    "digestStableAfterTemporaryEdit": true,
+    "temporaryDiskDigestChanged": true,
+    "servedIndexMatchesSnapshot": true,
+    "servedAppPrefixMatchesSnapshot": true,
+    "helperEvaluationSource": "same immutable snapshot bytes"
+  },
+  "timings": [
+    {
+      "navigationMs": 51.19,
+      "readyMs": 85.22,
+      "presiderMs": 617.68
+    },
+    {
+      "navigationMs": 52.03,
+      "readyMs": 87.66,
+      "presiderMs": 605.11
+    }
+  ],
+  "fixtureJourneys": "passed",
+  "correctionContracts": 25,
+  "assignmentEmulator": 1,
+  "rollbackContracts": 18,
+  "backendEmulator": 2,
+  "setlistEmulator": "two overlapping isolated runs passed",
+  "releaseAndPwaContracts": 9,
+  "previewContracts": 11,
+  "ownerBrowser": "phone and desktop, other-member writes rejected, owner confirmation saved, zero Axe violations and overflow",
+  "actualPreview": "aggregate-only, eight views, zero writes, errors, browser external requests, persistent storage or overflow",
+  "releaseStaging": "30 runtime assets, temporary staging removed, no Firebase command",
+  "backgroundUpdateContracts": 14,
+  "subscriptionLifecycleContracts": 6,
+  "sourceRevision": {
+    "kind": "sha256",
+    "method": "sha256-v2:path-null-byte-and-file-bytes;order=lexicographic-relative-path",
+    "fileOrder": "lexicographic relative paths",
+    "digest": "565144d8050da0b66bc115bc5a48f582800b683295f4b9ef74f5c4062c3933c1",
+    "files": [
+      "app.js",
+      "index.html",
+      "manifest.json",
+      "song-app.css",
+      "song-app.js",
+      "song-lib.js",
+      "src/core/constants.js",
+      "src/core/state.js",
+      "src/domain/coordinator.js",
+      "src/domain/member.js",
+      "src/domain/schedule.js",
+      "src/domain/setlist.js",
+      "src/domain/sheet.js",
+      "src/screens/coordinator/coordinator-screen.css",
+      "src/screens/coordinator/coordinator-screen.js",
+      "src/screens/coordinator/secondary-panels.js",
+      "src/screens/member/member-screen.css",
+      "src/screens/member/member-screen.js",
+      "src/services/assignments.js",
+      "src/services/firebase.js",
+      "src/services/song-repository.js",
+      "src/services/storage.js",
+      "src/services/subscriptions.js",
+      "src/ui/shell.js",
+      "styles.css",
+      "sw.js"
+    ]
+  },
+  "focusContracts": 5,
+  "cumulativeReview": "NO_MATERIAL_FINDINGS",
+  "reviewResultSha256": "884b99031561c7dc457846a6e111a03a214754d4d62c0dd09b1d3271dd8482b5"
+}

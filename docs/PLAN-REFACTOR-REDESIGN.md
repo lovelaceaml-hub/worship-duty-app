@@ -2,15 +2,17 @@
 
 Approved by Anthony in this task on 2026-09-07. Runner: coordinator. Mode: Parallel.
 
+Current status: local candidate completed and independently reviewed; deployment and live-record correction excluded. See [completion receipt](runs/worship-refactor-20260907/logs/20260908-local-completion.md).
+
 ## Result and constraints
 
-Redesign https://lv-zion-duties.web.app for members, presiders, and coordinators. Home puts My next duty above the date-grouped upcoming schedule. Use the requested refined layout and distinguishable themes, top navigation, optional tab swiping, header-to-home, existing passcodes and name selection. The presider gets one service workspace with a desktop side panel and phone song-search panel. Manage leads with assignments and pending requests.
+Redesign https://lv-zion-duties.web.app for members, presiders, and coordinators. Home puts My next duty above the date-grouped upcoming schedule. Use the requested refined layout and distinguishable themes, top navigation, optional tab swiping, header-to-home, existing passcodes and name selection. Presider has visible Services, Select Songs, Order of Worship, Library, and Insights sections, with compact service context and combined song selection plus library. Manage leads with assignments and pending requests.
 
 Keep lightweight buildless JavaScript and Firebase. Preserve records and IDs, local preference keys, calendar subscription URLs, anonymous-auth write sequencing, notifications and deduplication, full-schedule sync ownership, one-way Sheet upserts, manual duties, and setlist creation transactions. No database migration or rules change. The external song importer depends on song-lib.js and song-seed.js; preserve their paths, exports, and behavior. The separate lv-zion-service preview, preaching, and retired new-song-app are outside scope.
 
 ## Delivery authority and design
 
-Production implementation is authorized immediately. Anthony removed all prototype, six-stage, design-freeze and routine approval gates on 8 September 2026. Follow the current detailed Home, My Duties, Presider, song library, Manage and theme requirements. Existing prototype work is reusable design evidence, not a production prerequisite. No Stitch. See [current delivery authority](runs/worship-refactor-20260907/decisions/20260908-speed-delivery.md).
+Finish the full local implementation and release preparation without deploying. Anthony's latest request excludes Hosting, Functions, permission changes and live record corrections. No local design approval gate blocks implementation or verification. The earlier deployed redesign was reverted; old production remains live. A later deployment requires explicit authorization.
 
 ## Models and roles
 
@@ -70,7 +72,7 @@ Required docs: project AGENTS.md, README quick links, HANDOFF.md, USER-MANUAL.md
 
 ## Current design targets
 
-Anthony's latest detailed service layouts and six settled policy answers are authoritative. Original direction B and later revisions are historical references. Production Member, Presider and Coordinator work proceeds now. No prototype approval or reference-freeze milestone is required.
+Anthony's latest detailed layouts and corrections are authoritative. The actual runtime local preview is the current candidate. Complete and verify local behavior now; keep production unchanged.
 
 ## Build log
 
@@ -151,3 +153,9 @@ Anthony's latest detailed service layouts and six settled policy answers are aut
 - 2026-09-08 full-width local revision: WS3/HM3/PS3 integrated. One outer gutter, member-only header, Settings appearance, centered tabs, Home multiselect and connected month, month-scoped duty tables, Manage sections and compact Presider tabs. No deploy or provider write. Native Sol review interrupted by usage limit, pending. User test approval and full-plan completion remain open.
 
 - 2026-09-08 owner correction: remove choir song details from Home only. Presider and choir management remain unchanged. Local preview only.
+
+- 2026-09-08 completion request: finish everything except deploying. Astra runs integration, parallel Luna high audits identify concrete remaining UI/refactor and backend/release gaps, and the cumulative isolated Opus high review covers the final candidate. All production actions and historical record correction execution stay excluded.
+
+- Local completion audit: UI findings were limited to song snapshot pending/error visibility and expanded Choir outline, now corrected. Backend contracts are unchanged; rollback CLI and sanitized runbook fill the operational gap. The emulator harness now loads the extracted song repository from its immutable source snapshot. Cumulative Opus high review covers the complete local candidate and interrupted narrow UI review scope. No deployment or live-record correction.
+
+- Local completion closed: all accepted cumulative findings corrected, final correction review NO_MATERIAL_FINDINGS, final guarded phone/desktop journeys and focused contracts pass, exact runtime staging verified, documentation complete. Private backup follows. No deployment or live data correction.

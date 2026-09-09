@@ -6,6 +6,7 @@ const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { createHandlers } = require('../handlers');
 const identity = require('../identity-lib');
+const correctionRunner = require('../scripts/correct-member-identity.cjs');
 
 const PROJECT_ID = 'demo-worship-refactor';
 const HOST = process.env.FIRESTORE_EMULATOR_HOST || '';
@@ -287,7 +288,7 @@ test('identity correction preserves allowlisted history, rejects a concurrent wr
 
       await newTargetRef.set({ name: newName, token: 'fictional-new-target-token' });
       await assert.rejects(
-        identity.rollbackCorrection(db, jobId),
+        correctionRunner.runRollback({ db, rollbackJobId: jobId, output: { log() {} } }),
         error => error.code === 'ROLLBACK_CONFLICT'
       );
       assert.equal((await backupRoot.get()).data().status, 'applied');
@@ -300,7 +301,12 @@ test('identity correction preserves allowlisted history, rejects a concurrent wr
         token: 'fictional-unrelated-after-apply-token'
       });
 
-      const rollback = await identity.rollbackCorrection(db, jobId);
+      const rollbackLogs = [];
+      const restored = await correctionRunner.runRollback({ db, rollbackJobId: jobId, output: { log(value) { rollbackLogs.push(JSON.parse(value)); } } });
+      const rollback = restored.summary;
+      assert.equal(rollbackLogs[0].mode, 'rollback');
+      assert.equal(JSON.stringify(rollbackLogs).includes(oldName), false);
+      assert.equal(JSON.stringify(rollbackLogs).includes(newName), false);
       assert.equal(rollback.jobId, jobId);
       assert.equal((await scheduleRef.get()).data().assignments.Presider, oldName);
       assert.equal((await scheduleRef.get()).data().notes, 'fictional-post-apply-note');

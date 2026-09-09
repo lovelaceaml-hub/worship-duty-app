@@ -162,7 +162,7 @@
         if (!stopped && typeof target[name] === 'function') target[name](normalize(snapshot), normalizedChanges(snapshot));
       };
       const onError = error => {
-        if (!stopped && typeof target.error === 'function') target.error(error);
+        if (!stopped && typeof target.error === 'function') target.error(error, name);
       };
       unsubs.push(firebase.onSnapshot(ref, callback, onError));
     }

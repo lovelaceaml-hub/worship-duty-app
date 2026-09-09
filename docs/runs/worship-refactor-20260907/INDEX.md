@@ -1,122 +1,64 @@
-# Run: worship-refactor-20260907
+# Worship Service refactor and redesign
 
-Plan ID: worship-refactor-20260907
-Plan file: /Users/anthony/Projects/worship-duty-app/docs/PLAN-REFACTOR-REDESIGN.md
-Runner: coordinator
-Started: 2026-09-08T00:29Z
-Controller: GPT-6 Astra high, with optional Sol team leads and existing Terra supervision
+Plan: [complete refactor and redesign](../../PLAN-REFACTOR-REDESIGN.md). Runner: one coordinator, Parallel. Controller: Astra high. Baseline:885b0bb0ffb80802a5e6428edcea89ad66c428a7. Canonical source: /Users/anthony/Projects/worship-duty-app.
 
-## Current delivery
+## Current outcome
 
-Latest: [old design restored](logs/20260908-old-design-restored.md). Read [current preview approval authority](decisions/20260908-design-preview-required.md), which supersedes the earlier immediate-design-deployment wording. The [flat local test](http://127.0.0.1:8101/) is verified and ready for owner review. See its [receipt](logs/20260908-flat-local-preview-ready.md). Provider changes are paused.
+Local release candidate complete, deployment excluded. [Open the read-only test](http://127.0.0.1:8101/). The old production design remains live. Historical record correction is prepared and unapplied. A later release requires explicit authorization.
 
-Earlier [speed-delivery authority](decisions/20260908-speed-delivery.md) remains applicable to local implementation and parallelism. Its design-deployment waiver is superseded by the latest preview approval requirement. Use necessary affected checks.
+- [Completion receipt](logs/20260908-local-completion.md)
+- [Verification and fictional phone/desktop references](research/local-completion/README.md)
+- [Current lane board](board/index.html)
+- [Handoff](../../HANDOFF.md)
+- [Identity runbook](../../IDENTITY-CORRECTION-RUNBOOK.md)
 
-## Baselines
+## Lane records
 
-| Repo | Path | Branch | Baseline HEAD |
-|---|---|---|---|
-| worship-duty-app | /Users/anthony/Projects/worship-duty-app | codex/worship-refactor-redesign | 885b0bb0ffb80802a5e6428edcea89ad66c428a7 |
+Earlier deployed states describe historical compatible foundation releases, not deployment of this local candidate. Superseded prototype lanes remain recorded for provenance. The numbered plan Build log and timestamped logs retain the execution history.
 
-## Lanes
+| Lane | Work | Current record |
+|---|---|---|
+| [FL](lanes/FL.md) | Flat layout preview | verified-local |
+| [HM3](lanes/HM3.md) | Home and My Duties | integrated, local test |
+| [L0](lanes/L0.md) | Architecture critique | reviewed |
+| [LB](lanes/LB.md) | Backend | deployed |
+| [LC](lanes/LC.md) | Coordinator experience | superseded |
+| [LC0](lanes/LC0.md) | Local completion integration | completed-local |
+| [LCA](lanes/LCA.md) | UI and refactor requirement audit | completed |
+| [LCC](lanes/LCC.md) | Offline cache and background update corrections | completed-local |
+| [LCF](lanes/LCF.md) | Confirmation timestamp compatibility fix | deployed |
+| [LCG](lanes/LCG.md) | Song ownership and prayer compatibility | completed-local |
+| [LCI](lanes/LCI.md) | Atomic assignment proposal persistence | completed-local |
+| [LCR](lanes/LCR.md) | Backend and release readiness audit | completed |
+| [LD](lanes/LD.md) | Design (approval pending) | reviewed |
+| [LDP](lanes/LDP.md) | Local read-only preview server | merged |
+| [LDU-CALENDAR-REDESIGN-20260908](lanes/LDU.md) | Open Bulletin calendar redesign | merged |
+| [LF](lanes/LF.md) | Foundation | deployed |
+| [LF2](lanes/LF2.md) | Foundation state and subscriptions | deployed |
+| [LF3](lanes/LF3.md) | Pure member and coordinator selectors | deployed |
+| [LF4](lanes/LF4.md) | Setlist domain extraction | integrated |
+| [LI](lanes/LI.md) | Integration and completion | completed-local |
+| [LM](lanes/LM.md) | Member experience | superseded |
+| [LMC](lanes/LMC.md) | Manager contract critique | reviewed |
+| [LP](lanes/LP.md) | Presider experience | superseded |
+| [LR](lanes/LR.md) | Release machinery | deployed |
+| [LST](lanes/LST.md) | Service layout fictional verification | superseded |
+| [LSU](lanes/LSU.md) | Service list and song workspace | superseded |
+| [LV](lanes/LV.md) | Verification | reviewed |
+| [LVC](lanes/LVC.md) | Calendar redesign fictional acceptance verification | merged |
+| [PA](lanes/PA.md) | Atomic Presider reassignment | verified |
+| [PC](lanes/PC.md) | Department management | integrated |
+| [PJ](lanes/PJ.md) | Production journeys | integrated-local |
+| [PM](lanes/PM.md) | Member experience | integrated |
+| [PP](lanes/PP.md) | Presider interface | integrated |
+| [PR](lanes/PR.md) | Song repository and lifecycle | integrated-local |
+| [PS](lanes/PS.md) | Shared shell | integrated |
+| [PS3](lanes/PS3.md) | Presider and song workspace | integrated, local test |
+| [PT](lanes/PT.md) | Themes and responsive polish | integrated |
+| [PX](lanes/PX.md) | Secondary screen extraction | integrated-local |
+| [RP](lanes/RP.md) | Actual runtime read-only preview | verified-local |
+| [WS3](lanes/WS3.md) | Header, width and Manage | integrated, local test |
 
-| Lane | Title | State | Model | Worktree | Review | Depends on |
-|---|---|---|---|---|---|---|
-| L0 | Architecture critique | reviewed | gpt-5.6-sol | /Users/anthony/Projects/worship-duty-app | architecture approved | none |
-| LF | Foundation | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation | Sol-pass | none |
-| LF2 | Foundation state and subscriptions | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-state | Sol-pass | LF,LR |
-| LF3 | Pure member and coordinator selectors | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/foundation-domain | Sol-pass | LF2 |
-| LR | Release machinery | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/release | Sol-pass | none |
-| LD | Design references | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/design | Sol-pass | none |
-| LDP | Local read-only preview server | merged | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/real-preview-server | Sol-pass | LD |
-| LV | Verification | reviewed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/verification | Sol-pass | none |
-| LM | Member experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
-| LP | Presider experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
-| LC | Coordinator experience | planned | gpt-5.6-luna | /Users/anthony/Projects/worship-duty-app | pending | LF,LD |
-| LB | Backend | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/backend | Sol-pass | L0 |
-| LCF | Confirmation timestamp fix | deployed | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/confirmation-fix | Sol-pass | LF2 |
-| LI | Integration and completion | running | controller | /Users/anthony/Projects/worship-duty-app | pending | LF,LR,LV,LD,LB,LM,LP,LC |
-| LDU | Calendar and workspace redesign | merged | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/calendar-redesign | Sol-pass | LDP |
-| LVC | Calendar journey verification | merged | gpt-5.6-luna | /Users/anthony/Projects/worship-refactor-worktrees/calendar-verification | Sol-pass | LDU |
+## Records
 
-<!-- lane: LDU state: merged model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/calendar-redesign review: Sol-pass updated: 2026-09-08T18:53Z -->
-<!-- lane: LVC state: merged model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/calendar-verification review: Sol-pass updated: 2026-09-08T18:53Z -->
-
-## Folders
-
-- lanes/: one file per lane (work order, result, review). Front matter fields: lane, title, state, model, runner, worktree, review, depends_on, updated.
-- research/: attacker output and critique briefs.
-- decisions/: decisions log and integration rulings.
-- logs/: coordinator events, one file per event.
-- board/: rule diagram page and generated lane board.
-
-## Artifacts
-
-- Rule diagram: pending
-- Lane board: [Local live lane board](board/index.html)
-
-<!-- lane: L0 state: reviewed model: gpt-5.6-sol worktree: /Users/anthony/Projects/worship-duty-app review: architecture approved updated: 2026-09-08T00:39Z -->
-<!-- lane: LF state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation review: Sol-pass updated: 2026-09-08T01:47Z -->
-<!-- lane: LR state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/release review: Sol-pass updated: 2026-09-08T01:47Z -->
-<!-- lane: LD state: reviewed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/design review: Sol-pass updated: 2026-09-08T16:32Z -->
-<!-- lane: LV state: reviewed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/verification review: Sol-pass updated: 2026-09-08T14:52Z -->
-<!-- lane: LM state: planned model: gpt-5.6-luna worktree: pending review: pending updated: 2026-09-08T00:42Z -->
-<!-- lane: LP state: planned model: gpt-5.6-luna worktree: pending review: pending updated: 2026-09-08T00:42Z -->
-<!-- lane: LC state: planned model: gpt-5.6-luna worktree: pending review: pending updated: 2026-09-08T00:42Z -->
-<!-- lane: LB state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/backend review: Sol-pass updated: 2026-09-08T01:51Z -->
-<!-- lane: LI state: running model: controller worktree: pending review: pending updated: 2026-09-08T00:42Z -->
-
-<!-- lane: LF2 state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-state review: Sol-pass updated: 2026-09-08T02:29Z -->
-
-<!-- lane: LCF state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/confirmation-fix review: Sol-pass updated: 2026-09-08T03:08Z -->
-
-<!-- lane: LF3 state: deployed model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-domain review: Sol-pass updated: 2026-09-08T04:19Z -->
-
-<!-- lane: LDP state: merged model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/real-preview-server review: Sol-pass updated: 2026-09-08T16:32Z -->
-
-## Current revision 2
-
-Read [service layout revision 2](decisions/20260908-service-layout-v2.md). LSU UI and LST verification run in isolated worktrees; LMC investigates manager contracts read-only. Root integrates sequentially.
-
-<!-- lane: LSU state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/service-layout-v2 review: pending updated: 2026-09-08 -->
-
-<!-- lane: LST state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/service-layout-tests-v2 review: pending updated: 2026-09-08 -->
-
-<!-- lane: LMC state: reviewed model: gpt-5.6-sol worktree: /Users/anthony/Projects/worship-refactor-worktrees/manager-contract-v2 review: pending updated: 2026-09-08 -->
-
-## Historical identity correction
-
-[LNR approved capsule](decisions/20260908-identity-correction.md). This nonvisual compatibility lane runs alongside the prototype, with root-only live execution after review.
-
-<!-- lane: LNR state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/identity-correction review: pending updated: 2026-09-08 -->
-
-## Foundation setlist state
-
-[LF4 capsule](decisions/20260908-setlist-domain.md) consolidates existing pure song status calculations without visible changes. It runs independently of local UI revision and backend identity correction.
-
-<!-- lane: LF4 state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/foundation-setlist-state review: pending updated: 2026-09-08 -->
-
-## Immediate production lanes
-
-Astra controls integration. Sol leads shared interface coordination. The five independent production writers started together at baseline b44bec7. Native runtime hard ceiling is 100 concurrent agents including root; no smaller project cap applies. Gemini uses its installed CLI runtime.
-
-<!-- lane: PM state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-member review: proportional updated: 2026-09-08 -->
-
-<!-- lane: PP state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-presider review: proportional updated: 2026-09-08 -->
-
-<!-- lane: PC state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-manage review: proportional updated: 2026-09-08 -->
-
-<!-- lane: PS state: running model: gpt-5.6-luna worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-shell review: proportional updated: 2026-09-08 -->
-
-<!-- lane: PT state: running model: gemini-3.8-flash-medium worktree: /Users/anthony/Projects/worship-refactor-worktrees/production-themes review: proportional updated: 2026-09-08 -->
-
-
-## Current production integration
-
-See [integration log](logs/20260908-production-integration.md) and [manager configuration](logs/20260908-manager-configuration.md). PM, PP, PC, PS, PT, PA, PJ, PR and PX are integrated locally. The repository integration passed fictional phone and desktop journeys after the fixture asset map was extended for static dependencies. LNR passed review3 and two emulator checks, but remains unapplied. FL and RP prepare the flat read-only local test. Astra owns integration; further production changes require preview approval.
-
-## Current full-width revision
-
-Read [latest requested changes](decisions/20260908-width-tabs-revision.md). WS3, HM3 and PS3 are integrated from their isolated worktrees. Root owns shared integration, fixture updates and preview safeguards. Old production remains live; no deployment is authorized.
-
-Local preview verification passed. Native Sol review is pending after a provider usage-limit interruption. See the [revision checkpoint](logs/20260908-width-tabs-local-preview.md). This is not full-plan completion.
+Decisions, research, lane results and timestamped logs remain under this run tree. Board and review artifacts contain only sanitized engineering information. Real records stay in the authorized application/provider boundary.

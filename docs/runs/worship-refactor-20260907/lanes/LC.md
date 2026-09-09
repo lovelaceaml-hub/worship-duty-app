@@ -1,7 +1,7 @@
 ---
 lane: LC
 title: Coordinator experience
-state: planned
+state: superseded
 model: gpt-5.6-luna
 runner: coordinator
 worktree: pending
@@ -23,3 +23,5 @@ updated: 2026-09-08T00:42Z
 ## Review
 
 (coordinator appends)
+
+Current local completion record: PC implements the coordinator screen. No deployment.

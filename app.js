@@ -901,45 +901,46 @@ function copyICSLink() {
 
 /* ================= rendering ================= */
 
+function viewControlKey(control, index) {
+  if (control.dataset.preserveKey || control.id || control.name) return control.dataset.preserveKey || control.id || control.name;
+  const data = control.dataset || {};
+  const keys = Object.keys(data).sort();
+  return keys.length ? JSON.stringify(keys.map(key => [key, data[key]])) : '';
+}
+
 function captureViewSnapshot(view) {
   if (!view) return null;
-  const controls = [];
-  view.querySelectorAll('input, select, textarea').forEach((control, index) => {
-    const key = control.dataset.preserveKey || control.id || control.name || ('control-' + index);
-    controls.push({
-      key,
-      value: control.value,
-      checked: control.checked,
-      selectionStart: typeof control.selectionStart === 'number' ? control.selectionStart : null,
-      selectionEnd: typeof control.selectionEnd === 'number' ? control.selectionEnd : null
-    });
-  });
-  const active = document.activeElement && view.contains(document.activeElement)
-    ? (document.activeElement.dataset.preserveKey || document.activeElement.id || document.activeElement.name || '')
-    : '';
-  return { scrollY: window.scrollY || 0, controls, active };
+  const controls = Array.from(view.querySelectorAll('input, select, textarea'));
+  const control = document.activeElement;
+  const index = controls.indexOf(control);
+  const active = index < 0 ? null : {
+    key: viewControlKey(control, index),
+    tag: control.tagName,
+    type: control.type,
+    value: control.value,
+    selectionStart: typeof control.selectionStart === 'number' ? control.selectionStart : null,
+    selectionEnd: typeof control.selectionEnd === 'number' ? control.selectionEnd : null
+  };
+  return { scrollY: window.scrollY || 0, active };
 }
 
 function restoreViewSnapshot(view, snapshot) {
   if (!view || !snapshot) return;
-  const controls = Array.from(view.querySelectorAll('input, select, textarea'));
-  snapshot.controls.forEach(saved => {
-    const control = controls.find((candidate, index) =>
-      (candidate.dataset.preserveKey || candidate.id || candidate.name || ('control-' + index)) === saved.key);
-    if (!control) return;
-    const isMemberDepartmentControl = control.dataset && control.dataset.chg === 'member-department';
-    if (!isMemberDepartmentControl) {
-      if (control.type === 'checkbox' || control.type === 'radio') control.checked = saved.checked;
-      else if (document.activeElement !== control || control.value !== saved.value) control.value = saved.value;
+  const saved = snapshot.active;
+  if (saved) {
+    const controls = Array.from(view.querySelectorAll('input, select, textarea'));
+    const matches = saved.key ? controls.filter((candidate, index) => viewControlKey(candidate, index) === saved.key && candidate.tagName === saved.tag && candidate.type === saved.type) : [];
+    const target = matches.length === 1 ? matches[0] : null;
+    if (target) {
+      // Choice controls already commit on change. Only a focused text draft
+      // needs its value restored; other controls display fresh state.
+      const textDraft = target.tagName === 'TEXTAREA' || (target.tagName === 'INPUT' && ['text', 'search', 'url', 'password', 'number', 'email', 'tel', 'date', 'time'].includes(target.type || 'text'));
+      if (textDraft) target.value = saved.value;
+      if (typeof target.focus === 'function') target.focus({ preventScroll: true });
+      if (textDraft && saved.selectionStart != null && typeof target.setSelectionRange === 'function') {
+        try { target.setSelectionRange(saved.selectionStart, saved.selectionEnd); } catch (error) { /* unsupported input type */ }
+      }
     }
-    if (document.activeElement === control && saved.selectionStart != null && typeof control.setSelectionRange === 'function') {
-      try { control.setSelectionRange(saved.selectionStart, saved.selectionEnd); } catch (e) { /* ignored */ }
-    }
-  });
-  if (snapshot.active) {
-    const target = controls.find((candidate, index) =>
-      (candidate.dataset.preserveKey || candidate.id || candidate.name || ('control-' + index)) === snapshot.active);
-    if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
   }
   if (typeof window.scrollTo === 'function') window.scrollTo({ top: snapshot.scrollY, behavior: 'auto' });
 }

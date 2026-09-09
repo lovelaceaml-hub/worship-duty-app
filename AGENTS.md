@@ -1,5 +1,7 @@
 # Worship Service project contract
 
+Current scope (latest owner request): local implementation, compatibility checks, release preparation, documentation and cumulative review are complete. See docs/runs/worship-refactor-20260907/logs/20260908-local-completion.md. Do not deploy Hosting or Functions, change permission rules, or apply production record corrections. Existing design approval is required only before a later deployment, not before completing local work.
+
 Current design delivery authority (8 September 2026, latest correction): Anthony rejected the deployed redesign and requested restoration of the old design. Restore Hosting source 9247f75, keep the redesign local, and show the revised test for explicit approval before any further redesign deployment. This supersedes the earlier no-design-approval wording below. Do not deploy a new interface, backend correction or production data change while preparing this preview. Continue local work with flatter rows, fewer containers, less wasted space, and minimal disclosure controls. Existing records stay intact.
 
 Current delivery authority: docs/runs/worship-refactor-20260907/decisions/20260908-speed-delivery.md. Astra high controls this task; Sol may lead teams; Luna effort varies by task and Gemini 3.8 Flash may implement suitable work. No artificial cap on parallelism or lane size.

@@ -233,10 +233,12 @@ function makeFirestoreFixture(serverBaseURL, options = {}) {
   const members = fixtureMembers.concat(options.extraMembers || []);
   const departments = clone(fixtureDepartments);
   if (options.extraMembers?.length) departments.Worship = departments.Worship.concat(options.extraMembers);
+  const secondService = clone(fixtureServices[1]);
+  if (options.mixedProposals) delete secondService.assignments.Presider;
   return {
     schedule: {
       '2026-09-12_morning': clone(fixtureServices[0]),
-      '2026-09-19_morning': clone(fixtureServices[1])
+      '2026-09-19_morning': secondService
     },
     app: {
       members: { list: members },
@@ -704,9 +706,17 @@ export function doc(db, ...parts) { return makeRef('doc', parts); }
 export function collection(db, name) { return makeRef('collection', [name]); }
 export function query(ref, ...constraints) { return Object.assign({}, ref, { constraints: constraints }); }
 export function where(field, op, value) { return { field: field, op: op, value: value }; }
-export function onSnapshot(target, next, error) {
+export function onSnapshot(target, optionsOrNext, nextOrError, maybeError) {
+  const snapshotOptions = typeof optionsOrNext === 'object' ? optionsOrNext : {};
+  const next = typeof optionsOrNext === 'function' ? optionsOrNext : nextOrError;
+  const error = typeof optionsOrNext === 'function' ? nextOrError : maybeError;
   const listener = { target: target, next: next, error: error, active: true };
   listeners.push(listener);
+  control.failSetlistSnapshot = () => {
+    const active = listeners.filter(item => item.active && item.target.kind === 'collection' && item.target.path[0] === 'setlists');
+    active.forEach(item => { item.active = false; if (item.error) item.error({ code: 'unavailable' }); });
+    return active.length;
+  };
   const isSetlistCollection = target.kind === 'collection' && target.path[0] === 'setlists';
   const deliver = () => {
     if (!listener.active) return;
@@ -741,7 +751,15 @@ export async function updateDoc(ref, patch) {
   const permission = ensureCanWrite('updateDoc', ref);
   if (valueAt(ref) === undefined) { const error = new Error('fixture document missing'); error.code = 'not-found'; throw error; }
   const prior = valueAt(ref);
-  setValueAt(ref, applySentinels(patch, prior), true);
+  const updated = cloneValue(prior);
+  Object.keys(patch).forEach(field => {
+    const path = field.split('.');
+    let target = updated;
+    path.slice(0, -1).forEach(key => { target = target[key] || (target[key] = {}); });
+    const key = path[path.length - 1];
+    target[key] = applySentinels({ [key]: patch[field] }, target)[key];
+  });
+  setValueAt(ref, updated, false);
   const event = recordFirestoreEvent('write', { operation: 'updateDoc', collection: ref.path[0], id: ref.path.slice(1).join('/'), requiresAuth: permission.requiresAuth, authSignedIn: control.authSignedIn });
   control.writes.push({ operation: 'updateDoc', collection: ref.path[0], id: ref.path.slice(1).join('/'), requiresAuth: permission.requiresAuth, authSignedIn: control.authSignedIn, at: event.at, order: event.order });
   notify(ref);
@@ -1200,7 +1218,7 @@ async function exerciseManage(serverBaseURL, browser, viewName, viewport) {
 
 async function exerciseManagerJourneys(serverBaseURL, browser) {
   const managerMap = { Worship: ['Jordan Fixture'], Choir: ['Jordan Fixture'] };
-  const run = await launchFixturePage(serverBaseURL, browser, 'firebase', { width: 390, height: 844 }, { manageJourney: true, managerMap, extraMembers: ['Morgan Manager'], authDelayMs: 70 });
+  const run = await launchFixturePage(serverBaseURL, browser, 'firebase', { width: 390, height: 844 }, { manageJourney: true, mixedProposals: true, managerMap, extraMembers: ['Morgan Manager'], authDelayMs: 70 });
   const { page } = run;
   await page.locator('#header-me-select').selectOption({ label: 'Jordan Fixture' });
   await page.getByRole('button', { name: 'Manage', exact: true }).click();
@@ -1215,6 +1233,16 @@ async function exerciseManagerJourneys(serverBaseURL, browser) {
   assert.equal(await departmentChoice.inputValue(), 'Worship', 'manager journey must start in the configured own department');
   const managerEvidence = await captureAxe(page, 'manager-phone');
 
+  const assignmentChoice = page.locator('[data-chg="manage-assignment"][data-service="2026-09-12_morning"][data-duty="Presider"]');
+  const writesBeforeEdit = await page.evaluate(() => window.__QA_FIREBASE_CONTROL.writes.length);
+  await assignmentChoice.selectOption('Morgan Manager');
+  await page.waitForFunction(() => window.__QA_FIREBASE_STORE.schedule['2026-09-12_morning'].assignments.Presider === 'Morgan Manager');
+  const assignmentWrites = await page.evaluate(start => window.__QA_FIREBASE_CONTROL.writes.slice(start).filter(write => write.collection === 'schedule'), writesBeforeEdit);
+  assert.equal(assignmentWrites.length, 1, 'input then change must produce exactly one assignment write');
+  assert.equal(assignmentWrites[0].operation, 'updateDoc', 'manual assignment must use the guarded transaction patch');
+  await page.evaluate(() => { window.__QA_FIREBASE_STORE.schedule['2026-09-12_morning'].assignments.Presider = 'Casey Example'; });
+  await emitFixtureSnapshot(page, 'schedule');
+  assert.equal(await assignmentChoice.inputValue(), 'Casey Example', 'live assignment updates must replace stale displayed choices');
   const existingPresider = await page.evaluate(() => window.__QA_APP_STATE().services[0]?.assignments?.Presider || null);
   await page.getByRole('button', { name: 'Generate proposals', exact: true }).click();
   await page.locator('.manage-proposal-summary').waitFor({ timeout: 10000 });
@@ -1228,9 +1256,15 @@ async function exerciseManagerJourneys(serverBaseURL, browser) {
   const afterProposalState = await page.evaluate(() => ({ state: window.__QA_APP_STATE(), writes: window.__QA_FIREBASE_CONTROL.writes.slice() }));
   assert.equal(afterProposalState.state.services[0]?.assignments?.Presider, existingPresider, 'manager proposals must preserve the existing Presider assignment');
   assert.ok(afterProposalState.writes.some(write => write.collection === 'schedule'), 'saving manager proposals must reach the fictional schedule write boundary');
+  const persistedProposals = await page.evaluate(() => window.__QA_FIREBASE_STORE.schedule['2026-09-19_morning'].assignments);
+  assert.ok(persistedProposals.Presider, 'mixed proposals must persist the Presider');
+  assert.ok(persistedProposals['Prayer of Thanks'], 'mixed proposals must persist the sibling duty too');
+  await emitFixtureSnapshot(page, 'schedule');
+  assert.deepEqual(await page.evaluate(() => window.__QA_APP_STATE().services.find(service => service.date === '2026-09-19').assignments), persistedProposals, 'authoritative snapshots must retain every saved proposal');
 
   await departmentChoice.selectOption('Choir');
   await page.locator('#manage-choir-title').waitFor({ timeout: 10000 });
+  assert.equal(await page.locator('[data-chg="manage-assignment"]').count(), 0, 'Choir must not invent an assignment duty');
   const beforeChoirEdit = await page.evaluate(() => {
     const state = window.__QA_APP_STATE();
     return { departments: JSON.parse(JSON.stringify(state.departments)), assignments: JSON.parse(JSON.stringify(state.services.map(service => service.assignments))), songLibrary: window.SONG_SEED?.songs?.map(song => song.title) || [] };
@@ -1292,6 +1326,7 @@ async function exerciseSiteLock(serverBaseURL, browser) {
   const run = await launchFixturePage(serverBaseURL, browser, 'firebase', { width: 390, height: 844 }, { siteLockJourney: true, authDelayMs: 80 });
   const { page } = run;
   assert.equal(await page.locator('#site-pin-input').count(), 1, 'whole-site lock must render its fictional passcode field');
+  assert.equal(await page.locator('.app-footer').isVisible(), false, 'Settings must be hidden and unfocusable before site unlock');
   assert.equal(await page.getByText('This schedule is private', { exact: true }).count(), 1, 'whole-site lock must render its locked state');
   const locked = await captureAxe(page, 'site-lock-phone');
   await page.locator('#site-pin-input').fill(FIXTURE_SITE_PASSCODE);
@@ -1393,6 +1428,13 @@ async function exerciseViewport(serverBaseURL, browser, name, viewport) {
   const presiderStarted = performance.now();
   const presiderEvidence = await captureAxe(page, name + '-presider');
   const presiderMs = Math.round((performance.now() - presiderStarted) * 100) / 100;
+  const factGeometry = await page.locator('.presider-compact-summary').first().evaluate(row => {
+    const cells = Array.from(row.children);
+    return { height: row.getBoundingClientRect().height, overlap: cells.some(cell => Array.from(cell.children).some(child => child.getBoundingClientRect().right > cell.getBoundingClientRect().right + 0.5)) };
+  });
+  assert.ok(factGeometry.height <= 44, name + ': service facts must remain one compact row');
+  assert.equal(factGeometry.overlap, false, name + ': service facts must fit their own cells');
+  assert.equal(await page.locator('.presider-service-order .choir-slot').filter({ hasText: 'Fixture Choir Song' }).count(), 1, name + ': expanded service outline must include Choir');
   await page.locator('#presider-filter').selectOption('all');
   await page.locator('.presider-date-group').nth(1).waitFor({ timeout: 10000 });
   const secondDate = await page.locator('.presider-date-group').nth(1).getAttribute('data-date');
@@ -1453,9 +1495,17 @@ async function exerciseSetlistRace(serverBaseURL, browser) {
   const openMs = Math.round((performance.now() - opened) * 100) / 100;
   assert.ok(await page.locator('[data-testid="presider-service"]').count() > 0, 'race fixture should render service cards before its deferred setlist snapshot');
   assert.ok(await page.locator('[data-testid="presider-service"] [data-confirmation-state]').count() > 0, 'race fixture should render a fictional status while its deferred snapshot is pending');
+  await page.getByTestId('song-snapshot-status').filter({ hasText: 'Loading song plans' }).waitFor();
   const releasedSnapshots = await page.evaluate(() => window.__QA_FIREBASE_CONTROL.releaseSetlistSnapshot?.() || 0);
   assert.ok(releasedSnapshots >= 1, 'race fixture must release deferred setlist snapshots explicitly after picker mount');
   await page.locator('[data-testid="presider-service"] [data-confirmation-state]').first().waitFor({ timeout: 15000 });
+  await page.getByTestId('song-snapshot-status').waitFor({ state: 'detached' });
+  const failed = await page.evaluate(() => window.__QA_FIREBASE_CONTROL.failSetlistSnapshot());
+  assert.ok(failed > 0);
+  await page.getByTestId('song-snapshot-status').filter({ hasText: 'unavailable' }).waitFor();
+  await page.evaluate(() => { window.__QA_FIREBASE_OPTIONS.setlistSnapshotDeferred = false; });
+  await page.locator('[data-song-act="retry-song-snapshots"]').click();
+  await page.getByTestId('song-snapshot-status').waitFor({ state: 'detached' });
   const control = await page.evaluate(() => window.__QA_FIREBASE_CONTROL);
   assert.equal(control.transactionSets.filter(id => id === 'setlists/2026-09-12_morning').length, 0, 'existing setlist must not be overwritten before its first snapshot');
   assert.equal(control.writes.filter(write => write.collection === 'setlists').length, 0, 'opening the Presider view must not write before its first setlist snapshot');
