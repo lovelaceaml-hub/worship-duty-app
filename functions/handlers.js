@@ -3,6 +3,7 @@
 const sheetLibDefault = require('./sheet-lib');
 const icsLibDefault = require('./ics-lib');
 const { publicScheduleService: publicScheduleServiceDefault } = require('./public-schedule');
+const identityLibDefault = require('./identity-lib');
 
 const TZ = 'America/Los_Angeles';
 const DAY_MS = 24 * 3600 * 1000;
@@ -96,6 +97,7 @@ function createHandlers(dependencies) {
   const sheetLib = deps.sheetLib || sheetLibDefault;
   const icsLib = deps.icsLib || icsLibDefault;
   const publicScheduleService = deps.publicScheduleService || publicScheduleServiceDefault;
+  const identityLib = deps.identityLib || identityLibDefault;
 
   if (!db || typeof db.collection !== 'function') {
     throw new TypeError('createHandlers requires a Firestore adapter');
@@ -117,21 +119,34 @@ function createHandlers(dependencies) {
     return targets;
   }
 
-  async function sendToTargets(targets, names, title, bodyFn) {
-    const wanted = new Set(names.filter(Boolean));
+  async function loadIdentityResolver() {
+    const snapshot = await db.collection('app').doc('nameMap').get();
+    const data = snapshot.exists ? (snapshot.data() || {}) : {};
+    const map = data.map || {};
+    try {
+      return identityLib.createIdentityResolver(map);
+    } catch (error) {
+      logger.error('identity map is invalid; notification skipped', { code: error.code || 'INVALID_MAP' });
+      return null;
+    }
+  }
+
+  async function sendToTargets(targets, names, title, bodyFn, resolver) {
+    const identity = resolver || identityLib.createIdentityResolver({});
+    const wanted = new Set(names.filter(Boolean).map(name => identity.canonicalize(name)));
     if (!wanted.size) return;
-    const picked = targets.filter(target => wanted.has(target.name));
+    const picked = targets.filter(target => wanted.has(identity.canonicalize(target.name)));
     if (!picked.length) return;
 
-    const byBody = {};
+    const byBody = new Map();
     picked.forEach(target => {
-      const body = bodyFn(target.name);
-      (byBody[body] || (byBody[body] = [])).push(target.token);
+      const body = bodyFn(identity.canonicalize(target.name), target.name);
+      if (!byBody.has(body)) byBody.set(body, []);
+      byBody.get(body).push(target.token);
     });
 
     const dead = [];
-    for (const body of Object.keys(byBody)) {
-      const tokens = byBody[body];
+    for (const [body, tokens] of byBody.entries()) {
       const response = await sendEachForMulticast({
         tokens,
         data: { title: title, body: body }
@@ -152,10 +167,10 @@ function createHandlers(dependencies) {
       db.collection('tokens').doc(token).delete().catch(() => {})));
   }
 
-  async function sendToNames(names, title, bodyFn) {
+  async function sendToNames(names, title, bodyFn, resolver) {
     const wanted = new Set(names.filter(Boolean));
     if (!wanted.size) return;
-    await sendToTargets(await loadTokenTargets(), names, title, bodyFn);
+    await sendToTargets(await loadTokenTargets(), names, title, bodyFn, resolver);
   }
 
   async function onScheduleWrite(event) {
@@ -167,18 +182,36 @@ function createHandlers(dependencies) {
     const before = event.data.before.data() || {};
     const beforeAssignments = before.assignments || {};
     const afterAssignments = service.assignments || {};
-    const perName = {};
+    const resolver = await loadIdentityResolver();
+    if (!resolver) return;
+    const perName = new Map();
     Object.keys(afterAssignments).forEach(duty => {
       const name = afterAssignments[duty];
-      if (name && name !== beforeAssignments[duty] && !(name in perName)) {
-        perName[name] = duty;
+      const previous = beforeAssignments[duty];
+      if (name && !resolver.same(name, previous)) {
+        const canonical = resolver.canonicalize(name);
+        if (!perName.has(canonical)) perName.set(canonical, duty);
       }
     });
-    const names = Object.keys(perName);
+    const names = Array.from(perName.keys());
     if (!names.length) return;
 
     await sendToNames(names, 'New duty assigned to you', name =>
-      bodyFor(perName[name], service, clock));
+      bodyFor(perName.get(resolver.canonicalize(name)), service, clock), resolver);
+  }
+
+  async function claimReminderMarker(markerRefs, now) {
+    if (typeof db.runTransaction !== 'function') {
+      throw new TypeError('Reminder marker claims require a transactional Firestore adapter');
+    }
+    return db.runTransaction(async transaction => {
+      for (const ref of markerRefs) {
+        const existing = await transaction.get(ref);
+        if (existing && existing.exists) return false;
+      }
+      transaction.set(markerRefs[0], { t: now });
+      return true;
+    });
   }
 
   async function dutyReminders() {
@@ -187,6 +220,8 @@ function createHandlers(dependencies) {
     const cutoff = clock.toISOString(yesterday).slice(0, 10);
     const snap = await db.collection('schedule').where('date', '>=', cutoff).get();
     const tokenTargets = await loadTokenTargets();
+    const resolver = await loadIdentityResolver();
+    if (!resolver) return;
 
     for (const document of snap.docs) {
       const service = document.data() || {};
@@ -197,16 +232,16 @@ function createHandlers(dependencies) {
       const assignments = service.assignments || {};
       for (const duty of Object.keys(assignments)) {
         const name = assignments[duty];
-        if (!name) continue;
-        const markerId = serviceId + '_' + duty.replace(/[^a-zA-Z0-9]+/g, '-') + '_' +
-          name.replace(/[^a-zA-Z0-9]+/g, '-');
-        const marker = db.collection('sent').doc(markerId);
-        const existing = await marker.get();
-        if (existing.exists) continue;
-        await marker.set({ t: now });
+        if (typeof name !== 'string' || !name) continue;
+        const markerIdFor = candidate => serviceId + '_' + duty.replace(/[^a-zA-Z0-9]+/g, '-') + '_' +
+          candidate.replace(/[^a-zA-Z0-9]+/g, '-');
+        const markerRefs = resolver.variants(name)
+          .map(candidate => db.collection('sent').doc(markerIdFor(candidate)));
+        const claimed = await claimReminderMarker(markerRefs, now);
+        if (!claimed) continue;
         try {
           await sendToTargets(tokenTargets, [name], 'Duty reminder', () =>
-            bodyFor(duty, service, clock));
+            bodyFor(duty, service, clock), resolver);
         } catch (error) {
           logger.error('dutyReminders: send failed', { error: String(error) });
         }
@@ -228,16 +263,18 @@ function createHandlers(dependencies) {
       logger.info('onRequestCreated: no schedulerName configured, skipping notify');
       return;
     }
+    const resolver = await loadIdentityResolver();
+    if (!resolver) return;
 
     const body = request.name + ' requests a change: ' + request.duty + ': ' +
       fmtDate(request.date, clock) + ' ' + request.service +
       (request.note ? ', "' + request.note + '"' : '');
-    if (request.name === schedulerName) {
+    if (resolver.same(request.name, schedulerName)) {
       logger.info('onRequestCreated: requester is the scheduler, skipping self-notify');
       return;
     }
 
-    await sendToNames([schedulerName], 'Schedule change requested', () => body);
+    await sendToNames([schedulerName], 'Schedule change requested', () => body, resolver);
   }
 
   async function onRequestResolved(event) {
@@ -247,9 +284,11 @@ function createHandlers(dependencies) {
     const beforeData = before.data() || {};
     const afterData = after.data() || {};
     if (!(beforeData.status === 'pending' && afterData.status !== beforeData.status)) return;
+    const resolver = await loadIdentityResolver();
+    if (!resolver) return;
 
     const body = afterData.duty + ': ' + fmtDate(afterData.date, clock) + ' ' + afterData.service;
-    await sendToNames([afterData.name], 'Schedule change ' + afterData.status, () => body);
+    await sendToNames([afterData.name], 'Schedule change ' + afterData.status, () => body, resolver);
   }
 
   async function ics(req, res) {

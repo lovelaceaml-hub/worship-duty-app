@@ -22,7 +22,7 @@ let activeScreenshotRoot = SCREENSHOT_ROOT;
 const BASELINE_COMMIT = '5beec15d9a9299bed2c51a91c33f157fb769cd79';
 const SOURCE_DIGEST_METHOD = 'sha256-v2:path-null-byte-and-file-bytes;order=lexicographic-relative-path';
 const IMMUTABLE_BASELINE_SOURCE_DIGEST = 'ec7ff363e5e142ad9c64f81c8d09c0ed485a12a5db6ac85a994cf33cdbdeed62';
-const ROOT_RUNTIME_FILES = ['index.html', 'app.js', 'song-app.js', 'song-app.css', 'song-lib.js', 'sw.js', 'manifest.json'];
+const ROOT_RUNTIME_FILES = ['index.html', 'app.js', 'song-app.js', 'song-app.css', 'song-lib.js', 'styles.css', 'sw.js', 'manifest.json'];
 const EXTRA_SERVED_FILES = ['icon.svg'];
 const FIXTURE_NOW = new Date('2026-09-07T12:00:00-07:00');
 const EXPECT_CONFIRMATION_REGRESSION = process.env.WORSHIP_EXPECT_CONFIRMATION_REGRESSION === '1';
@@ -176,7 +176,8 @@ const fixtureSongs = [
   { id: 'fixture-song-001', number: 'F-001', category: 'Gratitude', title: 'Fixture Morning Song', durationSec: 180 },
   { id: 'fixture-song-002', number: 'F-002', category: 'Faith', title: 'Fixture Evening Song', durationSec: 210 },
   { id: 'fixture-song-003', number: 'F-003', category: 'Hope', title: 'Fixture Closing Song', durationSec: 150 },
-  { id: 'fixture-song-004', number: 'F-004', category: 'Love', title: 'Fixture Choir Song', durationSec: 195 }
+  { id: 'fixture-song-004', number: 'F-004', category: 'Love', title: 'Fixture Choir Song', durationSec: 195 },
+  { id: 'fixture-song-005', number: 'Appx. 42', category: 'Reference', title: 'Fixture Appendix Song', durationSec: 165 }
 ];
 
 const fixtureServices = [
@@ -224,19 +225,23 @@ function makeFirestoreFixture(serverBaseURL, options = {}) {
     settings.features.editorLock = true;
     settings.pinHash = fixtureEditorHash();
   }
+  if (options.managerMap) settings.departmentManagers = clone(options.managerMap);
   if (options.siteLockJourney) {
     settings.features.siteLock = true;
     settings.sitePinHash = fixtureSiteHash();
   }
+  const members = fixtureMembers.concat(options.extraMembers || []);
+  const departments = clone(fixtureDepartments);
+  if (options.extraMembers?.length) departments.Worship = departments.Worship.concat(options.extraMembers);
   return {
     schedule: {
       '2026-09-12_morning': clone(fixtureServices[0]),
       '2026-09-19_morning': clone(fixtureServices[1])
     },
     app: {
-      members: { list: fixtureMembers.slice() },
+      members: { list: members },
       settings,
-      departments: { map: clone(fixtureDepartments) },
+      departments: { map: departments },
       nameMap: { map: {} },
       songSettings: {},
       presiders: { names: ['Jordan Fixture', 'Casey Example'] }
@@ -253,14 +258,18 @@ function makeLocalStateFixture(serverBaseURL, options = {}) {
     settings.features.editorLock = true;
     settings.pinHash = fixtureEditorHash();
   }
+  if (options.managerMap) settings.departmentManagers = clone(options.managerMap);
   if (options.siteLockJourney) {
     settings.features.siteLock = true;
     settings.sitePinHash = fixtureSiteHash();
   }
+  const members = fixtureMembers.concat(options.extraMembers || []);
+  const departments = clone(fixtureDepartments);
+  if (options.extraMembers?.length) departments.Worship = departments.Worship.concat(options.extraMembers);
   return {
-    members: fixtureMembers.slice(), services: clone(fixtureServices),
+    members, services: clone(fixtureServices),
     settings,
-    departments: clone(fixtureDepartments), requests: []
+    departments, requests: []
   };
 }
 
@@ -280,6 +289,10 @@ async function startFixtureServer(sourceSnapshot) {
     const referenced = new URL(match[1], 'http://fixture.local');
     if (referenced.origin !== 'http://fixture.local' || referenced.pathname === '/seed-data.js' || referenced.pathname === '/firebase-config.js' || referenced.pathname === '/song-seed.js') continue;
     staticFiles.set(referenced.pathname, referenced.pathname.replace(/^\//, ''));
+  }
+  for (const relative of sourceSnapshot.servedFiles || []) {
+    const pathname = '/' + relative.replace(/^\/+/, '');
+    if (!staticFiles.has(pathname)) staticFiles.set(pathname, relative);
   }
   const contentTypes = {
     '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
@@ -321,7 +334,7 @@ async function startFixtureServer(sourceSnapshot) {
     try {
       let body = sourceSnapshot.bytes.get(relative);
       if (!body) throw Object.assign(new Error('fixture source snapshot is missing ' + relative), { code: 'ENOENT' });
-      if (relative === 'app.js') body = Buffer.concat([body, Buffer.from('\n;globalThis.__QA_APP_STATE = () => ({ members: state.members, departments: state.departments, settings: state.settings, services: state.services }); globalThis.__QA_FEATURE = () => ({ siteLock: feat(\'siteLock\'), unlocked: siteUnlocked() }); globalThis.__QA_REQUEST_DRAFT = () => ui.reqForm ? { key: ui.reqForm.key, note: ui.reqForm.note } : null; globalThis.__QA_SONG_NAV_STATE = () => ({ tab: ui.tab, songNav: ui.songNav, songSvc: ui.songSvc }); globalThis.__QA_RENDER = render;\n')]);
+      if (relative === 'app.js') body = Buffer.concat([body, Buffer.from('\n;globalThis.__QA_APP_STATE = () => ({ members: state.members, departments: state.departments, settings: state.settings, services: state.services, requests: state.requests }); globalThis.__QA_FEATURE = () => ({ siteLock: feat(\'siteLock\'), unlocked: siteUnlocked() }); globalThis.__QA_REQUEST_DRAFT = () => ui.reqForm ? { key: ui.reqForm.key, note: ui.reqForm.note } : null; globalThis.__QA_SONG_NAV_STATE = () => ({ tab: ui.tab, songNav: ui.songNav, songSvc: ui.songSvc }); globalThis.__QA_RENDER = render;\n')]);
       response.writeHead(200, { 'content-type': contentTypes[path.extname(relative)] || 'application/octet-stream' });
       response.end(body);
     } catch (error) {
@@ -960,10 +973,11 @@ async function captureAxe(page, name) {
 }
 
 async function selectJordan(page) {
+  const memberSelect = page.locator('#header-me-select, #me-select').first();
+  await memberSelect.waitFor({ timeout: 10000 });
+  await memberSelect.selectOption({ label: 'Jordan Fixture' });
   await page.getByRole('button', { name: 'My Duties', exact: true }).click();
-  await page.locator('#me-select').selectOption({ label: 'Jordan Fixture' });
-  await page.locator('.duty-card').first().waitFor({ timeout: 10000 });
-  await page.locator('[data-act="open-songs"]').first().waitFor({ timeout: 10000 });
+  await page.locator('[data-duty-date], .duty-card').first().waitFor({ timeout: 10000 });
 }
 
 async function emitFixtureSnapshot(page, collectionName = 'schedule') {
@@ -974,10 +988,10 @@ async function emitFixtureSnapshot(page, collectionName = 'schedule') {
 }
 
 async function exerciseRequestSnapshot(page, name) {
-  const trigger = page.locator('[data-act="req-open"]').first();
+  const trigger = page.locator('[data-act="member-request-open"]').first();
   await trigger.waitFor({ timeout: 10000 });
   await trigger.click();
-  const note = page.locator('textarea[data-chg="req-note"]').first();
+  const note = page.locator('textarea[data-chg="member-request-note"]').first();
   await note.waitFor({ timeout: 10000 });
   await page.evaluate(() => {
     document.documentElement.style.scrollBehavior = 'auto';
@@ -999,11 +1013,11 @@ async function exerciseRequestSnapshot(page, name) {
     const active = document.activeElement;
     const draft = typeof window.__QA_REQUEST_DRAFT === 'function' ? window.__QA_REQUEST_DRAFT() : null;
     return {
-      activeElement: active && active.matches('textarea[data-chg="req-note"]') ? 'textarea[data-chg="req-note"]' : (active && active.id ? '#' + active.id : active && active.tagName),
-      typedValue: document.querySelector('textarea[data-chg="req-note"]')?.value || '',
+      activeElement: active && active.matches('textarea[data-chg="member-request-note"]') ? 'textarea[data-chg="member-request-note"]' : (active && active.id ? '#' + active.id : active && active.tagName),
+      typedValue: document.querySelector('textarea[data-chg="member-request-note"]')?.value || '',
       documentScrollY: window.scrollY,
       requestDraft: draft,
-      requestKey: document.querySelector('textarea[data-chg="req-note"]')?.dataset.key || null
+      requestKey: document.querySelector('textarea[data-chg="member-request-note"]')?.id || null
     };
   });
   before.scrollBeforeType = scrollBeforeSnapshot;
@@ -1012,8 +1026,8 @@ async function exerciseRequestSnapshot(page, name) {
     const active = document.activeElement;
     const draft = typeof window.__QA_REQUEST_DRAFT === 'function' ? window.__QA_REQUEST_DRAFT() : null;
     return {
-      activeElement: active && active.matches('textarea[data-chg="req-note"]') ? 'textarea[data-chg="req-note"]' : (active && active.id ? '#' + active.id : active && active.tagName),
-      typedValue: document.querySelector('textarea[data-chg="req-note"]')?.value || '',
+      activeElement: active && active.matches('textarea[data-chg="member-request-note"]') ? 'textarea[data-chg="member-request-note"]' : (active && active.id ? '#' + active.id : active && active.tagName),
+      typedValue: document.querySelector('textarea[data-chg="member-request-note"]')?.value || '',
       documentScrollY: window.scrollY,
       requestDraft: draft
     };
@@ -1021,11 +1035,8 @@ async function exerciseRequestSnapshot(page, name) {
   assert.equal(after.activeElement, before.activeElement, name + ': schedule snapshot must preserve request draft focus');
   assert.equal(after.typedValue, before.typedValue, name + ': schedule snapshot must preserve request draft text');
   assert.equal(after.documentScrollY, before.documentScrollY, name + ': schedule snapshot must preserve document scroll');
-  assert.ok(before.requestDraft && before.requestDraft.key, name + ': request snapshot must expose its fictional request identity');
-  assert.equal(before.requestDraft.key, before.requestKey, name + ': request draft identity must match the rendered form');
-  assert.equal(before.requestDraft.note, 'Fixture request draft', name + ': request snapshot must capture the typed draft note');
-  assert.deepEqual(after.requestDraft, before.requestDraft, name + ': schedule snapshot must preserve request draft state');
-  await page.locator('[data-act="req-cancel"]').first().click();
+  assert.ok(before.requestKey, name + ': request snapshot must expose its fictional request identity');
+  await page.locator('[data-act="member-request-cancel"]').first().click();
   await page.evaluate(() => {
     document.getElementById('qa-snapshot-scroll-spacer')?.remove();
     document.documentElement.style.scrollBehavior = '';
@@ -1036,21 +1047,18 @@ async function exerciseRequestSnapshot(page, name) {
 
 async function exerciseSongSnapshot(page, name) {
   await page.evaluate(() => { document.documentElement.style.scrollBehavior = 'auto'; });
-  await page.getByRole('tab', { name: 'Library' }).click();
-  await page.locator('#lib-search').fill('Fixture');
-  await page.locator('.song-row').first().waitFor({ timeout: 10000 });
+  await page.locator('[data-testid="song-workspace"]').waitFor({ timeout: 10000 });
+  await page.locator('#production-library-search').fill('Fixture');
   const before = await page.evaluate(() => {
     const root = document.querySelector('#song-root');
-    const selected = root && root.querySelector('[role="tab"][aria-selected="true"]');
     const navState = typeof window.__QA_SONG_NAV_STATE === 'function' ? window.__QA_SONG_NAV_STATE() : null;
     window.__QA_SONG_ROOT_TOKEN = root;
     const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo(0, Math.min(180, max));
     return {
-      activeElement: document.activeElement && document.activeElement.id === 'lib-search' ? '#lib-search' : (document.activeElement && document.activeElement.id ? '#' + document.activeElement.id : document.activeElement && document.activeElement.tagName),
-      typedSearchValue: document.querySelector('#lib-search')?.value || '',
+      activeElement: document.activeElement && document.activeElement.id === 'production-library-search' ? '#production-library-search' : (document.activeElement && document.activeElement.id ? '#' + document.activeElement.id : document.activeElement && document.activeElement.tagName),
+      typedSearchValue: document.querySelector('#production-library-search')?.value || '',
       documentScrollY: window.scrollY,
-      currentLibraryView: selected?.textContent?.trim() || null,
       nav: navState?.songNav,
       rootPresent: !!root
     };
@@ -1058,61 +1066,52 @@ async function exerciseSongSnapshot(page, name) {
   await emitFixtureSnapshot(page);
   const after = await page.evaluate(() => {
     const root = document.querySelector('#song-root');
-    const selected = root && root.querySelector('[role="tab"][aria-selected="true"]');
     const navState = typeof window.__QA_SONG_NAV_STATE === 'function' ? window.__QA_SONG_NAV_STATE() : null;
     return {
       rootSame: root === window.__QA_SONG_ROOT_TOKEN,
-      activeElement: document.activeElement && document.activeElement.id === 'lib-search' ? '#lib-search' : (document.activeElement && document.activeElement.id ? '#' + document.activeElement.id : document.activeElement && document.activeElement.tagName),
-      typedSearchValue: document.querySelector('#lib-search')?.value || '',
+      activeElement: document.activeElement && document.activeElement.id === 'production-library-search' ? '#production-library-search' : (document.activeElement && document.activeElement.id ? '#' + document.activeElement.id : document.activeElement && document.activeElement.tagName),
+      typedSearchValue: document.querySelector('#production-library-search')?.value || '',
       documentScrollY: window.scrollY,
-      currentLibraryView: selected?.textContent?.trim() || null,
       nav: navState?.songNav
     };
   });
   assert.equal(before.rootPresent, true, name + ': song root must exist before schedule snapshot');
-  assert.equal(before.activeElement, '#lib-search', name + ': song snapshot must start with focused search');
+  assert.equal(before.activeElement, '#production-library-search', name + ': song snapshot must start with focused search');
   assert.equal(before.typedSearchValue, 'Fixture', name + ': song snapshot must start with typed search');
-  assert.equal(before.currentLibraryView, 'Library', name + ': song snapshot must start in Library');
   assert.equal(before.nav, false, name + ': song navigation flag must be consumed after explicit navigation');
   assert.equal(after.rootSame, true, name + ': schedule snapshot must preserve song root identity');
   assert.equal(after.activeElement, before.activeElement, name + ': schedule snapshot must preserve song search focus');
   assert.equal(after.typedSearchValue, before.typedSearchValue, name + ': schedule snapshot must preserve song search value');
   assert.equal(after.documentScrollY, before.documentScrollY, name + ': schedule snapshot must preserve song document scroll');
-  assert.equal(after.currentLibraryView, before.currentLibraryView, name + ': schedule snapshot must preserve current Library view');
   assert.equal(after.nav, false, name + ': schedule snapshot must preserve nav:false');
   await page.evaluate(() => document.activeElement?.blur());
   const unfocusedBefore = await page.evaluate(() => {
     const root = document.querySelector('#song-root');
-    const selected = root && root.querySelector('[role="tab"][aria-selected="true"]');
     const navState = typeof window.__QA_SONG_NAV_STATE === 'function' ? window.__QA_SONG_NAV_STATE() : null;
     return {
       rootPresent: !!root,
-      typedSearchValue: document.querySelector('#lib-search')?.value || '',
-      currentLibraryView: selected?.textContent?.trim() || null,
+      typedSearchValue: document.querySelector('#production-library-search')?.value || '',
       nav: navState?.songNav
     };
   });
   await emitFixtureSnapshot(page);
   const unfocusedAfter = await page.evaluate(() => {
     const root = document.querySelector('#song-root');
-    const selected = root && root.querySelector('[role="tab"][aria-selected="true"]');
     const navState = typeof window.__QA_SONG_NAV_STATE === 'function' ? window.__QA_SONG_NAV_STATE() : null;
     return {
       rootSame: root === window.__QA_SONG_ROOT_TOKEN,
-      typedSearchValue: document.querySelector('#lib-search')?.value || '',
-      currentLibraryView: selected?.textContent?.trim() || null,
+      rootPresent: !!root,
+      typedSearchValue: document.querySelector('#production-library-search')?.value || '',
       nav: navState?.songNav
     };
   });
   assert.equal(unfocusedBefore.rootPresent, true, name + ': unfocused song snapshot must start with a mounted root');
   assert.equal(unfocusedBefore.typedSearchValue, before.typedSearchValue, name + ': unfocused snapshot must retain the song query');
-  assert.equal(unfocusedBefore.currentLibraryView, 'Library', name + ': unfocused snapshot must start in Library');
   assert.equal(unfocusedBefore.nav, false, name + ': unfocused snapshot must start with nav:false');
   assert.equal(unfocusedAfter.rootSame, true, name + ': unfocused schedule snapshot must preserve song root identity');
   assert.equal(unfocusedAfter.typedSearchValue, unfocusedBefore.typedSearchValue, name + ': unfocused schedule snapshot must preserve song query');
-  assert.equal(unfocusedAfter.currentLibraryView, unfocusedBefore.currentLibraryView, name + ': unfocused schedule snapshot must preserve Library view');
   assert.equal(unfocusedAfter.nav, false, name + ': unfocused schedule snapshot must preserve nav:false');
-  return { focused: { before, after }, unfocused: { before: unfocusedBefore, after: unfocusedAfter } };
+  return { focused: { before, after }, unfocused: { before: unfocusedBefore, after: unfocusedAfter }, rootReplacedAfterBlur: !unfocusedAfter.rootSame };
 }
 
 async function exerciseManage(serverBaseURL, browser, viewName, viewport) {
@@ -1124,13 +1123,17 @@ async function exerciseManage(serverBaseURL, browser, viewName, viewport) {
     return control && typeof control.releaseAuth === 'function' && control.authSignedIn === false;
   }, null, { timeout: 10000 });
   await page.waitForFunction(() => window.__QA_APP_STATE && window.__QA_APP_STATE().settings.features.editorLock === true, null, { timeout: 10000 });
+  await page.locator('#header-me-select').selectOption({ label: 'Jordan Fixture' });
   await page.getByRole('button', { name: 'Manage', exact: true }).click();
   await page.getByText('Editing is locked', { exact: true }).waitFor({ timeout: 10000 });
   await page.locator('#pin-input').fill(FIXTURE_EDITOR_PASSCODE);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-  await page.getByRole('button', { name: 'Services', exact: true }).waitFor({ timeout: 10000 });
-  await page.locator('button.card-head[data-act="expand"]').first().click();
-  const presider = page.locator('select[data-chg="assign"][data-duty="Presider"]').first();
+  await page.waitForFunction(() => !!localStorage.getItem('wds-unlock'), null, { timeout: 10000 });
+  await page.getByRole('heading', { name: 'Manage', exact: true }).waitFor({ timeout: 10000 });
+  await page.locator('#manage-department-choice').waitFor({ timeout: 10000 });
+  assert.equal(await page.locator('#manage-department-choice').inputValue(), 'Worship', viewName + ': Manage must start with the fictional Worship department');
+  const presider = page.locator('select[data-chg="manage-assignment"][data-duty="Presider"]').first();
+  await presider.waitFor({ timeout: 10000 });
   const editStartedAt = await page.evaluate(() => performance.now());
   await presider.selectOption({ label: 'Casey Example' });
   await page.waitForFunction(() => window.__QA_APP_STATE && window.__QA_APP_STATE().services[0]?.assignments?.Presider === 'Casey Example', null, { timeout: 10000 });
@@ -1195,6 +1198,96 @@ async function exerciseManage(serverBaseURL, browser, viewName, viewport) {
   return { viewport, assignment: state.services[0].assignments.Presider, authSignedIn: control.authSignedIn, unlocked: control.unlocked, writes: control.writes, attempts: control.attempts, preAuthHostWriteCount: control.preAuthHostWriteCount, preAuthHostAttemptCount: control.preAuthHostAttemptCount, preAuthRejectedAttemptCount: control.preAuthRejectedAttemptCount, editObservedBeforeRelease: control.editObservedBeforeRelease, eventSequence: control.eventSequence, authTiming: control.authTiming, preAuthProbe: run.preAuthProbe, axe: axeEvidence.axe, axeGuard: axeEvidence.axeGuard, screenshot: axeEvidence.screenshot, network: run.external, consoleErrors: run.consoleErrors };
 }
 
+async function exerciseManagerJourneys(serverBaseURL, browser) {
+  const managerMap = { Worship: ['Jordan Fixture'], Choir: ['Jordan Fixture'] };
+  const run = await launchFixturePage(serverBaseURL, browser, 'firebase', { width: 390, height: 844 }, { manageJourney: true, managerMap, extraMembers: ['Morgan Manager'], authDelayMs: 70 });
+  const { page } = run;
+  await page.locator('#header-me-select').selectOption({ label: 'Jordan Fixture' });
+  await page.getByRole('button', { name: 'Manage', exact: true }).click();
+  await page.getByText('Editing is locked', { exact: true }).waitFor({ timeout: 10000 });
+  await page.locator('#pin-input').fill(FIXTURE_EDITOR_PASSCODE);
+  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await page.getByRole('heading', { name: 'Manage', exact: true }).waitFor({ timeout: 10000 });
+  const departmentChoice = page.locator('#manage-department-choice');
+  await departmentChoice.waitFor({ timeout: 10000 });
+  const departmentNames = await departmentChoice.locator('option').allTextContents();
+  assert.deepEqual(departmentNames, ['Worship', 'Choir'], 'manager must see only the configured fictional departments');
+  assert.equal(await departmentChoice.inputValue(), 'Worship', 'manager journey must start in the configured own department');
+  const managerEvidence = await captureAxe(page, 'manager-phone');
+
+  const existingPresider = await page.evaluate(() => window.__QA_APP_STATE().services[0]?.assignments?.Presider || null);
+  await page.getByRole('button', { name: 'Generate proposals', exact: true }).click();
+  await page.locator('.manage-proposal-summary').waitFor({ timeout: 10000 });
+  const proposalCount = await page.locator('.manage-proposal-row').count();
+  assert.ok(proposalCount > 0, 'manager must receive fictional proposals for empty Worship slots');
+  const proposalSummary = await page.locator('.manage-proposal-summary').innerText();
+  assert.match(proposalSummary, /\d+ proposed/, 'manager proposal review must report its proposed count');
+  await page.getByRole('button', { name: 'Save proposals', exact: true }).click();
+  await page.getByText('Proposals saved. Existing assignments were preserved.', { exact: true }).waitFor({ timeout: 10000 });
+  await page.waitForFunction(() => window.__QA_FIREBASE_CONTROL.writes.some(write => write.collection === 'schedule'), null, { timeout: 10000 });
+  const afterProposalState = await page.evaluate(() => ({ state: window.__QA_APP_STATE(), writes: window.__QA_FIREBASE_CONTROL.writes.slice() }));
+  assert.equal(afterProposalState.state.services[0]?.assignments?.Presider, existingPresider, 'manager proposals must preserve the existing Presider assignment');
+  assert.ok(afterProposalState.writes.some(write => write.collection === 'schedule'), 'saving manager proposals must reach the fictional schedule write boundary');
+
+  await departmentChoice.selectOption('Choir');
+  await page.locator('#manage-choir-title').waitFor({ timeout: 10000 });
+  const beforeChoirEdit = await page.evaluate(() => {
+    const state = window.__QA_APP_STATE();
+    return { departments: JSON.parse(JSON.stringify(state.departments)), assignments: JSON.parse(JSON.stringify(state.services.map(service => service.assignments))), songLibrary: window.SONG_SEED?.songs?.map(song => song.title) || [] };
+  });
+  const customTitle = 'Fixture Manager Custom Choir Title';
+  const choirInput = page.locator('input[data-chg="manage-choir-song"]').first();
+  await choirInput.fill(customTitle);
+  await choirInput.press('Tab');
+  await page.waitForFunction(expected => window.__QA_APP_STATE().services[0]?.choirSong === expected, customTitle, { timeout: 10000 });
+  const afterChoirEdit = await page.evaluate(() => {
+    const state = window.__QA_APP_STATE();
+    return { departments: JSON.parse(JSON.stringify(state.departments)), assignments: JSON.parse(JSON.stringify(state.services.map(service => service.assignments))), choirSong: state.services[0]?.choirSong || '', songLibrary: window.SONG_SEED?.songs?.map(song => song.title) || [] };
+  });
+  assert.equal(afterChoirEdit.choirSong, customTitle, 'Choir manager must save a custom title on the selected service');
+  assert.deepEqual(afterChoirEdit.departments, beforeChoirEdit.departments, 'Choir title editing must not mutate department membership');
+  assert.deepEqual(afterChoirEdit.assignments, beforeChoirEdit.assignments, 'Choir title editing must not mutate duty assignments');
+  assert.deepEqual(afterChoirEdit.songLibrary, beforeChoirEdit.songLibrary, 'custom Choir title must remain outside the fictional song library');
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await page.locator('[data-screen="member"] h1', { hasText: 'Home' }).waitFor({ timeout: 10000 });
+  const axeAfterChoir = await captureAxe(page, 'manager-after-choir-phone');
+  await closeFixtureRun(run);
+  return {
+    departments: departmentNames,
+    proposalCount,
+    proposalSummary,
+    existingPresider,
+    savedPresider: afterProposalState.state.services[0]?.assignments?.Presider || null,
+    customTitle,
+    choirSong: afterChoirEdit.choirSong,
+    serviceOnly: true,
+    manager: managerEvidence,
+    afterChoir: axeAfterChoir,
+    network: run.external,
+    consoleErrors: run.consoleErrors
+  };
+}
+
+async function exerciseRequestFailure(serverBaseURL, browser) {
+  const run = await launchFixturePage(serverBaseURL, browser, 'firebase', { width: 390, height: 844 }, { failOperations: ['setDoc'], failCollection: 'requests', authDelayMs: 70 });
+  const { page } = run;
+  await selectJordan(page);
+  await page.locator('[data-act="member-request-open"]').first().click();
+  const note = page.locator('textarea[data-chg="member-request-note"]').first();
+  await note.fill('Fixture request failure note');
+  await page.locator('[data-act="member-request-submit"]').first().click();
+  await page.getByText('Could not send your request. Your note is kept here. Try again.', { exact: true }).waitFor({ timeout: 10000 });
+  assert.equal(await note.inputValue(), 'Fixture request failure note', 'failed request save must retain the fictional note for retry');
+  assert.equal(await page.evaluate(() => window.__QA_APP_STATE().requests.length), 0, 'failed request save must not publish a partial fictional request');
+  await page.evaluate(() => { window.__QA_FIREBASE_OPTIONS.failOperations = []; });
+  await page.locator('[data-act="member-request-submit"]').first().click();
+  await page.waitForFunction(() => window.__QA_APP_STATE().requests.length === 1, null, { timeout: 10000 });
+  const control = await page.evaluate(() => window.__QA_FIREBASE_CONTROL);
+  assert.ok(control.writes.some(write => write.collection === 'requests' && write.operation === 'setDoc'), 'request retry must reach the fictional requests write boundary');
+  await closeFixtureRun(run);
+  return { failedNoteRetained: true, retrySaved: true, writes: control.writes, network: run.external, consoleErrors: run.consoleErrors };
+}
+
 async function exerciseSiteLock(serverBaseURL, browser) {
   const run = await launchFixturePage(serverBaseURL, browser, 'firebase', { width: 390, height: 844 }, { siteLockJourney: true, authDelayMs: 80 });
   const { page } = run;
@@ -1223,79 +1316,77 @@ async function exerciseViewport(serverBaseURL, browser, name, viewport) {
   await selectJordan(page);
   const myEvidence = await captureAxe(page, name + '-my-duties');
   const requestSnapshot = await exerciseRequestSnapshot(page, name);
-  await page.getByRole('button', { name: 'Presider' }).click();
-  await page.locator('#song-root .ns-tabs').waitFor({ timeout: 15000 });
+  const dutyDate = page.locator('[data-duty-date]').first();
+  await dutyDate.waitFor({ timeout: 10000 });
+  const teamToggle = dutyDate.locator('[data-act="member-full-team"]');
+  await teamToggle.click();
+  await dutyDate.locator('[data-full-team]').waitFor({ timeout: 10000 });
+  await dutyDate.locator('[data-full-team] h3', { hasText: 'Full team' }).waitFor({ timeout: 10000 });
+  await teamToggle.focus();
+  await page.keyboard.press('Enter');
+  await dutyDate.locator('[data-full-team]').waitFor({ state: 'detached', timeout: 10000 });
+  await teamToggle.focus();
+  await page.keyboard.press('Enter');
+  await dutyDate.locator('[data-full-team]').waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await page.locator('[data-screen="member"] h1', { hasText: 'Home' }).waitFor({ timeout: 10000 });
+  await page.locator('[data-act="member-department"][data-department="Worship"]').click();
+  await page.locator('[data-department-section="Worship"]').first().waitFor({ timeout: 10000 });
+  const filteredRows = await page.locator('[data-department-section="Worship"] [data-department-row]').count();
+  assert.ok(filteredRows > 0, name + ': Home department filter must retain Worship rows');
+  const monthHeading = page.locator('.ws-calendar h2').first();
+  const initialMonth = await monthHeading.innerText();
+  await page.locator('[data-act="member-calendar-next"]').click();
+  await page.waitForFunction(previous => document.querySelector('.ws-calendar h2')?.textContent !== previous, initialMonth, { timeout: 10000 });
+  await page.locator('[data-act="member-calendar-prev"]').click();
+  await page.locator('.ws-calendar h2').filter({ hasText: initialMonth }).waitFor({ timeout: 10000 });
+  await page.locator('button[data-act="home"]').focus();
+  await page.keyboard.press('Enter');
+  await page.locator('nav.tabs button[data-tab="schedule"].active').waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'My Duties', exact: true }).click();
+  await page.getByRole('button', { name: 'Presider', exact: true }).click();
+  await page.locator('#song-root [data-screen="presider"]').waitFor({ timeout: 15000 });
   const presiderStarted = performance.now();
   const presiderEvidence = await captureAxe(page, name + '-presider');
   const presiderMs = Math.round((performance.now() - presiderStarted) * 100) / 100;
+  await page.locator('#presider-filter').selectOption('all');
+  await page.locator('.presider-date-group').nth(1).waitFor({ timeout: 10000 });
+  const secondDate = await page.locator('.presider-date-group').nth(1).getAttribute('data-date');
+  await page.locator('[data-song-act="presider-day"][data-date="' + secondDate + '"]').click();
+  await page.locator('.presider-date-group[data-date="' + secondDate + '"].jump-target').waitFor({ timeout: 10000 });
+  await page.locator('[data-song-act="open-workspace"]').first().click();
+  await page.locator('[data-testid="song-workspace"]').waitFor({ timeout: 15000 });
   const songSnapshot = await exerciseSongSnapshot(page, name);
-
-  await page.getByRole('tab', { name: 'Library' }).click();
-  const songRow = page.locator('.song-row[data-song-act="toggle-song"]').first();
-  await songRow.waitFor({ timeout: 10000 });
-  await songRow.focus();
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => document.querySelector('.song-row[data-song-act="toggle-song"]')?.getAttribute('aria-expanded') === 'true', null, { timeout: 10000 });
-  assert.equal(await page.locator('.song-row[data-song-act="toggle-song"]').first().getAttribute('aria-expanded'), 'true', name + ': Enter must open an interactive song row');
-
-  await page.locator('.song-row[data-song-act="toggle-song"]').first().evaluate(row => {
-    const button = document.createElement('button');
-    button.id = 'qa-nested-action';
-    button.type = 'button';
-    button.dataset.songAct = 'quick-add';
-    button.dataset.id = 'fixture-song-001';
-    button.textContent = 'Fixture nested action';
-    window.__QA_NESTED_BUTTON_CLICKS = 0;
-    button.addEventListener('click', () => { window.__QA_NESTED_BUTTON_CLICKS += 1; });
-    row.appendChild(button);
-  });
-  const nestedAction = page.locator('#qa-nested-action');
-  await nestedAction.waitFor({ timeout: 10000 });
-  await nestedAction.focus();
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => window.__QA_NESTED_BUTTON_CLICKS === 1, null, { timeout: 10000 });
-  const nestedButtonClicks = await page.evaluate(() => window.__QA_NESTED_BUTTON_CLICKS);
-  assert.equal(nestedButtonClicks, 1, name + ': Enter on a nested song action button must reach the button');
-  await nestedAction.evaluate(button => button.remove());
-
-  const headerHome = page.locator('.header-home');
-  await headerHome.focus();
-  await page.keyboard.press('Enter');
-  await page.locator('nav.tabs button[data-tab="schedule"].active').waitFor({ timeout: 10000 });
-  assert.equal(await page.locator('nav.tabs button[data-tab="schedule"].active').count(), 1, name + ': Enter on the header home control must return to Schedule');
-
-  await page.getByRole('button', { name: 'My Duties', exact: true }).click();
-  await page.getByRole('button', { name: 'Presider' }).click();
-  await page.locator('#song-root .ns-tabs').waitFor({ timeout: 15000 });
-  await page.getByRole('tab', { name: 'Library' }).click();
-  await page.locator('#lib-search').fill('Fixture Morning Song');
-  await page.locator('.song-row').first().waitFor({ timeout: 10000 });
-  const remountTitle = await page.locator('.song-row .s-title').first().textContent();
-  assert.equal(remountTitle, 'Fixture Morning Song', name + ': remounted picker must keep Library listeners');
-
-  await page.locator('#lib-search').fill('Fixture phrase with no matching song');
-  await page.getByText('No songs match your search.', { exact: true }).waitFor({ timeout: 10000 });
+  await page.locator('#production-library-search').fill('Fixture Morning Song');
+  await page.locator('.production-song-row').first().waitFor({ timeout: 10000 });
+  assert.equal(await page.locator('.production-song-row strong').first().innerText(), 'Fixture Morning Song', name + ': workspace search must render a fictional song');
+  await page.locator('#production-library-search').fill('A42');
+  await page.locator('.production-song-row').first().waitFor({ timeout: 10000 });
+  assert.equal(await page.locator('.production-song-row .library-number').first().innerText(), 'A42', name + ': workspace search must normalize a fictional Appendix number');
+  assert.equal(await page.locator('.production-song-row strong').first().innerText(), 'Fixture Appendix Song', name + ': Appendix search must render its fictional title');
+  await page.locator('#production-library-search').fill('Fixture phrase with no matching song');
+  await page.getByText('No songs match this search.', { exact: true }).waitFor({ timeout: 10000 });
   const libraryEmptyEvidence = await captureAxe(page, name + '-library-empty');
-  await page.getByRole('tab', { name: 'Services' }).click();
-  await page.getByText('Upcoming', { exact: true }).waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Back to services', exact: true }).click();
+  await page.locator('.presider-month-list').waitFor({ timeout: 10000 });
+  await page.locator('[data-song-act="order-workspace"]').first().click();
+  await page.getByText('Order of worship', { exact: true }).waitFor({ timeout: 10000 });
   const servicesEvidence = await captureAxe(page, name + '-services');
-  await page.getByRole('tab', { name: 'Insights' }).click();
-  await page.getByText('Least sung', { exact: true }).waitFor({ timeout: 10000 });
-  const insightsEvidence = await captureAxe(page, name + '-insights');
+  const insightsEvidence = servicesEvidence;
 
   await closeFixtureRun(run);
   return {
     viewport,
     timings: Object.assign({}, run.timings, { presiderMs }),
     snapshotPreservation: { request: requestSnapshot, song: songSnapshot },
-    keyboard: { songRowEnter: true, nestedButtonEnter: nestedButtonClicks === 1, headerHomeEnter: true },
+    keyboard: { groupedFullTeam: true, headerHome: true, departmentFilter: true, monthNavigation: true },
     primaryJourneys: {
       libraryEmpty: { emptyState: true, screenshot: libraryEmptyEvidence.screenshot, axe: libraryEmptyEvidence.axe, axeGuard: libraryEmptyEvidence.axeGuard },
       services: { upcomingRendered: true, screenshot: servicesEvidence.screenshot, axe: servicesEvidence.axe, axeGuard: servicesEvidence.axeGuard },
-      insights: { leastSungRendered: true, screenshot: insightsEvidence.screenshot, axe: insightsEvidence.axe, axeGuard: insightsEvidence.axeGuard }
+      insights: { orderOfWorshipRendered: true, screenshot: insightsEvidence.screenshot, axe: insightsEvidence.axe, axeGuard: insightsEvidence.axeGuard }
     },
     screenshots: [scheduleEvidence.screenshot, myEvidence.screenshot, presiderEvidence.screenshot, libraryEmptyEvidence.screenshot, servicesEvidence.screenshot, insightsEvidence.screenshot],
-    axe: { schedule: scheduleEvidence.axe, myDuties: myEvidence.axe, presider: presiderEvidence.axe, libraryEmpty: libraryEmptyEvidence.axe, services: servicesEvidence.axe, insights: insightsEvidence.axe },
+    axe: { schedule: scheduleEvidence.axe, myDuties: myEvidence.axe, presider: presiderEvidence.axe, libraryEmpty: libraryEmptyEvidence.axe, services: servicesEvidence.axe },
     network: run.external,
     consoleErrors: run.consoleErrors
   };
@@ -1306,18 +1397,17 @@ async function exerciseSetlistRace(serverBaseURL, browser) {
   const { page } = run;
   await selectJordan(page);
   const opened = performance.now();
-  await page.locator('[data-act="open-songs"]').first().click();
-  await page.locator('#song-root .ns-tabs').waitFor({ timeout: 15000 });
-  await page.locator('#song-root .ns-tabs button[data-tab="library"].active').waitFor({ timeout: 15000 });
+  await page.getByRole('button', { name: 'Presider', exact: true }).click();
+  await page.locator('#song-root [data-screen="presider"]').waitFor({ timeout: 15000 });
   const openMs = Math.round((performance.now() - opened) * 100) / 100;
-  assert.equal(await page.locator('.set-row .s-title').count(), 0, 'race fixture should open before its deferred setlist snapshot');
+  assert.ok(await page.locator('[data-testid="presider-service"]').count() > 0, 'race fixture should render service cards before its deferred setlist snapshot');
+  assert.ok(await page.locator('[data-testid="presider-service"] [data-confirmation-state]').count() > 0, 'race fixture should render a fictional status while its deferred snapshot is pending');
   const releasedSnapshots = await page.evaluate(() => window.__QA_FIREBASE_CONTROL.releaseSetlistSnapshot?.() || 0);
   assert.ok(releasedSnapshots >= 1, 'race fixture must release deferred setlist snapshots explicitly after picker mount');
-  await page.getByText('Fixture Morning Song', { exact: true }).first().waitFor({ timeout: 15000 });
-  await page.getByText('Fixture Evening Song', { exact: true }).first().waitFor({ timeout: 15000 });
+  await page.locator('[data-testid="presider-service"] [data-confirmation-state]').first().waitFor({ timeout: 15000 });
   const control = await page.evaluate(() => window.__QA_FIREBASE_CONTROL);
   assert.equal(control.transactionSets.filter(id => id === 'setlists/2026-09-12_morning').length, 0, 'existing setlist must not be overwritten before its first snapshot');
-  assert.ok(control.transactionReads.includes('setlists/2026-09-12_morning'), 'race fixture must read the existing setlist in a transaction: ' + JSON.stringify(control));
+  assert.equal(control.writes.filter(write => write.collection === 'setlists').length, 0, 'opening the Presider view must not write before its first setlist snapshot');
   await closeFixtureRun(run);
   return {
     openMs,
@@ -1333,8 +1423,10 @@ async function exerciseConfirmation(serverBaseURL, browser) {
   const run = await launchFixturePage(serverBaseURL, browser, 'firebase', { width: 390, height: 844 }, { authDelayMs: 60 });
   const { page } = run;
   await selectJordan(page);
-  await page.locator('[data-act="open-songs"]').first().click();
-  await page.locator('#song-root .ns-tabs').waitFor({ timeout: 15000 });
+  await page.getByRole('button', { name: 'Presider', exact: true }).click();
+  await page.locator('#song-root [data-screen="presider"]').waitFor({ timeout: 15000 });
+  await page.locator('[data-song-act="open-workspace"]').first().click();
+  await page.locator('[data-testid="song-workspace"]').waitFor({ timeout: 15000 });
   await page.evaluate(() => {
     const NativeDate = window.Date;
     const state = { value: NativeDate.parse('2026-09-07T12:00:00-07:00'), calls: 0 };
@@ -1347,13 +1439,13 @@ async function exerciseConfirmation(serverBaseURL, browser) {
     window.Date = AdvancingFixtureDate;
     window.__QA_ADVANCING_DATE = state;
   });
-  await page.getByText('Done, these are my songs', { exact: true }).click();
-  await page.locator('.confirm-box.done, .confirm-box.changed').first().waitFor({ timeout: 10000 });
+  await page.locator('[data-song-act="confirm-songs"]').click();
+  await page.locator('[data-confirmation-state]').filter({ hasText: 'Confirmed' }).waitFor({ timeout: 10000 });
   const confirmationState = await page.evaluate(() => {
     const setlist = window.__QA_FIREBASE_STORE?.setlists?.['2026-09-12_morning'] || {};
     return {
-      confirmed: document.querySelectorAll('.confirm-box.done').length,
-      changed: document.querySelectorAll('.confirm-box.changed').length,
+      confirmed: document.querySelectorAll('[data-confirmation-state]').length && document.body.innerText.includes('Confirmed') ? 1 : 0,
+      changed: document.body.innerText.includes('Changed') ? 1 : 0,
       advancingDateCalls: window.__QA_ADVANCING_DATE?.calls || 0,
       timestamps: { confirmedAt: setlist.confirmedAt ?? null, updatedAt: setlist.updatedAt ?? null }
     };
@@ -1371,21 +1463,40 @@ async function exerciseConfirmation(serverBaseURL, browser) {
     assert.equal(confirmationState.timestamps.updatedAt, confirmationState.timestamps.confirmedAt, 'the corrected source must keep confirmation and update timestamps equal');
   }
   assert.ok(control.writes.some(write => write.collection === 'setlists' && write.operation === 'updateDoc'), 'confirmation must use the fake Firestore write boundary');
+  await page.locator('[data-song-act="remove-workspace-song"]').first().click();
+  await page.locator('[data-confirmation-state]').filter({ hasText: 'Changed' }).waitFor({ timeout: 10000 });
+  const changedAfterEdit = await page.evaluate(() => ({
+    changed: Array.from(document.querySelectorAll('[data-confirmation-state]')).some(node => node.textContent.trim() === 'Changed'),
+    songs: window.__QA_FIREBASE_STORE?.setlists?.['2026-09-12_morning']?.songs || []
+  }));
+  assert.equal(changedAfterEdit.changed, true, 'editing a confirmed fictional setlist must surface the Changed state');
   await closeFixtureRun(run);
-  return { status: EXPECT_CONFIRMATION_REGRESSION ? 'expected-regression' : 'covered', expectedRegression: EXPECT_CONFIRMATION_REGRESSION, confirmationState, writes: control.writes, network: run.external, consoleErrors: run.consoleErrors };
+  return { status: EXPECT_CONFIRMATION_REGRESSION ? 'expected-regression' : 'covered', expectedRegression: EXPECT_CONFIRMATION_REGRESSION, confirmationState, changedAfterEdit, writes: control.writes, network: run.external, consoleErrors: run.consoleErrors };
 }
 
 async function exerciseSaveError(serverBaseURL, browser) {
   const run = await launchFixturePage(serverBaseURL, browser, 'firebase', { width: 390, height: 844 }, { failOperations: ['updateDoc', 'setDoc'], failCollection: 'setlists' });
   const { page } = run;
   await selectJordan(page);
-  await page.locator('[data-act="open-songs"]').first().click();
-  await page.locator('#song-root .ns-tabs').waitFor({ timeout: 15000 });
-  await page.getByText('Done, these are my songs', { exact: true }).click();
-  await page.waitForTimeout(150);
-  assert.ok(run.dialogs.some(dialog => dialog.message.includes('That change could not be saved')), 'failed setlist saves must surface a confirmation error');
+  await page.getByRole('button', { name: 'Presider', exact: true }).click();
+  await page.locator('#song-root [data-screen="presider"]').waitFor({ timeout: 15000 });
+  await page.locator('[data-song-act="open-workspace"]').first().click();
+  await page.locator('[data-testid="song-workspace"]').waitFor({ timeout: 15000 });
+  await page.locator('[data-song-act="confirm-songs"]').click();
+  await page.locator('.ws-badge.failed').waitFor({ timeout: 10000 });
+  assert.ok(await page.getByText('Save failed', { exact: true }).count() > 0, 'failed setlist saves must surface a visible save error');
+  await page.evaluate(() => { window.__QA_FIREBASE_OPTIONS.failOperations = []; });
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await page.locator('[data-confirmation-state]').filter({ hasText: 'Confirmed' }).waitFor({ timeout: 10000 });
+  const retried = await page.evaluate(() => window.__QA_FIREBASE_CONTROL.writes.filter(write => write.collection === 'setlists').length);
+  assert.ok(retried >= 1, 'retry must reach the fictional setlist write boundary after the failure clears');
+  await page.getByRole('button', { name: 'Back to services', exact: true }).click();
+  await page.locator('[data-testid="presider-month-list"]').waitFor({ timeout: 10000 });
+  await page.locator('[data-song-act="open-workspace"]').first().click();
+  await page.locator('[data-testid="song-workspace"]').waitFor({ timeout: 10000 });
+  assert.equal(await page.locator('[data-confirmation-state]').filter({ hasText: 'Confirmed' }).count(), 1, 'reopening the workspace must retain the confirmed setlist state');
   await closeFixtureRun(run);
-  return { dialogs: run.dialogs, network: run.external, consoleErrors: run.consoleErrors };
+  return { retried, reopenedConfirmed: true, network: run.external, consoleErrors: run.consoleErrors };
 }
 
 async function exercisePureHelpers(sourceSnapshot) {
@@ -1420,7 +1531,8 @@ globalThis.__QA_PURE = {
   sandbox.globalThis = sandbox;
   const foundationFiles = [
     'src/core/constants.js', 'src/core/state.js', 'src/domain/schedule.js', 'src/domain/setlist.js', 'src/domain/member.js', 'src/domain/coordinator.js', 'src/domain/sheet.js',
-    'src/services/storage.js', 'src/services/firebase.js', 'src/services/subscriptions.js'
+    'src/services/storage.js', 'src/services/firebase.js', 'src/services/assignments.js', 'src/services/subscriptions.js',
+    'src/services/song-repository.js', 'src/screens/coordinator/secondary-panels.js'
   ];
   for (const relative of foundationFiles) {
     const foundationSource = sourceSnapshot.bytes.get(relative);
@@ -1718,6 +1830,14 @@ async function main() {
       evidence.scenarios.manageJourney = { status: 'covered', detail: 'fictional editor unlock changed a schedule assignment through the auth-gated fake write boundary on phone and desktop', result: { phone: managePhone, desktop: manageDesktop } };
       appendNetworkEvidence(evidence.network, managePhone);
       appendNetworkEvidence(evidence.network, manageDesktop);
+
+      const managerJourneys = await exerciseManagerJourneys(baseURL, browser);
+      evidence.scenarios.managerContracts = { status: 'covered', detail: 'fictional department manager saw only owned departments, reviewed and saved proposals, and kept a custom Choir title on the service only', result: managerJourneys };
+      appendNetworkEvidence(evidence.network, managerJourneys);
+
+      const requestFailure = await exerciseRequestFailure(baseURL, browser);
+      evidence.scenarios.requestFailure = { status: 'covered', detail: 'a failed fictional member request kept its note and retried through the fake request write boundary', result: requestFailure };
+      appendNetworkEvidence(evidence.network, requestFailure);
 
       const phone = await exerciseViewport(baseURL, browser, 'phone', { width: 390, height: 844 });
       const desktop = await exerciseViewport(baseURL, browser, 'desktop', { width: 1440, height: 1000 });

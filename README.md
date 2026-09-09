@@ -1,151 +1,89 @@
 # LV Zion Worship Service
 
-A simple web app for the congregation to see worship duty assignments.
-All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026,
-74 services, 45 members), and now also syncs live from Anthony's Google Sheet.
+LV Zion Worship Service is the shared app for worship assignments, personal
+duties, presider song planning, and coordinator updates.
 
 ## Quick links
 
-- **Local design review:** Verified calendar candidate is available locally. Revision 2 is in progress for compact duty rows, month-list Presider cards, song editing, department management and theme settings; production redesign is authorized and in progress. [Current records, view-only](http://127.0.0.1:8100/?screen=home). This local preview reads current assignments, saved song plans, requests and rosters into memory. It cannot save changes. The fictional prototype remains available for deterministic tests and design references. [Local preview notes](docs/design/prototype/REAL-DATA-PREVIEW.md).
-
-- **Active refactor:** [Approved plan](docs/PLAN-REFACTOR-REDESIGN.md), [design directions](docs/design/directions/index.html), and [lane board](docs/runs/worship-refactor-20260907/board/index.html). The compatible Foundation 3 and confirmation fix are live at stamp `20260908041730`. State, subscription lifecycle, and member/coordinator selectors are extracted and reviewed. Anthony selected Open Bulletin (direction B), then authorized broader layout and palette revisions with modest text. The [complete clickable prototype](docs/design/prototype/open-bulletin/index.html) is available with [phone and desktop references](docs/design/prototype/open-bulletin/screenshots/) and [state coverage](docs/design/prototype/open-bulletin/STATE-COVERAGE.md). Prototype review and the committed interaction checks passed. Anthony's production redesign is authorized and in progress.
-
-- **Website:** https://lv-zion-duties.web.app — share this link with members
-- **Status:** Live. **7 September 2026: the app now opens fast and the tabs sit at the top.**
-  Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
-  deploy with that script), the presider song files load only for presiders, sign-in no longer
-  blocks startup, and the calendar button subscribes to the live feed instead of downloading a
-  snapshot that goes stale. A cold phone open is about 1.2 seconds; a repeat open about 0.9
-  seconds with no app-file network traffic. See
-  [Handoff → Load performance and the release stamp](docs/HANDOFF.md).
-- **Earlier:** **26 July 2026: member writes were broken and are now fixed.** Firebase
-  Authentication had never been switched on for this project, so the rules (which require a
-  signed-in session) were rejecting every duty reminder, swap request and Manage edit. See
-  [Usage Counter](docs/USAGE-COUNTER.md). A privacy-safe daily usage counter was added at the
-  same time, so "does anyone open this?" is finally answerable.
+- **Website:** [lv-zion-duties.web.app](https://lv-zion-duties.web.app)
+- **Status:** Live on the restored production layout. A flatter redesign is a local preview awaiting user testing.
 - **Docs:**
-  - [User Manual](docs/USER-MANUAL.md) — how members and presiders use the app
-  - [Setup Guide](docs/SETUP-GUIDE.md) — how to run, restore, and publish it
-  - [Creation Guide](docs/CREATION-GUIDE.md) — how the combined app is built
-  - [Usage Counter](docs/USAGE-COUNTER.md) — what gets counted, and the sign-in bug it found
-  - [Playbook](docs/PLAYBOOK.md) — day-to-day operation and AI-delegation guide
-  - [User Guide](docs/USER-GUIDE.md) — simple guide to using the app
-  - [Handoff](docs/HANDOFF.md) — architecture reference document
-  - [Merge Handoff](docs/MERGE-HANDOFF.md) — record of the completed song-app merge
-  - [Design](docs/DESIGN.md) — the WATV-inspired service design system
-  - [Features](docs/FEATURES.md) — list of feature toggles and defaults
-  - [Implementation](docs/IMPLEMENTATION.md) — deep technical guide for extending the app
-  - [All documents →](docs/)
+  - [Handoff](docs/HANDOFF.md), current state and next work
+  - [User Manual](docs/USER-MANUAL.md), current production instructions and preview notes
+  - [Active plan](docs/PLAN-REFACTOR-REDESIGN.md), numbered plan and Build log
+  - [All documents](docs/)
 
-**Start here if you manage this app:** [docs/PLAYBOOK.md](docs/PLAYBOOK.md) —
-step-by-step instructions for entering the schedule, passcodes, notifications,
-deploying, and troubleshooting, plus how to delegate further development to AI.
+## Current release
 
-## The three screens
+The restored production source is `9247f75`. It is deployed at
+[lv-zion-duties.web.app](https://lv-zion-duties.web.app) as Hosting release
+`20260908235000`. Twenty runtime hashes matched the staged artifact, and the
+immediate fictional phone passcode smoke passed.
 
-- **Schedule** — every upcoming service with all assigned duties, grouped by day.
-- **My Duties** — a member picks their name once and sees only their duties,
-  can expand "Who else is serving?", turn on notifications (real push, see
-  below), and download their duties to their phone calendar (with built-in
-  reminders).
-- **Manage** — for editors (protected by a separate passcode): add/edit
-  services, assign people with dropdowns, manage the member list, toggle
-  features on/off for everyone, sync from the Google Sheet, back up or reset
-  the data.
+The flatter redesign remains local and awaits user testing before another
+redesign deployment. Function and data changes are paused. Historical title
+correction has not executed. The earlier manager configuration remains in
+place. Final completion is still open.
 
-**Presiders** also see a fourth tab, **Presider**, between My Duties and
-Manage. It opens the song-selection screen (Home / Library / Services /
-Insights) right inside this app; the **"Plan songs for your service"** button
-and per-duty **"Pick songs"** links on My Duties jump straight to a specific
-service's setlist. This was the separate "New Song Selection" app, merged in
-on 2026-07-10 — see [docs/HANDOFF.md](docs/HANDOFF.md) → "Presider song
-picker" and [docs/MERGE-HANDOFF.md](docs/MERGE-HANDOFF.md).
+## Current production app
 
-The whole app is also gated by a site-wide passcode before any of the three
-screens are shown (see docs/PLAYBOOK.md for both passcodes and how to change
-them).
+- **Schedule:** Upcoming services for everyone, grouped by day, with department
+  assignments, past-service access, and the existing filters.
+- **My Duties:** A member chooses a name, sees assigned duty cards, opens the
+  full team for a service, requests a change, enables notifications, and adds
+  duties to a calendar.
+- **Presider:** Presiders open the song picker from the Presider tab or a duty
+  card. The existing Home, Library, Services, Insights, runsheet, confirmation,
+  and sung-history workflows remain available.
+- **Manage:** Editors use the editor passcode to edit services, people,
+  features, requests, Sheet sync, backups, and restores.
 
-Full documentation lives in `docs/`: [PLAYBOOK.md](docs/PLAYBOOK.md)
-(day-to-day operation + AI delegation briefs), [HANDOFF.md](docs/HANDOFF.md)
-(architecture + runbook), [DESIGN.md](docs/DESIGN.md) (design system),
-[FEATURES.md](docs/FEATURES.md) (feature toggles + passcodes).
+## Local redesign preview
 
-## Live sync — DONE (2026-07-03)
+The local candidate continues the flatter journey with fewer boxes and fewer
+disclosures. [Open the current-records preview](http://127.0.0.1:8101/), which
+holds the records in memory and has saves disabled. It explores a shared month
+calendar, grouped duties, a Presider workspace, department management, and
+Blue, Sage, and Sand themes. It is a preview for explicit local test approval,
+not the current production behavior. Another redesign deployment waits for
+that approval.
 
-The shared database is set up and working:
+## Everyday operation
 
-- Firebase project **LV Zion Duties** (`lv-zion-duties`), on the Blaze
-  (pay-as-you-go) plan — upgraded 2026-07-03 to support Cloud Functions for
-  push notifications; effectively $0/month at this scale.
-- Firestore database created (nam5/US), seeded with the full schedule.
-- Security rules (`firestore.rules`, now in the repo) allow open read/write
-  on `schedule/*`, `app/*`, and `tokens/*`; the `sent/*` collection (used
-  internally to dedupe reminders) is locked to the Admin SDK only. Anyone
-  who has the app can still edit the schedule directly if they bypass the
-  UI — simple on purpose; see docs/HANDOFF.md's Known limitations.
-- `firebase-config.js` contains the real Firebase config and the Web Push
-  (VAPID) key.
+The app keeps the existing member name selection and site/editor passcodes.
+Passcodes are a member-facing gate, not verified identity. Do not publish or
+record their values. The app supports offline local storage, PWA installation,
+push notifications, and the existing live per-member calendar feed. On
+iPhone, add the site to the Home Screen to receive push notifications while
+the app is closed.
 
-## The app is LIVE
+The Google Sheet remains a one-way input. Sync touches only duties represented
+by Sheet rows, and a blank Member cell clears that represented duty. A deleted
+row does not clear an in-app-only assignment. The compatible importer and the
+`song-lib.js` and `song-seed.js` paths remain supported.
 
-**Share this link with members: https://lv-zion-duties.web.app**
-
-Deployed to Firebase Hosting on 2026-07-03. On a phone, members can use
-"Add to Home Screen" to install it like an app (required for push
-notifications to work on iPhone while the app is closed).
-
-To publish visual or app-file changes, run in this folder:
-
-    bash scripts/deploy.sh
-
-This prepares a validated temporary artifact, stamps every local runtime asset, and deploys only the existing Hosting site. Working source files are never rewritten. Run `bash scripts/deploy.sh --dry-run` to validate without deploying. The stamp is what makes the one-year browser cache safe, so always
-deploy app changes this way rather than calling firebase directly. Deploy
-Firestore rules or Cloud Functions only when those files intentionally changed
-and were separately reviewed.
-
-(Schedule edits do NOT need a re-deploy — they sync live through the
-database, or via the Google Sheet sync. Re-deploying is only for changes to
-the app's code.)
-
-## Notifications — what to expect
-
-- **Real push notifications**, sent from the server (Firebase Cloud
-  Messaging + Cloud Functions), fire even when a member's browser tab is
-  closed: "New duty assigned to you" when an assignment changes, and a
-  "Duty reminder" within 24 hours of each duty.
-- A member turns these on once, from My Duties → "Turn on notifications,"
-  after picking their name.
-- **iPhone note:** push while the app is closed requires the site to be
-  added to the Home Screen first (Share → Add to Home Screen), iOS 16.4+.
-- **Guaranteed reminders with zero app dependency:** each member can also
-  tap "Add my duties to my calendar" — the phone's own calendar then
-  reminds them 1 day and 2 hours before each duty, no internet needed.
-
-## Files
-
-- [Core constants](src/core/constants.js), [schedule domain](src/domain/schedule.js), and [Sheet parsing](src/domain/sheet.js) provide testable domain logic.
-- [Firebase gateway](src/services/firebase.js) and [storage adapter](src/services/storage.js) isolate persistence.
-- [State store](src/core/state.js) separates cached state from remote readiness; [subscriptions](src/services/subscriptions.js) owns listener startup, teardown, and preview/full takeover.
-- [Release staging](scripts/release.mjs) validates the runtime allowlist, versions, and cache rules.
-
-
-- `index.html` — the app shell and styles
-- `app.js` — all app logic
-- `seed-data.js` — the schedule imported from the Excel file
-- `firebase-config.js` — Firebase config + Web Push (VAPID) key for live sync
-  and push notifications
-- `firestore.rules` — Firestore security rules (deployed alongside hosting)
-- `functions/` — Cloud Functions for push notifications (`onScheduleWrite`,
-  `dutyReminders`)
-- `sw.js`, `manifest.json`, `icon.svg` — make it installable on phones and
-  receive background push
-
-## Fictional regression checks
-
-The UI test command uses fictional members, services, songs, and passcodes on a loopback server. It ignores UI_BASE_URL. The suite passed native Sol review8 and independent controller browser/emulator verification. It binds evidence to tested source bytes, scopes screenshots to each run, and rejects unexpected traffic and browser errors. It covers phone and desktop journeys, keyboard controls, delayed authentication, visible save failures, setlist creation races, and draft/search/scroll preservation.
+Coordinators can export a whole-state JSON backup and import one for a planned
+restore. Schedule changes do not need a hosting release. App changes use:
 
 ```sh
-WORSHIP_EVIDENCE_ROOT=/private/tmp/worship-current-qa npm --prefix /Users/anthony/Projects/worship-duty-app run test:ui
+bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh
 ```
 
-Current test evidence is kept separately from the original baseline and includes a source digest. [Baseline and current evidence](docs/runs/worship-refactor-20260907/research/verification/) retain known accessibility findings for the redesign; a passing functional suite is not a full accessibility verdict.
+Persistent non-sensitive project artifacts use the private [Anthony Mac
+Storage folder](https://drive.google.com/drive/folders/1rwJkIJ6hn8zNxh5DsYloB4DNFfuHGTz1),
+mounted locally at `/Users/anthony/Library/CloudStorage/GoogleDrive-lovelace.aml@gmail.com/My Drive/Anthony Mac Storage`.
+Real schedules, PHI, credentials, and private exports remain local or in
+authorized provider storage.
+
+## Current file map
+
+- `src/core/`, shared constants and state
+- `src/domain/`, schedule, member, coordinator, setlist, and Sheet rules
+- `src/services/`, Firebase, storage, subscriptions, and assignments
+- `src/screens/`, member and coordinator screens with their styles
+- `src/ui/`, shared application shell
+- `song-app.js`, the lazy presider song workspace
+
+The compatibility shell includes `app.js`, `index.html`, `styles.css`, and the
+importer-compatible song files. Keep release stamps and lazy song asset
+loading intact when changing runtime files.

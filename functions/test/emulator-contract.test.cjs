@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { createHandlers } = require('../handlers');
+const identity = require('../identity-lib');
 
 const PROJECT_ID = 'demo-worship-refactor';
 const HOST = process.env.FIRESTORE_EMULATOR_HOST || '';
@@ -172,6 +173,154 @@ test('backend handlers preserve Firestore merge and reminder contracts in the gu
       assert.equal(sends.length, 1);
       assert.equal(logs.some(entry => entry.level === 'error'), false);
     } finally {
+      await Promise.all(refs.map((ref, index) => restore(ref, originals[index])));
+      await deleteApp(app);
+    }
+  });
+
+test('identity correction preserves allowlisted history, rejects a concurrent write, and rolls back',
+  { skip: gate || false }, async () => {
+    const app = initializeApp({ projectId: PROJECT_ID }, FIXTURE_PREFIX + '-identity');
+    const db = getFirestore(app);
+    const jobId = FIXTURE_PREFIX + '-identity-job';
+    const oldName = 'Fictional Emulator Old';
+    const newName = 'Fictional Emulator New';
+    const otherName = 'Fictional Emulator Other';
+    const refs = [
+      db.collection('app').doc('nameMap'),
+      db.collection('app').doc('members'),
+      db.collection('app').doc('departments'),
+      db.collection('app').doc('presiders'),
+      db.collection('app').doc('settings'),
+      db.collection('schedule').doc(FIXTURE_PREFIX + '-identity-service'),
+      db.collection('setlists').doc(FIXTURE_PREFIX + '-identity-service'),
+      db.collection('songStats').doc(FIXTURE_PREFIX + '-identity-song'),
+      db.collection('requests').doc(FIXTURE_PREFIX + '-identity-request'),
+      db.collection('tokens').doc(FIXTURE_PREFIX + '-identity-token'),
+      db.collection('tokens').doc(FIXTURE_PREFIX + '-identity-new-target'),
+      db.collection('tokens').doc(FIXTURE_PREFIX + '-identity-unrelated-after-apply')
+    ];
+    const originals = await Promise.all(refs.map(ref => ref.get()));
+      const scheduleRef = refs[5];
+      const tokenRef = refs[9];
+      const newTargetRef = refs[10];
+      const unrelatedTokenRef = refs[11];
+    const backupRoot = db.collection('_adminIdentityCorrections').doc(jobId);
+
+    try {
+      await Promise.all([
+        refs[0].set({ map: { [oldName]: 'Fictional Emulator Middle' } }),
+        refs[1].set({ list: [oldName, newName, otherName], marker: 'fictional-members-marker' }),
+        refs[2].set({ map: { Choir: [oldName, newName, otherName] }, note: 'fictional-department-note' }),
+        refs[3].set({ names: [oldName, newName, otherName], ordering: ['a', 'b'] }),
+        refs[4].set({ schedulerName: oldName, sheetUrl: 'https://example.invalid/fictional-sheet' }),
+        scheduleRef.set({
+          date: '2027-02-07',
+          assignments: { Presider: oldName, 'Usher Door': otherName },
+          conflictOk: {
+            [oldName]: ['Usher Door'],
+            [newName]: ['Media Booth #1', 'Usher Door']
+          },
+          notes: 'fictional-schedule-note',
+          confirmed: true
+        }),
+        refs[6].set({ presider: oldName, confirmedBy: oldName, updatedBy: otherName,
+          songs: ['Fictional Emulator Song'], note: 'fictional-setlist-note' }),
+        refs[7].set({ history: [
+          { by: oldName, date: '2027-02-07', songs: ['Fictional Emulator Song'] }
+        ], count: 1 }),
+        refs[8].set({ name: oldName, resolvedBy: oldName, status: 'approved', note: 'fictional-request-note' }),
+        tokenRef.set({ name: oldName, token: 'fictional-emulator-token', createdAt: 'fictional-token-stamp' })
+      ]);
+
+      const firstPlan = await identity.planCorrection(db, { [oldName]: newName });
+      const changedBeforeApply = (await scheduleRef.get()).data();
+      await scheduleRef.set({ ...changedBeforeApply, notes: 'fictional-concurrent-note' });
+      await assert.rejects(
+        identity.applyCorrection(db, firstPlan, { jobId: jobId + '-conflict' }),
+        error => error.code === 'OPTIMISTIC_SCOPE_CONFLICT'
+      );
+      assert.equal((await scheduleRef.get()).data().assignments.Presider, oldName);
+      assert.equal((await db.collection('_adminIdentityCorrections').doc(jobId + '-conflict').get()).exists, false);
+
+      const plan = await identity.planCorrection(db, { [oldName]: newName });
+      const result = await identity.applyCorrection(db, plan, { jobId });
+      assert.equal(result.jobId, jobId);
+      assert.ok(result.targetCount >= 8);
+      const correctedSchedule = (await scheduleRef.get()).data();
+      assert.equal(correctedSchedule.assignments.Presider, newName);
+      assert.deepEqual(correctedSchedule.conflictOk, {
+        [newName]: ['Usher Door', 'Media Booth #1']
+      });
+      assert.equal(correctedSchedule.notes, 'fictional-concurrent-note');
+      assert.equal(correctedSchedule.confirmed, true);
+      assert.equal((await tokenRef.get()).data().name, newName);
+      assert.deepEqual((await refs[6].get()).data(), {
+        presider: newName,
+        confirmedBy: newName,
+        updatedBy: otherName,
+        songs: ['Fictional Emulator Song'],
+        note: 'fictional-setlist-note'
+      });
+      assert.deepEqual((await refs[7].get()).data(), {
+        history: [{ by: newName, date: '2027-02-07', songs: ['Fictional Emulator Song'] }],
+        count: 1
+      });
+      assert.deepEqual((await refs[8].get()).data(), {
+        name: newName,
+        resolvedBy: newName,
+        status: 'approved',
+        note: 'fictional-request-note'
+      });
+
+      const itemSnapshot = await backupRoot.collection('items').get();
+      assert.equal(itemSnapshot.size, result.targetCount);
+      itemSnapshot.forEach(item => {
+        const data = item.data();
+        assert.match(item.id, /^i_[a-f0-9]{40}$/);
+        assert.equal(data.docId, undefined);
+        assert.equal(data.collectionName, undefined);
+        assert.equal(data.notes, undefined);
+        assert.equal(data.token, undefined);
+        assert.ok(data.precondition.beforeUpdateTime);
+      });
+
+      await newTargetRef.set({ name: newName, token: 'fictional-new-target-token' });
+      await assert.rejects(
+        identity.rollbackCorrection(db, jobId),
+        error => error.code === 'ROLLBACK_CONFLICT'
+      );
+      assert.equal((await backupRoot.get()).data().status, 'applied');
+      await newTargetRef.delete();
+
+      const postApplySchedule = (await scheduleRef.get()).data();
+      await scheduleRef.set({ ...postApplySchedule, notes: 'fictional-post-apply-note' });
+      await unrelatedTokenRef.set({
+        name: otherName,
+        token: 'fictional-unrelated-after-apply-token'
+      });
+
+      const rollback = await identity.rollbackCorrection(db, jobId);
+      assert.equal(rollback.jobId, jobId);
+      assert.equal((await scheduleRef.get()).data().assignments.Presider, oldName);
+      assert.equal((await scheduleRef.get()).data().notes, 'fictional-post-apply-note');
+      assert.deepEqual((await scheduleRef.get()).data().conflictOk, {
+        [oldName]: ['Usher Door'],
+        [newName]: ['Media Booth #1', 'Usher Door']
+      });
+      assert.equal((await tokenRef.get()).data().name, oldName);
+      assert.equal((await refs[6].get()).data().presider, oldName);
+      assert.equal((await refs[7].get()).data().history[0].by, oldName);
+      assert.equal((await refs[8].get()).data().resolvedBy, oldName);
+      assert.deepEqual((await unrelatedTokenRef.get()).data(), {
+        name: otherName,
+        token: 'fictional-unrelated-after-apply-token'
+      });
+      assert.equal((await backupRoot.get()).data().status, 'rolledBack');
+    } finally {
+      const itemSnapshot = await backupRoot.collection('items').get();
+      await Promise.all(itemSnapshot.docs.map(item => item.ref.delete()));
+      await backupRoot.delete().catch(() => {});
       await Promise.all(refs.map((ref, index) => restore(ref, originals[index])));
       await deleteApp(app);
     }

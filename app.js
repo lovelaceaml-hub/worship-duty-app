@@ -78,7 +78,23 @@ const NAME_UNIFY_MAP = {
 
 /* Live copy of app/nameMap; null until the snapshot arrives (or in local mode). */
 let sharedNameMap = null;
-function unifiedNameMap() { return Object.assign({}, NAME_UNIFY_MAP, sharedNameMap || {}); }
+function flattenMappedName(name, map) {
+  const original = String(name || '');
+  let current = original;
+  const seen = new Set();
+  while (current && map && typeof map[current] === 'string' && map[current]) {
+    if (seen.has(current)) return original;
+    seen.add(current);
+    if (map[current] === current) return current;
+    current = map[current];
+  }
+  return current || original;
+}
+function unifiedNameMap() {
+  const merged = Object.assign({}, NAME_UNIFY_MAP, sharedNameMap || {});
+  Object.keys(merged).forEach(name => { merged[name] = flattenMappedName(name, merged); });
+  return merged;
+}
 
 function feat(id) {
   const f = (state.settings && state.settings.features) || {};
@@ -303,6 +319,7 @@ function screenDeps() {
   return {
     getState: () => state,
     getUi: () => ui,
+    getFirebase: () => fb,
     getSetlists: () => setlistIndex,
     core: CORE,
     scheduleDomain: DOMAIN,
@@ -317,6 +334,21 @@ function screenDeps() {
       today: todayISO
     },
     feature: feat,
+    currenthelpers: {
+      today: todayISO,
+      date: fmtDate,
+      time: fmtTime,
+      serviceId: svcId,
+      toISO,
+      sheetUrl,
+      upcomingServices,
+      dutiesFor,
+      renderCatRows,
+      conflictsFor,
+      activeConflicts,
+      sameDuties,
+      workloadStats
+    },
     requestRender: render,
     addBanner,
     confirm: (...args) => window.confirm(...args),
@@ -345,14 +377,38 @@ function screenDeps() {
       clearMemberRequestDraft: () => { ui.memberRequestDraft = null; },
       enableNotifications: () => handleAct('notify-on', document.createElement('button')),
       disableNotifications: () => handleAct('notify-off', document.createElement('button')),
-      submitRequest: request => {
+      submitRequest: async request => {
         const payload = request || {};
         const svcIdValue = payload.svcId || payload.serviceId || '';
         const duty = payload.duty || '';
-        ui.reqForm = { key: svcIdValue + ':' + duty, note: payload.note || '' };
-        const result = handleAct('req-submit', { dataset: { svc: svcIdValue, duty } });
+        const svc = findService(svcIdValue);
+        const note = String(payload.note || '');
+        ui.reqForm = { key: svcIdValue + ':' + duty, note };
+        if (!svc || !duty || !ui.me) throw new Error('Could not save the change request.');
+        const createdAt = Date.now();
+        const req = {
+          id: requestId(svcIdValue, duty, createdAt),
+          name: ui.me,
+          svcId: svcIdValue,
+          date: svc.date,
+          service: svc.service,
+          worship: svc.worship,
+          duty,
+          note,
+          status: 'pending',
+          createdAt
+        };
+        try {
+          await persistRequest(req);
+        } catch (error) {
+          throw new Error('Could not save the change request.');
+        }
+        if (!state.requests.some(item => item.id === req.id)) state.requests.push(req);
+        if (!fb) saveLocal();
+        ui.reqForm = null;
         ui.memberRequestDraft = null;
-        return result;
+        afterDataChange();
+        return req;
       },
       openPresider: id => {
         ui.songSvc = id || null;
@@ -362,12 +418,6 @@ function screenDeps() {
       }
     },
     legacy: {
-      renderSchedule,
-      renderMy,
-      renderManage,
-      renderSongs,
-      handleAct,
-      handleChg,
       renderSecondaryPanel: panel => {
         if (panel === 'planning') return renderManagePlanning();
         if (panel === 'requests') return renderManageRequests();
@@ -405,6 +455,11 @@ function screenInstanceFor(name) {
 }
 
 function destroyInactiveScreen(nextName) {
+  if (activeScreenName === 'presider' && nextName !== 'presider' && songApp && typeof songApp.unmount === 'function') {
+    try { songApp.unmount(); } catch (e) {
+      console.warn('WorshipApp presider screen cleanup failed:', e);
+    }
+  }
   if (activeScreenName && activeScreenName !== nextName && screenInstances[activeScreenName]) {
     try { screenInstances[activeScreenName].destroy(); } catch (e) {
       console.warn('WorshipApp ' + activeScreenName + ' screen cleanup failed:', e);
@@ -961,11 +1016,10 @@ function render() {
   applyTheme();
   renderHeaderControls();
 
-  // The Presider tab only exists for people with an upcoming Presider duty —
-  // same rule as the "Plan songs" button in My Duties. If the viewer stops
-  // qualifying while on the songs screen (name switch, schedule edit, feature
-  // toggle), kick them back to My Duties.
-  const isPresider = feat('songPicker') && !!ui.me && dutiesFor(ui.me).some(d => d.duty === 'Presider');
+  // Any selected member can browse the song workspace when song planning is
+  // enabled. If the feature is turned off or the viewer clears their name
+  // while on the songs screen, return them to My Duties.
+  const isPresider = feat('songPicker') && !!ui.me;
   document.getElementById('tab-presider').classList.toggle('hidden', !isPresider);
   if (ui.tab === 'songs' && !isPresider) { ui.tab = 'my'; ui.songSvc = null; ui.songNav = false; }
 
@@ -976,6 +1030,7 @@ function render() {
   const tabMy = document.getElementById('tab-my');
   tabMy.innerHTML = 'My Duties' + (unread > 0 && ui.tab !== 'my' ? '<span class="dot"></span>' : '');
   const tabManage = document.getElementById('tab-manage');
+  tabManage.classList.toggle('hidden', !managerAccessAllowed());
   tabManage.innerHTML = 'Manage' + (pendingRequestsCount() > 0 && ui.tab !== 'manage' ? '<span class="dot"></span>' : '');
 
   const view = document.getElementById('view');
@@ -992,7 +1047,9 @@ function render() {
       if (ui.tab === 'schedule') renderLegacyScreen(view, screenName, renderSchedule());
       else if (ui.tab === 'my') renderLegacyScreen(view, screenName, renderMy());
       else if (ui.tab === 'songs') {
-        renderLegacyScreen(view, screenName, '<div class="song-head"><button class="ghost" data-act="close-songs">← My Duties</button></div><div id="song-root"><div class="empty">Loading the song planner…</div></div>');
+        if (!view.querySelector('#song-root')) {
+          renderLegacyScreen(view, screenName, '<div class="song-head"><button class="ghost" data-act="close-songs">← My Duties</button></div><div id="song-root"><div class="empty">Loading the song planner…</div></div>');
+        }
         renderSongs(view);
       }
       else renderLegacyScreen(view, screenName, renderManage());
@@ -1272,6 +1329,7 @@ function songCtx() {
   ui.songNav = false;
   return {
     fb,
+    firebaseGateway,
     authReady,
     me: nameMap[ui.me] || ui.me,
     schedule: state.services,
@@ -1421,333 +1479,36 @@ function renderCreatePin() {
     '</div>';
 }
 
-function renderFeatures() {
-  let html = '<p class="hint">Turn features on or off for the whole congregation. Changes apply to everyone instantly.</p>';
-  FEATURES.forEach(f => {
-    html += '<div class="card feature-row">' +
-      '<div><div class="f-label">' + esc(f.label) + '</div><div class="f-desc">' + esc(f.desc) + '</div></div>' +
-      '<label class="switch"><input type="checkbox" data-chg="feature" data-id="' + f.id + '"' +
-      ' aria-label="' + esc(f.label) + '"' + (feat(f.id) ? ' checked' : '') + '><span class="track"></span></label>' +
-      '</div>';
-  });
-  html += '<div class="card"><div class="f-label">Change the editor passcode</div>' +
-    '<form class="add-row" style="margin-top:12px" data-act="change-pin">' +
-    '<input type="password" id="pin-change" aria-label="New editor passcode" placeholder="New passcode" autocomplete="off" required>' +
-    '<button class="ghost" type="submit">Change</button></form></div>';
-  html += '<div class="card"><div class="f-label">Change the site passcode</div>' +
-    '<div class="f-desc">The 4-digit code everyone enters to open the app.</div>' +
-    '<form class="add-row" style="margin-top:12px" data-act="change-site-pin">' +
-    '<input type="password" id="site-pin-change" aria-label="New site passcode" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="New passcode" autocomplete="off" required>' +
-    '<button class="ghost" type="submit">Change</button></form></div>';
-  html += '<div class="card"><div class="f-label">Scheduler</div>' +
-    '<div class="f-desc">Who receives a notification when a member submits a change request.</div>' +
-    '<select data-chg="scheduler-name" style="margin-top:10px">' +
-    '<option value="">— None —</option>' +
-    state.members.map(m => '<option value="' + esc(m) + '"' + (m === (state.settings.schedulerName || '') ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
-    '</select></div>';
-  return html;
-}
+let secondaryPanelRenderers = null;
 
-/* Coordinator Planning View: every upcoming double-duty conflict with
-   one-tap substitutes, unfilled slots for the next 4 weeks, and the
-   whole-roster workload table. */
-function renderManagePlanning() {
-  const t = todayISO();
-  const stats = workloadStats();
-  const upcoming = COORDINATOR_DOMAIN.upcomingServices(state.services, t, SERVICE_LABELS);
-
-  /* --- conflicts, with suggested subs --- */
-  let confHtml = '';
-  const planningRows = COORDINATOR_DOMAIN.conflictsWithSuggestions(upcoming, {
-    categories: CATEGORIES,
-    stats,
-    departments: state.departments,
-    members: state.members,
-    schedule: DOMAIN
-  });
-  planningRows.forEach(row => {
-    const svc = row.service;
-    const c = row.conflict;
-      confHtml += '<div class="plan-conflict"><div class="plan-when"><b>' + esc(c.name) + '</b> — ' +
-        esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) +
-        ' <span class="plan-duties">(' + c.duties.map(esc).join(' + ') + ')</span></div>';
-      c.duties.forEach(duty => {
-        const suggestion = row.suggestions.find(item => item.duty === duty);
-        const subs = suggestion ? suggestion.members : [];
-        confHtml += '<div class="plan-suggest"><span class="lab">' + esc(duty) + ' →</span> ' +
-          (subs.length
-            ? subs.map(m => '<button class="ghost mini" data-act="plan-assign" data-svc="' + svcId(svc) +
-                '" data-duty="' + esc(duty) + '" data-name="' + esc(m) + '">' + esc(m) + '</button>').join(' ')
-            : '<span class="plan-duties">no free member in this department</span>') +
-          '</div>';
-      });
-      confHtml += '</div>';
-  });
-  let html = '<div class="card"><div class="f-label">Double-duty conflicts — upcoming</div>' +
-    '<div class="f-desc">Tap a name to hand that duty to them. Already-acknowledged doubles (marked OK) are not listed.</div>' +
-    (confHtml || '<p class="hint" style="margin-top:12px">No unresolved double-bookings. 🎉</p>') + '</div>';
-
-  /* --- unfilled slots, next 28 days --- */
-  /* A service only "expects" the duties that comparable services actually
-     staff. Expected = duties filled in >=50% of PLANNED services of the same
-     worship|service type. This avoids flagging roles a service never uses
-     (e.g. Media/Translation on a weekday), which previously marked every
-     service "unfilled". Fully-empty (not-yet-planned) services are skipped —
-     that's a different signal than a partially-planned service with a gap. */
-  const horizon = (() => { const d = new Date(); d.setDate(d.getDate() + 28); return toISO(d); })();
-  let gapHtml = '';
-  const gapRows = COORDINATOR_DOMAIN.gapRows(state.services, t, horizon, CATEGORIES, SERVICE_LABELS);
-  gapRows.forEach(row => {
-    const svc = row.service;
-    const missing = row.missing;
-    if (missing.length) {
-      gapHtml += '<div class="plan-suggest"><span class="lab">' + esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) + '</span> ' +
-        '<span class="plan-duties">' + missing.length + ' unfilled: ' + missing.map(esc).join(', ') + '</span></div>';
-    }
-  });
-  html += '<div class="card"><div class="f-label">Unfilled duties — next 4 weeks</div>' +
-    (gapHtml || '<p class="hint" style="margin-top:12px">Every planned service has its usual duties filled.</p>') + '</div>';
-
-  /* --- workload table --- */
-  const rows = COORDINATOR_DOMAIN.workloadRows(stats, state.members);
-  html += '<div class="card"><div class="f-label">Workload — who is carrying what</div>' +
-    '<div class="f-desc">Duty counts. Sorted heaviest first (last 8 weeks + upcoming).</div>' +
-    '<div class="plan-scroll"><table class="plan-table"><tr>' +
-    '<th>Member</th><th>4 wk</th><th>8 wk</th><th>Upcoming</th><th>Year</th><th>Last served</th><th>Next</th></tr>' +
-    rows.map(r => {
-      const s = r.s;
-      const flag = s.upcoming === 0 ? ' <span class="warn-badge" title="Nothing upcoming">·</span>' : '';
-      return '<tr' + (s.past8 + s.upcoming === 0 ? ' class="plan-idle"' : '') + '><td>' + esc(r.m) + flag + '</td>' +
-        '<td>' + s.past4 + '</td><td>' + s.past8 + '</td><td>' + s.upcoming + '</td><td>' + s.total + '</td>' +
-        '<td>' + (s.last ? esc(fmtDate(s.last)) : '—') + '</td>' +
-        '<td>' + (s.next ? esc(fmtDate(s.next)) : '—') + '</td></tr>';
-    }).join('') +
-    '</table></div></div>';
-  return html;
-}
-
-function memberSelect(svc, duty) {
-  const cur = (svc.assignments || {})[duty] || '';
-  const conflicted = feat('conflictWarnings') && cur && activeConflicts(svc).some(c => c.name === cur);
-  const options = COORDINATOR_DOMAIN.eligibleDutyRoster(
-    svc, duty, state.departments, state.members, CATEGORIES
-  );
-  return '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '"' +
-    (conflicted ? ' class="conflict"' : '') + '>' +
-    '<option value="">—</option>' +
-    options.map(m => '<option value="' + esc(m) + '"' + (m === cur ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
-    '</select>';
-}
-
-/* Conflict notes for Manage cards. `expanded` controls whether OK/undo actions & muted "marked OK" lines show. */
-function renderManageConflicts(svc, expanded) {
-  if (!feat('conflictWarnings')) return '';
-  const id = svcId(svc);
-  const ok = svc.conflictOk || {};
-  let html = '';
-  activeConflicts(svc).forEach(c => {
-    html += '<div class="conflict-note"><span class="dot-c" style="background:var(--warn)"></span>' +
-      esc(c.name) + ' has ' + c.duties.length + ' duties this service' +
-      (expanded ? ' <button class="linkish" data-act="conflict-ok" data-svc="' + id + '" data-name="' + esc(c.name) + '">Mark as OK</button>' : '') +
-      '</div>';
-  });
-  if (expanded) {
-    conflictsFor(svc).filter(c => sameDuties(ok[c.name], c.duties)).forEach(c => {
-      html += '<div class="conflict-note ok">' + esc(c.name) + ' has ' + c.duties.length + ' duties (marked OK) ' +
-        '<button class="linkish" data-act="conflict-unok" data-svc="' + id + '" data-name="' + esc(c.name) + '">show warning again</button></div>';
-    });
+function coordinatorSecondaryRenderers() {
+  if (secondaryPanelRenderers) return secondaryPanelRenderers;
+  const module = screenModuleFor('coordinatorSecondary');
+  if (!module) return null;
+  try {
+    secondaryPanelRenderers = module.create(screenDeps());
+    return secondaryPanelRenderers;
+  } catch (e) {
+    console.warn('WorshipApp coordinator secondary panels failed to initialize:', e);
+    return null;
   }
-  return html;
 }
 
-function reqSubmittedAt(r) {
-  return new Date(r.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+function secondaryPanelCall(name) {
+  const renderers = coordinatorSecondaryRenderers();
+  if (!renderers || typeof renderers[name] !== 'function') return '';
+  const args = Array.prototype.slice.call(arguments, 1);
+  return renderers[name].apply(renderers, args);
 }
 
-function renderManageRequests() {
-  const requestSets = COORDINATOR_DOMAIN.splitRequests(state.requests);
-  const all = requestSets.all;
-  const pending = requestSets.pending;
-  const resolved = requestSets.resolved;
-
-  let html = '<p class="hint">Members can request a schedule change from My Duties. Approving here does not edit the schedule — ' +
-    'open the service in <b>Services</b> to make the actual change.</p>';
-
-  if (!pending.length) {
-    html += '<div class="empty">No pending requests.</div>';
-  } else {
-    pending.forEach(r => {
-      html += '<div class="card">' +
-        '<div class="req-head"><span class="req-when">' + esc(r.name) + ' — ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
-        '<div class="req-note" style="margin-top:2px">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) + '</div>' +
-        (r.note ? '<div class="req-note">' + esc(r.note) + '</div>' : '') +
-        '<div class="req-meta">Submitted ' + esc(reqSubmittedAt(r)) + '</div>' +
-        '<div class="req-actions-row">' +
-        '<button class="primary" data-act="req-approve" data-id="' + esc(r.id) + '">Approve</button>' +
-        '<button class="danger-link" data-act="req-decline" data-id="' + esc(r.id) + '">Decline</button>' +
-        '<button class="ghost" data-act="req-open-service" data-svc="' + esc(r.svcId) + '">Open service</button>' +
-        '</div></div>';
-    });
-  }
-
-  if (resolved.length) {
-    const open = ui.expanded['req-resolved'];
-    html += '<button class="linkish" data-act="expand" data-id="req-resolved">' +
-      (open ? 'Hide resolved requests' : 'Show ' + Math.min(resolved.length, 10) + ' resolved request' + (resolved.length > 1 ? 's' : '')) +
-      '</button>';
-    if (open) {
-      resolved.slice(0, 10).forEach(r => {
-        const when = r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
-        html += '<div class="req-item">' +
-          '<div class="req-head"><span class="req-when">' + esc(r.name) + ' — ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
-          '<div class="req-meta">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) +
-          (when ? ' · resolved ' + esc(when) + (r.resolvedBy ? ' by ' + esc(r.resolvedBy) : '') : '') + '</div>' +
-          '</div>';
-      });
-    }
-  }
-  return html;
-}
-
-function renderManageServices() {
-  let html = '<form class="add-row" data-act="add-service">' +
-    '<input type="date" id="svc-date" required value="' + todayISO() + '">' +
-    '<input type="time" id="svc-time" required value="09:00">' +
-    '<select id="svc-label">' + SERVICE_LABELS.map(l => '<option>' + l + '</option>').join('') + '</select>' +
-    '<input type="text" id="svc-worship" list="worship-types" placeholder="Worship (e.g. Sabbath Day)" value="Sabbath Day">' +
-    '<datalist id="worship-types">' + WORSHIP_TYPES.map(w => '<option>' + esc(w) + '</option>').join('') + '</datalist>' +
-    '<button class="primary" type="submit">Add</button></form>' +
-    '<p class="hint">Tap a service to assign people to each duty.</p>';
-
-  const up = upcomingServices();
-  if (!up.length) html += '<div class="empty">No upcoming services. Add one above.</div>';
-  let lastDate = '';
-  up.forEach(svc => {
-    if (svc.date !== lastDate) {
-      lastDate = svc.date;
-      html += '<div class="date-head"><span class="day">' + esc(fmtDate(svc.date)) + '</span></div>';
-    }
-    const id = svcId(svc);
-    const open = ui.expanded['m:' + id];
-    html += '<div class="card">' +
-      '<button type="button" class="card-head" data-act="expand" data-id="m:' + id + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
-      '<span class="svc-title">' + esc(svc.worship) + ' <small>· ' + esc(svc.service) + '</small></span>' +
-      '<span class="time">' + fmtTime(svc.time) + ' ' + (open ? '▲' : '▼') + '</span></button>';
-    if (open) {
-      html += '<div class="edit-grid">' +
-        '<span class="lab">Date</span><input type="date" value="' + esc(svc.date) + '" data-chg="svc-field" data-svc="' + id + '" data-field="date">' +
-        '<span class="lab">Time</span><input type="time" value="' + esc(svc.time) + '" data-chg="svc-field" data-svc="' + id + '" data-field="time">' +
-        '<span class="lab">Worship</span><input type="text" value="' + esc(svc.worship) + '" data-chg="svc-field" data-svc="' + id + '" data-field="worship">' +
-        '<span class="lab">Choir song</span><input type="text" value="' + esc(svc.choirSong || '') + '" placeholder="e.g. #311 I Repent of My Sin" data-chg="svc-field" data-svc="' + id + '" data-field="choirSong">' +
-        '</div>';
-      CATEGORIES.forEach(cat => {
-        html += '<div class="cat-edit-label"><span class="dot-c" style="background:' + cat.color + '"></span>' + esc(cat.name) + '</div>' +
-          '<div class="edit-grid">' +
-          cat.duties.map(duty => '<span class="lab">' + esc(duty) + '</span>' + memberSelect(svc, duty)).join('') +
-          '</div>';
-      });
-      html += renderManageConflicts(svc, true);
-      html += '<div style="text-align:right;margin-top:12px"><button class="danger-link" data-act="del-service" data-svc="' + id + '">Delete this service</button></div>';
-    } else {
-      html += renderCatRows(svc, false);
-    }
-    html += '</div>';
-  });
-  return html;
-}
-
-function renderManagePeople() {
-  let html = '<form class="add-row" data-act="add-member">' +
-    '<input type="text" id="member-name" required placeholder="New person\'s name (e.g. B. David)">' +
-    '<button class="primary" type="submit">Add</button></form>' +
-    '<p class="hint">Type on a name to fix it — the change applies to every duty automatically. ' +
-    'Check the departments below to control which duty pickers each person shows up in.</p>';
-  state.members.forEach(m => {
-    const n = dutiesFor(m).length;
-    html += '<div class="list-row" style="flex-wrap:wrap">' +
-      '<input type="text" value="' + esc(m) + '" data-chg="member-name" data-old="' + esc(m) + '" style="flex:1">' +
-      '<span class="count">' + n + ' upcoming</span>' +
-      '<button class="danger-link" data-act="del-member" data-name="' + esc(m) + '">Remove</button>' +
-      '<div style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;margin-top:2px">' +
-      CATEGORIES.map(cat => {
-        const checked = ((state.departments || {})[cat.name] || []).indexOf(m) !== -1;
-        return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)">' +
-          '<input type="checkbox" data-chg="member-cat" data-name="' + esc(m) + '" data-cat="' + esc(cat.name) + '"' +
-          (checked ? ' checked' : '') + '>' +
-          '<span class="dot-c" style="background:' + cat.color + '"></span>' + esc(cat.name) + '</label>';
-      }).join('') +
-      '</div>' +
-      '</div>';
-  });
-  return html;
-}
-
-function renderSheetCard() {
-  if (!fb) return ''; // only meaningful when live sync is on
-  const res = getJSON('wds-sheet-sync-result', null);
-  let status = 'Not synced yet on this device.';
-  if (res && res.t) {
-    const when = new Date(res.t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    let detail;
-    if (res.added || res.updated) {
-      const parts = [];
-      if (res.added) parts.push(res.added + ' added');
-      if (res.updated) parts.push(res.updated + ' updated');
-      detail = parts.join(', ') + ' service' + ((res.added + res.updated) > 1 ? 's' : '');
-    } else {
-      detail = 'everything matched';
-    }
-    status = 'Last checked ' + when + ' — ' + esc(detail);
-  }
-
-  let html = '<div class="card">' +
-    '<div class="f-label">Google Sheet</div>' +
-    '<div class="sync-status">' + esc(status) + '</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
-    '<button class="ghost" data-act="sheet-sync"' + (ui.syncing ? ' disabled' : '') + '>' +
-    (ui.syncing ? 'Syncing…' : 'Sync now') + '</button></div>' +
-    '<input type="text" data-chg="sheet-url" value="' + esc(sheetUrl()) + '" style="width:100%;margin-top:10px" ' +
-    'placeholder="Published-CSV link of the schedule sheet">' +
-    '<div class="hint" style="margin:6px 2px 0">Published-CSV link of the schedule sheet (File → Share → Publish to web → CSV).</div>' +
-    '<div class="hint" style="margin:8px 2px 0">The sheet is the source of truth for the duties it lists. Media Booth, Parking Lot, Offering, choir songs, and extra services added here are kept.</div>';
-
-  const msgs = (res && res.warningMsgs) || [];
-  if (msgs.length) {
-    html += '<div class="sync-status" style="margin-top:8px">Skipped from the sheet:</div>' +
-      '<ul class="sync-warnings">' +
-      msgs.slice(0, 3).map(w => '<li>' + esc(w) + '</li>').join('') +
-      (msgs.length > 3 ? '<li>+' + (res.warnings - 3) + ' more</li>' : '') +
-      '</ul>';
-  }
-  html += '</div>';
-  return html;
-}
-
-function renderManageData() {
-  let syncCard;
-  if (fb) {
-    syncCard = '<div class="card"><p><b style="color:var(--ok)">Live sync is on.</b> Every member sees schedule changes instantly, on any device.</p></div>';
-  } else {
-    syncCard = '<div class="card"><p><b>Right now the schedule lives on this device only.</b> To let the whole congregation see it live, connect a free Firebase database (about 10 minutes, one time):</p>' +
-      '<p>1. Go to <b>console.firebase.google.com</b> → Add project.<br>' +
-      '2. Add a Web app, then create a <b>Firestore database</b> (Start in test mode).<br>' +
-      '3. Copy the config it shows you into the file <b>firebase-config.js</b>:</p>' +
-      '<code class="cfg">window.FIREBASE_CONFIG = { apiKey: "...", authDomain: "...", projectId: "...", ... };</code>' +
-      '<p style="margin-top:10px">4. Put the app folder on any free host (e.g. Netlify Drop) and share the link. This device\'s schedule uploads itself automatically the first time.</p></div>';
-  }
-  return '<div class="data-actions">' + syncCard + renderSheetCard() +
-    '<div class="card"><p>Back up the schedule, or move it between devices by hand.</p>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-    '<button class="ghost" data-act="export">Export backup file</button>' +
-    '<label class="ghost" style="display:inline-flex;align-items:center;cursor:pointer">Import backup file' +
-    '<input type="file" accept=".json,application/json" data-chg="import-file" style="display:none"></label>' +
-    '</div></div>' +
-    '<div class="card"><p>Reload the original schedule from the spreadsheet (May – July 2026). This overwrites all current data' + (fb ? ' for everyone' : '') + '.</p>' +
-    '<button class="danger-link" data-act="reset">Reset to spreadsheet data</button></div>' +
-    '<div class="card"><p>One-time cleanup after the sheet\'s Raw Data tab was tidied up — merges leftover name variants (e.g. "B. Anthony L") into their current spelling everywhere.</p>' +
-    '<button class="ghost" data-act="unify-names">Unify member names</button></div>' +
-    '</div>';
-}
+function renderFeatures() { return secondaryPanelCall('renderFeatures'); }
+function renderManagePlanning() { return secondaryPanelCall('renderManagePlanning'); }
+function renderManageConflicts(svc, expanded) { return secondaryPanelCall('renderManageConflicts', svc, expanded); }
+function renderManageRequests() { return secondaryPanelCall('renderManageRequests'); }
+function renderManageServices() { return secondaryPanelCall('renderManageServices'); }
+function renderManagePeople() { return secondaryPanelCall('renderManagePeople'); }
+function renderSheetCard() { return secondaryPanelCall('renderSheetCard'); }
+function renderManageData() { return secondaryPanelCall('renderManageData'); }
 
 /* ================= actions ================= */
 
@@ -2004,7 +1765,7 @@ function handleAct(act, el) {
     }
   }
   else if (act === 'unify-names') {
-    if (!confirm('Merge leftover name variants (e.g. "B. Anthony L" → "B. Anthony") across members and all services?')) return;
+    if (!confirm('Merge leftover name variants across members and all services?')) return;
     const { membersChanged, membersMerged, touchedServices, departmentsChanged } = applyNameMap(unifiedNameMap());
     if (membersChanged) persistMembers();
     touchedServices.forEach(persistService);
@@ -2366,6 +2127,12 @@ function handleSubscriptionEvent(event) {
     } else {
       sharedNameMap = map;
     }
+    const mapped = flattenMappedName(ui.me, unifiedNameMap());
+    if (mapped !== ui.me) {
+      ui.me = mapped;
+      localStorage.setItem('wds-me', mapped);
+    }
+    renderSoon();
     return;
   }
   if (event.type === 'requests') {
@@ -2416,6 +2183,9 @@ async function initFirebase(config) {
   })().catch(e => { console.warn('Anonymous sign-in failed:', e); });
 
   const db = fsMod.getFirestore(app);
+  if (typeof fsMod.enableMultiTabIndexedDbPersistence === 'function') {
+    try { await fsMod.enableMultiTabIndexedDbPersistence(db); } catch (e) { /* unsupported or already enabled */ }
+  }
   fb = {
     db,
     doc: fsMod.doc,

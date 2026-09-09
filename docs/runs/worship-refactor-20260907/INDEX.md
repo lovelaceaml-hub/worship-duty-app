@@ -8,7 +8,9 @@ Controller: GPT-6 Astra high, with optional Sol team leads and existing Terra su
 
 ## Current delivery
 
-Production implementation starts immediately under [speed-delivery authority](decisions/20260908-speed-delivery.md). No prototype/stage approval or artificial lane/size cap. Use task-appropriate Luna effort or Gemini 3.8 Flash and necessary affected checks.
+Latest: [old design restored](logs/20260908-old-design-restored.md). Read [current preview approval authority](decisions/20260908-design-preview-required.md), which supersedes the earlier immediate-design-deployment wording. The [flat local test](http://127.0.0.1:8101/) is verified and ready for owner review. See its [receipt](logs/20260908-flat-local-preview-ready.md). Provider changes are paused.
+
+Earlier [speed-delivery authority](decisions/20260908-speed-delivery.md) remains applicable to local implementation and parallelism. Its design-deployment waiver is superseded by the latest preview approval requirement. Use necessary affected checks.
 
 ## Baselines
 
@@ -111,4 +113,4 @@ Astra controls integration. Sol leads shared interface coordination. The five in
 
 ## Current production integration
 
-See [integration log](logs/20260908-production-integration.md) and [manager configuration](logs/20260908-manager-configuration.md). PM, PP, PC, PS and PT are integrated locally. PA passed ten focused checks. PJ, PR and PX are active in separate worktrees. LNR is correcting review2 recovery findings. Astra owns sequential integration and release.
+See [integration log](logs/20260908-production-integration.md) and [manager configuration](logs/20260908-manager-configuration.md). PM, PP, PC, PS, PT, PA, PJ, PR and PX are integrated locally. The repository integration passed fictional phone and desktop journeys after the fixture asset map was extended for static dependencies. LNR passed review3 and two emulator checks, but remains unapplied. FL and RP prepare the flat read-only local test. Astra owns integration; further production changes require preview approval.

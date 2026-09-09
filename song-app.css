@@ -367,7 +367,7 @@
 #song-root .presider-service-order summary { padding: 12px 0 4px; color: var(--accent); cursor: pointer; font-weight: 800; }
 #song-root .presider-order-body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 8px 0 2px; }
 #song-root .outline-group { padding: 10px; border-radius: 12px; background: rgba(255, 255, 255, .27); }
-#song-root .outline-group h4 { margin: 0 0 6px; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+#song-root .outline-group h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
 #song-root .presider-outline-row, #song-root .selected-song-row { display: grid; grid-template-columns: 74px 48px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 36px; border-bottom: 1px solid var(--hairline); font-size: 14px; }
 #song-root .presider-outline-row:last-child { border-bottom: 0; }
 #song-root .presider-outline-row time, #song-root .selected-song-row time { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -435,6 +435,31 @@
   #song-root .production-song-row > span:nth-of-type(3), #song-root .production-song-row > span:nth-of-type(4) { display: none; }
 }
 #song-root .slot-row .linkish { margin-left: auto; padding: 0; font-size: 13px; flex: 0 0 auto; }
+
+/* Flat local preview: service rows are the hierarchy, not containers. */
+#song-root .presider-page{max-width:980px;padding-top:0}
+#song-root .presider-heading,#song-root .workspace-heading{margin:10px 0;padding-bottom:8px;border-bottom:1px solid var(--hairline)}
+#song-root .presider-heading h1,#song-root .workspace-heading h1{font-size:24px}
+#song-root .ws-calendar{margin:8px 0 12px;padding:8px 0;border-width:0 0 1px;border-radius:0;background:transparent;box-shadow:none}
+#song-root .ws-calendar-day{min-height:32px;border-radius:5px}
+#song-root .presider-month-toolbar{margin:10px 0 4px}.presider-month-toolbar h2{font-size:18px}
+#song-root .presider-date-group{margin:0 0 12px;padding-left:10px;border-left:3px solid var(--accent)}
+#song-root .ws-date-heading{margin:0;padding:8px 0 3px}#song-root .ws-date-heading h2{font-size:16px}
+#song-root .ws-service-card,#song-root .ws-card{margin:0;padding:9px 0;border-width:1px 0 0;border-radius:0;background:transparent;box-shadow:none}
+#song-root .presider-service-card.personal-presider{border-left:0}
+#song-root .presider-compact-summary{grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin:0;padding:6px 0;border-top:0}
+#song-root .presider-compact-summary small{font-size:9px}#song-root .presider-compact-summary strong{font-size:13px}
+#song-root .presider-prayer-grid{margin:6px 0;padding:6px 0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
+#song-root .presider-service-order{margin-top:4px}#song-root .presider-service-order summary{padding:6px 0}
+#song-root .presider-order-body{gap:0;padding:0}#song-root .outline-group{padding:6px 0;border-radius:0;background:transparent;border-top:1px solid var(--hairline)}
+#song-root .presider-action-row{margin-top:7px;padding-top:7px;border-top:1px solid var(--hairline)}
+#song-root .workspace-summary{display:flex;align-items:center;gap:12px;margin:8px 0;padding:8px 0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
+#song-root .workspace-summary>div{display:flex;align-items:center;gap:7px;padding:0;border:0;border-radius:0;background:transparent}#song-root .workspace-summary>div:last-child{margin-left:auto}
+#song-root .workspace-summary strong{font-size:15px}.workspace-notes{margin:9px 0!important}
+#song-root .selected-songs-panel,#song-root .song-library-panel{margin:0;padding:10px 0;border-width:1px 0 0;border-radius:0;background:transparent;box-shadow:none}
+#song-root .selected-song-row{border-bottom:1px solid var(--hairline)}
+#song-root .production-song-list{border-top:1px solid var(--hairline)}
+@media(max-width:700px){#song-root .presider-compact-summary{grid-template-columns:repeat(3,minmax(0,1fr))}#song-root .presider-compact-summary>span:last-child{grid-column:auto}#song-root .workspace-summary{flex-wrap:wrap}#song-root .workspace-summary>div:last-child{margin-left:0;width:100%}}
 
 /* ---- runsheet ---- */
 #song-root .runsheet .order-step { font-size: 19px; padding: 12px 0; gap: 14px; }
@@ -600,3 +625,31 @@
   #song-root .selected-song-row > .prep-move { grid-column: 4 / 6; grid-row: 2; justify-self: end; }
   #song-root .selected-song-row > .ws-icon-button { grid-column: 5; grid-row: 1; }
 }
+
+/* Secondary order labels remain readable in every theme. */
+#song-root .order-head,
+#song-root .order-step .n,
+#song-root .order-step .note,
+#song-root .runsheet .rs-song .n {
+  color: var(--muted);
+}
+
+/* The host normally gives legacy views a card. The local Presider workspace
+   is a full working screen, so it uses the page canvas instead. */
+#view:has(#song-root) { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+#song-root .song-workspace { background: transparent; }
+@media (max-width: 700px) {
+  #song-root .presider-heading { margin: 4px 0 6px; }
+  #song-root .ws-calendar { margin: 5px 0 8px; padding: 4px 0; }
+  #song-root .ws-calendar-weekdays, #song-root .ws-calendar-grid { gap: 2px; }
+  #song-root .ws-calendar-weekdays { margin: 3px 0 1px; }
+  #song-root .ws-calendar-day { min-height: 28px; }
+  #song-root .presider-month-toolbar { margin: 7px 0 2px; }
+  #song-root .presider-compact-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  #song-root .presider-compact-summary > span:last-child { grid-column: auto; }
+  #song-root .presider-compact-summary strong { min-height: 2.5em; overflow-wrap: anywhere; }
+  #song-root .presider-compact-summary .ws-badge { white-space: normal; overflow-wrap: anywhere; }
+  #song-root .presider-prayer-grid { grid-template-columns: 1fr !important; gap: 0; }
+}
+#song-root .presider-prayer-grid > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 5px 0; border: 0; border-radius: 0; background: transparent !important; }
+#song-root .presider-prayer-grid > div strong { text-align: right; }

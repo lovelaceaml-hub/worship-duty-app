@@ -245,6 +245,9 @@
   font-size: 16px;
 }
 
+/* Flat local preview: one workspace, separated rows instead of nested cards. */
+.manage-page{padding-top:0}.manage-page-heading{margin:10px 0}.manage-page-heading h1{font-size:24px}.manage-department-first{margin-bottom:10px;padding:10px 0;border-width:0 0 1px;border-radius:0;background:transparent;box-shadow:none}.manage-department-first h2,.manage-department-toolbar h2{font-size:20px}.manage-tabs{margin-bottom:12px;padding-bottom:6px}.manage-tabs button,.ws-button{min-height:36px;padding:7px 10px}.manage-card{margin-bottom:16px;padding:10px 0;border-width:1px 0 0;border-radius:0;background:transparent;box-shadow:none}.manage-section-heading{margin-bottom:10px}.manage-section-heading h2{font-size:17px}.manage-roster-add{margin-bottom:8px;padding-bottom:8px}.manage-roster-row{margin-top:0;padding:10px 0;border-width:0 0 1px;border-left:0;border-radius:0;background:transparent}.manage-qualifications{margin-top:8px;padding:7px 0;border-width:1px 0;border-radius:0}.manage-availability-grid{margin-top:8px}.manage-assignment-table{border-width:1px 0;border-radius:0}.manage-service-group + .manage-service-group tr:first-child th{border-top:6px solid var(--canvas,#f3f6f8)}.manage-service-heading th{padding:8px 4px}.assignment-edit-row td,.assignment-edit-row th{padding:7px 5px}.manage-choir-service{padding:9px 0;border-width:1px 0 0;border-radius:0;background:transparent}.manage-proposal-summary,.manage-proposal-row,.manage-unresolved>div{border-radius:0}
+
 .manage-roster-row-head .ws-muted {
   margin: 3px 0 0;
 }

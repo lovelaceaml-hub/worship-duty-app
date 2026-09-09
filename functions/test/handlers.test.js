@@ -18,6 +18,32 @@ function fixedClock(nowMs = FIXED_NOW) {
 }
 
 function runtime(db, options = {}) {
+  if (typeof db.runTransaction !== 'function') {
+    db.runTransaction = async callback => {
+      const operations = [];
+      const transaction = {
+        get(refOrQuery) { return refOrQuery.get(); },
+        set(ref, value, options) {
+          operations.push({ type: 'set', ref, value, options });
+          return transaction;
+        },
+        update(ref, value) {
+          operations.push({ type: 'set', ref, value, options: { merge: true } });
+          return transaction;
+        },
+        delete(ref) {
+          operations.push({ type: 'delete', ref });
+          return transaction;
+        }
+      };
+      const result = await callback(transaction);
+      for (const operation of operations) {
+        if (operation.type === 'delete') await operation.ref.delete();
+        else await operation.ref.set(operation.value, operation.options);
+      }
+      return result;
+    };
+  }
   const sends = [];
   const logs = [];
   const events = db.events;
@@ -397,4 +423,127 @@ test('scheduled Sheet sync leaves Firestore untouched when parsing yields no ser
   });
   assert.equal(db.events.some(event => event.type === 'bulk-create'), false);
   assert.ok(logs.some(entry => entry.level === 'warn' && entry.message.includes('zero services')));
+});
+
+test('schedule rename to a canonical spelling sends no duplicate notification', async () => {
+  const db = new FakeDb({
+    app: { nameMap: { map: { 'Fictional Old': 'Fictional New' } } },
+    tokens: {
+      'fictional-old-token': { name: 'Fictional Old' },
+      'fictional-new-token': { name: 'Fictional New' }
+    }
+  });
+  const { handlers, sends } = runtime(db);
+
+  await handlers.onScheduleWrite({ data: {
+    before: snapshot(db, 'schedule', 'fictional-rename', {
+      date: '2026-09-13', assignments: { Presider: 'Fictional Old' }
+    }),
+    after: snapshot(db, 'schedule', 'fictional-rename', {
+      date: '2026-09-13', assignments: { Presider: 'Fictional New' }
+    })
+  } });
+
+  assert.equal(sends.length, 0);
+});
+
+test('new assignments target canonical and legacy token registrations once', async () => {
+  const db = new FakeDb({
+    app: { nameMap: { map: { 'Fictional Old': 'Fictional New' } } },
+    tokens: {
+      'fictional-old-token': { name: 'Fictional Old' },
+      'fictional-new-token': { name: 'Fictional New' },
+      'fictional-other-token': { name: 'Fictional Other' }
+    }
+  });
+  const { handlers, sends } = runtime(db);
+
+  await handlers.onScheduleWrite({ data: {
+    before: snapshot(db, 'schedule', 'fictional-new-assignment', {
+      date: '2026-09-13', time: '09:00', service: 'Fictional Morning', worship: 'First',
+      assignments: { Presider: 'Fictional Other' }
+    }),
+    after: snapshot(db, 'schedule', 'fictional-new-assignment', {
+      date: '2026-09-13', time: '09:00', service: 'Fictional Morning', worship: 'First',
+      assignments: { Presider: 'Fictional Old' }
+    })
+  } });
+
+  assert.equal(sends.length, 1);
+  assert.deepEqual(sends[0].tokens, ['fictional-old-token', 'fictional-new-token']);
+  assert.equal(sends[0].data.body,
+    'Presider: First Fictional Morning, Sunday, September 13 at 9:00 AM');
+});
+
+test('an old reminder marker suppresses the canonical marker and duplicate send', async () => {
+  const serviceId = 'fictional-legacy-marker-service';
+  const oldMarker = serviceId + '_Presider_Fictional-Old';
+  const canonicalMarker = serviceId + '_Presider_Fictional-New';
+  const db = new FakeDb({
+    app: { nameMap: { map: { 'Fictional Old': 'Fictional New' } } },
+    schedule: {
+      [serviceId]: {
+        date: '2026-09-08', time: '10:00', service: 'Fictional Morning', worship: 'First',
+        assignments: { Presider: 'Fictional Old' }
+      }
+    },
+    tokens: {
+      'fictional-old-token': { name: 'Fictional Old' },
+      'fictional-new-token': { name: 'Fictional New' }
+    },
+    sent: { [oldMarker]: { t: FIXED_NOW } }
+  });
+  const { handlers, sends } = runtime(db);
+
+  await handlers.dutyReminders();
+
+  assert.equal(sends.length, 0);
+  assert.deepEqual(db._get('sent', oldMarker), { t: FIXED_NOW });
+  assert.equal(db._get('sent', canonicalMarker), undefined);
+});
+
+test('request self-notification compares canonical and legacy spellings', async () => {
+  const db = new FakeDb({
+    app: {
+      settings: { schedulerName: 'Fictional New' },
+      nameMap: { map: { 'Fictional Old': 'Fictional New' } }
+    },
+    tokens: {
+      'fictional-old-token': { name: 'Fictional Old' },
+      'fictional-new-token': { name: 'Fictional New' }
+    }
+  });
+  const { handlers, sends } = runtime(db);
+
+  await handlers.onRequestCreated({
+    data: snapshot(db, 'requests', 'fictional-self-request', {
+      name: 'Fictional Old', duty: 'Presider', date: '2026-09-13',
+      service: 'Fictional Morning', status: 'pending'
+    }),
+    params: { id: 'fictional-self-request' }
+  });
+
+  assert.equal(sends.length, 0);
+});
+
+test('calendar feed accepts a legacy alias', async () => {
+  const db = new FakeDb({
+    app: {
+      nameMap: { map: { 'Fictional Legacy': 'Fictional Canonical' } }
+    },
+    schedule: {
+      'fictional-calendar-service': {
+        date: '2026-09-10', time: '09:00', service: 'Fictional Morning', worship: 'First',
+        assignments: { Presider: 'Fictional Legacy' }
+      }
+    }
+  });
+  const { handlers } = runtime(db);
+  const response = responseRecorder();
+
+  await handlers.ics({ path: '/ics/Fictional%20Legacy' }, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /X-WR-CALNAME:LV Zion Duties: Fictional Canonical/);
+  assert.match(response.body, /SUMMARY:Presider \(First Fictional Morning\)/);
 });

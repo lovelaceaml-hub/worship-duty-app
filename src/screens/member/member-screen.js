@@ -20,6 +20,8 @@
       department: (ui().deptFilter || 'All'),
       requestKey: null,
       requestNote: '',
+      requestSaving: false,
+      requestError: '',
       jumpDate: null
     };
 
@@ -185,7 +187,7 @@
         if (pending) links.push('<span class="ws-muted">' + esc(entry.duty) + ': Pending</span>');
         else links.push('<button type="button" class="ws-link" data-act="member-request-open" data-svc="' + esc(serviceId(service)) + '" data-duty="' + esc(entry.duty) + '">Request change for ' + esc(entry.duty) + '</button>');
         if (local.requestKey === requestKey) {
-          links.push('<div class="ws-request-form"><label for="member-request-note-' + esc(serviceId(service)) + '-' + esc(entry.duty) + '">Reason for change</label><textarea id="member-request-note-' + esc(serviceId(service)) + '-' + esc(entry.duty) + '" data-chg="member-request-note" placeholder="Why do you need a change?">' + esc(local.requestNote) + '</textarea><button type="button" class="ws-button" data-act="member-request-submit" data-svc="' + esc(serviceId(service)) + '" data-duty="' + esc(entry.duty) + '">Submit</button><button type="button" class="ws-link" data-act="member-request-cancel">Cancel</button></div>');
+          links.push('<div class="ws-request-form"><label for="member-request-note-' + esc(serviceId(service)) + '-' + esc(entry.duty) + '">Reason for change</label><textarea id="member-request-note-' + esc(serviceId(service)) + '-' + esc(entry.duty) + '" data-chg="member-request-note" placeholder="Why do you need a change?">' + esc(local.requestNote) + '</textarea><button type="button" class="ws-button" data-act="member-request-submit" data-svc="' + esc(serviceId(service)) + '" data-duty="' + esc(entry.duty) + '"' + (local.requestSaving ? ' disabled' : '') + '>' + (local.requestSaving ? 'Saving...' : 'Submit') + '</button><button type="button" class="ws-link" data-act="member-request-cancel"' + (local.requestSaving ? ' disabled' : '') + '>Cancel</button>' + (local.requestError ? '<p role="alert">' + esc(local.requestError) + '</p>' : '') + '</div>');
         }
       });
       return links.join('');
@@ -199,7 +201,7 @@
         html += '<button type="button" class="ws-link" data-act="member-open-presider" data-svc="' + esc(serviceId(service)) + '">' + (summary && summary.confirmed ? 'Review songs' : 'Plan songs') + '</button>';
       }
       if (includeRequests && deps.feature && deps.feature('changeRequests') !== false) html += personalActionLinks(service, name);
-      return html ? '<div class="ws-service-action-row"><span>' + esc(timeText(service.time || service.time24)) + ' · ' + esc(serviceTitle(service)) + '</span><div class="ws-service-actions">' + html + '</div></div>' : '';
+      return html ? '<div class="ws-service-action-row"><div class="ws-service-actions">' + html + '</div></div>' : '';
     }
     function serviceCard(service, open, only, summaryOnly) {
       var id = serviceId(service), title = serviceTitle(service);
@@ -222,13 +224,13 @@
     function homeUpcoming(list) {
       var upcoming = list.filter(function (service) { return service.date >= today(); }), dates = [];
       upcoming.forEach(function (service) { if (dates.indexOf(service.date) === -1) dates.push(service.date); });
-      var html = '<section class="ws-schedule-section" data-schedule="upcoming"><div class="ws-section-heading"><div><p class="ws-kicker">Next on the calendar</p><h2>Upcoming schedule</h2></div><span class="ws-muted">' + upcoming.length + ' service' + (upcoming.length === 1 ? '' : 's') + '</span></div>';
+      var html = '<section class="ws-schedule-section" data-schedule="upcoming"><div class="ws-section-heading"><h2>Upcoming schedule</h2><span class="ws-muted">' + upcoming.length + ' service' + (upcoming.length === 1 ? '' : 's') + '</span></div>';
       if (!dates.length) return html + '<div class="ws-card ws-empty">No upcoming services in ' + esc(monthTitle(currentMonth())) + '.</div></section>';
       var date = dates[0], day = upcoming.filter(function (service) { return service.date === date; });
       return html + '<section class="ws-date-card ws-upcoming-date ' + tone(date) + '" data-date-group="' + esc(date) + '"><h3 class="ws-date-heading">' + esc(dateText(date)) + '</h3>' + day.map(function (service) { return serviceCard(service, true, local.department === 'All' ? null : local.department, true); }).join('') + '</section></section>';
     }
     function homeWholeMonth(list) {
-      var html = '<section class="ws-schedule-section ws-month-schedule" data-schedule="month" data-month-service-list><div class="ws-section-heading"><div><p class="ws-kicker">Selected month</p><h2>Whole month</h2></div><span class="ws-muted">' + esc(monthTitle(currentMonth())) + '</span></div>';
+      var html = '<section class="ws-schedule-section ws-month-schedule" data-schedule="month" data-month-service-list><div class="ws-section-heading"><h2>Whole month</h2><span class="ws-muted">' + esc(monthTitle(currentMonth())) + '</span></div>';
       if (!list.length) return html + '<div class="ws-card ws-empty">No services are listed for this month.</div></section>';
       var byDate = {};
       list.forEach(function (service) { (byDate[service.date] || (byDate[service.date] = [])).push(service); });
@@ -244,7 +246,7 @@
     function home() {
       var key = currentMonth(), list = dayServices(key), selected = {};
       list.forEach(function (service) { selected[serviceId(service)] = true; });
-      var html = '<div class="member-page" data-screen="member"><div class="ws-heading"><p class="ws-kicker">LV Zion</p><h1>Home</h1><p>See the services and the people serving each department.</p></div>' + renderCalendar('home', selected) + departmentButtons() + nextDutyCard() + homeUpcoming(list) + homeWholeMonth(list);
+      var html = '<div class="member-page" data-screen="member"><div class="ws-heading"><h1>Home</h1></div>' + renderCalendar('home', selected) + departmentButtons() + nextDutyCard() + homeUpcoming(list) + homeWholeMonth(list);
       return html + '</div>';
     }
     function memberTools() {
@@ -258,7 +260,7 @@
       return html;
     }
     function dutyTable(entries, label) {
-      return '<div class="ws-table-scroll"><table class="ws-duty-table"><caption class="sr-only">' + esc(label) + '</caption><thead><tr><th scope="col">Time</th><th scope="col">Worship session</th><th scope="col">Duty</th><th scope="col">Person</th></tr></thead><tbody>' + entries.map(function (entry) {
+      return '<div class="ws-table-scroll"><table class="ws-duty-table"><caption class="sr-only">' + esc(label) + '</caption><thead><tr><th scope="col">Time</th><th scope="col">Worship</th><th scope="col">Duty</th><th scope="col">Person</th></tr></thead><tbody>' + entries.map(function (entry) {
         var service = entry.service;
         return '<tr data-department-row data-duty="' + esc(entry.duty) + '"><td>' + esc(timeText(service.time || service.time24)) + '</td><td>' + esc(sessionTitle(service)) + '</td><td>' + esc(entry.duty) + '</td><td class="' + (entry.person === ui().me ? 'is-me' : '') + '">' + esc(entry.person) + (entry.person === ui().me ? ' (You)' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>';
@@ -282,7 +284,7 @@
       });
       var selected = {};
       assigned.forEach(function (service) { selected[serviceId(service)] = true; });
-      var html = '<div class="member-page" data-screen="member"><div class="ws-heading"><p class="ws-kicker">Your schedule</p><h1>My Duties</h1><p>One clear view of every service where you are assigned.</p></div>' + renderCalendar('duties', selected) + memberTools();
+      var html = '<div class="member-page" data-screen="member"><div class="ws-heading"><h1>My Duties</h1></div>' + renderCalendar('duties', selected) + memberTools();
       if (!me) return html + '<div class="ws-card ws-empty">Choose your name in the header to see your duties.</div></div>';
       if (!assigned.length) return html + '<div class="ws-card ws-empty">You have no assigned duties.</div></div>';
       var byDate = {};
@@ -316,12 +318,21 @@
         if (token === 'member-calendar-subscribe') { command('subscribeCalendar'); return true; }
         if (token === 'member-calendar-copy') { command('copyCalendarLink'); return true; }
         if (token === 'member-open-presider') { command('openPresider', element.dataset.svc); return true; }
-        if (token === 'member-request-open') { local.requestKey = (element.dataset.svc || '') + ':' + (element.dataset.duty || ''); local.requestNote = ''; refresh(); return true; }
+        if (token === 'member-request-open') { local.requestKey = (element.dataset.svc || '') + ':' + (element.dataset.duty || ''); local.requestNote = ''; local.requestError = ''; refresh(); return true; }
         if (token === 'member-request-cancel') { local.requestKey = null; local.requestNote = ''; command('clearMemberRequestDraft'); refresh(); return true; }
         if (token === 'member-request-submit') {
           var svcId = String(element.dataset.svc || ''), duty = String(element.dataset.duty || '');
-          if (svcId && duty) command('submitRequest', { svcId: svcId, duty: duty, note: local.requestNote });
-          local.requestKey = null; local.requestNote = ''; command('clearMemberRequestDraft'); refresh(); return true;
+          if (!svcId || !duty || local.requestSaving) return true;
+          local.requestSaving = true; local.requestError = ''; refresh();
+          Promise.resolve().then(function () {
+            if (!deps.commands || typeof deps.commands.submitRequest !== 'function') throw new Error('Request service unavailable');
+            return command('submitRequest', { svcId: svcId, duty: duty, note: local.requestNote });
+          }).then(function () {
+            local.requestKey = null; local.requestNote = ''; command('clearMemberRequestDraft');
+          }).catch(function () {
+            local.requestError = 'Could not send your request. Your note is kept here. Try again.';
+          }).finally(function () { local.requestSaving = false; refresh(); });
+          return true;
         }
       }
       return false;

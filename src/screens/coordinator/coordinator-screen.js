@@ -437,11 +437,11 @@
       const selected = selectDepartment(selectedDepartment(state), state);
       const map = configuredManagers(state);
       if (!allowed.length) {
-        return '<div class="manage-department-first" data-manage-department-first><div><p class="ws-kicker">Manage</p><h2>No department access</h2><p class="ws-muted">Choose an authorized selected name before opening a department.</p></div></div>';
+        return '<div class="manage-department-first" data-manage-department-first><div><h2>No department access</h2><p class="ws-muted">Choose an authorized selected name before opening a department.</p></div></div>';
       }
       const role = map ? (isAdmin(state) ? 'Admin access' : 'Department manager access') : 'Editor access';
       return '<div class="manage-department-first" data-manage-department-first>' +
-        '<div><p class="ws-kicker">Manage</p><h2>Department workspace</h2><p class="ws-muted">' + esc(role) + '. Choose a department to edit its roster and monthly duties.</p></div>' +
+        '<div><h2>Department workspace</h2><p class="ws-muted">' + esc(role) + '</p></div>' +
         '<label for="manage-department-choice">Department<select id="manage-department-choice" data-chg="manage-department" aria-label="Manage department">' +
         allowed.map(name => '<option value="' + esc(name) + '"' + (name === selected ? ' selected' : '') + '>' + esc(name) + '</option>').join('') +
         '</select></label></div>';
@@ -452,13 +452,13 @@
       const duties = departmentDuties(department, state);
       const members = Array.isArray(state.members) ? state.members.slice().sort((a, b) => String(a).localeCompare(String(b))) : [];
       const available = members.filter(member => roster.indexOf(member) === -1);
-      let html = '<section class="ws-card manage-card" aria-labelledby="manage-roster-title"><div class="manage-section-heading"><div><p class="ws-kicker">Roster</p><h2 id="manage-roster-title">' + esc(department) + ' department roster</h2></div><span class="ws-badge" style="--badge-color:' + esc(departmentColor(department, state)) + '">' + roster.length + ' member' + (roster.length === 1 ? '' : 's') + '</span></div>';
+      let html = '<section class="manage-card manage-flat-section" aria-labelledby="manage-roster-title"><div class="manage-section-heading"><h2 id="manage-roster-title">Roster</h2><span class="ws-badge" style="--badge-color:' + esc(departmentColor(department, state)) + '">' + roster.length + ' member' + (roster.length === 1 ? '' : 's') + '</span></div>';
       html += '<form class="manage-roster-add" data-act="manage-roster-add"><label for="manage-roster-member">Add a member<select id="manage-roster-member" name="member"' + (!available.length ? ' disabled' : '') + '><option value="">Choose a member</option>' + available.map(member => '<option value="' + esc(member) + '"' + (screen.rosterMember === member ? ' selected' : '') + '>' + esc(member) + '</option>').join('') + '</select></label><button class="ws-button ws-button-primary" type="submit"' + (!available.length ? ' disabled' : '') + '>Add to roster</button></form>';
       if (!roster.length) html += '<p class="ws-empty">No one is listed in this department yet.</p>';
       roster.forEach(member => {
         const rule = rulesFor(department, member, state);
         const selectedDuties = Array.isArray(rule.duties) ? rule.duties : [];
-        html += '<article class="manage-roster-row" data-roster-member="' + esc(member) + '"><div class="manage-roster-row-head"><div><h3>' + esc(member) + '</h3><p class="ws-muted">Edit qualifications and availability for this department.</p></div><button type="button" class="ws-button ws-button-danger" data-act="manage-roster-remove" data-department="' + esc(department) + '" data-member="' + esc(member) + '">Remove</button></div>';
+        html += '<article class="manage-roster-row" data-roster-member="' + esc(member) + '"><div class="manage-roster-row-head"><h3>' + esc(member) + '</h3><button type="button" class="ws-button ws-button-danger" data-act="manage-roster-remove" data-department="' + esc(department) + '" data-member="' + esc(member) + '">Remove</button></div>';
         html += '<fieldset class="manage-qualifications"><legend>Qualified duties</legend><div class="manage-duty-checks">' + duties.map(duty => '<label><input type="checkbox" data-chg="manage-roster-duty" data-department="' + esc(department) + '" data-member="' + esc(member) + '" data-duty="' + esc(duty) + '"' + (selectedDuties.indexOf(duty) !== -1 ? ' checked' : '') + '><span>' + esc(duty) + '</span></label>').join('') + '</div><p class="ws-help">Leave every duty unchecked to keep the existing roster behavior and allow this member for all duties.</p></fieldset>';
         html += '<div class="manage-availability-grid"><label>Unavailable dates<input type="text" value="' + esc(printList(rule.unavailableDates)) + '" placeholder="YYYY-MM-DD, YYYY-MM-DD" data-chg="manage-roster-availability" data-field="unavailableDates" data-department="' + esc(department) + '" data-member="' + esc(member) + '"></label><label>Unavailable service IDs<input type="text" value="' + esc(printList(rule.unavailableServiceIds)) + '" placeholder="date_service" data-chg="manage-roster-availability" data-field="unavailableServiceIds" data-department="' + esc(department) + '" data-member="' + esc(member) + '"></label></div></article>';
       });
@@ -496,7 +496,7 @@
 
     function renderChoirSongs(state, month) {
       const services = servicesForMonth(state, month);
-      let html = '<section class="ws-card manage-card" aria-labelledby="manage-choir-title"><div class="manage-section-heading"><div><p class="ws-kicker">Choir</p><h2 id="manage-choir-title">Service song titles</h2></div><span class="ws-badge">Schedule only</span></div><p class="ws-muted">Choose a library suggestion or type a title. Custom text is saved on the service only and never added to the song library.</p>';
+      let html = '<section class="manage-card manage-flat-section" aria-labelledby="manage-choir-title"><div class="manage-section-heading"><h2 id="manage-choir-title">Choir song titles</h2><span class="ws-badge">Schedule only</span></div>';
       if (!services.length) return html + '<p class="ws-empty">No services are scheduled in this month.</p></section>';
       services.forEach(service => {
         const id = serviceId(service);
@@ -515,7 +515,7 @@
 
     function renderAutoAssignment(state, department, month) {
       const proposal = screen.proposals && screen.proposals.department === department && screen.proposals.month === month ? screen.proposals : null;
-      let html = '<section class="ws-card manage-card" aria-labelledby="manage-auto-title"><div class="manage-section-heading"><div><p class="ws-kicker">Planning aid</p><h2 id="manage-auto-title">Auto propose empty slots</h2></div><span class="ws-badge">Review then save</span></div><p class="ws-muted">Suggestions balance the current upcoming load and respect qualifications, availability, and same-service conflicts. Existing assignments are never replaced.</p><button type="button" class="ws-button ws-button-secondary" data-act="manage-auto-propose">Generate proposals</button>';
+      let html = '<section class="manage-card manage-flat-section" aria-labelledby="manage-auto-title"><div class="manage-section-heading"><h2 id="manage-auto-title">Auto propose empty slots</h2><span class="ws-badge">Review then save</span></div><button type="button" class="ws-button ws-button-secondary" data-act="manage-auto-propose">Generate proposals</button>';
       if (proposal) {
         html += '<div class="manage-proposal-summary" aria-live="polite"><strong>' + proposal.items.length + ' proposed</strong><span>' + proposal.unresolved.length + ' unresolved</span></div>';
         if (proposal.items.length) {
@@ -535,9 +535,9 @@
       const department = selectDepartment(selectedDepartment(state), state);
       if (!department) return '<div class="ws-card manage-card"><p class="ws-empty">Choose your name to see the departments you can manage.</p></div>';
       const month = setMonth(monthValue(state));
-      let html = '<div class="manage-department-toolbar"><div><p class="ws-kicker">Department first</p><h2>' + esc(department) + ' management</h2></div><div class="manage-month-control"><button type="button" class="ws-button ws-button-quiet" data-act="manage-month-prev" aria-label="Previous month">Previous</button><label for="manage-month">Month<input id="manage-month" type="month" value="' + esc(month) + '" data-chg="manage-month"></label><button type="button" class="ws-button ws-button-quiet" data-act="manage-month-next" aria-label="Next month">Next</button></div></div>';
+      let html = '<div class="manage-department-toolbar"><h2>' + esc(department) + '</h2><div class="manage-month-control"><button type="button" class="ws-button ws-button-quiet" data-act="manage-month-prev" aria-label="Previous month">Previous</button><label for="manage-month">Month<input id="manage-month" type="month" value="' + esc(month) + '" data-chg="manage-month"></label><button type="button" class="ws-button ws-button-quiet" data-act="manage-month-next" aria-label="Next month">Next</button></div></div>';
       html += renderRoster(state, department);
-      html += '<section class="ws-card manage-card" aria-labelledby="manage-assignments-title"><div class="manage-section-heading"><div><p class="ws-kicker">Monthly assignments</p><h2 id="manage-assignments-title">' + esc(department) + ' duty slots</h2></div><span class="ws-muted">' + esc(month) + '</span></div>' + renderAssignmentRows(state, department, month) + '</section>';
+      html += '<section class="manage-card manage-flat-section" aria-labelledby="manage-assignments-title"><div class="manage-section-heading"><h2 id="manage-assignments-title">Monthly assignments</h2><span class="ws-muted">' + esc(month) + '</span></div>' + renderAssignmentRows(state, department, month) + '</section>';
       html += renderAutoAssignment(state, department, month);
       if (department === 'Choir') html += renderChoirSongs(state, month);
       return html;
@@ -571,7 +571,7 @@
       if (allowed.indexOf(current) === -1 && current) selectDepartment(current, state);
       const tabs = panelTabs(state);
       let html = '<section class="manage-page" data-screen="manage" aria-labelledby="manage-page-title">' +
-        '<div class="manage-page-heading"><div><p class="ws-kicker">Coordinator workspace</p><h1 id="manage-page-title">Manage the schedule</h1><p class="ws-muted">Start with a department, then review people and assignments together.</p></div></div>' +
+        '<div class="manage-page-heading"><h1 id="manage-page-title">Manage</h1></div>' +
         renderNotice() + renderDepartmentChoice(state) +
         '<nav class="manage-tabs" aria-label="Manage sections">' + tabs.map(tab => '<button type="button" class="' + (screen.panel === tab[0] ? 'is-active' : '') + '" data-act="manage-panel" data-panel="' + esc(tab[0]) + '" aria-current="' + (screen.panel === tab[0] ? 'page' : 'false') + '">' + esc(tab[1]) + '</button>').join('') + '</nav>';
       html += screen.panel === 'department' ? renderDepartment(state) : renderSecondary(screen.panel, state);

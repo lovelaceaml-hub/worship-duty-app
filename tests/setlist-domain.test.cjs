@@ -160,7 +160,8 @@ function makeMixedReleaseHarness() {
   sandbox.globalThis = sandbox;
   const oldHostNamespace = sandbox.window.WorshipApp;
   vm.runInNewContext(setlistSource, sandbox, { filename: path.join(sourceRoot, 'src/domain/setlist.js') });
-  const executable = stagedSongSource.replace(stagedImport, '').replace(/export function /g, 'function ') + `
+  vm.runInNewContext(fs.readFileSync(path.join(sourceRoot, 'src/services/song-repository.js'), 'utf8'), sandbox, { filename: 'src/services/song-repository.js' });
+  const executable = stagedSongSource.replace(stagedImport, '').replace("import './src/services/song-repository.js?v=DEV';", '').replace(/export function /g, 'function ') + `
 globalThis.__mixedReleaseApi = { songStatus, isConfirmed, changedSinceConfirmed };
 `;
   vm.runInNewContext(executable, sandbox, { filename: path.join(sourceRoot, 'song-app.js') });
