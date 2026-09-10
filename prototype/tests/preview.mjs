@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright';
+import {checkWorkspaces} from './workspaces.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const out=path.join(root,'preview-artifacts');
 await fs.mkdir(path.join(out,'screenshots'),{recursive:true});
@@ -112,7 +113,7 @@ try {
  await page.locator('[data-song-act="confirm-songs"]').first().click();
  check('Setlist confirmation',await page.locator('.confirm-box').innerText().then(s=>s.includes('Songs confirmed')));
  await shot('02-presider-library-desktop');
- for(const tab of ['home','services','insights','library']){await page.locator(`[data-song-act="tab"][data-tab="${tab}"]`).click();check(`Presider ${tab} renders`,await page.locator('#song-root').innerText().then(s=>s.length>150));}
+ for(const tab of ['home','services','insights','library']){await page.locator(`.ns-tabs [data-song-act="tab"][data-tab="${tab}"]`).click();check(`Presider ${tab} renders`,await page.locator('#song-root').innerText().then(s=>s.length>150));}
  await page.reload();await nav('my');await page.locator('[data-act="open-songs"]').first().click();
  await page.waitForSelector('#song-root .set-row');
  check('Setlist persists after reload',await page.locator('.set-row').count(),2);
@@ -138,6 +139,7 @@ try {
  await page.waitForLoadState();await page.waitForSelector('#a-search');
  check('Reset restores only preview assignment edits',(await state()).services.find(s=>s.date==='2026-07-04'&&s.service==='Morning').assignments['Prayer of Thanks'],'B. Brent');
  check('Reset preserves production and unrelated storage',await page.evaluate(()=>[window.localStorage.getItem('wds-me'),window.localStorage.getItem('unrelated-setting')]),['PRODUCTION-SENTINEL','KEEP']);
+ await checkWorkspaces({page,check,shot});
  check('Zero external network requests',report.externalRequests,[]);
  check('Zero runtime errors',report.pageErrors,[]);
  report.passed=true;
