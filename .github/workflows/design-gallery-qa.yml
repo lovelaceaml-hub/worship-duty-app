@@ -11,9 +11,9 @@ on:
 permissions:
   contents: read
 jobs:
-  build:
+  integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,6 +21,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - name: Build four-choice live candidate
         run: node design-gallery/build.mjs
       - name: Parse generated JavaScript
@@ -35,8 +36,18 @@ jobs:
           test ! -e .hosting-gallery/functions
           test ! -e .hosting-gallery/design-gallery
           test ! -e .hosting-gallery/prototype
+      - name: Exercise Original, Prism, Navy & Cream, and Aurora with mocked Firebase
+        run: node design-gallery/test.mjs
+      - name: Package review evidence
+        if: always()
+        run: |
+          mkdir -p design-gallery-review/source/design-gallery
+          if [ -d .hosting-gallery ]; then cp -r .hosting-gallery design-gallery-review/release-candidate; fi
+          if [ -d design-gallery-results ]; then cp -r design-gallery-results design-gallery-review/results; fi
+          cp design-gallery/* design-gallery-review/source/design-gallery/
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: design-gallery-build-review
-          path: .hosting-gallery
+          name: design-gallery-integration-review
+          path: design-gallery-review/
           retention-days: 7
