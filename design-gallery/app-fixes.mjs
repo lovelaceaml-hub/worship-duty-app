@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 function replaceExactlyOnce(source, before, after, label) {
   const count = source.split(before).length - 1;
@@ -49,4 +50,12 @@ export async function applyStagedAppFixes(dest) {
   const after = patchChoirDateSync(before);
   await fs.writeFile(appPath, after);
   return { appPath, changed: after !== before };
+}
+
+const invoked = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invoked) {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const target = process.argv[2] ? path.resolve(process.argv[2]) : path.join(repoRoot, '.hosting-gallery');
+  const result = await applyStagedAppFixes(target);
+  console.log(`Applied choir date/service sync fix to ${result.appPath}`);
 }
