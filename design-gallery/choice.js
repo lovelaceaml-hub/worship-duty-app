@@ -58,21 +58,24 @@
     if (modeName === 'classic') return Promise.resolve();
     const link = stylesheet(modeName);
     if (!link) return Promise.reject(Error(NAMES[modeName] + ' stylesheet is missing.'));
-    // Start fetching the requested design only when needed. Same-origin CSS lets
-    // us verify a real parsed sentinel instead of trusting an empty StyleSheet.
-    link.media = 'all';
-    if (parsed(modeName)) return Promise.resolve();
+    if (parsed(modeName)) { link.media = 'all'; return Promise.resolve(); }
+    // Listen BEFORE changing media. A cached or very small stylesheet can finish
+    // between assigning media='all' and attaching load handlers. Polling the
+    // sentinel as a fallback also covers browsers that do not emit a second load
+    // event when a previously non-matching media sheet becomes active.
     return new Promise((resolve,reject) => {
-      let done = false;
+      let done = false, poll = 0;
       const finish = ok => {
-        if (done) return; done = true; clearTimeout(timer);
+        if (done) return; done = true; clearTimeout(timer); clearInterval(poll);
         link.removeEventListener('load', yes); link.removeEventListener('error', no);
         ok ? resolve() : reject(Error(NAMES[modeName] + ' could not be loaded.'));
       };
       const yes = () => finish(parsed(modeName)), no = () => finish(false);
-      const timer = setTimeout(no, 7000);
       link.addEventListener('load', yes, {once:true}); link.addEventListener('error', no, {once:true});
-      if (parsed(modeName)) finish(true);
+      poll = setInterval(() => { if (parsed(modeName)) finish(true); }, 40);
+      const timer = setTimeout(no, 7000);
+      link.media = 'all'; link.disabled = false;
+      queueMicrotask(() => { if (parsed(modeName)) finish(true); });
     });
   }
   function disableUnusedStyles(active) {
