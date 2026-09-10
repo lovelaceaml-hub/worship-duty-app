@@ -1,0 +1,40 @@
+name: Prototype preview QA
+on:
+  push:
+    branches: ['prototype/aurora-workspace']
+  pull_request:
+    paths: ['prototype/**', '.github/workflows/prototype-preview.yml']
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install existing test dependencies
+        run: npm ci
+      - name: Test preview when present
+        run: |
+          if [ -f prototype/tests/preview.mjs ]; then
+            npx playwright install --with-deps chromium
+            node prototype/tests/preview.mjs
+          fi
+      - name: Package review source
+        if: always()
+        run: |
+          mkdir -p preview-artifacts/source
+          cp index.html app.js seed-data.js song-app.js song-lib.js song-seed.js song-app.css package.json package-lock.json preview-artifacts/source/
+          if [ -d prototype ]; then cp -R prototype preview-artifacts/source/; fi
+          if [ -d tests ]; then cp -R tests preview-artifacts/source/; fi
+      - name: Upload private review bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-prototype-review
+          path: preview-artifacts/
+          retention-days: 7
