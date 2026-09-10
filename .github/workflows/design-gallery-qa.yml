@@ -21,23 +21,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Inspect current published schedule choir rows
-        run: |
-          curl -fL --retry 3 --retry-delay 2 --max-time 120 \
-            'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv' \
-            -o /tmp/schedule.csv
-          python - <<'PY'
-          import csv
-          with open('/tmp/schedule.csv', newline='', encoding='utf-8-sig') as f:
-              rows=list(csv.reader(f))
-          print('HEADER', rows[0])
-          for row in rows[1:]:
-              if any('choir' in str(cell).lower() for cell in row):
-                  print('CHOIR_ROW', row)
-          PY
       - run: npx playwright install --with-deps chromium
       - name: Build four-choice live candidate
         run: node design-gallery/build.mjs
+      - name: Apply live app correctness fixes
+        run: node design-gallery/app-fixes.mjs
+      - name: Verify choir-song date/service sync correction
+        run: |
+          grep -q "_sheetChoirSongSeen: false" .hosting-gallery/app.js
+          grep -q "svc._sheetChoirSongSeen = true" .hosting-gallery/app.js
+          grep -q "sheetSvc._sheetChoirSongSeen && existing.choirSong !== sheetSvc.choirSong" .hosting-gallery/app.js
+          ! grep -q "if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong)" .hosting-gallery/app.js
       - name: Parse generated JavaScript
         run: |
           node --check .hosting-gallery/app.js
