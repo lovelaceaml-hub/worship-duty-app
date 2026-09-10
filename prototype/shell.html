@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#151d39">
+<title>LV Zion · Aurora prototype</title>
+<!-- STYLES -->
+</head>
+<body class="aurora" data-screen="schedule">
+<a class="skip-link" href="#view">Skip to content</a>
+<aside class="rail" aria-label="Workspace navigation">
+  <button class="brand header-home" data-act="home" aria-label="Return to schedule"><span class="brand-mark">LV<span></span></span><span>LV ZION<small>WORSHIP DUTY</small></span></button>
+  <div class="rail-label">YOUR WORKSPACE</div>
+  <nav class="tabs" aria-label="Main navigation">
+    <button data-act="tab" data-tab="schedule">Schedule</button>
+    <button data-act="tab" data-tab="my" id="tab-my">My Duties</button>
+    <button data-act="tab" data-tab="songs" id="tab-presider" class="hidden">Presider</button>
+    <button data-act="tab" data-tab="manage" id="tab-manage">Manage</button>
+  </nav>
+  <div class="rail-bottom">
+    <div class="sandbox-note"><span class="sandbox-dot"></span> A space to try things<p>Changes stay in this preview.<br>Your live schedule is untouched.</p></div>
+    <button class="profile" data-act="tab" data-tab="my"><span class="avatar" id="rail-initials">AL</span><span id="rail-person">Choose your name</span><span class="profile-arrow">↗</span></button>
+    <div class="rail-version">AURORA <span>DESIGN PROTOTYPE / 01</span></div>
+  </div>
+</aside>
+<div class="workspace">
+  <header class="topbar"><div class="breadcrumb"><span class="crumb-home">Workspace</span><span class="crumb-slash">/</span><strong id="crumb">Schedule</strong></div><div class="top-tools"><span class="preview-tag">LOCAL PROTOTYPE</span><button class="icon-button" data-aurora="motion" aria-label="Pause animation" title="Pause animation">Ⅱ</button><button class="icon-button" data-aurora="theme" aria-label="Switch color theme" title="Switch color theme">◐</button><button class="reset-button" data-aurora="reset">Reset preview</button></div></header>
+  <div class="preview-disclosure" role="note">Repository reference data · Preview date July 1, 2026 · Not the live schedule<span id="storage-note"></span></div>
+  <div class="page-heading"><div><div class="overline" id="page-kicker">EVERY ROLE. ONE PLACE.</div><h1 id="page-title">Service schedule</h1><p id="page-description">A clear view of who is serving, and when.</p></div><div id="heading-action"></div></div>
+  <div id="banners" aria-live="polite"></div>
+  <main id="view" tabindex="-1"></main>
+  <footer class="page-footer"><span>LV ZION · WORSHIP DUTY</span><span id="sync-pill" class="sync-pill">Local preview</span></footer>
+</div>
+<div id="aurora-toast" class="aurora-toast" role="status" aria-live="polite"></div>
+<!-- RUNTIME -->
+</body>
+</html>
