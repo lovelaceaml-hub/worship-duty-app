@@ -20,5 +20,11 @@ const page=await context.newPage();page.on('console',m=>{const line=m.type()+': 
 await page.clock.setSystemTime(new Date('2026-07-01T12:00:00-07:00'));await page.goto(origin);await page.waitForFunction(()=>!!window.__mockLive);await page.evaluate(()=>__mockLive.emit('app/settings',__designFixture.docs['app/settings']));await page.waitForTimeout(100);await page.locator('#site-pin-input').fill('2468');await page.locator('[data-act="site-unlock"] button').click();await page.waitForSelector('.wd-design-dialog[open]');await page.keyboard.press('Escape');
 async function pick(mode){await page.locator('[data-design-open]:visible').first().click();await page.locator(`[data-design-select="${mode}"]`).click();await page.waitForTimeout(900);console.log('STATE',mode,JSON.stringify(await page.evaluate(()=>({mode:WorshipDesign.getMode(),status:document.getElementById('wd-design-status')?.textContent,dialog:!!document.querySelector('.wd-design-dialog[open]'),auroraMedia:document.getElementById('wd-aurora-css')?.media,auroraRules:(()=>{try{return [...(document.getElementById('wd-aurora-css')?.sheet?.cssRules||[])].slice(-3).map(r=>r.selectorText||r.cssText.slice(0,50));}catch(e){return [String(e)]}})()}))));}
 await pick('prism');await pick('navy');await pick('aurora');
+await page.setViewportSize({width:320,height:900});await page.waitForTimeout(120);
+console.log('AURORA_320_OVERFLOW',JSON.stringify(await page.evaluate(()=>{
+ const vw=innerWidth,doc=document.documentElement.scrollWidth;
+ const offenders=[...document.querySelectorAll('body *')].map((el,i)=>{const r=el.getBoundingClientRect(),cs=getComputedStyle(el);return {i,tag:el.tagName.toLowerCase(),id:el.id,cls:String(el.className||'').slice(0,110),left:Math.round(r.left*10)/10,right:Math.round(r.right*10)/10,width:Math.round(r.width*10)/10,scrollWidth:el.scrollWidth,overflowX:cs.overflowX,display:cs.display,text:(el.textContent||'').replace(/\s+/g,' ').trim().slice(0,70)};}).filter(x=>x.display!=='none'&&(x.right>vw+1||x.left<-1)).sort((a,b)=>b.right-a.right).slice(0,30);
+ return {vw,doc,offenders};
+})));
 console.log('FINAL CONSOLE',JSON.stringify(consoleMessages));
 await context.close();await browser.close();
