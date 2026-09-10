@@ -1,0 +1,35 @@
+/* Always available in BOTH designs. Deliberately namespaced: no changes to the original theme. */
+.nc-icon{width:19px;height:19px;flex:0 0 auto;vertical-align:middle}
+.nc-appearance{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:8px 11px;border:1px solid #a9b9c2;border-radius:10px;background:#fff;color:#253943;font:600 12px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+.nc-appearance[hidden]{display:none!important}
+header.app .nc-appearance{grid-column:2;grid-row:3;justify-self:end}
+.nc-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.nc-dialog{box-sizing:border-box;width:min(560px,calc(100vw - 28px));max-height:calc(100dvh - 32px);overflow:auto;margin:auto;padding:26px;border:1px solid #d9cab9;border-radius:24px;background:#f8f4ed;color:#302e30;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;box-shadow:0 24px 90px #0b18254d}
+.nc-dialog::backdrop{background:#14263096;backdrop-filter:blur(6px)}
+.nc-dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.nc-dialog-kicker{font-size:10px;font-weight:750;letter-spacing:.15em;color:#856030}
+.nc-dialog h2{font-size:27px;letter-spacing:-.035em;line-height:1.2;margin:20px 0 12px;color:#253943}
+.nc-dialog p{color:#635b5e;font-size:14px}
+.nc-dialog .nc-button{font:inherit;cursor:pointer;min-height:44px;border-radius:12px;border:1px solid #ddcfc0;background:#fffcf8;color:#4f3038;padding:11px 14px;box-sizing:border-box}
+.nc-dialog .nc-close{padding:10px;display:flex;align-items:center;justify-content:center}
+.nc-dialog .nc-button:focus-visible,.nc-dialog select:focus-visible,.nc-appearance:focus-visible{outline:3px solid #a97837;outline-offset:3px}
+.nc-dialog .nc-primary{background:#662c38;border-color:#662c38;color:white;font-weight:650}
+.nc-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}
+.nc-choices>.nc-button{display:flex;flex-direction:column;gap:5px;text-align:left;padding:10px}
+.nc-choices>.nc-button[aria-pressed=true]{border:2px solid #662c38;padding:9px;box-shadow:0 0 0 3px #662c3810}
+.nc-choices strong{font-size:15px;margin-top:6px}.nc-choices>.nc-button>span:last-child{font-size:12px;color:#71656a}
+.nc-swatch{display:block;width:100%;height:110px;border-radius:9px;overflow:hidden;position:relative;padding:34px 10px 10px;background:#f2f6f8}
+.nc-swatch:before{content:"";position:absolute;inset:0 0 auto;height:24px;background:#2383c6}
+.nc-swatch i{display:block;height:12px;background:#fff;border-radius:4px;margin-bottom:7px;border:1px solid #d9e1e5}
+.nc-swatch i:nth-child(2){width:75%}.nc-swatch i:nth-child(3){width:55%}
+.nc-swatch-navy{background:#f3ede2}.nc-swatch-navy:before{background:#253943}
+.nc-swatch-navy i{border-color:#dfd2c2}.nc-swatch-navy i:first-child{background:#692f3a;width:60%;border-color:#692f3a}
+.nc-options{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:16px;border-top:1px solid #e3d8ca}
+.nc-options label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:600;color:#504447}
+.nc-options select{box-sizing:border-box;width:100%;min-width:0;min-height:44px;border:1px solid #dacbbc;background:#fffaf4;border-radius:9px;padding:8px;font-size:14px;color:#463b3d}
+.nc-dialog .nc-dialog-note{font-size:11px;line-height:1.6;color:#796e71}
+.nc-dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px;flex-wrap:wrap}
+@media(max-width:640px){header.app .nc-appearance{flex:0 0 auto;padding:8px}header.app .nc-appearance span{display:none}}
+@media(max-width:360px){.nc-dialog{padding:18px}.nc-dialog h2{font-size:23px}.nc-options{grid-template-columns:1fr}.nc-dialog-actions>.nc-button{flex:1;font-size:13px}.nc-choices{gap:8px}}
+@media(prefers-reduced-motion:no-preference){.nc-dialog[open]{animation:nc-dialog-in .22s ease-out}@keyframes nc-dialog-in{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}}
+html[data-nc-motion=off] .nc-dialog{animation:none}

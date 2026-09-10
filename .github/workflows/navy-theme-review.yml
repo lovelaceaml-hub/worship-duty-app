@@ -1,0 +1,40 @@
+name: Navy and Cream opt-in review
+on:
+  push:
+    branches: [prototype/navy-cream]
+    paths: ['navy-live/**', '.github/workflows/navy-theme-review.yml']
+  pull_request:
+    paths: ['navy-live/**', '.github/workflows/navy-theme-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: node navy-live/build.mjs
+      - run: |
+          node --check navy-live/dist/app.js
+          node --check navy-live/dist/navy-choice.js
+          node --check navy-live/dist/sw.js
+      - run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - run: python navy-live/test.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: navy-cream-review
+          path: |
+            navy-live/dist
+            navy-live/evidence
+          retention-days: 7
+# Review only. No Firebase authentication, deployment, database writes or changes to main.
