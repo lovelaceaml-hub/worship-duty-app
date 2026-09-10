@@ -1,5 +1,7 @@
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {manifest,root,dest,hash} from './build.mjs';
 import {applyStagedAppFixes} from './app-fixes.mjs';
 
@@ -9,22 +11,59 @@ const args=process.argv.slice(2),allowed=new Set(['--publish','--preview']);
 if(args.some(a=>!allowed.has(a))||args.length>1)throw Error('Use no argument to build, --preview for a temporary Firebase channel, or --publish for the existing live site.');
 if(!args.length){console.log('Built with choir date/service sync fix. Not deployed. Re-run with --preview or --publish from an authenticated Firebase environment.');process.exit(0);}
 const origin='https://lv-zion-duties.web.app';
+const normalizeApp=s=>String(s).replace(/\?v=[A-Za-z0-9]+/g,'?v=DEV');
+const sha256=s=>createHash('sha256').update(s).digest('hex');
+const currentBase=await fs.readFile(path.join(root,'app.js'),'utf8');
+const currentBaseSha256=sha256(currentBase);
+
+function git(args){
+  const r=spawnSync('git',args,{cwd:root,encoding:'utf8'});
+  if(r.status!==0)return '';
+  return r.stdout || '';
+}
+
+function findAncestorAppMatch(liveApp){
+  const liveHash=hash(normalizeApp(liveApp));
+  const commits=git(['rev-list','HEAD','--','app.js']).trim().split(/\s+/).filter(Boolean);
+  for(const commit of commits){
+    const source=git(['show',commit+':app.js']);
+    if(source && hash(normalizeApp(source))===liveHash)return commit;
+  }
+  return '';
+}
+
 async function compatibleLive(){
   const live=await (await fetch(origin+'/?gallery-check='+Date.now(),{signal:AbortSignal.timeout(20000)})).text();
   const src=live.match(/<script[^>]+src=["']([^"']*app\.js[^"']*)["']/)?.[1];
   if(!src)throw Error('Cannot identify the deployed app. Nothing deployed.');
   const current=await (await fetch(new URL(src,origin),{signal:AbortSignal.timeout(20000)})).text();
-  const normalized=current.replace(/\?v=[A-Za-z0-9]+/g,'?v=DEV');
-  if(hash(normalized)===manifest.upstream.app)return {kind:'original'};
+  const normalized=normalizeApp(current);
+  if(hash(normalized)===manifest.upstream.app)return {kind:'original-current'};
+
+  // Known release markers from previous opt-in designs. Prism used baseAppSha256;
+  // later Gallery/Navy releases record upstream.app. Accept either only when the
+  // marker proves it was built from the exact reviewed base.
   for(const [file,kind] of [['design-gallery-release.json','gallery'],['release-manifest.json','prism'],['navy-release.json','navy']]){
     try{
       const r=await fetch(origin+'/'+file+'?gallery-check='+Date.now(),{signal:AbortSignal.timeout(12000)});if(!r.ok)continue;
-      const info=await r.json();if(info?.upstream?.app===manifest.upstream.app)return {kind,info};
+      const info=await r.json();
+      if(info?.upstream?.app===manifest.upstream.app || info?.baseAppSha256===currentBaseSha256)return {kind,info};
     }catch{}
   }
-  throw Error('The live app differs from Original/Prism/Navy/Gallery built from the reviewed base. Stop and reconcile before publishing.');
+
+  // Older production releases predate release-manifest.json. Rather than force
+  // past the guard, compare the actual live app.js against every app.js version
+  // in the ancestry of the checked-out main branch. A match proves the live app
+  // is an older repository version and this deployment is a forward update.
+  const ancestor=findAncestorAppMatch(current);
+  if(ancestor)return {kind:'original-history',commit:ancestor};
+
+  throw Error('The live app does not match the current reviewed base, a known design release, or any app.js version in this main-branch history. Nothing deployed.');
 }
-if(args.includes('--publish')){const c=await compatibleLive();console.log('Compatible current live release:',c.kind);}
+if(args.includes('--publish')){
+  const c=await compatibleLive();
+  console.log('Compatible current live release:',c.kind+(c.commit?' @ '+c.commit.slice(0,12):''));
+}
 const command=process.platform==='win32'?'npx.cmd':'npx';
 const firebase=['--yes','firebase-tools'];
 const releaseArgs=args.includes('--publish')?['deploy','--only','hosting']:['hosting:channel:deploy','design-gallery-review','--expires','7d'];
