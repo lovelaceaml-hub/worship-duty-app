@@ -1,0 +1,37 @@
+name: Opt-in live design integration
+on:
+  push:
+    branches: [feature/prism-opt-in-live]
+    paths: ['live-design/**', '.github/workflows/live-design-qa.yml']
+  pull_request:
+    paths: ['live-design/**', '.github/workflows/live-design-qa.yml']
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Test original live handlers with mocked Firebase
+        run: node live-design/test.mjs
+      - name: Package release candidate (never deploy)
+        if: always()
+        run: |
+          mkdir -p live-design-results/release-candidate live-design-results/source/live-design
+          if [ -d .hosting-live ]; then cp -r .hosting-live/. live-design-results/release-candidate/; fi
+          cp live-design/* live-design-results/source/live-design/
+          cp -r prototype prototype-prism live-design-results/source/
+          cp app.js song-app.js song-app.css song-lib.js song-seed.js seed-data.js index.html sw.js manifest.json icon.svg firebase-config.js firebase.json package.json package-lock.json live-design-results/source/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-design-integration-review
+          path: live-design-results/
+          retention-days: 7
