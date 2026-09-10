@@ -32,6 +32,23 @@ function findAncestorAppMatch(liveApp){
   return '';
 }
 
+async function matchesUnmarkedLegacyPrism(liveApp){
+  // The first Prism publisher intentionally excluded release-manifest.json from
+  // Hosting, so a valid Prism deployment may have no marker at all. Rebuild
+  // that exact legacy candidate from the reviewed source and compare generated
+  // app.js byte-for-byte after normalizing only the release stamp.
+  const build=spawnSync(process.execPath,[path.join(root,'live-design/build.mjs')],{
+    cwd:root,
+    encoding:'utf8',
+    env:{...process.env,RELEASE_STAMP:'LEGACYPRISMCHECK'}
+  });
+  if(build.status!==0)return false;
+  try{
+    const legacy=await fs.readFile(path.join(root,'.hosting-live','app.js'),'utf8');
+    return hash(normalizeApp(legacy))===hash(normalizeApp(liveApp));
+  }catch{return false;}
+}
+
 async function compatibleLive(){
   const live=await (await fetch(origin+'/?gallery-check='+Date.now(),{signal:AbortSignal.timeout(20000)})).text();
   const src=live.match(/<script[^>]+src=["']([^"']*app\.js[^"']*)["']/)?.[1];
@@ -51,14 +68,15 @@ async function compatibleLive(){
     }catch{}
   }
 
-  // Older production releases predate release-manifest.json. Rather than force
-  // past the guard, compare the actual live app.js against every app.js version
-  // in the ancestry of the checked-out main branch. A match proves the live app
-  // is an older repository version and this deployment is a forward update.
+  // Exact reconstruction of the earlier Prism Hosting candidate, for releases
+  // that were deployed before the marker was included in Hosting.
+  if(await matchesUnmarkedLegacyPrism(current))return {kind:'prism-unmarked-exact'};
+
+  // Older Original production releases can also predate release markers.
   const ancestor=findAncestorAppMatch(current);
   if(ancestor)return {kind:'original-history',commit:ancestor};
 
-  throw Error('The live app does not match the current reviewed base, a known design release, or any app.js version in this main-branch history. Nothing deployed.');
+  throw Error('The live app does not exactly match the current reviewed base, a known design release, the reconstructed legacy Prism release, or any app.js version in this main-branch history. Nothing deployed.');
 }
 if(args.includes('--publish')){
   const c=await compatibleLive();
