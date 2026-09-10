@@ -1,0 +1,61 @@
+name: Appearance gallery integration
+on:
+  push:
+    branches: [feature/design-gallery-opt-in]
+  pull_request:
+    paths:
+      - 'design-gallery/**'
+      - 'prototype/**'
+      - 'prototype-prism/**'
+      - '.github/workflows/design-gallery-qa.yml'
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Build four-choice live candidate
+        run: node design-gallery/build.mjs
+      - name: Apply live app correctness fixes
+        run: node design-gallery/app-fixes.mjs
+      - name: Verify choir-song date/service sync correction
+        run: |
+          grep -q "_sheetChoirSongSeen: false" .hosting-gallery/app.js
+          grep -q "svc._sheetChoirSongSeen = true" .hosting-gallery/app.js
+          grep -q "sheetSvc._sheetChoirSongSeen && existing.choirSong !== sheetSvc.choirSong" .hosting-gallery/app.js
+          ! grep -q "if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong)" .hosting-gallery/app.js
+      - name: Parse generated JavaScript
+        run: |
+          node --check .hosting-gallery/app.js
+          node --check .hosting-gallery/song-app.js
+          node --check .hosting-gallery/design-choice.js
+      - name: Verify production-only staging
+        run: |
+          test -f .hosting-gallery/design-gallery-release.json
+          test ! -e .hosting-gallery/firestore.rules
+          test ! -e .hosting-gallery/functions
+          test ! -e .hosting-gallery/design-gallery
+          test ! -e .hosting-gallery/prototype
+      - name: Exercise Original, Prism, Navy & Cream, and Aurora with mocked Firebase
+        run: node design-gallery/test.mjs
+      - name: Package review evidence
+        if: always()
+        run: |
+          mkdir -p design-gallery-review/source/design-gallery
+          if [ -d .hosting-gallery ]; then cp -r .hosting-gallery design-gallery-review/release-candidate; fi
+          if [ -d design-gallery-results ]; then cp -r design-gallery-results design-gallery-review/results; fi
+          cp design-gallery/* design-gallery-review/source/design-gallery/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: design-gallery-integration-review
+          path: design-gallery-review/
+          retention-days: 7
