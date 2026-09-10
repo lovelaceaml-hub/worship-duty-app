@@ -133,6 +133,16 @@ if (window.WorshipDesign) {
   let currentRoot=classicRoot;
   const classicNames={schedule:'Schedule',my:'My Duties',songs:'Presider',manage:'Manage'};
   const isAccessible=()=>__designSettingsReady&&(!feat('siteLock')||siteUnlocked());
+  let auroraCatalogLoading=null;
+  function ensureAuroraCatalog(){
+    if(window.SONG_SEED?.songs)return Promise.resolve();
+    if(auroraCatalogLoading)return auroraCatalogLoading;
+    const script=document.createElement('script');script.src='song-seed.js'+ASSET_V;
+    auroraCatalogLoading=loadTag(script).then(()=>{
+      if(!window.SONG_SEED?.songs)throw new Error('Aurora song catalog did not load.');
+    }).catch(err=>{auroraCatalogLoading=null;throw err;});
+    return auroraCatalogLoading;
+  }
 
   function fieldKey(el){return el.id||[el.tagName,el.name,JSON.stringify({...el.dataset})].join('|');}
   function saveFields(){const index=new Map();return [...parts.view.querySelectorAll('input:not([type=file]),textarea,select')].map(el=>{const key=fieldKey(el),n=index.get(key)||0;index.set(key,n+1);return {key,n,value:el.value,checked:el.checked};});}
@@ -173,6 +183,7 @@ if (window.WorshipDesign) {
         mount('prism');document.body.className=classicClass+' aurora prism';
         try{document.body.classList.toggle('dark',localStorage.getItem('wds-prism-palette')==='dark');document.body.classList.toggle('still',localStorage.getItem('wds-prism-motion')==='off');}catch{}
       } else if(next==='aurora'){
+        await ensureAuroraCatalog();
         mount('aurora');document.body.className=classicClass+' aurora';
         try{document.body.classList.toggle('dark',localStorage.getItem('wds-aurora-palette')==='dark');document.body.classList.toggle('still',localStorage.getItem('wds-aurora-motion')==='off');}catch{}
       } else {
