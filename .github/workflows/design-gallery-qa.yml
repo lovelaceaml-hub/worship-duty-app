@@ -36,6 +36,8 @@ jobs:
           test ! -e .hosting-gallery/functions
           test ! -e .hosting-gallery/design-gallery
           test ! -e .hosting-gallery/prototype
+      - name: Diagnose Aurora transition
+        run: node design-gallery/diagnose.mjs
       - name: Exercise Original, Prism, Navy & Cream, and Aurora with mocked Firebase
         run: node design-gallery/test.mjs
       - name: Package review evidence
