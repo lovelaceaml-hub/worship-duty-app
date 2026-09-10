@@ -1,0 +1,35 @@
+name: Prism prototype review
+on:
+  push:
+    branches: [prototype/prism-calendar]
+    paths: ['prototype-prism/**', '.github/workflows/prism-preview.yml']
+  pull_request:
+    paths: ['prototype-prism/**', '.github/workflows/prism-preview.yml']
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node prototype-prism/tests/preview.mjs
+      - name: Package the runnable app and source
+        if: always()
+        run: |
+          mkdir -p prism-preview-artifacts/source
+          cp -r prototype prototype-prism prism-preview-artifacts/source/
+          cp index.html app.js seed-data.js song-app.js song-app.css song-lib.js song-seed.js package.json package-lock.json prism-preview-artifacts/source/
+          if [ -f prototype-prism/dist/index.html ]; then cp prototype-prism/dist/index.html prism-preview-artifacts/LV_Zion_Prism_Prototype.html; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prism-prototype-review
+          path: prism-preview-artifacts/
+          retention-days: 7
