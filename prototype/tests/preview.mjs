@@ -90,9 +90,11 @@ try {
  for(const name of ['planning','people','features','data']){await sub(name);check(`Manage ${name} screen renders`,await page.locator('#view').innerText().then(s=>s.length>120));}
  await sub('features');
  check('Online sheet sync disabled in prototype',await page.locator('[data-chg="feature"][data-id="sheetSync"]').isDisabled());
- await page.locator('[data-chg="feature"][data-id="songPicker"]').uncheck();
+ // The original switches visually hide their input. Click the visible label,
+ // exactly as a member does, rather than forcing a hidden checkbox click.
+ await page.locator('[data-chg="feature"][data-id="songPicker"]').locator('..').click();
  check('Song picker feature gate',await page.locator('#tab-presider').isHidden());
- await page.locator('[data-chg="feature"][data-id="songPicker"]').check();
+ await page.locator('[data-chg="feature"][data-id="songPicker"]').locator('..').click();
  await nav('my');
  await page.locator('[data-act="open-songs"]').first().click();
  await page.waitForSelector('#song-root [data-song-act="quick-add"]');
