@@ -12,10 +12,11 @@ const replaceOnce = (text, needle, replacement, label) => {
   if (text.split(needle).length !== 2) throw new Error(`Prototype adapter drift: ${label}`);
   return text.replace(needle, replacement);
 };
-const [shell, css, adapter, originalHTML, hostSource, songSource, seed, songSeed, songLib, songCSS] = await Promise.all([
+const [shell, css, adapter, originalHTML, hostSource, songSource, seed, songSeed, songLib, songCSS, workspaceCSS, workspaceJS, presiderJS] = await Promise.all([
   read('prototype/shell.html'), read('prototype/aurora.css'), read('prototype/aurora.js'),
   read('index.html'), read('app.js'), read('song-app.js'), read('seed-data.js'),
-  read('song-seed.js'), read('song-lib.js'), read('song-app.css')
+  read('song-seed.js'), read('song-lib.js'), read('song-app.css'),
+  read('prototype/workspaces.css'), read('prototype/workspaces.js'), read('prototype/presider-workspace.js')
 ]);
 const baseCSS = originalHTML.match(/<style>([\s\S]*?)<\/style>/)?.[1];
 if (!baseCSS) throw new Error('Prototype adapter drift: original stylesheet missing');
@@ -24,7 +25,7 @@ let host = replaceOnce(hostSource,
   '/* Review sandbox: never register the production service worker. */', 'service worker');
 host = replaceOnce(host, 'songAppLoading = loadSongAssets()', 'songAppLoading = Promise.resolve()', 'lazy assets');
 host = replaceOnce(host, ".then(() => import('./song-app.js' + ASSET_V))", '.then(() => window.AuroraSongModule)', 'song import');
-host = replaceOnce(host, '\ninit();', '\n' + adapter + '\ninit();', 'initialization');
+host = replaceOnce(host, '\ninit();', '\n' + adapter + '\n' + workspaceJS + '\ninit();', 'initialization');
 let songs = replaceOnce(songSource, 'export function mount(rootEl, context)', 'function mount(rootEl, context)', 'song export');
 songs = replaceOnce(songs, '  ctx = context || {};',
   '  ctx = context || {};\n  state.schedule = ctx.previewSchedule || [];', 'local schedule bridge');
@@ -50,10 +51,10 @@ window.Aurora = (() => {
 `;
 const script = text => '<script>\n' + text.replace(/<\/script/gi, '<\\/script') + '\n</script>';
 const scripts = [boot,seed,songSeed,songLib,
-  '(function(){ const localStorage=window.Aurora.storage; const Date=window.Aurora.Clock;\n'+songs+'\nwindow.AuroraSongModule={mount};\n})();',
+  '(function(){ const localStorage=window.Aurora.storage; const Date=window.Aurora.Clock;\n'+songs+'\n'+presiderJS+'\nwindow.AuroraSongModule={mount};\n})();',
   '(function(){ const localStorage=window.Aurora.storage; const Date=window.Aurora.Clock;\n'+host+'\n})();'
 ].map(script).join('\n');
-const result = shell.replace('<!-- STYLES -->', '<style>\n'+baseCSS+'\n'+songCSS+'\n'+css+'\n</style>').replace('<!-- RUNTIME -->', scripts);
+const result = shell.replace('<!-- STYLES -->', '<style>\n'+baseCSS+'\n'+songCSS+'\n'+css+'\n'+workspaceCSS+'\n</style>').replace('<!-- RUNTIME -->', scripts);
 const out = path.join(here, 'dist');
 await fs.mkdir(out, {recursive:true});
 await fs.writeFile(path.join(out, 'index.html'), result);
