@@ -21,6 +21,18 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Inspect current published schedule choir rows
+        run: |
+          python - <<'PY'
+          import csv, io, urllib.request
+          url='https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv'
+          text=urllib.request.urlopen(url, timeout=20).read().decode('utf-8-sig')
+          rows=list(csv.reader(io.StringIO(text)))
+          print('HEADER', rows[0])
+          for row in rows[1:]:
+              if any('choir' in str(cell).lower() for cell in row):
+                  print('CHOIR_ROW', row)
+          PY
       - run: npx playwright install --with-deps chromium
       - name: Build four-choice live candidate
         run: node design-gallery/build.mjs
