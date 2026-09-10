@@ -1,9 +1,13 @@
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {manifest,root,dest,hash} from './build.mjs';
+import {applyStagedAppFixes} from './app-fixes.mjs';
+
+await applyStagedAppFixes(dest);
+
 const args=process.argv.slice(2),allowed=new Set(['--publish','--preview']);
 if(args.some(a=>!allowed.has(a))||args.length>1)throw Error('Use no argument to build, --preview for a temporary Firebase channel, or --publish for the existing live site.');
-if(!args.length){console.log('Not deployed. Re-run with --preview or --publish from an authenticated Firebase environment.');process.exit(0);}
+if(!args.length){console.log('Built with choir date/service sync fix. Not deployed. Re-run with --preview or --publish from an authenticated Firebase environment.');process.exit(0);}
 const origin='https://lv-zion-duties.web.app';
 async function compatibleLive(){
   const live=await (await fetch(origin+'/?gallery-check='+Date.now(),{signal:AbortSignal.timeout(20000)})).text();
