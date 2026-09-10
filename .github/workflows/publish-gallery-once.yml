@@ -1,0 +1,67 @@
+name: Publish appearance gallery to Firebase live
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-gallery-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      FIREBASE_SERVICE_ACCOUNT_LV_ZION_DUTIES: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LV_ZION_DUTIES }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Configure Firebase credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${FIREBASE_SERVICE_ACCOUNT_LV_ZION_DUTIES:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_LV_ZION_DUTIES" > "$RUNNER_TEMP/firebase-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+            echo "Using Firebase project service-account credential."
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+            echo "Using Firebase service-account credential."
+          elif [ -n "${GOOGLE_CREDENTIALS:-}" ]; then
+            printf '%s' "$GOOGLE_CREDENTIALS" > "$RUNNER_TEMP/firebase-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+            echo "Using Google service-account credential."
+          elif [ -n "${GCP_SA_KEY:-}" ]; then
+            printf '%s' "$GCP_SA_KEY" > "$RUNNER_TEMP/firebase-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+            echo "Using GCP service-account credential."
+          elif [ -n "${FIREBASE_TOKEN:-}" ]; then
+            echo "Using Firebase CI token."
+          else
+            echo "::error::No Firebase deployment credential is configured in this repository."
+            exit 1
+          fi
+
+      - name: Publish Original + Prism + Navy & Cream + Aurora
+        run: node design-gallery/release.mjs --publish
+
+      - name: Verify live release marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 4 --retry-delay 2 \
+            "https://lv-zion-duties.web.app/design-gallery-release.json?verify=$(date +%s)" \
+            -o /tmp/live-release.json
+          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/live-release.json','utf8')); if(x.design!=='appearance-gallery-v1') throw new Error('Live release marker is not the appearance gallery'); console.log('Verified live gallery release:',x.release);"
