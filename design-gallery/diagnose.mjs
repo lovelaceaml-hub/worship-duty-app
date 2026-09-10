@@ -1,0 +1,24 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import vm from 'node:vm';
+import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+import {chromium} from 'playwright';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const stage=path.join(root,'.hosting-gallery');
+const hash=b=>createHash('sha256').update(b).digest('hex');
+const seedScope={window:{}};vm.runInNewContext(await fs.readFile(path.join(root,'seed-data.js'),'utf8'),seedScope);
+const seed=JSON.parse(JSON.stringify(seedScope.window.SEED_DATA)),pin=hash(Buffer.from('2468'));
+const fixture={services:seed.services,holdSettings:true,docs:{'app/settings':{sitePinHash:pin,pinHash:pin,features:{siteLock:true,editorLock:true,sheetSync:false,notifications:false,reminders:false}},'app/members':{list:seed.members},'app/departments':{map:{Worship:seed.members,'Usher Sisters':seed.members,'Usher Brothers':seed.members}},'app/nameMap':{map:{'B. Anthony L':'B. Anthony'}},'app/presiders':{names:['B. Anthony']},'app/songSettings':{pinHash:pin}}};
+const assets=new Map(await Promise.all((await fs.readdir(stage)).map(async n=>[n,await fs.readFile(path.join(stage,n))]))),fsMock=await fs.readFile(path.join(root,'live-design/fixture-firestore.js'),'utf8');
+const browser=await chromium.launch(),origin='http://localhost:8134';
+const context=await browser.newContext({viewport:{width:390,height:850},serviceWorkers:'block',reducedMotion:'reduce',timezoneId:'America/Los_Angeles'});
+await context.addInitScript(f=>{window.__designFixture=f;localStorage.setItem('wds-me','B. Anthony L');},fixture);
+const consoleMessages=[];
+await context.route('**/*',async route=>{const url=new URL(route.request().url());if(url.origin===origin){const name=url.pathname.slice(1)||'index.html',data=assets.get(name);return data?route.fulfill({body:data,contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html':'application/json'}):route.fulfill({status:404,body:'not found'});}if(url.href.endsWith('/firebase-app.js'))return route.fulfill({body:'export const initializeApp=config=>(window.__apps=(window.__apps||0)+1,{config});',contentType:'text/javascript'});if(url.href.endsWith('/firebase-firestore.js'))return route.fulfill({body:fsMock,contentType:'text/javascript'});if(url.href.endsWith('/firebase-auth.js'))return route.fulfill({body:'export const getAuth=()=>({}); export const signInAnonymously=async()=>{window.__authCount=(window.__authCount||0)+1;};',contentType:'text/javascript'});if(url.href.endsWith('/firebase-messaging.js'))return route.fulfill({body:'export const isSupported=async()=>false;',contentType:'text/javascript'});return route.fulfill({status:503,body:'blocked'});});
+const page=await context.newPage();page.on('console',m=>{const line=m.type()+': '+m.text();consoleMessages.push(line);console.log('BROWSER',line);});page.on('pageerror',e=>console.log('PAGEERROR',String(e)));
+await page.clock.setSystemTime(new Date('2026-07-01T12:00:00-07:00'));await page.goto(origin);await page.waitForFunction(()=>!!window.__mockLive);await page.evaluate(()=>__mockLive.emit('app/settings',__designFixture.docs['app/settings']));await page.waitForTimeout(100);await page.locator('#site-pin-input').fill('2468');await page.locator('[data-act="site-unlock"] button').click();await page.waitForSelector('.wd-design-dialog[open]');await page.keyboard.press('Escape');
+async function pick(mode){await page.locator('[data-design-open]:visible').first().click();await page.locator(`[data-design-select="${mode}"]`).click();await page.waitForTimeout(900);console.log('STATE',mode,JSON.stringify(await page.evaluate(()=>({mode:WorshipDesign.getMode(),status:document.getElementById('wd-design-status')?.textContent,dialog:!!document.querySelector('.wd-design-dialog[open]'),auroraMedia:document.getElementById('wd-aurora-css')?.media,auroraRules:(()=>{try{return [...(document.getElementById('wd-aurora-css')?.sheet?.cssRules||[])].slice(-3).map(r=>r.selectorText||r.cssText.slice(0,50));}catch(e){return [String(e)]}})()}))));}
+await pick('prism');await pick('navy');await pick('aurora');
+console.log('FINAL CONSOLE',JSON.stringify(consoleMessages));
+await context.close();await browser.close();
