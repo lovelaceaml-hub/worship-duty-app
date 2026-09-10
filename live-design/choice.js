@@ -23,13 +23,16 @@
   function themeReady() {
     const link = document.getElementById('wd-prism-css');
     if (!link) return Promise.reject(Error('New design stylesheet is missing.'));
-    if (link.sheet) return Promise.resolve();
+    // Browsers can expose an empty StyleSheet even after an HTTP error.
+    // Confirm a real Prism layout rule parsed before leaving the current UI.
+    const valid=()=>{try{return [...(link.sheet?.cssRules||[])].some(r=>r.selectorText?.split(',').some(s=>s.trim()==='.prism-calendar-column'));}catch{return false;}};
+    if (valid()) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const done = ok => { clearTimeout(timer); link.removeEventListener('load', yes); link.removeEventListener('error', no); ok ? resolve() : reject(Error('New design could not be loaded.')); };
-      const yes = () => done(true), no = () => done(false);
+      const yes = () => done(valid()), no = () => done(false);
       const timer = setTimeout(no, 7000);
       link.addEventListener('load', yes, {once:true}); link.addEventListener('error', no, {once:true});
-      if (link.sheet) done(true);
+      if (valid()) done(true);
     });
   }
   async function change(next, remember = true) {
