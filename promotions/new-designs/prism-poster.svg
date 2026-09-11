@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Prism promotional poster for Worship Duties</title>
+  <desc id="desc">Calendar-first Prism design promotional artwork in blue, white, and soft lavender.</desc>
+  <defs>
+    <linearGradient id="prismBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8f9fd"/>
+      <stop offset="1" stop-color="#eef3ff"/>
+    </linearGradient>
+    <linearGradient id="prismAccent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3153ed"/>
+      <stop offset="1" stop-color="#6374f4"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#172544" flood-opacity=".13"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#prismBg)"/>
+  <circle cx="1450" cy="45" r="255" fill="#3153ed" opacity=".045"/>
+  <circle cx="1430" cy="110" r="170" fill="none" stroke="#3153ed" stroke-opacity=".09" stroke-width="2"/>
+  <circle cx="230" cy="840" r="180" fill="#b1e3ea" opacity=".14" filter="url(#soft)"/>
+
+  <g font-family="Inter, Avenir Next, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <g transform="translate(92 72)">
+      <rect width="52" height="52" rx="26" fill="#3153ed"/>
+      <text x="26" y="33" text-anchor="middle" font-size="18" font-weight="800" fill="#fff">LV</text>
+      <circle cx="48" cy="48" r="8" fill="#b1e3ea" stroke="#fff" stroke-width="4"/>
+      <text x="72" y="22" font-size="14" font-weight="800" letter-spacing="2.2" fill="#172544">LV ZION</text>
+      <text x="72" y="42" font-size="10" font-weight="650" letter-spacing="2.3" fill="#596780">WORSHIP DUTIES</text>
+    </g>
+
+    <g transform="translate(92 235)">
+      <rect width="150" height="34" rx="17" fill="#e3e9ff"/>
+      <text x="75" y="22" text-anchor="middle" font-size="11" font-weight="800" letter-spacing="1.8" fill="#3153ed">NEW APPEARANCE</text>
+      <text x="0" y="111" font-size="94" font-weight="760" letter-spacing="-5" fill="#172544">PRISM</text>
+      <text x="0" y="166" font-size="32" font-weight="650" fill="#3153ed">See the month.</text>
+      <text x="0" y="207" font-size="32" font-weight="650" fill="#172544">Focus the service.</text>
+      <text x="0" y="264" font-size="18" font-weight="450" fill="#596780">A crisp, calendar-first workspace built</text>
+      <text x="0" y="293" font-size="18" font-weight="450" fill="#596780">for quick scanning and clear service details.</text>
+
+      <g transform="translate(0 348)">
+        <rect width="262" height="56" rx="14" fill="url(#prismAccent)"/>
+        <text x="24" y="35" font-size="15" font-weight="750" fill="#fff">Appearance  →  Prism</text>
+      </g>
+      <text x="0" y="443" font-size="13" font-weight="700" letter-spacing="1.1" fill="#596780">SAME SCHEDULE · SAME DUTIES · SWITCH ANYTIME</text>
+    </g>
+
+    <g transform="translate(700 130)" filter="url(#shadow)">
+      <rect width="790" height="640" rx="30" fill="#ffffff" stroke="#dfe5f1"/>
+      <rect width="790" height="82" rx="30" fill="#ffffff"/>
+      <path d="M0 82H790" stroke="#e3e8f1"/>
+
+      <g transform="translate(28 22)">
+        <circle cx="19" cy="19" r="19" fill="#3153ed"/>
+        <text x="19" y="24" text-anchor="middle" font-size="11" font-weight="800" fill="#fff">LV</text>
+        <text x="53" y="16" font-size="10" font-weight="800" letter-spacing="1.4" fill="#172544">WORSHIP DUTIES</text>
+        <text x="53" y="31" font-size="7" font-weight="650" letter-spacing="1.3" fill="#6b7890">PRISM WORKSPACE</text>
+      </g>
+
+      <g transform="translate(290 21)">
+        <rect width="286" height="42" rx="21" fill="#f3f5fb"/>
+        <rect x="5" y="5" width="68" height="32" rx="16" fill="#3153ed"/>
+        <text x="39" y="26" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">Schedule</text>
+        <text x="109" y="26" text-anchor="middle" font-size="8" font-weight="650" fill="#596780">My Duties</text>
+        <text x="176" y="26" text-anchor="middle" font-size="8" font-weight="650" fill="#596780">Presider</text>
+        <text x="244" y="26" text-anchor="middle" font-size="8" font-weight="650" fill="#596780">Manage</text>
+      </g>
+
+      <text x="34" y="130" font-size="11" font-weight="800" letter-spacing="1.7" fill="#3153ed">SCHEDULE</text>
+      <text x="34" y="171" font-size="35" font-weight="700" letter-spacing="-1.4" fill="#172544">September 2026</text>
+      <text x="34" y="197" font-size="11" fill="#596780">Plan the month. Inspect each service without losing context.</text>
+
+      <g transform="translate(34 232)">
+        <rect width="500" height="350" rx="18" fill="#fff" stroke="#e3e8f1"/>
+        <text x="22" y="34" font-size="15" font-weight="700" fill="#172544">Month view</text>
+        <g transform="translate(18 54)" font-size="8" font-weight="700" fill="#748097">
+          <text x="20" y="12">SUN</text><text x="87" y="12">MON</text><text x="154" y="12">TUE</text><text x="221" y="12">WED</text><text x="288" y="12">THU</text><text x="355" y="12">FRI</text><text x="422" y="12">SAT</text>
+        </g>
+        <g transform="translate(16 77)">
+          <rect width="468" height="255" rx="10" fill="#fbfcff"/>
+          <g stroke="#edf0f6" stroke-width="1">
+            <path d="M67 0V255M134 0V255M201 0V255M268 0V255M335 0V255M402 0V255"/>
+            <path d="M0 64H468M0 128H468M0 192H468"/>
+          </g>
+          <rect x="201" y="64" width="67" height="64" fill="#3153ed"/>
+          <g font-size="9" font-weight="650" fill="#5d6a83">
+            <text x="11" y="18">30</text><text x="78" y="18">31</text><text x="145" y="18">1</text><text x="212" y="18">2</text><text x="279" y="18">3</text><text x="346" y="18">4</text><text x="413" y="18">5</text>
+            <text x="11" y="82">6</text><text x="78" y="82">7</text><text x="145" y="82">8</text><text x="212" y="82" fill="#fff">9</text><text x="279" y="82">10</text><text x="346" y="82">11</text><text x="413" y="82">12</text>
+            <text x="11" y="146">13</text><text x="78" y="146">14</text><text x="145" y="146">15</text><text x="212" y="146">16</text><text x="279" y="146">17</text><text x="346" y="146">18</text><text x="413" y="146">19</text>
+            <text x="11" y="210">20</text><text x="78" y="210">21</text><text x="145" y="210">22</text><text x="212" y="210">23</text><text x="279" y="210">24</text><text x="346" y="210">25</text><text x="413" y="210">26</text>
+          </g>
+          <g fill="#dbe5ff">
+            <rect x="143" y="94" width="44" height="9" rx="4"/><rect x="277" y="94" width="44" height="9" rx="4"/><rect x="344" y="158" width="44" height="9" rx="4"/>
+          </g>
+          <rect x="210" y="95" width="47" height="9" rx="4" fill="#ffffff" opacity=".45"/>
+        </g>
+      </g>
+
+      <g transform="translate(554 232)">
+        <rect width="202" height="350" rx="18" fill="#ffffff" stroke="#e3e8f1"/>
+        <rect width="202" height="90" rx="18" fill="#eff3ff"/>
+        <text x="18" y="27" font-size="8" font-weight="800" letter-spacing="1.3" fill="#596f95">SELECTED SERVICE</text>
+        <text x="18" y="55" font-size="22" font-weight="700" fill="#26385d">Wed 9</text>
+        <text x="18" y="73" font-size="9" fill="#64728c">Evening worship</text>
+        <circle cx="171" cy="43" r="21" fill="#3153ed" opacity=".09"/>
+        <text x="171" y="49" text-anchor="middle" font-size="17" font-weight="700" fill="#3153ed">9</text>
+
+        <g transform="translate(16 111)">
+          <rect width="170" height="43" rx="10" fill="#3153ed"/>
+          <text x="85" y="27" text-anchor="middle" font-size="9" font-weight="750" fill="#fff">7:30 PM · SELECTED</text>
+          <text x="0" y="79" font-size="9" font-weight="800" letter-spacing="1.1" fill="#596780">YOUR TEAM</text>
+          <g transform="translate(0 94)" font-size="9" fill="#172544">
+            <text y="0">Presider</text><text x="167" y="0" text-anchor="end" font-weight="700">James</text>
+            <path d="M0 13H170" stroke="#edf0f6"/>
+            <text y="36">Prayers</text><text x="167" y="36" text-anchor="end" font-weight="700">Anthony</text>
+            <path d="M0 49H170" stroke="#edf0f6"/>
+            <text y="72">Usher</text><text x="167" y="72" text-anchor="end" font-weight="700">Gabriel</text>
+            <path d="M0 85H170" stroke="#edf0f6"/>
+            <text y="108">Audio</text><text x="167" y="108" text-anchor="end" font-weight="700">Joshua</text>
+          </g>
+        </g>
+      </g>
+
+      <g transform="translate(34 602)">
+        <rect width="722" height="1" fill="#edf0f6"/>
+        <text x="0" y="23" font-size="8" font-weight="750" letter-spacing="1.2" fill="#3153ed">CALENDAR-FIRST CLARITY</text>
+        <text x="722" y="23" text-anchor="end" font-size="8" font-weight="650" letter-spacing="1.1" fill="#7a869d">ONE APP · ONE LIVE SCHEDULE</text>
+      </g>
+    </g>
+  </g>
+</svg>
