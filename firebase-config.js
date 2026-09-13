@@ -18,3 +18,12 @@ window.FCM_VAPID_KEY = 'BNzc9Ma8hhqLex7180RU36gu1-oowMsHQazkDX1oAjgQp99fe9rOURrU
 // to ship. Leave '' to keep App Check off (the app still works). Do NOT enable
 // Firestore App Check *enforcement* in the console until the song app ships it too.
 window.RECAPTCHA_SITE_KEY = '';
+
+// Load the member identity cleanup + department-leader Manage policy after the
+// main app has initialized. The fixed release query prevents older cached
+// browsers from missing this newly added module.
+window.addEventListener('load', () => {
+  import('./member-access.js?v=20260913a').catch(error => {
+    console.warn('Member access module failed to load:', error);
+  });
+}, { once: true });
