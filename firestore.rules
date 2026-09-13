@@ -1,30 +1,347 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Worship-duty app collections: reads stay open (schedule/roster are shared
-    // and the .ics feed reads them), but writes now require an authenticated
-    // session. The app signs in anonymously on load (invisible to members), so
-    // this blocks anonymous internet scripts from wiping/tampering the data
-    // without adding any login. DEPLOY ORDER: enable Anonymous auth + ship the
-    // signing-in client BEFORE deploying these rules, or writes will fail.
-    match /schedule/{doc} { allow read: if true; allow write: if request.auth != null; }
-    // Worship app owns app/* (settings, members, departments, nameMap); the song
-    // app only *reads* app/nameMap, so gating writes here does not affect it.
-    match /app/{doc}      { allow read: if true; allow write: if request.auth != null; }
-    match /tokens/{token} { allow read: if true; allow write: if request.auth != null; }
-    match /requests/{doc} { allow read: if true; allow write: if request.auth != null; }
-    // Song-planner collections. The song UI now lives inside this app (the old
-    // stand-alone new-song-app was merged in), but these MUST stay open:
-    // song-ingest (the Signal daemon) writes to them over unauthenticated REST
-    // with only an API key. Tightening to request.auth != null would break it —
-    // future work is giving ingest an auth token first.
-    match /songStats/{doc} { allow read, write: if true; }
-    match /setlists/{doc} { allow read, write: if true; }
-    // 'sent' markers are functions-only (Admin SDK bypasses these rules):
-    match /sent/{doc} { allow read, write: if false; }
-    // Usage counters — one doc per day holding plain integers (see pulse() in
-    // app.js). No device ids, no names, no free text, so there is nothing here
-    // to leak. Writes follow the same signed-in-anonymously rule as the rest.
-    match /pulse/{day} { allow read: if true; allow write: if request.auth != null; }
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function claimBool(name) {
+      return signedIn() && request.auth.token.keys().hasAny([name]) &&
+        request.auth.token[name] == true;
+    }
+
+    function claimRole(role) {
+      return signedIn() && request.auth.token.keys().hasAny(['role']) &&
+        request.auth.token.role == role;
+    }
+
+    function claimListHas(name, value) {
+      return signedIn() && request.auth.token.keys().hasAny([name]) &&
+        value in request.auth.token[name];
+    }
+
+    function hasAccount() {
+      return signedIn() && exists(
+        /databases/$(database)/documents/accounts/$(request.auth.uid)
+      );
+    }
+
+    function accountData() {
+      return get(
+        /databases/$(database)/documents/accounts/$(request.auth.uid)
+      ).data;
+    }
+
+    function accountActive() {
+      return hasAccount() && accountData().keys().hasAny(['active']) &&
+        accountData().active == true;
+    }
+
+    function accountRole(role) {
+      return accountActive() && accountData().keys().hasAny(['role']) &&
+        accountData().role == role;
+    }
+
+    function accountListHas(name, value) {
+      return accountActive() && accountData().keys().hasAny([name]) &&
+        value in accountData()[name];
+    }
+
+    function accountBool(name) {
+      return accountActive() && accountData().keys().hasAny([name]) &&
+        accountData()[name] == true;
+    }
+
+    function isCoordinator() {
+      return signedIn() && (
+        claimBool('admin') || claimBool('coordinator') ||
+        claimRole('admin') || claimRole('coordinator') || claimRole('scheduler') ||
+        accountRole('admin') || accountRole('coordinator') || accountRole('scheduler') ||
+        claimListHas('permissions', 'schedule.manage') ||
+        accountListHas('permissions', 'schedule.manage')
+      );
+    }
+
+    function isMember() {
+      return accountActive() || claimBool('member') || claimRole('member') ||
+        claimListHas('roles', 'member') || isCoordinator() ||
+        (signedIn() && request.auth.token.keys().hasAny([
+          'memberId', 'memberName', 'departments', 'departmentIds'
+        ]));
+    }
+
+    function isDepartmentLeader(department) {
+      return isCoordinator() ||
+        claimListHas('departments', department) ||
+        claimListHas('departmentIds', department) ||
+        accountListHas('departments', department) ||
+        accountListHas('departmentIds', department);
+    }
+
+    function assignmentPermission() {
+      return claimBool('assignmentEditor') || claimBool('departmentAssignmentEditor') ||
+        claimListHas('permissions', 'schedule.assign') ||
+        accountBool('assignmentEditor') ||
+        accountListHas('permissions', 'schedule.assign');
+    }
+
+    function documentDepartment(data) {
+      return data.keys().hasAny(['departmentId']) ? data.departmentId :
+        (data.keys().hasAny(['department']) ? data.department : '');
+    }
+
+    function canEditDepartmentDocument(data) {
+      return isMember() && (
+        isDepartmentLeader(documentDepartment(data)) || assignmentPermission()
+      );
+    }
+
+    function canEditAssignments(before, after) {
+      return isMember() && (
+        isCoordinator() || canEditDepartmentDocument(before) ||
+        canEditDepartmentDocument(after) || assignmentPermission()
+      );
+    }
+
+    function secretFieldsAbsent(data) {
+      return !data.keys().hasAny([
+        'pin', 'pinHash', 'sitePinHash', 'editorPinHash', 'passwordHash',
+        'passcode', 'passcodeHash', 'hash'
+      ]);
+    }
+
+    function callerMemberId() {
+      return request.auth.token.keys().hasAny(['memberId'])
+        ? request.auth.token.memberId : '';
+    }
+
+    function callerMemberName() {
+      return request.auth.token.keys().hasAny(['memberName'])
+        ? request.auth.token.memberName : '';
+    }
+
+    function accountMemberId() {
+      return accountData().keys().hasAny(['memberId'])
+        ? accountData().memberId : '';
+    }
+
+    function accountMemberName() {
+      return accountData().keys().hasAny(['memberName'])
+        ? accountData().memberName : '';
+    }
+
+    function belongsToCaller(data) {
+      return signedIn() && (
+        (data.keys().hasAny(['uid']) && data.uid == request.auth.uid) ||
+        (data.keys().hasAny(['ownerUid']) && data.ownerUid == request.auth.uid) ||
+        (data.keys().hasAny(['memberUid']) && data.memberUid == request.auth.uid) ||
+        (data.keys().hasAny(['memberId']) && callerMemberId() != '' &&
+          data.memberId == callerMemberId()) ||
+        (data.keys().hasAny(['name']) && callerMemberName() != '' &&
+          data.name == callerMemberName()) ||
+        (hasAccount() && data.keys().hasAny(['memberId']) &&
+          data.memberId == accountMemberId()) ||
+        (hasAccount() && data.keys().hasAny(['name']) &&
+          data.name == accountMemberName())
+      );
+    }
+
+    function requestIsOwned(data) {
+      return belongsToCaller(data) ||
+        (data.keys().hasAny(['requesterUid']) &&
+          data.requesterUid == request.auth.uid) ||
+        (data.keys().hasAny(['createdBy']) &&
+          data.createdBy == request.auth.uid);
+    }
+
+    function tokenBelongsToCaller(data) {
+      return belongsToCaller(data) ||
+        (data.keys().hasAny(['tokenOwnerUid']) &&
+          data.tokenOwnerUid == request.auth.uid);
+    }
+
+    function scheduleStructuralChange() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'date', 'time', 'service', 'worship', 'choirSong', 'status', 'source',
+        'scheduleType', 'kind', 'scope', 'departmentId', 'department',
+        'updatedAt', 'updatedBy'
+      ]);
+    }
+
+    function scheduleAssignmentChange() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'assignments', 'conflictOk', 'departmentId', 'department', 'scope',
+        'scheduleType', 'kind', 'updatedAt', 'updatedBy'
+      ]);
+    }
+
+    function scheduleIsDepartmentScoped(data) {
+      return (data.keys().hasAny(['scope']) && data.scope == 'department') ||
+        (data.keys().hasAny(['scheduleType']) && data.scheduleType == 'department') ||
+        (data.keys().hasAny(['kind']) && data.kind == 'department') ||
+        data.keys().hasAny(['departmentId', 'department']);
+    }
+
+    function scheduleIsStructural(data) {
+      return !scheduleIsDepartmentScoped(data) ||
+        (data.keys().hasAny(['scope']) && data.scope == 'structural') ||
+        (data.keys().hasAny(['scheduleType']) && data.scheduleType == 'structural') ||
+        (data.keys().hasAny(['kind']) && data.kind == 'structural');
+    }
+
+    function canCreateStructuralSchedule() {
+      return isCoordinator() && scheduleIsStructural(request.resource.data);
+    }
+
+    function canUpdateSchedule() {
+      return (isCoordinator() && scheduleStructuralChange()) ||
+        (scheduleAssignmentChange() && canEditAssignments(resource.data, request.resource.data));
+    }
+
+    function canReadMemberDocument(data) {
+      return isMember() && secretFieldsAbsent(data);
+    }
+
+    // The shared service schedule remains public for the congregation and the
+    // existing calendar feed. Writes split structural edits from assignments.
+    match /schedule/{scheduleId} {
+      allow read: if true;
+      allow create: if canCreateStructuralSchedule();
+      allow update: if canUpdateSchedule();
+      allow delete: if isCoordinator();
+    }
+
+    // These explicit paths support department-scoped schedules without making
+    // a department leader a global schedule editor.
+    match /departmentSchedules/{scheduleId} {
+      allow read: if isMember();
+      allow create, update: if canEditDepartmentDocument(request.resource.data);
+      allow delete: if canEditDepartmentDocument(resource.data);
+    }
+
+    match /departmentAssignments/{assignmentId} {
+      allow read: if isMember();
+      allow create, update: if canEditDepartmentDocument(request.resource.data);
+      allow delete: if canEditDepartmentDocument(resource.data);
+    }
+
+    match /app/config {
+      allow read: if isMember() && secretFieldsAbsent(resource.data);
+      allow write: if isCoordinator();
+    }
+
+    match /app/members {
+      allow read: if isMember();
+      allow write: if isCoordinator();
+    }
+
+    match /app/membership/{memberId} {
+      allow read: if isCoordinator() ||
+        (isMember() && callerMemberId() == memberId);
+      allow write: if isCoordinator();
+    }
+
+    match /app/departments {
+      allow read: if isMember();
+      allow write: if isCoordinator();
+    }
+
+    match /app/nameMap {
+      allow read: if isMember();
+      allow write: if isCoordinator();
+    }
+
+    match /app/presiders {
+      allow read: if isMember();
+      allow write: if isCoordinator();
+    }
+
+    // PIN and hash documents are never directly readable. Callable auth or
+    // Admin SDK code must handle verification without exposing these fields.
+    match /app/settings {
+      allow read: if false;
+      allow write: if isCoordinator();
+    }
+
+    match /app/songSettings {
+      allow read: if false;
+      allow write: if isCoordinator();
+    }
+
+    match /app/{appDocument} {
+      allow read: if appDocument != 'settings' &&
+        appDocument != 'songSettings' && canReadMemberDocument(resource.data);
+      allow write: if appDocument != 'settings' &&
+        appDocument != 'songSettings' && isCoordinator();
+    }
+
+    match /accounts/{accountUid} {
+      allow read: if (request.auth != null && request.auth.uid == accountUid ||
+        isCoordinator()) && secretFieldsAbsent(resource.data);
+      allow create, update, delete: if isCoordinator();
+    }
+
+    match /memberships/{membershipId} {
+      allow read: if isCoordinator() ||
+        (isMember() && belongsToCaller(resource.data));
+      allow write: if isCoordinator();
+    }
+
+    match /requests/{requestId} {
+      allow read: if isCoordinator() ||
+        (isMember() && requestIsOwned(resource.data));
+      allow create: if isMember() && requestIsOwned(request.resource.data) &&
+        request.resource.data.status == 'pending';
+      allow update: if isCoordinator() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'resolvedAt', 'resolvedBy', 'updatedAt', 'note'
+        ]);
+      allow delete: if isCoordinator();
+    }
+
+    match /conflicts/{conflictId} {
+      allow read: if isMember();
+      allow create, update: if isMember() &&
+        (isCoordinator() || canEditDepartmentDocument(request.resource.data));
+      allow delete: if isCoordinator();
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isCoordinator() ||
+        (isMember() && belongsToCaller(resource.data));
+      allow create: if isCoordinator();
+      allow update, delete: if isCoordinator();
+    }
+
+    match /tokens/{tokenId} {
+      allow read: if isCoordinator() ||
+        (isMember() && tokenBelongsToCaller(resource.data));
+      allow create, update: if isMember() &&
+        tokenBelongsToCaller(request.resource.data);
+      allow delete: if isMember() && tokenBelongsToCaller(resource.data);
+    }
+
+    match /audit/{auditId} {
+      allow read: if isCoordinator() && secretFieldsAbsent(resource.data);
+      allow create: if isCoordinator() &&
+        secretFieldsAbsent(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // Anonymous song-ingest and the embedded song picker depend on these
+    // legacy shared collections remaining open until ingest gets credentials.
+    match /songStats/{songId} { allow read, write: if true; }
+    match /setlists/{setlistId} { allow read, write: if true; }
+
+    // The daily counter has no member data, but writes still require auth.
+    match /pulse/{day} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    match /sent/{markerId} { allow read, write: if false; }
+
+    // New collections are denied until they receive an explicit boundary.
+    match /{document=**} { allow read, write: if false; }
   }
 }
