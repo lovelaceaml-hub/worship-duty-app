@@ -122,7 +122,10 @@ async function ensureSignedIn(app) {
 async function commitWrites(fsMod, db, writes) {
   for (let i = 0; i < writes.length; i += 400) {
     const batch = fsMod.writeBatch(db);
-    writes.slice(i, i + 400).forEach(write => batch.set(write.ref, write.data, write.options || {}));
+    writes.slice(i, i + 400).forEach(write => {
+      if (write.options) batch.set(write.ref, write.data, write.options);
+      else batch.set(write.ref, write.data);
+    });
     await batch.commit();
   }
 }
@@ -458,7 +461,7 @@ async function start() {
       cleanMemberIdentities(app, db, fsMod, false).catch(error => {
         console.warn('Background member cleanup skipped:', error);
       });
-    }, 1200);
+    }, 5000);
   }
 }
 
