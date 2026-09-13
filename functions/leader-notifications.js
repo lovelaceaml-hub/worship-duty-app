@@ -395,11 +395,15 @@ function recordsFromDepartmentMap(departmentMap, role) {
       if (!name) continue;
       const current = records.get(name) || { name, role, departments: [] };
       const mappedDepartments = uniqueStrings([...current.departments, department]);
+      const existingOptIn = explicitPushOptIn(current);
+      const incomingOptIn = explicitPushOptIn(person);
       if (person && typeof person === 'object') Object.assign(current, person);
       current.departments = uniqueStrings([
         ...mappedDepartments,
         ...(person && typeof person === 'object' ? recordDepartments(person) : [])
       ]);
+      const optInValues = [existingOptIn, incomingOptIn].filter(value => value != null);
+      if (optInValues.length) current.pushOptIn = optInValues.every(Boolean);
       records.set(name, current);
     }
   }
