@@ -22,7 +22,7 @@ if(scripts.split('function handleAct(act, el) {').length!==3)throw Error('Prism 
 scripts=scripts.replaceAll('function handleAct(act, el) {','async function handleAct(act, el) {');
 for(const [needle,replacement] of [
   ["if (svc && confirm('Delete \"'","if (svc && await window.PrismUI.confirm('Delete \"'"],
-  ["if (confirm('Remove ' + name","if (await window.PrismUI.confirm('Remove ' + name"],
+  ["if (confirm(question))","if (await window.PrismUI.confirm(question))"],
   ["if (confirm('Replace ALL current data","if (await window.PrismUI.confirm('Replace ALL current data"],
   ["if (!confirm('Merge leftover name variants","if (!await window.PrismUI.confirm('Merge leftover name variants"]
 ])scripts=replaceOnce(scripts,needle,replacement);

@@ -30,7 +30,7 @@ jobs:
         run: |
           grep -q "_sheetChoirSongSeen: false" .hosting-gallery/app.js
           grep -q "svc._sheetChoirSongSeen = true" .hosting-gallery/app.js
-          grep -q "sheetSvc._sheetChoirSongSeen && existing.choirSong !== sheetSvc.choirSong" .hosting-gallery/app.js
+          grep -q "const choirSongSeen = sheetSvc._sheetChoirSongSeen === true" .hosting-gallery/app.js
           ! grep -q "if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong)" .hosting-gallery/app.js
       - name: Parse generated JavaScript
         run: |

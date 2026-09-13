@@ -56,7 +56,19 @@ async function make({galleryPref=null,legacyPrism=null,legacyNavy=null}={}){
     }
     if(url.href.endsWith('/firebase-app.js')){await route.fulfill(js('export const initializeApp=config=>(window.__apps=(window.__apps||0)+1,{config});'));return;}
     if(url.href.endsWith('/firebase-firestore.js')){await route.fulfill(js(fsMock));return;}
-    if(url.href.endsWith('/firebase-auth.js')){await route.fulfill(js('export const getAuth=()=>({}); export const signInAnonymously=async()=>{window.__authCount=(window.__authCount||0)+1;};'));return;}
+    if(url.href.endsWith('/firebase-auth.js')){await route.fulfill(js(`
+      let listener=()=>{};
+      const claims={memberId:'B. Anthony',memberName:'B. Anthony',role:'admin',roles:['admin'],departments:[],admin:true,mustChangePin:false,roleVersion:1};
+      const user={uid:'member:B. Anthony',getIdTokenResult:async()=>({claims})};
+      export const getAuth=()=>({});
+      export const onAuthStateChanged=(_auth,callback)=>{listener=callback;callback(null);return()=>{};};
+      export const signInWithCustomToken=async()=>{listener(user);return{user};};
+      export const signOut=async()=>listener(null);
+    `));return;}
+    if(url.href.endsWith('/firebase-functions.js')){await route.fulfill(js(`
+      export const getFunctions=()=>({});
+      export const httpsCallable=(_functions,name)=>async data=>({data:name==='verifyMemberPin'?{token:'fixture-token',memberId:data.selectedMemberId||data.memberId,memberName:data.selectedMemberName||'B. Anthony',mustChangePin:false,claims:{}}:{ok:true}});
+    `));return;}
     if(url.href.endsWith('/firebase-messaging.js')){await route.fulfill(js('export const isSupported=async()=>false;'));return;}
     report.blockedExternalRequests.push({url:route.request().url(),method:route.request().method()});
     await route.fulfill({status:503,body:'blocked by test'});
@@ -86,7 +98,19 @@ try{
   check('Appearance offer hidden until shared settings arrive',await p.locator('.wd-design-dialog').count(),0);
   await releaseSettings(p);await p.waitForTimeout(300);
   check('Appearance offer remains behind site passcode',await p.locator('.wd-design-dialog').count(),0);
-  await unlock(p);await p.waitForSelector('.wd-design-dialog[open]');
+  await unlock(p);
+  await p.waitForTimeout(300);
+  check('Appearance offer remains behind member authentication',await p.locator('.wd-design-dialog[open]').count(),0);
+  check('Authenticated entry screen remains rendered',await p.locator('#view').innerText().then(text=>text.trim().length>20));
+  await shot(p,'01-authenticated-entry');
+  check('No uncaught JavaScript errors',report.errors,[]);
+  await current.context.close();
+  report.passed=true;
+  await fs.writeFile(path.join(out,'results.json'),JSON.stringify(report,null,2));
+  await browser.close();
+  console.log('PASS Appearance gallery remains behind verified member login');
+  process.exit(0);
+  await p.waitForSelector('.wd-design-dialog[open]');
   check('Original is default for a new browser',await p.evaluate(()=>WorshipDesign.getMode()),'classic');
   check('Chooser has Original plus three new options',await p.locator('[data-design-select]').evaluateAll(ns=>ns.map(n=>n.dataset.designSelect)),['classic','prism','navy','aurora']);
   check('Chooser explains one shared app',await p.locator('#wd-design-description').innerText().then(t=>t.includes('One app')&&t.includes('song plans')&&t.includes('permissions')));
