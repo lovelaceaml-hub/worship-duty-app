@@ -280,11 +280,12 @@ function setupLeaderAccess(app, db, fsMod) {
   const membersRef = fsMod.doc(db, 'app', 'members');
   let settings = {};
   let members = [];
+  let settingsLoaded = false;
   let renderQueued = false;
 
   const leaders = () => uniqueSorted((settings.departmentLeaders || []).map(normalizeMemberName));
   const restrictionActive = () => leaders().length > 0;
-  const canManage = () => !restrictionActive() || leaders().includes(currentMember());
+  const canManage = () => settingsLoaded && (!restrictionActive() || leaders().includes(currentMember()));
 
   function queueApply() {
     if (renderQueued) return;
@@ -352,8 +353,17 @@ function setupLeaderAccess(app, db, fsMod) {
     }
   }
 
+  // Default closed until the shared settings snapshot arrives so a non-leader
+  // never sees a brief Manage-tab flash during startup.
+  const initialManageTab = document.getElementById('tab-manage');
+  if (initialManageTab) {
+    initialManageTab.classList.add('hidden');
+    initialManageTab.setAttribute('aria-hidden', 'true');
+  }
+
   fsMod.onSnapshot(settingsRef, snap => {
     settings = snap.exists() ? (snap.data() || {}) : {};
+    settingsLoaded = true;
     queueApply();
   });
 
