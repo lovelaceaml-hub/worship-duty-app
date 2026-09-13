@@ -1611,9 +1611,16 @@ function renderServiceCard(sl, opts) {
     const today = sl.date === todayISO();
     if (today) html += '<button class="primary sm" data-song-act="runsheet" data-id="' + esc(sl.id) + '">Runsheet</button>';
     if (editable) {
-      if (needsConfirm) html += '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' +
-        (changedSinceConfirmed(sl) ? 'Confirm again' : 'Confirm songs') + '</button>';
-      html += '<button class="' + (today || needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="build-for" data-id="' + esc(sl.id) + '">Add songs</button>';
+      if (sung) {
+        html += '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="edit-setlist" data-id="' + esc(sl.id) + '">Open in Builder</button>';
+        html += '<button class="danger-link" data-song-act="undo-sung" data-id="' + esc(sl.id) + '">Undo sung</button>';
+      } else {
+        if (needsConfirm) html += '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' +
+          (changedSinceConfirmed(sl) ? 'Confirm again' : 'Confirm songs') + '</button>';
+        html += '<button class="' + (today || needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="build-for" data-id="' + esc(sl.id) + '">Add songs</button>';
+        html += '<button class="' + (today || needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="mark-sung" data-id="' + esc(sl.id) + '">Mark as sung</button>';
+      }
+      html += '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete</button>';
     } else {
       html += '<span class="readonly-note">View only</span>';
     }
