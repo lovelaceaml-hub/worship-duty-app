@@ -18,8 +18,8 @@ const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day
 /* Seed data for state.departments (categoryName -> member names), used only
    the first time app/departments is missing/empty in Firestore (or local mode). */
 const DEPARTMENTS_SEED = {
-  'Worship': ['B. Anthony', 'B. Brent', 'B. Davidson', 'B. Giomar', 'B. James', 'B. Jason', 'B. Jordan', 'D. Aaron', 'D. Caleb', 'D. Chloe', 'D. Chris', 'D. Danielle', 'D. Kenya', 'D. Roza', 'E. Simon', 'M. Chad', 'S. Adrienne', 'S. Martha', 'S. Paola', 'S. Skye'],
-  'Usher Sisters': ['D. Chloe', 'D. Danielle', 'D. Kenya', 'D. Roza', 'S. Adrienne', 'S. Estefany', 'S. Hana', 'S. Lisa', 'S. Melissa', 'S. Paola', 'S. Skye', 'S. Taylor'],
+  'Worship': ['B. Anthony', 'B. Brent', 'B. Davidson', 'B. Giomar', 'B. James', 'B. Jason', 'B. Jordan', 'D. Aaron', 'D. Caleb', 'M. Chloe', 'D. Chris', 'D. Danielle', 'D. Kenya', 'D. Roza', 'E. Simon', 'M. Chad', 'S. Adrienne', 'S. Martha', 'S. Paola', 'S. Skye'],
+  'Usher Sisters': ['M. Chloe', 'D. Danielle', 'D. Kenya', 'D. Roza', 'S. Adrienne', 'S. Estefany', 'S. Hana', 'S. Lisa', 'S. Melissa', 'S. Paola', 'S. Skye', 'S. Taylor'],
   'Usher Brothers': ['B. Alex', 'B. Anthony', 'B. Clyde', 'B. Davidson', 'B. Delvin', 'B. Drew', 'B. Dustin', 'B. Giomar', 'B. Irvin', 'B. James S', 'B. Jordan', 'D. Chris'],
   'Lobby': ['S. Adrienne', 'S. Anessa', 'S. Bridgette', 'S. Ivonne', 'S. Leslie', 'S. Lupita', 'S. Mercie', 'S. Nichol', 'S. Paola'],
   'Translation': ['B. Irvin', 'B. Jason', 'D. Roza', 'S. Elena', 'S. Elisa', 'S. Leslie', 'S. Martha', 'S. Monica C', 'S. Monica S', 'S. Paola'],
@@ -38,21 +38,22 @@ const ASSET_V = '?v=DEV';
 const DEFAULT_SITE_HASH = '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b';
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv';
 
-/* Name cleanup after the sheet's Raw Data tab was tidied up — maps old
+/* Name cleanup after the sheet's Raw Data tab was tidied up, maps old
    variant spellings to their canonical form. See 'unify-names'. This constant
    is the seed/fallback for the shared Firestore doc app/nameMap, which both
    this app and the song app read so canonicalization stays consistent. */
 const NAME_UNIFY_MAP = {
   'B. Anthony L': 'B. Anthony', 'D. Chris K': 'D. Chris', 'D. Chris Kane': 'D. Chris',
   'B. James D': 'B. James', 'B. Jason S': 'B. Jason', 'S. Martha B': 'S. Martha',
-  'S. Monica Salazar': 'S. Monica S', 'M.Chad': 'M. Chad', 'B. Gio': 'B. Giomar'
+  'S. Monica Salazar': 'S. Monica S', 'M.Chad': 'M. Chad', 'B. Gio': 'B. Giomar',
+  'D. Chloe': 'M. Chloe'
 };
 
 /* Live copy of app/nameMap; null until the snapshot arrives (or in local mode). */
 let sharedNameMap = null;
 function unifiedNameMap() { return Object.assign({}, NAME_UNIFY_MAP, sharedNameMap || {}); }
 
-/* Feature toggles — managed live in Manage → Features, synced to every device */
+/* Feature toggles, managed live in Manage → Features, synced to every device */
 const FEATURES = [
   { id: 'siteLock',       label: 'Site passcode',             desc: 'Everyone must enter the 4-digit passcode before the app opens on a new device.', def: true },
   { id: 'editorLock',     label: 'Editor passcode',           desc: 'Require the passcode before anyone can open Manage and edit the schedule.', def: true },
@@ -249,7 +250,7 @@ function suggestSubs(svc, duty, excludeName, stats) {
     .map(x => x.m);
 }
 
-/* ================= google sheet sync — pure parsers ================= */
+/* ================= google sheet sync, pure parsers ================= */
 
 /* Minimal RFC-4180-ish CSV parser. Handles quoted fields, embedded commas,
    escaped quotes (""), and CRLF/LF line endings. Returns array of row arrays. */
@@ -339,7 +340,7 @@ function parseSheetTime(raw) {
 }
 
 /* Turn parsed CSV rows into service objects.
-   Returns { services, members, warnings }. Pure — no window/document/state. */
+   Returns { services, members, warnings }. Pure, no window/document/state. */
 function sheetRowsToServices(rows, today) {
   const result = { services: [], members: [], warnings: [] };
   if (!rows || !rows.length) return result;
@@ -375,12 +376,13 @@ function sheetRowsToServices(rows, today) {
     const key = iso + '|' + serviceLabel;
     let svc = byKey[key];
     if (!svc) {
-      svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {}, choirSong: '' };
+      svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {}, choirSong: '', _sheetChoirSongSeen: false };
       byKey[key] = svc;
       result.services.push(svc);
     }
     if (isChoirSong) {
-      if (member) svc.choirSong = member; // never clear the song on a blank cell
+      svc._sheetChoirSongSeen = true;
+      svc.choirSong = member; // an explicit blank row clears a stale song
       continue;
     }
     svc.assignments[duty] = member; // '' explicitly clears the slot
@@ -393,15 +395,79 @@ function sheetRowsToServices(rows, today) {
 /* ================= state ================= */
 
 let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
-let fb = null; // { db, setDoc, doc, deleteDoc, writeBatch, collection }
+let fb = null; // { db, auth, functions, setDoc, doc, deleteDoc, writeBatch, collection }
 
-/* Anonymous sign-in no longer blocks startup. Reads are open in
-   firestore.rules, so making the whole app wait for a sign-in round trip
-   before the first schedule row was requested bought nothing. Writes DO need
-   it (the rules require request.auth != null), so every write goes through
-   fbWrite() and waits on this promise instead. */
-let authReady = Promise.resolve();
-function fbWrite(fn) { return authReady.then(fn); }
+/* Firestore reads remain useful before sign-in, but every write requires a
+   verified member session. Firebase Auth restores a custom-token session on
+   reload, so this gate is the only browser-side mutation boundary. */
+let authReady = Promise.resolve(null);
+let authUser = null;
+let verifiedSession = null;
+let authStatus = 'loading';
+let requestUnsub = null;
+
+function isVerifiedSession() {
+  return !!(verifiedSession && verifiedSession.memberName && verifiedSession.memberId);
+}
+function isForcedSession() {
+  return isVerifiedSession() && verifiedSession.mustChangePin === true;
+}
+function authActor() {
+  if (!isVerifiedSession()) return null;
+  return Object.assign({}, verifiedSession, {
+    name: verifiedSession.memberName,
+    member: verifiedSession.memberName,
+    claims: verifiedSession,
+    token: verifiedSession
+  });
+}
+function permissionApi() {
+  return window.WorshipDutyPermissions || window.WDS_PERMISSIONS || {};
+}
+function permissionConfig() {
+  const api = permissionApi();
+  return (state.settings && state.settings.permissionConfig) ||
+    api.DEFAULT_PERMISSION_CONFIG || {};
+}
+function canPermission(method, ...args) {
+  const api = permissionApi();
+  if (typeof api[method] !== 'function') return false;
+  try { return !!api[method](...args, permissionConfig()); }
+  catch (_error) { return false; }
+}
+function authorizedDepartments() {
+  const actor = authActor();
+  if (!actor) return [];
+  const api = permissionApi();
+  if (canPermission('isAdmin', actor)) {
+    const all = typeof api.allDepartments === 'function'
+      ? api.allDepartments(permissionConfig())
+      : CATEGORIES.map(category => category.name);
+    return ['All'].concat(all.filter(department => department !== 'All'));
+  }
+  if (typeof api.departmentsForLeader !== 'function') return [];
+  try { return api.departmentsForLeader(actor, permissionConfig()); }
+  catch (_error) { return []; }
+}
+function canManageAnyDepartment() {
+  return authorizedDepartments().length > 0;
+}
+function selectedManageDepartment() {
+  const allowed = authorizedDepartments();
+  if (allowed.indexOf(ui.manageDept) !== -1) return ui.manageDept;
+  ui.manageDept = allowed[0] || '';
+  return ui.manageDept;
+}
+function canManageSelectedDepartment(department) {
+  if (!department || department === 'All') return canPermission('isAdmin', authActor());
+  return canPermission('canManageDepartment', authActor(), department);
+}
+function fbWrite(fn) {
+  if (fb && (!isVerifiedSession() || isForcedSession())) {
+    return Promise.reject(new Error('A verified member session is required for this action.'));
+  }
+  return authReady.then(fn);
+}
 let settingsLoaded = false; // true once shared settings arrived (or local mode)
 let departmentsLoaded = false; // true once the departments doc arrived (or local mode)
 let membersLoaded = false; // true once the members doc arrived (or local mode)
@@ -409,7 +475,9 @@ let membersLoaded = false; // true once the members doc arrived (or local mode)
 const ui = {
   tab: 'schedule',
   sub: 'services',
-  me: localStorage.getItem('wds-me') || '',
+  me: '',
+  loginMember: '',
+  manageDept: 'All',
   deptFilter: (function () {
     const v = localStorage.getItem('wds-dept') || 'All';
     return v === 'All' || CATEGORIES.some(c => c.name === v) ? v : 'All';
@@ -419,9 +487,11 @@ const ui = {
   banners: [],
   pinError: '',
   sitePinError: '',
+  authError: '',
+  authBusy: false,
   rebaseline: false,
   syncing: false,
-  reqForm: null, // { key, note } — in-progress "request a change" draft, survives re-render
+  reqForm: null, // { key, note } - in-progress "request a change" draft, survives re-render
   songSvc: null, // svcId deep-link target for the song picker (ui.tab === 'songs')
   songNav: false // one-shot: this render is an explicit navigation into the song picker (tab or button), not a background re-mount
 };
@@ -449,32 +519,72 @@ function loadLocal() {
   return null;
 }
 
+function canonicalMemberName(name) {
+  const value = String(name == null ? '' : name).trim();
+  return value ? (unifiedNameMap()[value] || value) : '';
+}
+
+/* Apply the canonical identity map to browser state without restoring an
+   identity from localStorage. D. Chloe is always represented as M. Chloe. */
+function canonicalizeStateNames() {
+  const canon = canonicalMemberName;
+  const members = [];
+  (state.members || []).forEach(member => {
+    const name = canon(member);
+    if (name && members.indexOf(name) === -1) members.push(name);
+  });
+  state.members = members.sort();
+  (state.services || []).forEach(service => {
+    const assignments = service.assignments || {};
+    Object.keys(assignments).forEach(duty => { assignments[duty] = canon(assignments[duty]); });
+    const conflictOk = service.conflictOk || {};
+    const merged = {};
+    Object.keys(conflictOk).forEach(name => {
+      const key = canon(name);
+      merged[key] = (merged[key] || []).concat(conflictOk[name] || []);
+    });
+    if (Object.keys(merged).length) service.conflictOk = merged;
+  });
+  Object.keys(state.departments || {}).forEach(department => {
+    const seen = {};
+    state.departments[department] = (state.departments[department] || [])
+      .map(canon).filter(name => name && !seen[name] && (seen[name] = true)).sort();
+  });
+  (state.requests || []).forEach(request => {
+    request.name = canon(request.name);
+    request.resolvedBy = canon(request.resolvedBy);
+  });
+  if (state.settings && state.settings.schedulerName) {
+    state.settings.schedulerName = canon(state.settings.schedulerName);
+  }
+}
+
 /* persistence that works in both modes */
 function persistService(svc) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), svc));
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), svc)).catch(() => {});
   else saveLocal();
 }
 function persistDeleteService(id) {
-  if (fb) fbWrite(() => fb.deleteDoc(fb.doc(fb.db, 'schedule', id)));
+  if (fb) fbWrite(() => fb.deleteDoc(fb.doc(fb.db, 'schedule', id))).catch(() => {});
   else saveLocal();
 }
 function persistMembers() {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'members'), { list: state.members }));
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'members'), { list: state.members })).catch(() => {});
   else saveLocal();
 }
 function persistSettings() {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'settings'), state.settings));
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'settings'), state.settings)).catch(() => {});
   else saveLocal();
 }
 function persistDepartments() {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments }));
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments })).catch(() => {});
   else saveLocal();
 }
 function persistNameMap(map) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'nameMap'), { map: map }));
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'nameMap'), { map: map })).catch(() => {});
 }
 function persistRequest(req) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'requests', req.id), req));
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'requests', req.id), req)).catch(() => {});
   else saveLocal();
 }
 function resolveRequest(id, status) {
@@ -482,12 +592,14 @@ function resolveRequest(id, status) {
   if (!req) return;
   req.status = status;
   req.resolvedAt = Date.now();
-  req.resolvedBy = ui.me || 'editor';
+  req.resolvedByUid = (authUser && authUser.uid) || '';
+  req.resolvedByName = ui.me || '';
+  req.resolvedBy = req.resolvedByUid;
   persistRequest(req);
 }
 function persistAll() {
   if (!fb) { saveLocal(); return; }
-  // Collect every write as a thunk, then commit in chunks — a full seed or a
+  // Collect every write as a thunk, then commit in chunks, a full seed or a
   // large import can exceed Firestore's 500-op single-batch cap.
   const ops = [];
   const keep = {};
@@ -506,7 +618,7 @@ function persistAll() {
       const batch = fb.writeBatch(fb.db);
       chunk.forEach(fn => fn(batch));
       return batch.commit();
-    });
+    }).catch(() => {});
   }
 }
 
@@ -553,7 +665,7 @@ async function sysNotify(title, body) {
 /* ---- server push (FCM) token registration ----
    Registers the current device's FCM token in Firestore under `tokens/{token}`
    tagged with the member name, so Cloud Functions can push to it. Every guard
-   fails silently — unsupported browsers (iOS Safari not installed to home
+   fails silently, unsupported browsers (iOS Safari not installed to home
    screen, missing VAPID key, notifications off, no name) simply no-op. */
 async function registerPush() {
   try {
@@ -572,7 +684,7 @@ async function registerPush() {
     const prevToken = localStorage.getItem('wds-fcm-token');
     const prevName = localStorage.getItem('wds-fcm-name');
     if (prevToken && prevToken !== token) {
-      // token rotated — drop the stale doc
+      // token rotated, drop the stale doc
       try { await fb.deleteDoc(fb.doc(fb.db, 'tokens', prevToken)); } catch (e) { /* ignore */ }
     }
     if (prevToken !== token || prevName !== ui.me) {
@@ -604,7 +716,7 @@ function getJSON(key, fallback) {
 }
 
 function dutyLabel(d) {
-  return d.duty + ' — ' + d.svc.worship + ' ' + d.svc.service + ', ' + fmtDate(d.svc.date) + ' at ' + fmtTime(d.svc.time);
+  return d.duty + ' | ' + d.svc.worship + ' ' + d.svc.service + ', ' + fmtDate(d.svc.date) + ' at ' + fmtTime(d.svc.time);
 }
 
 /* Detect duties newly added for the selected member */
@@ -634,7 +746,7 @@ function checkNewDuties() {
     localStorage.setItem('wds-alerts-' + ui.me, JSON.stringify(alerts.slice(0, 30)));
     if (ui.tab !== 'my') {
       localStorage.setItem('wds-unread-' + ui.me, String(fresh.length + Number(localStorage.getItem('wds-unread-' + ui.me) || 0)));
-      addBanner('You have ' + fresh.length + ' new dut' + (fresh.length > 1 ? 'ies' : 'y') + ' — see My Duties.', true);
+      addBanner('You have ' + fresh.length + ' new dut' + (fresh.length > 1 ? 'ies' : 'y') + ' | see My Duties.', true);
     }
     render();
   }
@@ -687,7 +799,7 @@ function afterDataChange() {
   checkReminders();
 }
 
-/* ================= google sheet sync — engine ================= */
+/* ================= google sheet sync, engine ================= */
 
 const SHEET_SYNC_MIN_MS = 5 * 60 * 1000; // auto-sync throttle window
 
@@ -726,9 +838,11 @@ function mergeSheetServices(services) {
     let changed = false;
     if (sheetSvc.time && existing.time !== sheetSvc.time) { existing.time = sheetSvc.time; changed = true; }
     if (sheetSvc.worship && existing.worship !== sheetSvc.worship) { existing.worship = sheetSvc.worship; changed = true; }
-    if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong) { existing.choirSong = sheetSvc.choirSong; changed = true; }
+    const choirSongSeen = sheetSvc._sheetChoirSongSeen === true ||
+      (!Object.prototype.hasOwnProperty.call(sheetSvc, '_sheetChoirSongSeen') && Boolean(sheetSvc.choirSong));
+    if (choirSongSeen && existing.choirSong !== sheetSvc.choirSong) { existing.choirSong = sheetSvc.choirSong; changed = true; }
     if (!existing.assignments) existing.assignments = {};
-    // Only touch duties the sheet mentions — Media Booth, Parking Lot and
+    // Only touch duties the sheet mentions, Media Booth, Parking Lot and
     // Offering assignments are preserved.
     Object.keys(sheetSvc.assignments).forEach(duty => {
       addToDept(duty, sheetSvc.assignments[duty]);
@@ -745,6 +859,10 @@ function mergeSheetServices(services) {
 
 async function syncFromSheet(manual) {
   if (!feat('sheetSync')) { if (manual) alert('Google Sheet sync is turned off in Manage → Features.'); return; }
+  if (fb && (!isVerifiedSession() || !canPermission('isAdmin', authActor()))) {
+    if (manual) addBanner('Only an authorized administrator can sync the schedule from the sheet.', true);
+    return;
+  }
   const url = sheetUrl();
   if (!url) { if (manual) alert('No sheet link is set. Add one in Manage → Data & Sync.'); return; }
   if (!manual) {
@@ -847,7 +965,7 @@ function icsStamp(d) {
     p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + 'Z';
 }
 
-/* VTIMEZONE for America/Los_Angeles — anchors event times to Pacific wall-clock
+/* VTIMEZONE for America/Los_Angeles, anchors event times to Pacific wall-clock
    (matching push reminders) instead of floating to the subscriber's timezone. */
 const LA_VTIMEZONE = [
   'BEGIN:VTIMEZONE', 'TZID:America/Los_Angeles',
@@ -917,6 +1035,257 @@ function copyICSLink() {
   }
 }
 
+function safeAuthMessage(error) {
+  const code = String(error && error.code || '').replace(/^functions\//, '');
+  if (code === 'failed-precondition') return 'Change your member PIN before using the app.';
+  if (code === 'permission-denied') return 'This member account cannot perform that action.';
+  if (code === 'unavailable' || code === 'internal') return 'The member sign-in service is unavailable. Try again.';
+  if (code === 'invalid-argument') return 'Enter a member and a 4 to 6 digit PIN.';
+  return 'That member name and PIN did not match.';
+}
+
+function sessionFromClaims(claims, user) {
+  const source = claims && typeof claims === 'object' ? claims : {};
+  const memberName = canonicalMemberName(source.memberName || source.name);
+  const memberId = String(source.memberId || memberName || '').trim();
+  if (!memberName || !memberId) return null;
+  return Object.assign({}, source, {
+    uid: user && user.uid,
+    memberId,
+    memberName,
+    name: memberName,
+    roles: Array.isArray(source.roles) ? source.roles.slice() : [],
+    departments: Array.isArray(source.departments) ? source.departments.slice() : [],
+    mustChangePin: source.mustChangePin === true
+  });
+}
+
+function setVerifiedSession(session, user) {
+  verifiedSession = session;
+  authUser = user || authUser;
+  if (!session) {
+    authStatus = fb ? 'signedOut' : 'local';
+    ui.me = '';
+    ui.loginMember = '';
+    authReady = Promise.resolve(null);
+    return;
+  }
+  authStatus = session.mustChangePin ? 'forced' : 'verified';
+  ui.me = session.mustChangePin ? '' : session.memberName;
+  ui.loginMember = session.memberName;
+  if (session.mustChangePin) {
+    localStorage.removeItem('wds-me');
+  } else {
+    localStorage.setItem('wds-me', session.memberName);
+  }
+  authReady = Promise.resolve(user || null);
+  canonicalizeStateNames();
+  selectedManageDepartment();
+}
+
+function startRequestListener() {
+  if (requestUnsub) {
+    requestUnsub();
+    requestUnsub = null;
+  }
+  if (!fb || !isVerifiedSession()) return;
+  const actor = authActor();
+  let source;
+  if (canPermission('isAdmin', actor)) {
+    source = fb.collection(fb.db, 'requests');
+  } else {
+    const departments = authorizedDepartments().filter(department => department !== 'All');
+    if (canManageAnyDepartment() && departments.length) {
+      source = fb.query(fb.collection(fb.db, 'requests'), fb.where('department', 'in', departments.slice(0, 10)));
+    } else if (authUser && authUser.uid) {
+      source = fb.query(fb.collection(fb.db, 'requests'), fb.where('requesterUid', '==', authUser.uid));
+    } else {
+      source = fb.query(fb.collection(fb.db, 'requests'), fb.where('name', '==', ui.me));
+    }
+  }
+  requestUnsub = fb.onSnapshot(source, snap => {
+    state.requests = snap.docs.map(d => d.data());
+    canonicalizeStateNames();
+    renderSoon();
+  }, () => { /* request access is scoped by the signed-in member claims */ });
+}
+
+async function syncAuthUser(user, forceRefresh) {
+  authUser = user || null;
+  if (!user) {
+    setVerifiedSession(null, null);
+    startRequestListener();
+    renderSoon();
+    return null;
+  }
+  try {
+    const tokenResult = await user.getIdTokenResult(!!forceRefresh);
+    const session = sessionFromClaims(tokenResult.claims, user);
+    setVerifiedSession(session, user);
+    startRequestListener();
+    if (session && !session.mustChangePin) pulse('opens');
+    renderSoon();
+    return session;
+  } catch (_error) {
+    setVerifiedSession(null, user);
+    startRequestListener();
+    renderSoon();
+    return null;
+  }
+}
+
+function authCall(name, payload) {
+  if (!fb || typeof fb.callable !== 'function') {
+    return Promise.reject(new Error('The member sign-in service is unavailable.'));
+  }
+  return fb.callable(name)(payload).then(result => result && result.data);
+}
+
+async function memberLogin() {
+  if (ui.authBusy) return;
+  const memberInput = document.getElementById('member-login');
+  const pinInput = document.getElementById('member-pin');
+  const name = canonicalMemberName((memberInput && memberInput.value) || ui.loginMember);
+  const pin = pinInput ? pinInput.value : '';
+  if (!name || !/^\d{4,6}$/.test(pin)) {
+    ui.authError = 'Choose your name and enter a 4 to 6 digit PIN.';
+    render();
+    return;
+  }
+  ui.loginMember = name;
+  ui.authBusy = true;
+  ui.authError = '';
+  render();
+  try {
+    if (fb && fb.auth && fb.callable && fb.signInWithCustomToken) {
+      const result = await authCall('verifyMemberPin', {
+        selectedMemberId: name,
+        selectedMemberName: name,
+        pin
+      });
+      if (!result || !result.token) throw new Error('The member sign-in service is unavailable.');
+      await fb.signInWithCustomToken(fb.auth, result.token);
+      if (fb.auth.currentUser) await syncAuthUser(fb.auth.currentUser, true);
+    } else {
+      // Local mode still requires a selected member and a PIN. It grants no
+      // privileged claims and is only a development fallback when Firebase
+      // has not been configured for this copy of the app.
+      if (pin !== '2217') throw new Error('Member PIN did not match.');
+      setVerifiedSession({
+        memberId: name,
+        memberName: name,
+        role: 'member',
+        roles: ['member'],
+        departments: [],
+        mustChangePin: false
+      }, null);
+    }
+    if (!isVerifiedSession()) throw new Error('The member sign-in service is unavailable.');
+    ui.authError = '';
+    ui.authBusy = false;
+    ui.rebaseline = true;
+    render();
+    checkNewDuties();
+    checkReminders();
+    if (notifyOn()) registerPush();
+  } catch (error) {
+    ui.authBusy = false;
+    ui.authError = safeAuthMessage(error);
+    setVerifiedSession(null, null);
+    render();
+  }
+}
+
+async function memberChangePin() {
+  if (!isForcedSession() || ui.authBusy) return;
+  const first = document.getElementById('member-new-pin');
+  const second = document.getElementById('member-new-pin-confirm');
+  const newPin = first ? first.value : '';
+  const confirmation = second ? second.value : '';
+  if (!/^\d{4,6}$/.test(newPin)) {
+    ui.authError = 'Use 4 to 6 digits for your new PIN.';
+    render();
+    return;
+  }
+  if (newPin !== confirmation) {
+    ui.authError = 'The two new PIN entries do not match.';
+    render();
+    return;
+  }
+  const name = verifiedSession.memberName;
+  ui.authBusy = true;
+  ui.authError = '';
+  render();
+  try {
+    if (fb && fb.callable) {
+      await authCall('changeMemberPin', { memberId: verifiedSession.memberId, newPin });
+      const result = await authCall('verifyMemberPin', {
+        selectedMemberId: verifiedSession.memberId,
+        selectedMemberName: name,
+        pin: newPin
+      });
+      if (!result || !result.token) throw new Error('The member sign-in service is unavailable.');
+      await fb.signInWithCustomToken(fb.auth, result.token);
+      if (fb.auth.currentUser) await syncAuthUser(fb.auth.currentUser, true);
+    } else {
+      setVerifiedSession(Object.assign({}, verifiedSession, { mustChangePin: false }), null);
+    }
+    if (isForcedSession()) throw new Error('The member PIN still needs to be changed.');
+    ui.authBusy = false;
+    ui.authError = '';
+    ui.rebaseline = true;
+    render();
+    checkNewDuties();
+    checkReminders();
+  } catch (error) {
+    ui.authBusy = false;
+    ui.authError = safeAuthMessage(error);
+    render();
+  }
+}
+
+async function memberLogout() {
+  try {
+    if (fb && fb.signOut && fb.auth) await fb.signOut(fb.auth);
+  } catch (_error) { /* local state still clears below */ }
+  setVerifiedSession(null, null);
+  ui.tab = 'schedule';
+  ui.sub = 'services';
+  ui.songSvc = null;
+  ui.songNav = false;
+  ui.authError = '';
+  render();
+}
+
+function renderMemberLogin() {
+  const members = Array.from(new Set((state.members || []).map(canonicalMemberName).filter(Boolean))).sort();
+  const options = '<option value="">Choose your name</option>' + members.map(member =>
+    '<option value="' + esc(member) + '"' + (member === ui.loginMember ? ' selected' : '') + '>' + esc(member) + '</option>'
+  ).join('');
+  const status = authStatus === 'loading'
+    ? '<p class="hint">Checking for a verified session...</p>'
+    : '<p class="hint">Select your member account and enter its 4 to 6 digit PIN.</p>';
+  return '<div class="card lock-box auth-box"><div class="lock-title">Member sign in</div>' + status +
+    '<form class="add-row" data-act="member-login">' +
+    '<select id="member-login" data-chg="login-member" aria-label="Member name" required>' + options + '</select>' +
+    '<input type="password" id="member-pin" aria-label="Member PIN" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="6" autocomplete="current-password" placeholder="Member PIN" required>' +
+    '<button class="primary" type="submit"' + (ui.authBusy ? ' disabled' : '') + '>' + (ui.authBusy ? 'Signing in...' : 'Sign in') + '</button></form>' +
+    (ui.authError ? '<p class="pin-error">' + esc(ui.authError) + '</p>' : '') +
+    '</div>';
+}
+
+function renderForcedPinChange() {
+  return '<div class="card lock-box auth-box"><div class="lock-title">Change your member PIN</div>' +
+    '<p class="hint">This account must set a new 4 to 6 digit PIN before the schedule opens.</p>' +
+    '<form class="add-row" data-act="member-change-pin">' +
+    '<input type="password" id="member-new-pin" aria-label="New member PIN" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="6" autocomplete="new-password" placeholder="New PIN" required>' +
+    '<input type="password" id="member-new-pin-confirm" aria-label="Repeat new member PIN" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="6" autocomplete="new-password" placeholder="Repeat new PIN" required>' +
+    '<button class="primary" type="submit"' + (ui.authBusy ? ' disabled' : '') + '>' + (ui.authBusy ? 'Saving...' : 'Save PIN') + '</button></form>' +
+    '<button class="ghost" data-act="member-logout">Sign out</button>' +
+    (ui.authError ? '<p class="pin-error">' + esc(ui.authError) + '</p>' : '') +
+    '</div>';
+}
+
 /* ================= rendering ================= */
 
 function render() {
@@ -929,15 +1298,34 @@ function render() {
     if (input) input.focus();
     return;
   }
+  if (!isVerifiedSession()) {
+    nav.classList.toggle('hidden', true);
+    document.getElementById('banners').innerHTML = '';
+    document.getElementById('view').innerHTML = renderMemberLogin();
+    return;
+  }
+  if (isForcedSession()) {
+    nav.classList.toggle('hidden', true);
+    document.getElementById('banners').innerHTML = '';
+    document.getElementById('view').innerHTML = renderForcedPinChange();
+    return;
+  }
   nav.classList.toggle('hidden', false);
 
-  // The Presider tab only exists for people with an upcoming Presider duty —
+  // The Presider tab only exists for people with an upcoming Presider duty,
   // same rule as the "Plan songs" button in My Duties. If the viewer stops
   // qualifying while on the songs screen (name switch, schedule edit, feature
   // toggle), kick them back to My Duties.
-  const isPresider = feat('songPicker') && !!ui.me && dutiesFor(ui.me).some(d => d.duty === 'Presider');
+  const songEditor = canPermission('canEditSongs', authActor(), {});
+  const isPresider = feat('songPicker') && !!ui.me &&
+    (dutiesFor(ui.me).some(d => d.duty === 'Presider') || songEditor);
   document.getElementById('tab-presider').classList.toggle('hidden', !isPresider);
   if (ui.tab === 'songs' && !isPresider) { ui.tab = 'my'; ui.songSvc = null; ui.songNav = false; }
+
+  const canManage = canManageAnyDepartment();
+  const tabManage = document.getElementById('tab-manage');
+  tabManage.classList.toggle('hidden', !canManage);
+  if (ui.tab === 'manage' && !canManage) ui.tab = 'schedule';
 
   document.querySelectorAll('nav.tabs button').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === ui.tab);
@@ -945,20 +1333,19 @@ function render() {
   const unread = Number(localStorage.getItem('wds-unread-' + ui.me) || 0);
   const tabMy = document.getElementById('tab-my');
   tabMy.innerHTML = 'My Duties' + (unread > 0 && ui.tab !== 'my' ? '<span class="dot"></span>' : '');
-  const tabManage = document.getElementById('tab-manage');
-  tabManage.innerHTML = 'Manage' + (pendingRequestsCount() > 0 && ui.tab !== 'manage' ? '<span class="dot"></span>' : '');
+  tabManage.innerHTML = 'Manage' + (actionableCountsForViewer().total > 0 && ui.tab !== 'manage' ? '<span class="dot"></span>' : '');
 
   const view = document.getElementById('view');
   // A background Firestore snapshot calls render(); replacing innerHTML would
   // wipe whatever the editor is typing (service field, member name, sheet URL,
   // change-request note) and drop focus. Skip the view refresh while a text
-  // input inside #view is focused — the next render() after they blur catches up.
+  // input inside #view is focused, the next render() after they blur catches up.
   if (!viewHasFocusedInput(view)) {
     if (ui.tab === 'schedule') view.innerHTML = renderSchedule();
     else if (ui.tab === 'my') view.innerHTML = renderMy();
     else if (ui.tab === 'songs') renderSongs(view);
     else view.innerHTML = renderManage();
-    pulse('tab_' + ui.tab); // counts once per device per day — see pulse()
+    pulse('tab_' + ui.tab); // counts once per device per day, see pulse()
   }
   renderBanners();
 }
@@ -980,11 +1367,25 @@ function viewHasFocusedInput(view) {
 }
 
 function renderBanners() {
-  if (feat('siteLock') && !siteUnlocked()) { document.getElementById('banners').innerHTML = ''; return; }
-  document.getElementById('banners').innerHTML = ui.banners.map((b, i) =>
+  if ((feat('siteLock') && !siteUnlocked()) || !isVerifiedSession() || isForcedSession()) {
+    document.getElementById('banners').innerHTML = '';
+    return;
+  }
+  const items = [];
+  if (canManageAnyDepartment()) {
+    const counts = actionableCountsForViewer();
+    if (counts.total) {
+      items.push('<div class="banner alert"><button class="linkish" data-act="open-manage-queue">' +
+        esc(counts.message) + '</button></div>');
+    }
+  }
+  items.push('<div class="banner"><span>Signed in as <b>' + esc(ui.me) + '</b></span>' +
+    '<button class="linkish" data-act="member-logout">Sign out</button></div>');
+  items.push.apply(items, ui.banners.map((b, i) =>
     '<div class="banner' + (b.alert ? ' alert' : '') + '"><span>' + esc(b.txt) + '</span>' +
     '<button class="x" data-act="dismiss-banner" data-i="' + i + '" aria-label="Dismiss">✕</button></div>'
-  ).join('');
+  ));
+  document.getElementById('banners').innerHTML = items.join('');
 }
 
 function pillFor(member) {
@@ -1001,7 +1402,7 @@ function renderCatRows(svc, showEmpty, only) {
       .map(duty => {
         const m = (svc.assignments || {})[duty];
         return '<div class="duty-row"><div class="dname">' + esc(duty) + '</div>' +
-          (m ? pillFor(m) + conflictBadge(svc, m) : '<span style="color:var(--muted);font-style:italic;font-size:13px">—</span>') + '</div>';
+          (m ? pillFor(m) + conflictBadge(svc, m) : '<span style="color:var(--muted);font-style:italic;font-size:13px">-</span>') + '</div>';
       });
     if (rows.length) {
       html += '<div class="cat-label"><span class="dot-c" style="background:' + cat.color + '"></span>' +
@@ -1070,13 +1471,8 @@ function renderSchedule() {
 }
 
 function renderMy() {
-  const opts = '<option value="">— Choose your name —</option>' +
-    state.members.map(m => '<option value="' + esc(m) + '"' + (m === ui.me ? ' selected' : '') + '>' + esc(m) + '</option>').join('');
-
-  let html = '<div class="me-picker"><label for="me-select">Who are you?</label>' +
-    '<select id="me-select" data-chg="me">' + opts + '</select></div>';
-
-  if (!ui.me) return html + '<div class="empty">Choose your name above to see your duties.</div>';
+  let html = '';
+  if (!ui.me) return '<div class="empty">Sign in to see your duties.</div>';
 
   // notifications + calendar controls (feature-gated)
   let controls = '';
@@ -1109,7 +1505,7 @@ function renderMy() {
   const duties = dutiesFor(ui.me);
   if (!duties.length) {
     html += '<div class="empty">You have no upcoming duties right now. ' +
-      'You\'ll see them here — and be notified — as soon as one is assigned to you.</div>';
+      'You\'ll see them here, and be notified, as soon as one is assigned to you.</div>';
     return html + renderYourRequests();
   }
 
@@ -1129,7 +1525,7 @@ function renderMy() {
     se.duties.push(d);
   });
 
-  // Presider song picker — a role-conditional door into the song-selection
+  // Presider song picker, a role-conditional door into the song-selection
   // screen (ported from the old song app). Only presiders ever see it.
   if (feat('songPicker') && duties.some(d => d.duty === 'Presider')) {
     const first = duties.find(d => d.duty === 'Presider');
@@ -1189,7 +1585,7 @@ function renderMy() {
 
 /* The song-selection screen is the old stand-alone song app, ported to an ES
    module (song-app.js) that renders into #song-root. It's loaded lazily on
-   first open — most members never preside, so they never pay for it. */
+   first open, most members never preside, so they never pay for it. */
 let songApp = null;      // the imported module, once loaded
 let songAppLoading = null; // in-flight import promise
 let songAssetsLoading = null; // in-flight <link>/<script> loads
@@ -1244,10 +1640,18 @@ function songCtx() {
   return {
     fb,
     me: nameMap[ui.me] || ui.me,
+    permissions: verifiedSession || {},
     nameMap,
     nav,
     // Deep-link hint: the service whose Presider button was tapped (if any).
-    service: svc ? { date: svc.date, worship: svc.worship, service: svc.service, time: svc.time } : null,
+    service: svc ? {
+      date: svc.date, worship: svc.worship, service: svc.service, time: svc.time,
+      choirSong: svc.choirSong || '',
+      assignments: Object.assign({}, svc.assignments || {}),
+      presider: (svc.assignments || {}).Presider || ''
+    } : null,
+    canEditSongService: service => isVerifiedSession() && !isForcedSession() && canEditSongService(service),
+    canManagePresiders: () => isVerifiedSession() && !isForcedSession() && canManagePresiders(),
     onBack: () => { ui.tab = 'my'; ui.songSvc = null; render(); }
   };
 }
@@ -1304,7 +1708,7 @@ function statusChip(status) {
   return '<span class="status-chip ' + esc(status) + '">' + esc(label) + '</span>';
 }
 
-/* "Your requests" card in My Duties — newest first, last ~6, only if any exist for ui.me. */
+/* "Your requests" card in My Duties, newest first, last ~6, only if any exist for ui.me. */
 function renderYourRequests() {
   if (!ui.me) return '';
   const mine = state.requests.filter(r => r.name === ui.me).slice().sort((a, b) => b.createdAt - a.createdAt);
@@ -1312,7 +1716,7 @@ function renderYourRequests() {
   return '<div class="card req-card"><b style="font-size:13.5px">Your requests</b>' +
     mine.slice(0, 6).map(r =>
       '<div class="req-item">' +
-      '<div class="req-head"><span class="req-when">' + esc(r.duty) + ' — ' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) + '</span>' +
+      '<div class="req-head"><span class="req-when">' + esc(r.duty) + ' | ' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) + '</span>' +
       statusChip(r.status) + '</div>' +
       (r.note ? '<div class="req-note">' + esc(r.note) + '</div>' : '') +
       '</div>').join('') +
@@ -1323,24 +1727,107 @@ function pendingRequestsCount() {
   return state.requests.filter(r => r.status === 'pending').length;
 }
 
-function renderManage() {
-  if (feat('editorLock')) {
-    const pin = state.settings.pinHash || '';
-    if (!pin) return renderCreatePin();
-    if (localStorage.getItem('wds-unlock') !== pin) return renderUnlock();
+function actionableDepartmentForDuty(duty) {
+  const api = permissionApi();
+  if (typeof api.departmentForDuty === 'function') {
+    try { return api.departmentForDuty(duty, permissionConfig()) || ''; }
+    catch (_error) { /* use the local category map below */ }
   }
-  const pendingCount = pendingRequestsCount();
-  const subs = [['services', 'Services'], ['planning', 'Planning'], ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')], ['people', 'People'], ['features', 'Features'], ['data', 'Data & Sync']];
-  let html = '<div class="subnav">' + subs.map(s =>
+  return dutyCategory(duty).name;
+}
+
+function actionableDepartments(item) {
+  const out = [];
+  const add = value => {
+    if (!value) return;
+    const department = String(value).trim();
+    if (department && out.indexOf(department) === -1) out.push(department);
+  };
+  (Array.isArray(item && item.departments) ? item.departments : []).forEach(add);
+  add(item && (item.department || item.category));
+  (Array.isArray(item && item.duties) ? item.duties : []).forEach(duty => add(actionableDepartmentForDuty(duty)));
+  if (!out.length && item && item.duty) add(actionableDepartmentForDuty(item.duty));
+  return out;
+}
+
+/* Browser equivalent of department-workflows.actionableCounts. It keeps the
+   source data local, then applies the same authorization scope before a count
+   reaches the badge or alert. */
+function actionableCountsForViewer() {
+  const result = { requests: 0, conflicts: 0, total: 0, byDepartment: {}, message: '' };
+  const actor = authActor();
+  const allowed = authorizedDepartments().filter(department => department !== 'All');
+  if (!actor || !allowed.length) return result;
+  const admin = canPermission('isAdmin', actor);
+  const canSee = item => {
+    const departments = actionableDepartments(item);
+    if (admin) return true;
+    return departments.some(department => allowed.indexOf(department) !== -1);
+  };
+  const add = (kind, item) => {
+    const departments = actionableDepartments(item);
+    if (!canSee(item)) return;
+    result[kind] += 1;
+    result.total += 1;
+    (departments.length ? departments : ['unassigned']).forEach(department => {
+      if (!result.byDepartment[department]) result.byDepartment[department] = { requests: 0, conflicts: 0 };
+      result.byDepartment[department][kind] += 1;
+    });
+  };
+  const seenRequests = {};
+  (state.requests || []).forEach(request => {
+    if (!request || request.status !== 'pending') return;
+    const id = request.id || [request.name, request.date, request.service, request.duty].join('|');
+    if (seenRequests[id]) return;
+    seenRequests[id] = true;
+    add('requests', request);
+  });
+  const seenConflicts = {};
+  (state.services || []).forEach(service => {
+    activeConflicts(service).forEach(conflict => {
+      const id = [svcId(service), conflict.name, conflict.duties.join('|')].join('|');
+      if (seenConflicts[id]) return;
+      seenConflicts[id] = true;
+      add('conflicts', Object.assign({}, conflict, {
+        serviceId: svcId(service), date: service.date, service: service.service,
+        duties: conflict.duties
+      }));
+    });
+  });
+  const parts = [];
+  if (result.requests) parts.push(result.requests + ' request' + (result.requests === 1 ? '' : 's'));
+  if (result.conflicts) parts.push(result.conflicts + ' conflict' + (result.conflicts === 1 ? '' : 's'));
+  if (parts.length) result.message = parts.join(' and ') + ' ' + (result.total === 1 ? 'needs' : 'need') + ' your attention';
+  return result;
+}
+
+function renderManage() {
+  if (!isVerifiedSession() || isForcedSession() || !canManageAnyDepartment()) {
+    return '<div class="empty">You do not have access to Manage.</div>';
+  }
+  const pendingCount = actionableCountsForViewer().total;
+  const departments = authorizedDepartments();
+  const departmentOptions = departments.map(department =>
+    '<option value="' + esc(department) + '"' + (selectedManageDepartment() === department ? ' selected' : '') + '>' +
+    esc(department === 'All' ? 'All Departments' : department) + '</option>'
+  ).join('');
+  const subs = [['services', 'Services'], ['planning', 'Planning'], ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')], ['people', 'People']];
+  if (canPermission('canManageLeaders', authActor())) subs.push(['leaders', 'Leader config']);
+  if (canPermission('isAdmin', authActor())) subs.push(['features', 'Features'], ['data', 'Data & Sync']);
+  let html = '<div class="me-picker"><label for="manage-dept">Manage department</label>' +
+    '<select id="manage-dept" data-chg="manage-dept">' + departmentOptions + '</select></div>' +
+    '<div class="subnav">' + subs.map(s =>
     '<button data-act="sub" data-sub="' + s[0] + '"' + (ui.sub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>').join('') +
-    (feat('editorLock') ? '<button class="lock-btn" data-act="lock-now">Lock</button>' : '') +
+    '<button class="lock-btn" data-act="member-logout">Sign out</button>' +
     '</div>';
   if (ui.sub === 'services') html += renderManageServices();
   else if (ui.sub === 'planning') html += renderManagePlanning();
   else if (ui.sub === 'requests') html += renderManageRequests();
   else if (ui.sub === 'people') html += renderManagePeople();
-  else if (ui.sub === 'features') html += renderFeatures();
-  else html += renderManageData();
+  else if (ui.sub === 'leaders' && canPermission('canManageLeaders', authActor())) html += renderLeaderConfig();
+  else if (ui.sub === 'features' && canPermission('isAdmin', authActor())) html += renderFeatures();
+  else if (ui.sub === 'data' && canPermission('isAdmin', authActor())) html += renderManageData();
+  else html += renderManageServices();
   return html;
 }
 
@@ -1369,13 +1856,42 @@ function renderUnlock() {
 function renderCreatePin() {
   return '<div class="card lock-box">' +
     '<div class="lock-title">Create the editor passcode</div>' +
-    '<p class="hint">No passcode exists yet. Whoever sets it first becomes the editor — afterwards it is required to open Manage on any device.</p>' +
+    '<p class="hint">No passcode exists yet. Whoever sets it first becomes the editor. Afterwards it is required to open Manage on any device.</p>' +
     '<form class="add-row" data-act="set-pin">' +
     '<input type="password" id="pin-new" aria-label="New editor passcode" placeholder="New passcode" autocomplete="off" required>' +
     '<input type="password" id="pin-confirm" aria-label="Repeat new editor passcode" placeholder="Repeat it" autocomplete="off" required>' +
     '<button class="primary" type="submit">Set passcode</button></form>' +
     (ui.pinError ? '<p class="pin-error">' + esc(ui.pinError) + '</p>' : '') +
     '</div>';
+}
+
+function manageDepartment() {
+  const department = selectedManageDepartment();
+  return department === 'All' ? '' : department;
+}
+
+function manageCategories() {
+  const department = manageDepartment();
+  return CATEGORIES.filter(category => !department || category.name === department);
+}
+
+function manageServiceVisible(service) {
+  const department = manageDepartment();
+  if (!department) return true;
+  const assignments = service && service.assignments || {};
+  const roster = (state.departments && state.departments[department]) || [];
+  return Object.keys(assignments).some(duty => actionableDepartmentForDuty(duty) === department ||
+    (assignments[duty] && roster.indexOf(assignments[duty]) !== -1));
+}
+
+function manageRequestVisible(request) {
+  return !!request && canPermission('canResolveRequest', authActor(), request);
+}
+
+function manageMemberVisible(name) {
+  const department = manageDepartment();
+  if (!department) return true;
+  return ((state.departments || {})[department] || []).indexOf(name) !== -1;
 }
 
 function renderFeatures() {
@@ -1399,10 +1915,24 @@ function renderFeatures() {
   html += '<div class="card"><div class="f-label">Scheduler</div>' +
     '<div class="f-desc">Who receives a notification when a member submits a change request.</div>' +
     '<select data-chg="scheduler-name" style="margin-top:10px">' +
-    '<option value="">— None —</option>' +
+    '<option value="">None</option>' +
     state.members.map(m => '<option value="' + esc(m) + '"' + (m === (state.settings.schedulerName || '') ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
     '</select></div>';
   return html;
+}
+
+function renderLeaderConfig() {
+  if (!canPermission('canManageLeaders', authActor())) return '<div class="empty">Leader configuration is restricted.</div>';
+  const config = permissionConfig();
+  const leaders = config.departmentLeaders || {};
+  let html = '<div class="card"><div class="f-label">Department leaders</div>' +
+    '<p class="hint">Leader configuration is visible to authorized global managers. Operational tools remain scoped to the selected department.</p>';
+  CATEGORIES.forEach(category => {
+    const names = Array.isArray(leaders[category.name]) ? leaders[category.name] : [];
+    html += '<div class="list-row"><span style="flex:1;font-weight:650">' + esc(category.name) + '</span>' +
+      '<span class="count">' + esc(names.join(', ') || 'No leader listed') + '</span></div>';
+  });
+  return html + '</div>';
 }
 
 /* Coordinator Planning View: every upcoming double-duty conflict with
@@ -1413,13 +1943,16 @@ function renderManagePlanning() {
   const stats = workloadStats();
   const upcoming = state.services
     .filter(s => s.date >= t)
+    .filter(manageServiceVisible)
     .sort((a, b) => a.date.localeCompare(b.date) || SERVICE_LABELS.indexOf(a.service) - SERVICE_LABELS.indexOf(b.service));
 
   /* --- conflicts, with suggested subs --- */
   let confHtml = '';
   upcoming.forEach(svc => {
-    activeConflicts(svc).forEach(c => {
-      confHtml += '<div class="plan-conflict"><div class="plan-when"><b>' + esc(c.name) + '</b> — ' +
+    activeConflicts(svc).filter(c => canPermission('canAcknowledgeConflict', authActor(), Object.assign({}, c, {
+      serviceId: svcId(svc), date: svc.date, service: svc.service
+    }))).forEach(c => {
+      confHtml += '<div class="plan-conflict"><div class="plan-when"><b>' + esc(c.name) + '</b> | ' +
         esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) +
         ' <span class="plan-duties">(' + c.duties.map(esc).join(' + ') + ')</span></div>';
       c.duties.forEach(duty => {
@@ -1434,7 +1967,7 @@ function renderManagePlanning() {
       confHtml += '</div>';
     });
   });
-  let html = '<div class="card"><div class="f-label">Double-duty conflicts — upcoming</div>' +
+  let html = '<div class="card"><div class="f-label">Double-duty conflicts, upcoming</div>' +
     '<div class="f-desc">Tap a name to hand that duty to them. Already-acknowledged doubles (marked OK) are not listed.</div>' +
     (confHtml || '<p class="hint" style="margin-top:12px">No unresolved double-bookings. 🎉</p>') + '</div>';
 
@@ -1443,7 +1976,7 @@ function renderManagePlanning() {
      staff. Expected = duties filled in >=50% of PLANNED services of the same
      worship|service type. This avoids flagging roles a service never uses
      (e.g. Media/Translation on a weekday), which previously marked every
-     service "unfilled". Fully-empty (not-yet-planned) services are skipped —
+     service "unfilled". Fully-empty (not-yet-planned) services are skipped,
      that's a different signal than a partially-planned service with a gap. */
   const expFilled = {}, expCount = {};
   (state.services || []).forEach(s => {
@@ -1463,22 +1996,22 @@ function renderManagePlanning() {
   let gapHtml = '';
   upcoming.filter(s => s.date <= horizon).forEach(svc => {
     const a = svc.assignments || {};
-    if (!Object.keys(a).some(d => a[d])) return; // not yet planned — different signal
+    if (!Object.keys(a).some(d => a[d])) return; // not yet planned, different signal
     const missing = expectedDuties(svc).filter(d => !a[d]);
     if (missing.length) {
       gapHtml += '<div class="plan-suggest"><span class="lab">' + esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) + '</span> ' +
         '<span class="plan-duties">' + missing.length + ' unfilled: ' + missing.map(esc).join(', ') + '</span></div>';
     }
   });
-  html += '<div class="card"><div class="f-label">Unfilled duties — next 4 weeks</div>' +
+  html += '<div class="card"><div class="f-label">Unfilled duties, next 4 weeks</div>' +
     (gapHtml || '<p class="hint" style="margin-top:12px">Every planned service has its usual duties filled.</p>') + '</div>';
 
   /* --- workload table --- */
   const rows = Object.keys(stats)
     .map(m => ({ m, s: stats[m] }))
-    .filter(r => r.s.total > 0 || state.members.indexOf(r.m) !== -1)
+    .filter(r => manageMemberVisible(r.m) && (r.s.total > 0 || state.members.indexOf(r.m) !== -1))
     .sort((a, b) => (b.s.past8 + b.s.upcoming) - (a.s.past8 + a.s.upcoming) || a.m.localeCompare(b.m));
-  html += '<div class="card"><div class="f-label">Workload — who is carrying what</div>' +
+  html += '<div class="card"><div class="f-label">Workload, who is carrying what</div>' +
     '<div class="f-desc">Duty counts. Sorted heaviest first (last 8 weeks + upcoming).</div>' +
     '<div class="plan-scroll"><table class="plan-table"><tr>' +
     '<th>Member</th><th>4 wk</th><th>8 wk</th><th>Upcoming</th><th>Year</th><th>Last served</th><th>Next</th></tr>' +
@@ -1487,8 +2020,8 @@ function renderManagePlanning() {
       const flag = s.upcoming === 0 ? ' <span class="warn-badge" title="Nothing upcoming">·</span>' : '';
       return '<tr' + (s.past8 + s.upcoming === 0 ? ' class="plan-idle"' : '') + '><td>' + esc(r.m) + flag + '</td>' +
         '<td>' + s.past4 + '</td><td>' + s.past8 + '</td><td>' + s.upcoming + '</td><td>' + s.total + '</td>' +
-        '<td>' + (s.last ? esc(fmtDate(s.last)) : '—') + '</td>' +
-        '<td>' + (s.next ? esc(fmtDate(s.next)) : '—') + '</td></tr>';
+        '<td>' + (s.last ? esc(fmtDate(s.last)) : '-') + '</td>' +
+        '<td>' + (s.next ? esc(fmtDate(s.next)) : '-') + '</td></tr>';
     }).join('') +
     '</table></div></div>';
   return html;
@@ -1503,7 +2036,7 @@ function memberSelect(svc, duty) {
   if (cur && options.indexOf(cur) === -1) options = [cur].concat(options);
   return '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '"' +
     (conflicted ? ' class="conflict"' : '') + '>' +
-    '<option value="">—</option>' +
+    '<option value="">-</option>' +
     options.map(m => '<option value="' + esc(m) + '"' + (m === cur ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
     '</select>';
 }
@@ -1514,14 +2047,18 @@ function renderManageConflicts(svc, expanded) {
   const id = svcId(svc);
   const ok = svc.conflictOk || {};
   let html = '';
-  activeConflicts(svc).forEach(c => {
+  activeConflicts(svc).filter(c => canPermission('canAcknowledgeConflict', authActor(), Object.assign({}, c, {
+    serviceId: id, date: svc.date, service: svc.service
+  }))).forEach(c => {
     html += '<div class="conflict-note"><span class="dot-c" style="background:var(--warn)"></span>' +
       esc(c.name) + ' has ' + c.duties.length + ' duties this service' +
       (expanded ? ' <button class="linkish" data-act="conflict-ok" data-svc="' + id + '" data-name="' + esc(c.name) + '">Mark as OK</button>' : '') +
       '</div>';
   });
   if (expanded) {
-    conflictsFor(svc).filter(c => sameDuties(ok[c.name], c.duties)).forEach(c => {
+    conflictsFor(svc).filter(c => sameDuties(ok[c.name], c.duties) && canPermission('canAcknowledgeConflict', authActor(), Object.assign({}, c, {
+      serviceId: id, date: svc.date, service: svc.service
+    }))).forEach(c => {
       html += '<div class="conflict-note ok">' + esc(c.name) + ' has ' + c.duties.length + ' duties (marked OK) ' +
         '<button class="linkish" data-act="conflict-unok" data-svc="' + id + '" data-name="' + esc(c.name) + '">show warning again</button></div>';
     });
@@ -1534,11 +2071,11 @@ function reqSubmittedAt(r) {
 }
 
 function renderManageRequests() {
-  const all = state.requests.slice().sort((a, b) => b.createdAt - a.createdAt);
+  const all = state.requests.filter(manageRequestVisible).slice().sort((a, b) => b.createdAt - a.createdAt);
   const pending = all.filter(r => r.status === 'pending');
   const resolved = all.filter(r => r.status !== 'pending');
 
-  let html = '<p class="hint">Members can request a schedule change from My Duties. Approving here does not edit the schedule — ' +
+  let html = '<p class="hint">Members can request a schedule change from My Duties. Approving here does not edit the schedule, ' +
     'open the service in <b>Services</b> to make the actual change.</p>';
 
   if (!pending.length) {
@@ -1546,7 +2083,7 @@ function renderManageRequests() {
   } else {
     pending.forEach(r => {
       html += '<div class="card">' +
-        '<div class="req-head"><span class="req-when">' + esc(r.name) + ' — ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
+        '<div class="req-head"><span class="req-when">' + esc(r.name) + ' | ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
         '<div class="req-note" style="margin-top:2px">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) + '</div>' +
         (r.note ? '<div class="req-note">' + esc(r.note) + '</div>' : '') +
         '<div class="req-meta">Submitted ' + esc(reqSubmittedAt(r)) + '</div>' +
@@ -1567,9 +2104,9 @@ function renderManageRequests() {
       resolved.slice(0, 10).forEach(r => {
         const when = r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
         html += '<div class="req-item">' +
-          '<div class="req-head"><span class="req-when">' + esc(r.name) + ' — ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
+          '<div class="req-head"><span class="req-when">' + esc(r.name) + ' | ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
           '<div class="req-meta">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) +
-          (when ? ' · resolved ' + esc(when) + (r.resolvedBy ? ' by ' + esc(r.resolvedBy) : '') : '') + '</div>' +
+          (when ? ' · resolved ' + esc(when) + ((r.resolvedByName || r.resolvedBy) ? ' by ' + esc(r.resolvedByName || r.resolvedBy) : '') : '') + '</div>' +
           '</div>';
       });
     }
@@ -1578,16 +2115,17 @@ function renderManageRequests() {
 }
 
 function renderManageServices() {
-  let html = '<form class="add-row" data-act="add-service">' +
+  const canCreate = canPermission('canCreateService', authActor());
+  let html = canCreate ? '<form class="add-row" data-act="add-service">' +
     '<input type="date" id="svc-date" required value="' + todayISO() + '">' +
     '<input type="time" id="svc-time" required value="09:00">' +
     '<select id="svc-label">' + SERVICE_LABELS.map(l => '<option>' + l + '</option>').join('') + '</select>' +
     '<input type="text" id="svc-worship" list="worship-types" placeholder="Worship (e.g. Sabbath Day)" value="Sabbath Day">' +
     '<datalist id="worship-types">' + WORSHIP_TYPES.map(w => '<option>' + esc(w) + '</option>').join('') + '</datalist>' +
-    '<button class="primary" type="submit">Add</button></form>' +
-    '<p class="hint">Tap a service to assign people to each duty.</p>';
+    '<button class="primary" type="submit">Add</button></form>' :
+    '<p class="hint">Select a service to edit duties in your authorized department.</p>';
 
-  const up = upcomingServices();
+  const up = upcomingServices().filter(manageServiceVisible);
   if (!up.length) html += '<div class="empty">No upcoming services. Add one above.</div>';
   let lastDate = '';
   up.forEach(svc => {
@@ -1602,13 +2140,13 @@ function renderManageServices() {
       '<span class="svc-title">' + esc(svc.worship) + ' <small>· ' + esc(svc.service) + '</small></span>' +
       '<span class="time">' + fmtTime(svc.time) + ' ' + (open ? '▲' : '▼') + '</span></button>';
     if (open) {
-      html += '<div class="edit-grid">' +
-        '<span class="lab">Date</span><input type="date" value="' + esc(svc.date) + '" data-chg="svc-field" data-svc="' + id + '" data-field="date">' +
-        '<span class="lab">Time</span><input type="time" value="' + esc(svc.time) + '" data-chg="svc-field" data-svc="' + id + '" data-field="time">' +
-        '<span class="lab">Worship</span><input type="text" value="' + esc(svc.worship) + '" data-chg="svc-field" data-svc="' + id + '" data-field="worship">' +
-        '<span class="lab">Choir song</span><input type="text" value="' + esc(svc.choirSong || '') + '" placeholder="e.g. #311 I Repent of My Sin" data-chg="svc-field" data-svc="' + id + '" data-field="choirSong">' +
+        html += '<div class="edit-grid">' +
+        '<span class="lab">Date</span><input type="date" value="' + esc(svc.date) + '" data-chg="svc-field" data-svc="' + id + '" data-field="date"' + (canPermission('isAdmin', authActor()) ? '' : ' disabled') + '>' +
+        '<span class="lab">Time</span><input type="time" value="' + esc(svc.time) + '" data-chg="svc-field" data-svc="' + id + '" data-field="time"' + (canPermission('isAdmin', authActor()) ? '' : ' disabled') + '>' +
+        '<span class="lab">Worship</span><input type="text" value="' + esc(svc.worship) + '" data-chg="svc-field" data-svc="' + id + '" data-field="worship"' + (canPermission('isAdmin', authActor()) ? '' : ' disabled') + '>' +
+        (canEditSongService(svc) ? '<span class="lab">Choir song</span><input type="text" value="' + esc(svc.choirSong || '') + '" placeholder="e.g. #311 I Repent of My Sin" data-chg="svc-field" data-svc="' + id + '" data-field="choirSong">' : '') +
         '</div>';
-      CATEGORIES.forEach(cat => {
+      manageCategories().forEach(cat => {
         html += '<div class="cat-edit-label"><span class="dot-c" style="background:' + cat.color + '"></span>' + esc(cat.name) + '</div>' +
           '<div class="edit-grid">' +
           cat.duties.map(duty => '<span class="lab">' + esc(duty) + '</span>' + memberSelect(svc, duty)).join('') +
@@ -1617,7 +2155,7 @@ function renderManageServices() {
       html += renderManageConflicts(svc, true);
       html += '<div style="text-align:right;margin-top:12px"><button class="danger-link" data-act="del-service" data-svc="' + id + '">Delete this service</button></div>';
     } else {
-      html += renderCatRows(svc, false);
+      html += renderCatRows(svc, false, manageDepartment() || undefined);
     }
     html += '</div>';
   });
@@ -1625,26 +2163,36 @@ function renderManageServices() {
 }
 
 function renderManagePeople() {
-  let html = '<form class="add-row" data-act="add-member">' +
+  const department = manageDepartment();
+  const people = department
+    ? ((state.departments || {})[department] || []).slice().sort()
+    : state.members.slice().sort();
+  const canRename = !department && canPermission('isAdmin', authActor());
+  let html = '<form class="add-row" data-act="add-member" data-dept="' + esc(department || 'All') + '">' +
     '<input type="text" id="member-name" required placeholder="New person\'s name (e.g. B. David)">' +
-    '<button class="primary" type="submit">Add</button></form>' +
-    '<p class="hint">Type on a name to fix it — the change applies to every duty automatically. ' +
-    'Check the departments below to control which duty pickers each person shows up in.</p>';
-  state.members.forEach(m => {
+    '<button class="primary" type="submit">Add to ' + esc(department || 'member list') + '</button></form>' +
+    '<p class="hint">This view is scoped to ' + esc(department || 'all departments') + '. ' +
+    (canRename ? 'Type on a name to fix it across duties. ' : 'Member changes stay within the selected department. ') +
+    'Assignment history is preserved.</p>';
+  if (!people.length) html += '<div class="empty">No members are listed in this scope yet.</div>';
+  people.forEach(m => {
     const n = dutiesFor(m).length;
+    const targetDepartments = department ? [department] : authorizedDepartments();
+    const canReset = canPermission('canResetPin', authActor(), { name: m, departments: targetDepartments });
     html += '<div class="list-row" style="flex-wrap:wrap">' +
-      '<input type="text" value="' + esc(m) + '" data-chg="member-name" data-old="' + esc(m) + '" style="flex:1">' +
+      (canRename ? '<input type="text" value="' + esc(m) + '" data-chg="member-name" data-old="' + esc(m) + '" style="flex:1">' : '<span style="flex:1;font-weight:650">' + esc(m) + '</span>') +
       '<span class="count">' + n + ' upcoming</span>' +
-      '<button class="danger-link" data-act="del-member" data-name="' + esc(m) + '">Remove</button>' +
-      '<div style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;margin-top:2px">' +
+      '<button class="danger-link" data-act="del-member" data-name="' + esc(m) + '" data-dept="' + esc(department || 'All') + '">' +
+      (department ? 'Archive here' : 'Remove') + '</button>' +
+      (canReset ? '<button class="ghost mini" data-act="reset-member-pin" data-name="' + esc(m) + '" data-dept="' + esc(department || 'All') + '">Reset PIN</button>' : '') +
+      (department ? '<span class="count">Active in ' + esc(department) + '</span>' : '<div style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;margin-top:2px">' +
       CATEGORIES.map(cat => {
         const checked = ((state.departments || {})[cat.name] || []).indexOf(m) !== -1;
         return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)">' +
           '<input type="checkbox" data-chg="member-cat" data-name="' + esc(m) + '" data-cat="' + esc(cat.name) + '"' +
           (checked ? ' checked' : '') + '>' +
           '<span class="dot-c" style="background:' + cat.color + '"></span>' + esc(cat.name) + '</label>';
-      }).join('') +
-      '</div>' +
+      }).join('') + '</div>') +
       '</div>';
   });
   return html;
@@ -1665,7 +2213,7 @@ function renderSheetCard() {
     } else {
       detail = 'everything matched';
     }
-    status = 'Last checked ' + when + ' — ' + esc(detail);
+    status = 'Last checked ' + when + ' | ' + esc(detail);
   }
 
   let html = '<div class="card">' +
@@ -1710,9 +2258,9 @@ function renderManageData() {
     '<label class="ghost" style="display:inline-flex;align-items:center;cursor:pointer">Import backup file' +
     '<input type="file" accept=".json,application/json" data-chg="import-file" style="display:none"></label>' +
     '</div></div>' +
-    '<div class="card"><p>Reload the original schedule from the spreadsheet (May – July 2026). This overwrites all current data' + (fb ? ' for everyone' : '') + '.</p>' +
+    '<div class="card"><p>Reload the original schedule from the spreadsheet (May to July 2026). This overwrites all current data' + (fb ? ' for everyone' : '') + '.</p>' +
     '<button class="danger-link" data-act="reset">Reset to spreadsheet data</button></div>' +
-    '<div class="card"><p>One-time cleanup after the sheet\'s Raw Data tab was tidied up — merges leftover name variants (e.g. "B. Anthony L") into their current spelling everywhere.</p>' +
+    '<div class="card"><p>One-time cleanup after the sheet\'s Raw Data tab was tidied up, merges leftover name variants (e.g. "B. Anthony L") into their current spelling everywhere.</p>' +
     '<button class="ghost" data-act="unify-names">Unify member names</button></div>' +
     '</div>';
 }
@@ -1721,10 +2269,10 @@ function renderManageData() {
 
 /* Applies NAME_UNIFY_MAP (or a compatible map) to state.members, every
    service's assignments/conflictOk, and every department roster (rosters are
-   keyed by member name too, and are what duty dropdowns actually read from —
-   see memberSelect — so they must stay in sync or old spellings keep showing
+   keyed by member name too, and are what duty dropdowns actually read from,
+   see memberSelect, so they must stay in sync or old spellings keep showing
    up there even after members/services are unified).
-   Pure w.r.t. persistence — caller persists whatever comes back touched.
+   Pure w.r.t. persistence, caller persists whatever comes back touched.
    Returns { membersChanged, membersMerged, touchedServices, departmentsChanged }. */
 function applyNameMap(map) {
   const canon = n => (map[n] || n);
@@ -1800,8 +2348,126 @@ function songStateTag(id) {
 
 function findService(id) { return state.services.find(s => svcId(s) === id); }
 
+function findRequest(id) { return (state.requests || []).find(request => request.id === id); }
+
+function requestDepartment(request) {
+  if (!request) return '';
+  if (request.department) return request.department;
+  return actionableDepartmentForDuty(request.duty);
+}
+
+function songServiceForPermission(service) {
+  if (!service) return null;
+  return Object.assign({}, service, {
+    presider: service.presider || (service.assignments && service.assignments.Presider) || ''
+  });
+}
+
+function canEditSongService(service) {
+  return !!authActor() && canPermission('canEditSongs', authActor(), songServiceForPermission(service));
+}
+
+function canManagePresiders() {
+  return !!authActor() && canPermission('canManageLeaders', authActor());
+}
+
+function canRunAction(act, el) {
+  const actor = authActor();
+  if (act === 'site-unlock' || act === 'login-member') return true;
+  if (act === 'member-login') return !isVerifiedSession() && !isForcedSession();
+  if (act === 'member-change-pin') return isForcedSession();
+  if (act === 'member-logout') return isVerifiedSession();
+  if (act === 'home') return true;
+  if (!isVerifiedSession() || isForcedSession()) return false;
+  if (act === 'tab') {
+    if (el.dataset.tab === 'manage') return canManageAnyDepartment();
+    if (el.dataset.tab === 'songs') return canEditSongService(findService(ui.songSvc)) ||
+      canPermission('canEditSongs', actor, {}) ||
+      dutiesFor(ui.me).some(duty => duty.duty === 'Presider');
+    return el.dataset.tab === 'schedule' || el.dataset.tab === 'my';
+  }
+  if (act === 'open-manage-queue') return canManageAnyDepartment();
+  if (act === 'sub') {
+    if (el.dataset.sub === 'leaders') return canPermission('canManageLeaders', actor);
+    if (el.dataset.sub === 'features' || el.dataset.sub === 'data') return canPermission('isAdmin', actor);
+    return canManageAnyDepartment();
+  }
+  if (act === 'lock-now') return canManageAnyDepartment();
+  if (act === 'open-songs') return canEditSongService(findService(el.dataset.svc)) || canPermission('canEditSongs', actor, {});
+  if (['close-songs', 'dept-filter', 'dismiss-banner', 'toggle-past', 'clear-alerts',
+    'notify-on', 'notify-off', 'subscribe-ics', 'copy-ics', 'expand', 'req-open',
+    'req-cancel'].indexOf(act) !== -1) return true;
+  if (act === 'req-submit') {
+    const service = findService(el.dataset.svc);
+    return !!service && service.assignments && service.assignments[el.dataset.duty] === ui.me;
+  }
+  if (act === 'req-approve' || act === 'req-decline') {
+    const request = findRequest(el.dataset.id);
+    return !!request && canPermission('canResolveRequest', actor, request);
+  }
+  if (act === 'req-open-service') return canManageAnyDepartment();
+  if (act === 'assign' || act === 'plan-assign') {
+    return canPermission('canEditDuty', actor, el.dataset.duty);
+  }
+  if (act === 'svc-field') {
+    const service = findService(el.dataset.svc);
+    return el.dataset.field === 'choirSong'
+      ? canEditSongService(service)
+      : canPermission('isAdmin', actor);
+  }
+  if (act === 'member-name') return canPermission('isAdmin', actor);
+  if (act === 'member-cat') return canPermission('canManageDepartmentMember', actor, el.dataset.cat, { name: el.dataset.name });
+  if (act === 'manage-dept') return authorizedDepartments().indexOf(el.value) !== -1;
+  if (['change-site-pin', 'set-pin', 'unlock', 'change-pin', 'feature', 'scheduler-name',
+    'sheet-url', 'import-file', 'export', 'reset', 'unify-names'].indexOf(act) !== -1) {
+    return canPermission('isAdmin', actor);
+  }
+  if (act === 'add-service') return canPermission('canCreateService', actor);
+  if (act === 'del-service') return canPermission('isAdmin', actor);
+  if (act === 'add-member') {
+    const department = selectedManageDepartment();
+    return department === 'All'
+      ? canPermission('isAdmin', actor)
+      : canPermission('canManageDepartmentMember', actor, department, { name: ui.loginMember || '' });
+  }
+  if (act === 'del-member' || act === 'reset-member-pin') {
+    const target = { name: canonicalMemberName(el.dataset.name), departments: [el.dataset.dept || selectedManageDepartment()] };
+    if (act === 'reset-member-pin') return canPermission('canResetPin', actor, target);
+    const department = el.dataset.dept || selectedManageDepartment();
+    return department === 'All'
+      ? canPermission('isAdmin', actor)
+      : canPermission('canManageDepartmentMember', actor, department, target);
+  }
+  if (act === 'conflict-ok' || act === 'conflict-unok') {
+    const service = findService(el.dataset.svc);
+    const conflict = service && conflictsFor(service).find(item => item.name === el.dataset.name);
+    return !!conflict && canPermission('canAcknowledgeConflict', actor, Object.assign({}, conflict, {
+      serviceId: el.dataset.svc, date: service.date, service: service.service
+    }));
+  }
+  return canManageAnyDepartment();
+}
+
 function handleAct(act, el) {
-  if (act === 'home') {
+  if (!canRunAction(act, el)) {
+    addBanner('You are not allowed to perform that action.', true);
+    return;
+  }
+  if (act === 'member-login') {
+    memberLogin();
+  }
+  else if (act === 'member-change-pin') {
+    memberChangePin();
+  }
+  else if (act === 'member-logout') {
+    memberLogout();
+  }
+  else if (act === 'open-manage-queue') {
+    ui.tab = 'manage';
+    ui.sub = 'requests';
+    render();
+  }
+  else if (act === 'home') {
     ui.tab = 'schedule';
     ui.songSvc = null;
     render();
@@ -1930,18 +2596,40 @@ function handleAct(act, el) {
     }
   }
   else if (act === 'add-member') {
-    const name = document.getElementById('member-name').value.trim();
+    const input = document.getElementById('member-name');
+    const name = canonicalMemberName(input && input.value);
     if (!name) return;
-    if (state.members.indexOf(name) !== -1) { alert(name + ' is already on the list.'); return; }
-    state.members.push(name);
-    state.members.sort();
-    persistMembers();
+    const department = el.dataset.dept && el.dataset.dept !== 'All' ? el.dataset.dept : '';
+    if (department) {
+      if (!state.departments) state.departments = {};
+      const roster = state.departments[department] || (state.departments[department] = []);
+      if (roster.indexOf(name) !== -1) { alert(name + ' is already in this department.'); return; }
+      roster.push(name);
+      roster.sort();
+      persistDepartments();
+    } else {
+      if (state.members.indexOf(name) !== -1) { alert(name + ' is already on the list.'); return; }
+      state.members.push(name);
+      state.members.sort();
+      persistMembers();
+    }
     render();
   }
   else if (act === 'del-member') {
-    const name = el.dataset.name;
+    const name = canonicalMemberName(el.dataset.name);
+    const department = el.dataset.dept && el.dataset.dept !== 'All' ? el.dataset.dept : '';
     const n = dutiesFor(name).length;
-    if (confirm('Remove ' + name + '?' + (n ? ' They will be taken off ' + n + ' upcoming duties.' : ''))) {
+    const question = department
+      ? 'Archive ' + name + ' from ' + department + '? Existing assignments stay in history.'
+      : 'Remove ' + name + '?' + (n ? ' They will be taken off ' + n + ' upcoming duties.' : '');
+    if (confirm(question)) {
+      if (department) {
+        const roster = (state.departments && state.departments[department]) || [];
+        state.departments[department] = roster.filter(member => member !== name);
+        persistDepartments();
+        afterDataChange();
+        return;
+      }
       state.members = state.members.filter(m => m !== name);
       const touched = [];
       state.services.forEach(svc => {
@@ -1961,6 +2649,17 @@ function handleAct(act, el) {
       if (ui.me === name) { ui.me = ''; localStorage.removeItem('wds-me'); }
       afterDataChange();
     }
+  }
+  else if (act === 'reset-member-pin') {
+    const name = canonicalMemberName(el.dataset.name);
+    if (!name || !confirm('Reset the member PIN for ' + name + '?')) return;
+    authCall('resetMemberPin', { memberId: name }).then(() => {
+      addBanner('The PIN for ' + name + ' was reset. They must choose a new PIN at sign-in.');
+      render();
+    }).catch(error => {
+      addBanner(safeAuthMessage(error), true);
+      render();
+    });
   }
   else if (act === 'conflict-ok') {
     const svc = findService(el.dataset.svc);
@@ -1993,7 +2692,7 @@ function handleAct(act, el) {
     // Guard against a fast double-tap creating a fresh double-booking: refuse
     // if this person already holds another duty in the same service.
     if (Object.keys(svc.assignments).some(d => d !== duty && svc.assignments[d] === name)) {
-      alert(name + ' is already serving in this service — pick a different person.');
+      alert(name + ' is already serving in this service, pick a different person.');
       return;
     }
     svc.assignments[duty] = name;
@@ -2058,11 +2757,14 @@ function handleAct(act, el) {
     const req = {
       id: requestId(el.dataset.svc, el.dataset.duty, createdAt),
       name: ui.me,
+      memberId: verifiedSession.memberId,
+      requesterUid: (authUser && authUser.uid) || '',
       svcId: el.dataset.svc,
       date: svc.date,
       service: svc.service,
       worship: svc.worship,
       duty: el.dataset.duty,
+      department: actionableDepartmentForDuty(el.dataset.duty),
       note: (ui.reqForm && ui.reqForm.note) || '',
       status: 'pending',
       createdAt
@@ -2088,14 +2790,22 @@ function handleAct(act, el) {
 }
 
 function handleChg(chg, el) {
-  if (chg === 'me') {
-    ui.me = el.value;
-    localStorage.setItem('wds-me', ui.me);
-    ui.rebaseline = true;
+  if (chg === 'login-member') {
+    ui.loginMember = canonicalMemberName(el.value);
+    ui.authError = '';
+    return;
+  }
+  if (!canRunAction(chg, el)) {
+    addBanner('You are not allowed to perform that action.', true);
+    return;
+  }
+  if (chg === 'me') return;
+  if (chg === 'manage-dept') {
+    ui.manageDept = el.value;
+    if (ui.manageDept !== 'All' && authorizedDepartments().indexOf(ui.manageDept) === -1) {
+      ui.manageDept = authorizedDepartments()[0] || '';
+    }
     render();
-    checkNewDuties();
-    checkReminders();
-    if (notifyOn()) registerPush();
   }
   else if (chg === 'assign') {
     const svc = findService(el.dataset.svc);
@@ -2216,7 +2926,7 @@ document.addEventListener('change', e => {
   if (el) handleChg(el.dataset.chg, el);
 });
 /* Live-capture the change-request note as the member types, so a Firestore
-   snapshot re-render mid-typing (see afterDataChange) can't lose the draft —
+   snapshot re-render mid-typing (see afterDataChange) can't lose the draft,
    'change' alone only fires on blur. */
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-chg="req-note"]');
@@ -2234,14 +2944,14 @@ function setSyncPill(live) {
 /* ---- Pulse: the smallest honest answer to "does anyone open this?" ----
    Writes ONE document per day, `pulse/{YYYY-MM-DD}`, holding plain counters.
 
-   It stores no device id, no name, no free text — nothing that identifies a
+   It stores no device id, no name, no free text, nothing that identifies a
    person. Each device counts itself at most once per event per day, using a
    localStorage note that never leaves the phone, so the number means
    "devices that did this today", not "taps".
 
    Why this exists: as of July 2026 not one of the church apps had any
    measurement at all, so "is the worship schedule read by fifty people or by
-   nobody?" was unanswerable — a busy app and a dead one looked identical. */
+   nobody?" was unanswerable, a busy app and a dead one looked identical. */
 const pulseInFlight = new Set(); // stops a double-count before the write resolves
 
 function pulse(event) {
@@ -2273,24 +2983,26 @@ function pulse(event) {
     }).catch(() => {
       pulseInFlight.delete(event);                  // let a later attempt retry
     });
-  } catch (e) { /* private mode, quota, clock — all non-fatal */ }
+  } catch (e) { /* private mode, quota, clock, all non-fatal */ }
 }
 
 async function initFirebase(config) {
   // Fetched together, not one after the other: these are two separate
   // downloads from Google's CDN and the second does not depend on the first.
-  const [appMod, fsMod] = await Promise.all([
+  const [appMod, fsMod, authMod, functionsMod] = await Promise.all([
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js')
   ]);
   const app = appMod.initializeApp(config);
 
-  // App Check — attests requests come from the real app. Activates only once a
+  // App Check, attests requests come from the real app. Activates only once a
   // reCAPTCHA v3 site key is configured (window.RECAPTCHA_SITE_KEY); until then
   // it's a no-op so the app keeps working during rollout. Must run right after
   // initializeApp, before any other Firebase service makes a request. NOTE: do
   // NOT turn on Firestore App Check *enforcement* in the console until the song
-  // app (shared project) also ships this — enforcement is project-wide.
+  // app (shared project) also ships this, enforcement is project-wide.
   if (window.RECAPTCHA_SITE_KEY) {
     try {
       const acMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js');
@@ -2301,27 +3013,25 @@ async function initFirebase(config) {
     } catch (e) { console.warn('App Check init failed:', e); }
   }
 
-  // Anonymous auth — an invisible sign-in so the Firestore write rules can
-  // require an authenticated context without adding any login UI for members.
-  // Reads stay open, so this deliberately runs alongside the rest of startup
-  // instead of in front of it: nothing a member sees depends on it. Writes wait
-  // for it via fbWrite(). If it fails (e.g. Anonymous auth switched off in the
-  // console) the app still shows data; only writes would be rejected.
-  authReady = (async () => {
-    const authMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
-    await authMod.signInAnonymously(authMod.getAuth(app));
-  })().catch(e => { console.warn('Anonymous sign-in failed:', e); });
-
   const db = fsMod.getFirestore(app);
+  const auth = authMod.getAuth(app);
+  const functions = functionsMod.getFunctions(app, REGION);
   fb = {
     db,
+    auth,
+    functions,
+    callable: name => functionsMod.httpsCallable(functions, name),
+    signInWithCustomToken: authMod.signInWithCustomToken,
+    signOut: authMod.signOut,
     doc: fsMod.doc,
     setDoc: fsMod.setDoc,
     deleteDoc: fsMod.deleteDoc,
     writeBatch: fsMod.writeBatch,
-    // Extras for the song module (song-app.js) — it shares this app's single
+    // Extras for the song module (song-app.js), it shares this app's single
     // Firebase instance and anonymous auth instead of initializing its own.
     collection: fsMod.collection,
+    query: fsMod.query,
+    where: fsMod.where,
     onSnapshot: fsMod.onSnapshot,
     getDoc: fsMod.getDoc,
     getDocs: fsMod.getDocs,
@@ -2332,8 +3042,10 @@ async function initFirebase(config) {
     increment: fsMod.increment,
     knownIds: []
   };
-  pulse('opens');
-  // Cloud Messaging — best-effort; unsupported browsers just leave messaging null.
+  authStatus = 'loading';
+  authReady = Promise.resolve(null);
+  authMod.onAuthStateChanged(auth, user => { syncAuthUser(user, false); });
+  // Cloud Messaging, best-effort; unsupported browsers just leave messaging null.
   try {
     const msgMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js');
     if (await msgMod.isSupported()) {
@@ -2354,6 +3066,7 @@ async function initFirebase(config) {
     snap => {
       if (historyLoaded || snap.empty) return;
       state.services = snap.docs.map(d => d.data());
+      canonicalizeStateNames();
       setSyncPill(true);
       renderSoon();
     },
@@ -2372,15 +3085,16 @@ async function initFirebase(config) {
       // brand-new database: upload the spreadsheet schedule once
       state = loadLocal() || seedState();
       persistAll();
-      setSyncPill(true); // data is now flowing — safe to claim "Live sync on"
+      setSyncPill(true); // data is now flowing, safe to claim "Live sync on"
       afterDataChange();
       scheduleSyncSoon();
       return;
     }
     firstSnapshot = false;
-    state.services = snap.docs.map(d => d.data());
+      state.services = snap.docs.map(d => d.data());
+      canonicalizeStateNames();
     fb.knownIds = snap.docs.map(d => d.id);
-    setSyncPill(true); // data has landed — flip the pill to live now, not before
+    setSyncPill(true); // data has landed, flip the pill to live now, not before
     afterDataChange();
     scheduleSyncSoon(); // auto-pull from the sheet once, shortly after real data lands
   }, err => {
@@ -2389,7 +3103,8 @@ async function initFirebase(config) {
     setSyncPill(false);
   });
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'members'), snap => {
-    if (snap.exists()) state.members = snap.data().list || [];
+    if (snap.exists()) state.members = (snap.data().list || []).map(canonicalMemberName);
+    canonicalizeStateNames();
     membersLoaded = true;
     renderSoon();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
@@ -2402,11 +3117,12 @@ async function initFirebase(config) {
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'departments'), snap => {
     const map = snap.exists() ? (snap.data().map || {}) : null;
     if (!map || !Object.keys(map).length) {
-      state.departments = DEPARTMENTS_SEED;
-      persistDepartments();
+      state.departments = JSON.parse(JSON.stringify(DEPARTMENTS_SEED));
+      if (isVerifiedSession() && canPermission('isAdmin', authActor())) persistDepartments();
     } else {
       state.departments = map;
     }
+    canonicalizeStateNames();
     departmentsLoaded = true;
     renderSoon();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
@@ -2420,10 +3136,6 @@ async function initFirebase(config) {
       sharedNameMap = map;
     }
   }, () => { /* connection errors are surfaced by the schedule listener */ });
-  fsMod.onSnapshot(fsMod.collection(db, 'requests'), snap => {
-    state.requests = snap.docs.map(d => d.data());
-    renderSoon();
-  }, () => { /* connection errors are surfaced by the schedule listener */ });
   // Upcoming setlists only: enough for the My Duties song indicator without
   // pulling down every setlist the church has ever planned.
   fsMod.onSnapshot(
@@ -2435,7 +3147,6 @@ async function initFirebase(config) {
       renderSoon();
     },
     () => { /* the indicator just stays quiet; errors surface on the schedule listener */ });
-  if (notifyOn()) registerPush();
 }
 
 function init() {
@@ -2453,10 +3164,11 @@ function init() {
       renderLoading();
     }
     initFirebase(window.FIREBASE_CONFIG).catch(() => {
-      addBanner('Firebase config is invalid — running on this device only.', true);
+      addBanner('Firebase config is invalid - running on this device only.', true);
       state = loadLocal() || seedState();
       departmentsLoaded = true;
       membersLoaded = true;
+      authStatus = 'local';
       setSyncPill(false);
       afterDataChange();
     });
@@ -2464,6 +3176,7 @@ function init() {
     state = loadLocal() || seedState();
     departmentsLoaded = true;
     membersLoaded = true;
+    authStatus = 'local';
     saveLocal();
     setSyncPill(false);
     afterDataChange();
