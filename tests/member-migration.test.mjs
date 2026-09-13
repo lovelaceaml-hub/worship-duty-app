@@ -4,9 +4,10 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const migration = require('../functions/migrate-member-access.js');
+const memberAuth = require('../functions/member-auth.js');
 const memberAccess = require('../member-access.js');
 
-const PRIVILEGED_HASH = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const PRIVILEGED_HASH = await memberAuth.hashPin('0000', { salt: 'migration-test-salt' });
 
 function fixture() {
   return {
@@ -79,7 +80,7 @@ test('migration is idempotent and preserves exact leader and song editor configu
   const first = migration.transformDatabase(fixture(), options);
   const second = migration.transformDatabase(first.database, options);
 
-  assert.equal(second.writes.length, 0);
+  assert.equal(second.writes.length, 0, JSON.stringify(second.writes));
   assert.deepEqual(first.database.app.settings.departmentLeaders, ['B. Anthony', 'M. Chloe']);
   assert.deepEqual(first.database.app.songSettings.editorNames, ['M. Chloe']);
   assert.equal(first.database.app.songSettings.editorPinHash, PRIVILEGED_HASH);
@@ -187,8 +188,8 @@ test('default migration records the requested roles and initializes privileged a
   assert.equal(result.database.accounts['D. Chloe'], undefined);
 });
 
-test('existing privileged account hash and completed PIN state are preserved', () => {
-  const existingHash = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+test('existing privileged account hash and completed PIN state are preserved', async () => {
+  const existingHash = await memberAuth.hashPin('4567', { salt: 'existing-test-salt' });
   const result = migration.transformDatabase({
     app: {},
     accounts: { known: { name: 'D. Chloe', pinHash: existingHash, mustChangePin: false } }
@@ -251,7 +252,7 @@ test('full remapper covers tokens, accounts, memberships, requestedBy, and neste
   assert.equal(result.database.requests.request1.audit.acknowledgment.acknowledgedBy, 'M. Chloe');
   assert.equal(result.database.requests.request1.audit.acknowledgment.acknowledgedFor, 'M. Chloe');
   assert.deepEqual(result.database.accounts['M. Chloe'], {
-    name: 'M. Chloe', aliasOnly: true, canonicalOnly: true
+    name: 'M. Chloe', aliasOnly: true, canonicalOnly: true, active: true, roleVersion: 1
   });
   assert.deepEqual(result.database.memberships['M. Chloe'].departments, ['Media', 'Worship']);
   assert.equal(result.database.accounts['D. Chloe'], undefined);

@@ -10,11 +10,20 @@ service cloud.firestore {
     // Admin SDK writes from trusted server functions bypass these rules.
 
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.mustChangePin != true;
+    }
+
+    function claimsCurrent() {
+      return signedIn()
+        && hasAccount()
+        && request.auth.token.roleVersion is int
+        && accountData().roleVersion is int
+        && request.auth.token.roleVersion == accountData().roleVersion;
     }
 
     function hasRole(role) {
-      return signedIn()
+      return claimsCurrent()
         && (
           (request.auth.token.roles is list && role in request.auth.token.roles)
           || (request.auth.token.roles is map
@@ -30,33 +39,35 @@ service cloud.firestore {
     // send role, permission, or boolean claims. They are still Firebase Auth
     // claims, never client-writable document fields.
     function claimBool(name) {
-      return signedIn()
+      return claimsCurrent()
         && request.auth.token.keys().hasAny([name])
         && request.auth.token[name] == true;
     }
 
     function claimRole(role) {
-      return signedIn()
+      return claimsCurrent()
         && request.auth.token.keys().hasAny(['role'])
         && request.auth.token.role == role;
     }
 
     function claimListHas(name, value) {
-      return signedIn()
+      return claimsCurrent()
         && request.auth.token.keys().hasAny([name])
         && request.auth.token[name] is list
         && value in request.auth.token[name];
     }
 
     function hasAccount() {
-      return signedIn() && exists(
-        /databases/$(database)/documents/accounts/$(request.auth.uid)
+      return signedIn()
+        && request.auth.token.memberId is string
+        && exists(
+        /databases/$(database)/documents/accounts/$(request.auth.token.memberId)
       );
     }
 
     function accountData() {
       return get(
-        /databases/$(database)/documents/accounts/$(request.auth.uid)
+        /databases/$(database)/documents/accounts/$(request.auth.token.memberId)
       ).data;
     }
 
@@ -67,20 +78,23 @@ service cloud.firestore {
     }
 
     function accountRole(role) {
-      return accountActive()
+      return claimsCurrent()
+        && accountActive()
         && accountData().keys().hasAny(['role'])
         && accountData().role == role;
     }
 
     function accountListHas(name, value) {
-      return accountActive()
+      return claimsCurrent()
+        && accountActive()
         && accountData().keys().hasAny([name])
         && accountData()[name] is list
         && value in accountData()[name];
     }
 
     function accountBool(name) {
-      return accountActive()
+      return claimsCurrent()
+        && accountActive()
         && accountData().keys().hasAny([name])
         && accountData()[name] == true;
     }
@@ -141,7 +155,7 @@ service cloud.firestore {
     }
 
     function canManageOrgConfig() {
-      return isAdmin() || isGlobalLeaderManager();
+      return isAdmin();
     }
 
     function isDepartmentLeader(department) {
@@ -600,7 +614,7 @@ service cloud.firestore {
           || (
             request.resource.data.conflictOk.get(memberName, []) is list
             && request.resource.data.conflictOk
-              .get(memberName, []).hasOnly(duties)
+              .get(memberName, []).hasAny(duties)
           )
         );
     }
@@ -1017,27 +1031,27 @@ service cloud.firestore {
 
     match /app/departments {
       allow read: if secretFieldsAbsent(resource.data);
-      allow write: if canManageOrgConfig();
+      allow write: if isAdmin();
     }
 
     match /app/departmentConfig {
       allow read: if secretFieldsAbsent(resource.data);
-      allow write: if canManageOrgConfig();
+      allow write: if isAdmin();
     }
 
     match /app/leaderConfig {
       allow read: if secretFieldsAbsent(resource.data);
-      allow write: if canManageOrgConfig();
+      allow write: if isAdmin();
     }
 
     match /app/roles {
       allow read: if secretFieldsAbsent(resource.data);
-      allow write: if canManageOrgConfig();
+      allow write: if isAdmin();
     }
 
     match /app/nameMap {
       allow read: if secretFieldsAbsent(resource.data);
-      allow write: if canManageOrgConfig();
+      allow write: if isAdmin();
     }
 
     match /app/config {

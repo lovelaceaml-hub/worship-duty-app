@@ -7,7 +7,8 @@
     "node": "20"
   },
   "scripts": {
-    "test": "node --test test/public-schedule.test.js"
+    "test": "node --test test/public-schedule.test.js",
+    "migrate:member-access": "node scripts/migrate-member-access.js"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",

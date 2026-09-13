@@ -1,5 +1,7 @@
 'use strict';
 
+const { parsePinHash } = require('./member-auth');
+
 /*
  * Canonical identity migration for the Worship Duty data model.
  *
@@ -348,6 +350,13 @@ function normalizeExistingHash(value, path) {
   }
 }
 
+function normalizeAccountHash(value, path) {
+  if (isEmptyMergeValue(value) || !parsePinHash(String(value))) {
+    throw new Error(path + ' must be a supported salted PIN hash');
+  }
+  return String(value);
+}
+
 function applyHashField(target, field, replacement, path, options) {
   options = options || {};
   const current = target[field];
@@ -590,8 +599,8 @@ function planCollection(database, collection, canon) {
 function transformDatabase(input, options) {
   options = options || {};
   const directHash = options.privilegedPinHash || options.initialPinHash || options.initialPrivilegedPinHash;
-  if (directHash && !options.privilegedPinHash) {
-    options = Object.assign({}, options, { privilegedPinHash: assertHash(directHash) });
+  if (directHash) {
+    options = Object.assign({}, options, { privilegedPinHash: assertAccountHash(directHash) });
   }
   if (options.songEditorPinHash || options.editorPinHash) {
     options = Object.assign({}, options, {
@@ -707,10 +716,12 @@ function transformDatabase(input, options) {
 
   ['leaderConfig', 'memberAccess', 'notifications'].forEach(name => {
     const before = readAppDoc(database, name);
-    if (!before) return;
-    const next = name === 'leaderConfig'
-      ? Object.assign({}, before, access)
-      : transformNamedDocument(before, canon);
+    if (!before && name !== 'leaderConfig') return;
+    const hasLegacyIdentity = before && Object.keys(STATIC_ALIASES)
+      .some(alias => JSON.stringify(before).includes(JSON.stringify(alias)));
+    const next = !before
+      ? canonicalizeAccessConfiguration(access, canon)
+      : (name === 'leaderConfig' && !hasLegacyIdentity ? clone(before) : transformNamedDocument(before, canon));
     setAppDoc(database, name, next);
     pushIfChanged(writes, 'app/' + name, before, next);
   });
@@ -747,7 +758,7 @@ function transformDatabase(input, options) {
       let validHash = false;
       if (!isEmptyMergeValue(currentHash)) {
         try {
-          next.pinHash = normalizeExistingHash(currentHash, 'accounts/' + entry.id);
+          next.pinHash = normalizeAccountHash(currentHash, 'accounts/' + entry.id);
           validHash = true;
         } catch (error) {
           // An invalid privileged hash cannot be used for login. Replace it
@@ -762,6 +773,8 @@ function transformDatabase(input, options) {
       } else if (validHash && next.mustChangePin == null) {
         next.mustChangePin = true;
       }
+      next.active = next.active !== false;
+      next.roleVersion = Number(next.roleVersion || 1);
       if (!sameJson(before, next)) {
         counts.accounts++;
         replaceSetWrite(writes, 'accounts/' + entry.id, next, { merge: false });
@@ -774,7 +787,9 @@ function transformDatabase(input, options) {
         name,
         memberName: name,
         pinHash: assertHash(options.privilegedPinHash),
-        mustChangePin: true
+        mustChangePin: true,
+        active: true,
+        roleVersion: 1
       };
       writes.push({ path: 'accounts/' + name, data, options: { merge: false } });
       setEntry(database, 'accounts', name, data);
@@ -787,13 +802,17 @@ function transformDatabase(input, options) {
   // role list; callers can repair it explicitly with their own hash policy.
   entriesFor(database, 'accounts').forEach(entry => {
     const account = entry.data || {};
+    let next = Object.assign({}, account, {
+      active: account.active !== false,
+      roleVersion: Number(account.roleVersion || 1)
+    });
     if (!isEmptyMergeValue(account.pinHash)) {
-      const normalized = normalizeExistingHash(account.pinHash, 'accounts/' + entry.id);
-      if (normalized !== account.pinHash) {
-        const next = Object.assign({}, account, { pinHash: normalized });
-        replaceSetWrite(writes, 'accounts/' + entry.id, next, { merge: false });
-        setEntry(database, 'accounts', entry.id, next);
-      }
+      const normalized = normalizeAccountHash(account.pinHash, 'accounts/' + entry.id);
+      next.pinHash = normalized;
+    }
+    if (!sameJson(next, account)) {
+      replaceSetWrite(writes, 'accounts/' + entry.id, next, { merge: false });
+      setEntry(database, 'accounts', entry.id, next);
     }
   });
 
@@ -933,10 +952,17 @@ function migrateLocalStorageSnapshot(input, options) {
 
 function assertHash(hash) {
   if (hash == null || hash === '') return '';
-  if (typeof hash !== 'string' || !/^[0-9a-f]{64}$/i.test(hash)) {
-    throw new Error('privileged PIN hash must be a 64-character SHA-256 hex string');
+  if (typeof hash !== 'string' || (!/^[0-9a-f]{64}$/i.test(hash) && !parsePinHash(hash))) {
+    throw new Error('PIN hash must be a supported salted hash or legacy SHA-256 hex string');
   }
-  return hash.toLowerCase();
+  return /^[0-9a-f]{64}$/i.test(hash) ? hash.toLowerCase() : hash;
+}
+
+function assertAccountHash(hash) {
+  if (typeof hash !== 'string' || !parsePinHash(hash)) {
+    throw new Error('privileged PIN hash must use the supported salted account format');
+  }
+  return hash;
 }
 
 async function resolvePrivilegedPinHash(options) {
@@ -953,15 +979,15 @@ async function resolvePrivilegedPinHash(options) {
     if (typeof options.hashPin !== 'function') {
       throw new Error('plaintext PIN input is not accepted without an injected hashPin function');
     }
-    return assertHash(await options.hashPin(plaintext));
+    return assertAccountHash(await options.hashPin(plaintext));
   }
-  if (suppliedHash) return assertHash(suppliedHash);
+  if (suppliedHash) return assertAccountHash(suppliedHash);
   if (typeof options.hashPin !== 'function') return '';
   if (options.hashPin.length > 0) {
     throw new TypeError('hashPin requires an injected initial PIN value');
   }
   const hash = await options.hashPin();
-  return assertHash(hash);
+  return assertAccountHash(hash);
 }
 
 async function migrateMemberAccess(options, overrides) {

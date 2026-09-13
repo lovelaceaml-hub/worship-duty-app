@@ -561,11 +561,17 @@ function canonicalizeStateNames() {
 
 /* persistence that works in both modes */
 function persistService(svc) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), svc)).catch(() => {});
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), svc)).catch(error => {
+    addBanner('The service change was not saved: ' + safeAuthMessage(error), true);
+    renderSoon();
+  });
   else saveLocal();
 }
 function persistDeleteService(id) {
-  if (fb) fbWrite(() => fb.deleteDoc(fb.doc(fb.db, 'schedule', id))).catch(() => {});
+  if (fb) fbWrite(() => fb.deleteDoc(fb.doc(fb.db, 'schedule', id))).catch(error => {
+    addBanner('The service was not deleted: ' + safeAuthMessage(error), true);
+    renderSoon();
+  });
   else saveLocal();
 }
 function persistMembers() {
@@ -588,7 +594,10 @@ function persistNameMap(map) {
   if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'nameMap'), { map: map })).catch(() => {});
 }
 function persistRequest(req) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'requests', req.id), req)).catch(() => {});
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'requests', req.id), req)).catch(error => {
+    addBanner('The request change was not saved: ' + safeAuthMessage(error), true);
+    renderSoon();
+  });
   else saveLocal();
 }
 function resolveRequest(id, status) {
@@ -2898,7 +2907,7 @@ function handleChg(chg, el) {
     authCall('updateRoleConfiguration', {
       roleType, department, memberName, enabled: el.checked
     }).then(result => {
-      if (result && result.data && result.data.config) state.permissionConfig = result.data.config;
+      if (result && result.config) state.permissionConfig = result.config;
       addBanner('Role access updated.');
       render();
     }).catch(error => {

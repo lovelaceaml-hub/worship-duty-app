@@ -1,6 +1,6 @@
 # Authentication, Department, Notifications, Prism, Presider, and Choir Song Upgrade
 
-Status: Active
+Status: Implementation complete, pull request pending
 
 Baseline: `694a538d8c48b154ead681e10605c29f52fea850`
 
@@ -74,3 +74,7 @@ Sol owns shared entrypoints, `app.js`, `index.html`, shared manifests and lockfi
 
 - 2026-09-13: Confirmed remote `main` at required merge commit `694a538`. Preserved the original local checkout with three unrelated commits and untracked release folders. Created the isolated feature worktree and branch.
 - 2026-09-13: Accepted Anthony's speed and usage boundary. Nine disjoint Luna high implementation lanes, proportional peer review only, one Opus completion review, no production deployment.
+- 2026-09-13: Integrated all Luna lanes and their proportional Luna peer reviews. Added runtime callable wiring, verified member login, fail-closed Manage visibility, scoped department selection, actionable counts, and canonical song wiring.
+- 2026-09-13: Completed 110 focused checks with one optional Firestore emulator matrix skipped. Completed real Chromium site-lock and member-login smoke checks at desktop and phone sizes with no accessibility, console, or failed-response findings.
+- 2026-09-13: The one Opus completion review returned changes required. Sol corrected server-enforced forced-PIN state, stale-role token invalidation, role configuration escalation, protected PIN reset boundaries, login throttling, migration hash compatibility and idempotence, cross-department conflict acknowledgement, failed-write feedback, and role-config response wiring.
+- 2026-09-13: Per Anthony's one-review instruction, the Opus findings moved to one Sol correction pass. No second external review was launched.

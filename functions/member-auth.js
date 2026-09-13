@@ -472,7 +472,8 @@ function sessionClaims(member) {
     leader: privileged && !isAdmin(member),
     globalLeaderManager: Boolean(member.globalLeaderManager === true),
     songEditor: isSongEditor(member),
-    mustChangePin: effectiveMustChangePin(member)
+    mustChangePin: effectiveMustChangePin(member),
+    roleVersion: Number(member.roleVersion || 1)
   };
   const roles = copyStrings(member.roles);
   const departments = copyStrings(member.departments);
@@ -574,11 +575,15 @@ function createMemberAuthService(dependencies = {}) {
     }
 
     const storedHash = memberPinHash(member);
+    if (typeof memberStore.assertCanAttempt === 'function') await memberStore.assertCanAttempt(member.id);
     const valid = storedHash && await verifyPin(input.pin, storedHash);
     if (!valid) {
+      if (typeof memberStore.recordFailedAttempt === 'function') await memberStore.recordFailedAttempt(member.id);
       audit(logger, 'verify', 'denied', null, member);
       throw authError('unauthenticated', GENERIC_LOGIN_MESSAGE);
     }
+
+    if (typeof memberStore.clearFailedAttempts === 'function') await memberStore.clearFailedAttempts(member.id);
 
     const claims = sessionClaims(member);
     const uid = cleanText(member.authUid) || `member:${member.id}`;
@@ -602,15 +607,8 @@ function createMemberAuthService(dependencies = {}) {
     const selfChange = actorMatchesMember(actor, member);
 
     if (!selfChange) {
-      if (actorNeedsPinChange(actor)) {
-        throw authError('failed-precondition', 'Change your PIN before managing another account.');
-      }
-      try {
-        await assertActorCanAct(permission, actor, 'member.pin.change', member);
-      } catch (error) {
-        audit(logger, 'change', 'denied', actor, member);
-        throw error;
-      }
+      audit(logger, 'change', 'denied', actor, member);
+      throw authError('permission-denied', 'A PIN may only be changed by its owner. Use reset for another account.');
     }
 
     const pinHash = await hashPin(input.newPin);

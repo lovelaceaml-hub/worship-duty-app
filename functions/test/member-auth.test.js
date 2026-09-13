@@ -211,18 +211,15 @@ test('denies a reset when the injected actor permission check rejects it', async
   assert.equal(h.permissionCalls.length, 1);
 });
 
-test('checks delegated PIN changes exactly once and allows an authorized actor', async () => {
+test('requires administrators to reset rather than directly choosing another member PIN', async () => {
   const record = memberRecord({ pinHash: await hashPin('1234') });
   const h = harness(record);
-  const result = await h.service.changeMemberPin({
+  await assert.rejects(h.service.changeMemberPin({
     auth: { uid: 'admin-1', token: { memberId: 'admin-1', role: 'admin' } },
     data: { memberId: record.id, newPin: '567890' }
-  });
-  assert.deepEqual(result, { ok: true, memberId: record.id, mustChangePin: false });
-  assert.equal(h.permissionCalls.length, 1);
-  assert.equal(h.permissionCalls[0].action, 'member.pin.change');
-  assert.equal(Object.prototype.hasOwnProperty.call(h.permissionCalls[0].target, 'pinHash'), false);
-  assert.equal(await verifyPin('567890', record.pinHash), true);
+  }), error => error.code === 'permission-denied');
+  assert.equal(h.permissionCalls.length, 0);
+  assert.equal(await verifyPin('1234', record.pinHash), true);
 });
 
 test('a protected actor cannot bypass a forced change to reset another account', async () => {

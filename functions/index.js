@@ -146,6 +146,9 @@ function createFirestoreMemberStore() {
     if (!names.includes(requested)) return null;
     const defaults = memberRoleRecord(requested);
     defaults.pinHash = await hashPin(defaults.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN);
+    defaults.active = true;
+    defaults.roleVersion = 1;
+    await accounts.doc(requested).set(defaults, { merge: true });
     return defaults;
   }
 
@@ -176,16 +179,49 @@ function createFirestoreMemberStore() {
         name: canonicalMemberName(current.name || memberId),
         memberName: canonicalMemberName(current.memberName || current.name || memberId)
       }), { merge: true });
+    },
+    async assertCanAttempt(id) {
+      const snapshot = await accounts.doc(canonicalMemberName(id)).get();
+      const data = snapshot.exists ? snapshot.data() : {};
+      if (Number(data.loginLockedUntil || 0) > Date.now()) {
+        const error = new Error('Too many attempts. Try again later.');
+        error.code = 'resource-exhausted';
+        throw error;
+      }
+    },
+    async recordFailedAttempt(id) {
+      const ref = accounts.doc(canonicalMemberName(id));
+      await db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(ref);
+        const data = snapshot.exists ? snapshot.data() : {};
+        const attempts = Number(data.failedLoginAttempts || 0) + 1;
+        transaction.set(ref, {
+          failedLoginAttempts: attempts,
+          loginLockedUntil: attempts >= 5 ? Date.now() + 15 * 60 * 1000 : 0
+        }, { merge: true });
+      });
+    },
+    async clearFailedAttempts(id) {
+      await accounts.doc(canonicalMemberName(id)).set({ failedLoginAttempts: 0, loginLockedUntil: 0 }, { merge: true });
     }
   };
 }
 
 function memberPermissionAdapter() {
   return {
-    assertActorCanAct({ actor, action, target }) {
+    async assertActorCanAct({ actor, action, target }) {
       const identity = Object.assign({}, actor && actor.token, { uid: actor && actor.uid });
-      if (action === 'member.pin.reset' || action === 'member.pin.change') {
-        if (!permissions.canResetPin(identity, target, PERMISSION_CONFIG)) {
+      if (action === 'member.pin.reset') {
+        const config = await runtimePermissionConfig();
+        if (permissions.isAdmin(identity, config) || permissions.isGlobalManager(identity, config)) return true;
+        const targetIdentity = { name: canonicalMemberName(target && (target.name || target.memberName || target.id)), roles: target && target.roles };
+        const privilegedTarget = permissions.isAdmin(targetIdentity, config) ||
+          permissions.isGlobalManager(targetIdentity, config) ||
+          permissions.departmentsForLeader(targetIdentity, config).length > 0 ||
+          permissions.canEditSongs(targetIdentity, {}, config);
+        const memberships = await departmentsForMember(targetIdentity.name);
+        const scopedTarget = Object.assign({}, targetIdentity, { departments: memberships });
+        if (privilegedTarget || !permissions.canResetPin(identity, scopedTarget, config)) {
           const error = new Error('You are not allowed to perform this action.');
           error.code = 'permission-denied';
           throw error;
@@ -234,13 +270,19 @@ exports.resetMemberPin = exposeMemberAuthCallable(memberAuthCallables.resetMembe
 
 function callableActor(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'A verified member session is required.');
+  if (request.auth.token && request.auth.token.mustChangePin === true) {
+    throw new HttpsError('failed-precondition', 'Change your PIN before using privileged actions.');
+  }
   return Object.assign({}, request.auth.token || {}, { uid: request.auth.uid });
 }
 
 async function runtimePermissionConfig() {
   const snapshot = await db.collection('app').doc('leaderConfig').get();
   return snapshot.exists
-    ? Object.assign({}, PERMISSION_CONFIG, snapshot.data())
+    ? Object.assign({}, snapshot.data(), {
+      admin: PERMISSION_CONFIG.admin,
+      globalLeaderManager: PERMISSION_CONFIG.globalLeaderManager
+    })
     : PERMISSION_CONFIG;
 }
 
@@ -305,12 +347,11 @@ exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
     throw new HttpsError('permission-denied', 'Only global leader managers can change role assignments.');
   }
   const next = {
-    admin: Array.from(current.admin || PERMISSION_CONFIG.admin),
-    globalLeaderManager: Array.from(current.globalLeaderManager || PERMISSION_CONFIG.globalLeaderManager),
+    admin: Array.from(PERMISSION_CONFIG.admin),
+    globalLeaderManager: Array.from(PERMISSION_CONFIG.globalLeaderManager),
     departmentLeaders: Object.assign({}, current.departmentLeaders || PERMISSION_CONFIG.departmentLeaders),
     songEditors: Array.from(current.songEditors || PERMISSION_CONFIG.songEditors)
   };
-  const key = roleType === 'songEditor' ? 'songEditors' : department;
   const list = roleType === 'songEditor'
     ? next.songEditors
     : Array.from(next.departmentLeaders[department] || []);
@@ -321,7 +362,6 @@ exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
   else next.departmentLeaders[department] = updated;
   const actorName = canonicalMemberName(actor.memberName || actor.name || actor.uid);
   await db.collection('app').doc('leaderConfig').set(next, { merge: false });
-  const roleDefaults = memberRoleRecord(memberName);
   const memberActor = { name: memberName };
   const departments = permissions.departmentsForLeader(memberActor, next);
   const roles = [];
@@ -329,12 +369,22 @@ exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
   if (permissions.isGlobalManager(memberActor, next)) roles.push('globalLeaderManager');
   if (departments.length) roles.push('departmentLeader');
   if (permissions.canEditSongs(memberActor, {}, next)) roles.push('songEditor');
-  await db.collection('accounts').doc(memberName).set({
+  const accountRef = db.collection('accounts').doc(memberName);
+  const beforeAccount = await accountRef.get();
+  const beforeData = beforeAccount.exists ? beforeAccount.data() : {};
+  const wasPrivileged = Array.isArray(beforeData.roles) && beforeData.roles.some(role => role !== 'member');
+  const nowPrivileged = roles.length > 0;
+  const accountPatch = {
     roles, departments,
     role: roles[0] || 'member',
     globalLeaderManager: roles.includes('globalLeaderManager'),
-    mustChangePin: roles.length ? true : roleDefaults.mustChangePin
-  }, { merge: true });
+    mustChangePin: !wasPrivileged && nowPrivileged ? true : Boolean(beforeData.mustChangePin),
+    active: true,
+    roleVersion: Number(beforeData.roleVersion || 1) + 1
+  };
+  if (!beforeData.pinHash) accountPatch.pinHash = await hashPin(nowPrivileged ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN);
+  await accountRef.set(accountPatch, { merge: true });
+  try { await getAuth().revokeRefreshTokens(String(beforeData.authUid || 'member:' + memberName)); } catch (_error) { /* next token still uses the new role version */ }
   await db.collection('audit').add({
     actor: actorName, actorUid: request.auth.uid,
     action: 'role-configuration-changed', target: memberName,

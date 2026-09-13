@@ -2,30 +2,30 @@
 
 Plan ID: 2026-09-13-auth-department-notifications-presider
 Plan file: /Users/anthony/Projects/worship-duty-app-worktrees/auth-department-upgrade/docs/PLAN-AUTH-DEPARTMENT-NOTIFICATIONS-PRESIDER.md
-Runner: pending
+Runner: parallel Luna implementation with Sol integration
 Started: 2026-09-13T20:23Z
-Coordinator: pending
+Coordinator: Terra coordinator, completed
 
 ## Baselines
 
 | Repo | Path | Branch | Baseline HEAD |
 |---|---|---|---|
-| pending | pending | pending | pending |
+| worship-duty-app | /Users/anthony/Projects/worship-duty-app-worktrees/auth-department-upgrade | feature/auth-department-notifications-presider | 694a538d8c48b154ead681e10605c29f52fea850 |
 
 ## Lanes
 
 | Lane | Title | State | Model | Worktree | Review | Depends on |
 |---|---|---|---|---|---|---|
-| LL1 | Authorization model | planned | pending | pending | pending | pending |
-| LL2 | Secure member authentication | planned | pending | pending | pending | pending |
-| LL3 | Firestore security boundary | planned | pending | pending | pending | pending |
-| LL4 | Department workflow model | planned | pending | pending | pending | pending |
-| LL5 | Notification routing | planned | pending | pending | pending | pending |
-| LL6 | Prism calendar behavior | planned | pending | pending | pending | pending |
-| LL7 | Presider and song experience | planned | pending | pending | pending | pending |
-| LL8 | Spreadsheet choir-song synchronization | planned | pending | pending | pending | pending |
-| LL9 | Canonical identity and migration | planned | pending | pending | pending | pending |
-| LLI | Integration, minimum verification, review, and PR | planned | pending | pending | pending | pending |
+| LL1 | Authorization model | complete | Luna high | isolated lane | Luna peer complete | none |
+| LL2 | Secure member authentication | complete | Luna high | isolated lane | Luna peer complete | LL1 |
+| LL3 | Firestore security boundary | complete | Luna high | isolated lane | Luna peer complete | LL1 |
+| LL4 | Department workflow model | complete | Luna high | isolated lane | Luna peer complete | LL1 |
+| LL5 | Notification routing | complete | Luna high | isolated lane | Luna peer complete | LL1, LL4 |
+| LL6 | Prism calendar behavior | complete | Luna high | isolated lane | Luna peer complete | none |
+| LL7 | Presider and song experience | complete | Luna high | isolated lane | Luna peer complete | LL1 |
+| LL8 | Spreadsheet choir-song synchronization | complete | Luna high | isolated lane | Luna peer complete | none |
+| LL9 | Canonical identity and migration | complete | Luna high | isolated lane | Luna peer complete | LL1 |
+| LLI | Integration, minimum verification, review, and PR | complete | Sol | integration worktree | one Opus review, findings corrected by Sol | all lanes |
 
 ## Folders
 
