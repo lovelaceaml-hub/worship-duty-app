@@ -1,23 +1,51 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Firebase Auth custom claims are the authority for client writes. The
+    // canonical shape is:
+    //   roles: ["admin", "globalLeaderManager", "departmentLeader", "songEditor"]
+    //   departments: ["Worship", "Translation"]
+    //   memberName: "Canonical Member Name"
+    // Admin SDK writes from trusted server functions bypass these rules.
+
     function signedIn() {
       return request.auth != null;
     }
 
+    function hasRole(role) {
+      return signedIn()
+        && (
+          (request.auth.token.roles is list && role in request.auth.token.roles)
+          || (request.auth.token.roles is map
+            && request.auth.token.roles[role] == true)
+          || (
+            request.auth.token.keys().hasAny(['role'])
+            && request.auth.token.role == role
+          )
+        );
+    }
+
+    // Legacy claim helpers remain available for staged clients that still
+    // send role, permission, or boolean claims. They are still Firebase Auth
+    // claims, never client-writable document fields.
     function claimBool(name) {
-      return signedIn() && request.auth.token.keys().hasAny([name]) &&
-        request.auth.token[name] == true;
+      return signedIn()
+        && request.auth.token.keys().hasAny([name])
+        && request.auth.token[name] == true;
     }
 
     function claimRole(role) {
-      return signedIn() && request.auth.token.keys().hasAny(['role']) &&
-        request.auth.token.role == role;
+      return signedIn()
+        && request.auth.token.keys().hasAny(['role'])
+        && request.auth.token.role == role;
     }
 
     function claimListHas(name, value) {
-      return signedIn() && request.auth.token.keys().hasAny([name]) &&
-        value in request.auth.token[name];
+      return signedIn()
+        && request.auth.token.keys().hasAny([name])
+        && request.auth.token[name] is list
+        && value in request.auth.token[name];
     }
 
     function hasAccount() {
@@ -33,160 +61,309 @@ service cloud.firestore {
     }
 
     function accountActive() {
-      return hasAccount() && accountData().keys().hasAny(['active']) &&
-        accountData().active == true;
+      return hasAccount()
+        && accountData().keys().hasAny(['active'])
+        && accountData().active == true;
     }
 
     function accountRole(role) {
-      return accountActive() && accountData().keys().hasAny(['role']) &&
-        accountData().role == role;
+      return accountActive()
+        && accountData().keys().hasAny(['role'])
+        && accountData().role == role;
     }
 
     function accountListHas(name, value) {
-      return accountActive() && accountData().keys().hasAny([name]) &&
-        value in accountData()[name];
+      return accountActive()
+        && accountData().keys().hasAny([name])
+        && accountData()[name] is list
+        && value in accountData()[name];
     }
 
     function accountBool(name) {
-      return accountActive() && accountData().keys().hasAny([name]) &&
-        accountData()[name] == true;
+      return accountActive()
+        && accountData().keys().hasAny([name])
+        && accountData()[name] == true;
     }
 
-    function isCoordinator() {
-      return signedIn() && (
-        claimBool('admin') || claimBool('coordinator') ||
-        claimRole('admin') || claimRole('coordinator') || claimRole('scheduler') ||
-        accountRole('admin') || accountRole('coordinator') || accountRole('scheduler') ||
-        claimListHas('permissions', 'schedule.manage') ||
-        accountListHas('permissions', 'schedule.manage')
-      );
+    function isAdmin() {
+      return hasRole('admin') || claimBool('admin') || accountRole('admin');
     }
 
-    function isMember() {
-      return accountActive() || claimBool('member') || claimRole('member') ||
-        claimListHas('roles', 'member') || isCoordinator() ||
-        (signedIn() && request.auth.token.keys().hasAny([
-          'memberId', 'memberName', 'departments', 'departmentIds'
-        ]));
+    function isGlobalLeaderManager() {
+      return hasRole('globalLeaderManager')
+        || claimBool('globalLeaderManager')
+        || accountRole('globalLeaderManager');
+    }
+
+    function isSongEditor() {
+      return isAdmin()
+        || hasRole('songEditor')
+        || claimBool('songEditor')
+        || accountRole('songEditor');
+    }
+
+    function hasDepartmentLeaderAuthority() {
+      return hasRole('departmentLeader')
+        || claimBool('departmentLeader')
+        || claimListHas('permissions', 'department.manage')
+        || claimListHas('permissions', 'schedule.assign')
+        || accountRole('departmentLeader')
+        || accountBool('departmentLeader')
+        || accountListHas('permissions', 'department.manage')
+        || accountListHas('permissions', 'schedule.assign');
+    }
+
+    function hasDepartmentMembership(department) {
+      return (
+        request.auth.token.departments is list
+        && department in request.auth.token.departments
+      )
+        || (
+          request.auth.token.departmentIds is list
+          && department in request.auth.token.departmentIds
+        )
+        || accountListHas('departments', department)
+        || accountListHas('departmentIds', department);
+    }
+
+    function managesDepartment(department) {
+      return isAdmin()
+        || (
+          signedIn()
+          && hasDepartmentLeaderAuthority()
+          && hasDepartmentMembership(department)
+        )
+        || (
+          signedIn()
+          && request.auth.token.departmentLeaders is map
+          && request.auth.token.departmentLeaders[department] == true
+        );
+    }
+
+    function canManageOrgConfig() {
+      return isAdmin() || isGlobalLeaderManager();
     }
 
     function isDepartmentLeader(department) {
-      return isCoordinator() ||
-        claimListHas('departments', department) ||
-        claimListHas('departmentIds', department) ||
-        accountListHas('departments', department) ||
-        accountListHas('departmentIds', department);
+      return managesDepartment(department);
+    }
+
+    function isCoordinator() {
+      return isAdmin()
+        || claimBool('coordinator')
+        || claimRole('coordinator')
+        || claimRole('scheduler')
+        || claimListHas('permissions', 'schedule.manage')
+        || accountRole('coordinator')
+        || accountRole('scheduler')
+        || accountListHas('permissions', 'schedule.manage');
     }
 
     function assignmentPermission() {
-      return claimBool('assignmentEditor') || claimBool('departmentAssignmentEditor') ||
-        claimListHas('permissions', 'schedule.assign') ||
-        accountBool('assignmentEditor') ||
-        accountListHas('permissions', 'schedule.assign');
+      return claimBool('assignmentEditor')
+        || claimBool('departmentAssignmentEditor')
+        || claimListHas('permissions', 'schedule.assign')
+        || accountBool('assignmentEditor')
+        || accountListHas('permissions', 'schedule.assign');
     }
 
-    function documentDepartment(data) {
-      return data.keys().hasAny(['departmentId']) ? data.departmentId :
-        (data.keys().hasAny(['department']) ? data.department : '');
+    function isMember() {
+      return signedIn()
+        && (
+          claimBool('member')
+          || hasRole('member')
+          || accountActive()
+          || request.auth.token.keys().hasAny([
+            'memberId',
+            'memberName',
+            'departments',
+            'departmentIds'
+          ])
+        );
     }
 
-    function canEditDepartmentDocument(data) {
-      return isMember() && (
-        isDepartmentLeader(documentDepartment(data)) || assignmentPermission()
-      );
+    function hasMemberName(value) {
+      return signedIn()
+        && value is string
+        && request.auth.token.memberName is string
+        && value == request.auth.token.memberName;
     }
 
-    function canEditAssignments(before, after) {
-      return isMember() && (
-        isCoordinator() || canEditDepartmentDocument(before) ||
-        canEditDepartmentDocument(after) || assignmentPermission()
-      );
+    function hasCallerUid(data) {
+      return signedIn()
+        && data.keys().hasAny([
+          'uid',
+          'ownerUid',
+          'tokenOwnerUid',
+          'memberUid',
+          'requesterUid',
+          'createdByUid'
+        ])
+        && (
+          (data.keys().hasAny(['uid']) && data.uid == request.auth.uid)
+          || (data.keys().hasAny(['ownerUid']) && data.ownerUid == request.auth.uid)
+          || (data.keys().hasAny(['tokenOwnerUid']) && data.tokenOwnerUid == request.auth.uid)
+          || (data.keys().hasAny(['memberUid']) && data.memberUid == request.auth.uid)
+          || (data.keys().hasAny(['requesterUid']) && data.requesterUid == request.auth.uid)
+          || (data.keys().hasAny(['createdByUid']) && data.createdByUid == request.auth.uid)
+        );
+    }
+
+    function hasExplicitOwnerUid(data) {
+      return data.keys().hasAny([
+        'uid',
+        'ownerUid',
+        'tokenOwnerUid',
+        'memberUid',
+        'requesterUid',
+        'createdByUid'
+      ]);
+    }
+
+    function actorMetadataIsOwned(data) {
+      return (
+        !data.keys().hasAny(['updatedByUid'])
+        || data.updatedByUid == request.auth.uid
+      )
+        && (
+          !data.keys().hasAny(['updatedBy'])
+          || hasMemberName(data.updatedBy)
+          || data.updatedBy == request.auth.uid
+        );
     }
 
     function secretFieldsAbsent(data) {
       return !data.keys().hasAny([
-        'pin', 'pinHash', 'sitePinHash', 'editorPinHash', 'passwordHash',
-        'passcode', 'passcodeHash', 'hash'
+        'pin',
+        'pinHash',
+        'sitePinHash',
+        'editorPinHash',
+        'passwordHash',
+        'credentialHash',
+        'passcode',
+        'passcodeHash',
+        'pinCode',
+        'password',
+        'hash'
       ]);
     }
 
+    function canReadMemberDocument(data) {
+      return signedIn() && secretFieldsAbsent(data);
+    }
+
     function callerMemberId() {
-      return request.auth.token.keys().hasAny(['memberId'])
-        ? request.auth.token.memberId : '';
+      return signedIn()
+        && request.auth.token.keys().hasAny(['memberId'])
+        ? request.auth.token.memberId
+        : '';
     }
 
     function callerMemberName() {
-      return request.auth.token.keys().hasAny(['memberName'])
-        ? request.auth.token.memberName : '';
+      return signedIn()
+        && request.auth.token.keys().hasAny(['memberName'])
+        ? request.auth.token.memberName
+        : '';
     }
 
     function accountMemberId() {
-      return accountData().keys().hasAny(['memberId'])
-        ? accountData().memberId : '';
+      return accountActive()
+        && accountData().keys().hasAny(['memberId'])
+        ? accountData().memberId
+        : '';
     }
 
     function accountMemberName() {
-      return accountData().keys().hasAny(['memberName'])
-        ? accountData().memberName : '';
+      return accountActive()
+        && accountData().keys().hasAny(['memberName'])
+        ? accountData().memberName
+        : '';
     }
 
     function belongsToCaller(data) {
-      return signedIn() && (
-        (data.keys().hasAny(['uid']) && data.uid == request.auth.uid) ||
-        (data.keys().hasAny(['ownerUid']) && data.ownerUid == request.auth.uid) ||
-        (data.keys().hasAny(['memberUid']) && data.memberUid == request.auth.uid) ||
-        (data.keys().hasAny(['memberId']) && callerMemberId() != '' &&
-          data.memberId == callerMemberId()) ||
-        (data.keys().hasAny(['name']) && callerMemberName() != '' &&
-          data.name == callerMemberName()) ||
-        (hasAccount() && data.keys().hasAny(['memberId']) &&
-          data.memberId == accountMemberId()) ||
-        (hasAccount() && data.keys().hasAny(['name']) &&
-          data.name == accountMemberName())
-      );
+      return signedIn()
+        && (
+          (data.keys().hasAny(['uid']) && data.uid == request.auth.uid)
+          || (data.keys().hasAny(['ownerUid']) && data.ownerUid == request.auth.uid)
+          || (data.keys().hasAny(['memberUid']) && data.memberUid == request.auth.uid)
+          || (data.keys().hasAny(['memberId']) && callerMemberId() != ''
+            && data.memberId == callerMemberId())
+          || (data.keys().hasAny(['name']) && callerMemberName() != ''
+            && data.name == callerMemberName())
+          || (data.keys().hasAny(['memberId']) && accountMemberId() != ''
+            && data.memberId == accountMemberId())
+          || (data.keys().hasAny(['name']) && accountMemberName() != ''
+            && data.name == accountMemberName())
+        );
     }
 
-    function requestIsOwned(data) {
-      return belongsToCaller(data) ||
-        (data.keys().hasAny(['requesterUid']) &&
-          data.requesterUid == request.auth.uid) ||
-        (data.keys().hasAny(['createdBy']) &&
-          data.createdBy == request.auth.uid);
+    function documentDepartment(data) {
+      return data.keys().hasAny(['departmentId'])
+        ? data.departmentId
+        : (data.keys().hasAny(['department']) ? data.department : '');
     }
 
-    function tokenBelongsToCaller(data) {
-      return belongsToCaller(data) ||
-        (data.keys().hasAny(['tokenOwnerUid']) &&
-          data.tokenOwnerUid == request.auth.uid);
+    function canEditDepartmentDocument(data) {
+      return isMember()
+        && documentDepartment(data) is string
+        && managesDepartment(documentDepartment(data));
     }
 
+    // Compatibility predicates for the older department-scoped collections.
+    // Main schedule writes use the explicit per-department helpers below.
     function scheduleStructuralChange() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'date', 'time', 'service', 'worship', 'choirSong', 'status', 'source',
-        'scheduleType', 'kind', 'scope', 'departmentId', 'department',
-        'updatedAt', 'updatedBy'
+        'date',
+        'time',
+        'service',
+        'worship',
+        'choirSong',
+        'status',
+        'source',
+        'scheduleType',
+        'kind',
+        'scope',
+        'departmentId',
+        'department',
+        'updatedAt',
+        'updatedBy'
       ]);
     }
 
     function scheduleAssignmentChange() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'assignments', 'conflictOk', 'departmentId', 'department', 'scope',
-        'scheduleType', 'kind', 'updatedAt', 'updatedBy'
+        'assignments',
+        'conflictOk',
+        'departmentId',
+        'department',
+        'scope',
+        'scheduleType',
+        'kind',
+        'updatedAt',
+        'updatedBy'
       ]);
     }
 
+    function canEditAssignments(before, after) {
+      return isMember()
+        && (
+          canEditDepartmentDocument(before)
+          || canEditDepartmentDocument(after)
+        );
+    }
+
     function scheduleIsDepartmentScoped(data) {
-      return (data.keys().hasAny(['scope']) && data.scope == 'department') ||
-        (data.keys().hasAny(['scheduleType']) && data.scheduleType == 'department') ||
-        (data.keys().hasAny(['kind']) && data.kind == 'department') ||
-        data.keys().hasAny(['departmentId', 'department']);
+      return (data.keys().hasAny(['scope']) && data.scope == 'department')
+        || (data.keys().hasAny(['scheduleType']) && data.scheduleType == 'department')
+        || (data.keys().hasAny(['kind']) && data.kind == 'department')
+        || data.keys().hasAny(['departmentId', 'department']);
     }
 
     function scheduleIsStructural(data) {
-      return !scheduleIsDepartmentScoped(data) ||
-        (data.keys().hasAny(['scope']) && data.scope == 'structural') ||
-        (data.keys().hasAny(['scheduleType']) && data.scheduleType == 'structural') ||
-        (data.keys().hasAny(['kind']) && data.kind == 'structural');
+      return !scheduleIsDepartmentScoped(data)
+        || (data.keys().hasAny(['scope']) && data.scope == 'structural')
+        || (data.keys().hasAny(['scheduleType']) && data.scheduleType == 'structural')
+        || (data.keys().hasAny(['kind']) && data.kind == 'structural');
     }
 
     function canCreateStructuralSchedule() {
@@ -194,154 +371,975 @@ service cloud.firestore {
     }
 
     function canUpdateSchedule() {
-      return (isCoordinator() && scheduleStructuralChange()) ||
-        (scheduleAssignmentChange() && canEditAssignments(resource.data, request.resource.data));
+      return (isCoordinator() && scheduleStructuralChange())
+        || (scheduleAssignmentChange() && canEditAssignments(resource.data, request.resource.data));
     }
 
-    function canReadMemberDocument(data) {
-      return isMember() && secretFieldsAbsent(data);
+    function hasAssignments(data) {
+      return data.keys().hasAny(['assignments'])
+        && data.assignments is map;
     }
 
-    // The shared service schedule remains public for the congregation and the
-    // existing calendar feed. Writes split structural edits from assignments.
+    function serviceHasDepartmentDuty(data, duties) {
+      return hasAssignments(data)
+        && data.assignments.keys().hasAny(duties);
+    }
+
+    function canEditServiceSongs(data) {
+      return isSongEditor()
+        || (
+          hasAssignments(data)
+          && data.assignments.keys().hasAny(['Presider'])
+          && (
+            hasMemberName(data.assignments.Presider)
+            || (
+              data.keys().hasAny(['presiderUid'])
+              && data.presiderUid == request.auth.uid
+            )
+          )
+        );
+    }
+
+    function changesOnlyServiceSongs() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'choirSong',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['choirSong'])
+        && actorMetadataIsOwned(request.resource.data)
+        && canEditServiceSongs(resource.data);
+    }
+
+    function changesWorshipAssignments() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'assignments',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignments'])
+        && actorMetadataIsOwned(request.resource.data)
+        && hasAssignments(resource.data)
+        && hasAssignments(request.resource.data)
+        && request.resource.data.assignments.diff(resource.data.assignments)
+          .affectedKeys().hasOnly([
+            'Presider',
+            'Sermon',
+            'Prayer of Thanks',
+            'Closing Prayer'
+          ])
+        && managesDepartment('Worship');
+    }
+
+    function changesUsherSistersAssignments() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'assignments',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignments'])
+        && actorMetadataIsOwned(request.resource.data)
+        && hasAssignments(resource.data)
+        && hasAssignments(request.resource.data)
+        && request.resource.data.assignments.diff(resource.data.assignments)
+          .affectedKeys().hasOnly([
+            'Usher Door',
+            'Usher Front',
+            'Usher Back'
+          ])
+        && managesDepartment('Usher Sisters');
+    }
+
+    function changesUsherBrothersAssignments() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'assignments',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignments'])
+        && actorMetadataIsOwned(request.resource.data)
+        && hasAssignments(resource.data)
+        && hasAssignments(request.resource.data)
+        && request.resource.data.assignments.diff(resource.data.assignments)
+          .affectedKeys().hasOnly([
+            'Usher #1',
+            'Usher #2',
+            'Lobby Security'
+          ])
+        && managesDepartment('Usher Brothers');
+    }
+
+    function changesLobbyAssignments() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'assignments',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignments'])
+        && actorMetadataIsOwned(request.resource.data)
+        && hasAssignments(resource.data)
+        && hasAssignments(request.resource.data)
+        && request.resource.data.assignments.diff(resource.data.assignments)
+          .affectedKeys().hasOnly([
+            'Lobby Desk #1',
+            'Lobby Desk #2'
+          ])
+        && managesDepartment('Lobby');
+    }
+
+    function changesTranslationAssignments() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'assignments',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignments'])
+        && actorMetadataIsOwned(request.resource.data)
+        && hasAssignments(resource.data)
+        && hasAssignments(request.resource.data)
+        && request.resource.data.assignments.diff(resource.data.assignments)
+          .affectedKeys().hasOnly([
+            'Translation #1',
+            'Translation #2'
+          ])
+        && managesDepartment('Translation');
+    }
+
+    function changesMediaAssignments() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'assignments',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignments'])
+        && actorMetadataIsOwned(request.resource.data)
+        && hasAssignments(resource.data)
+        && hasAssignments(request.resource.data)
+        && request.resource.data.assignments.diff(resource.data.assignments)
+          .affectedKeys().hasOnly([
+            'Media Booth #1',
+            'Media Booth #2'
+          ])
+        && managesDepartment('Media');
+    }
+
+    function changesParkingAssignments() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'assignments',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignments'])
+        && actorMetadataIsOwned(request.resource.data)
+        && hasAssignments(resource.data)
+        && hasAssignments(request.resource.data)
+        && request.resource.data.assignments.diff(resource.data.assignments)
+          .affectedKeys().hasOnly([
+            'Parking #1',
+            'Parking #2',
+            'Parking #3',
+            'Parking #4',
+            'Parking #5'
+          ])
+        && managesDepartment('Parking Lot');
+    }
+
+    function changesOfferingAssignments() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'assignments',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && actorMetadataIsOwned(request.resource.data)
+        && hasAssignments(resource.data)
+        && hasAssignments(request.resource.data)
+        && request.resource.data.assignments.diff(resource.data.assignments)
+          .affectedKeys().hasOnly([
+            'Offering #1',
+            'Offering #2',
+            'Offering #3',
+            'Offering #4',
+            'Offering #5',
+            'Offering #6'
+          ])
+        && managesDepartment('Offering');
+    }
+
+    function changedConflictEntries() {
+      return request.resource.data.conflictOk.diff(
+        resource.data.keys().hasAny(['conflictOk'])
+          && resource.data.conflictOk is map
+          ? resource.data.conflictOk
+          : {}
+      ).affectedKeys();
+    }
+
+    function conflictEntryIsForDepartment(memberName, duties) {
+      return memberName is string
+        && memberName != ''
+        && (
+          !changedConflictEntries().hasAny([memberName])
+          || (
+            request.resource.data.conflictOk.get(memberName, []) is list
+            && request.resource.data.conflictOk
+              .get(memberName, []).hasOnly(duties)
+          )
+        );
+    }
+
+    function changesWorshipConflictEntries() {
+      return hasAssignments(resource.data)
+        && request.resource.data.conflictOk is map
+        && changedConflictEntries().size() > 0
+        && changedConflictEntries().hasOnly([
+          resource.data.assignments.get('Presider', ''),
+          resource.data.assignments.get('Sermon', ''),
+          resource.data.assignments.get('Prayer of Thanks', ''),
+          resource.data.assignments.get('Closing Prayer', '')
+        ])
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Presider', ''),
+          ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Sermon', ''),
+          ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Prayer of Thanks', ''),
+          ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Closing Prayer', ''),
+          ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer']
+        );
+    }
+
+    function changesUsherSistersConflictEntries() {
+      return hasAssignments(resource.data)
+        && request.resource.data.conflictOk is map
+        && changedConflictEntries().size() > 0
+        && changedConflictEntries().hasOnly([
+          resource.data.assignments.get('Usher Door', ''),
+          resource.data.assignments.get('Usher Front', ''),
+          resource.data.assignments.get('Usher Back', '')
+        ])
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Usher Door', ''),
+          ['Usher Door', 'Usher Front', 'Usher Back']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Usher Front', ''),
+          ['Usher Door', 'Usher Front', 'Usher Back']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Usher Back', ''),
+          ['Usher Door', 'Usher Front', 'Usher Back']
+        );
+    }
+
+    function changesUsherBrothersConflictEntries() {
+      return hasAssignments(resource.data)
+        && request.resource.data.conflictOk is map
+        && changedConflictEntries().size() > 0
+        && changedConflictEntries().hasOnly([
+          resource.data.assignments.get('Usher #1', ''),
+          resource.data.assignments.get('Usher #2', ''),
+          resource.data.assignments.get('Lobby Security', '')
+        ])
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Usher #1', ''),
+          ['Usher #1', 'Usher #2', 'Lobby Security']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Usher #2', ''),
+          ['Usher #1', 'Usher #2', 'Lobby Security']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Lobby Security', ''),
+          ['Usher #1', 'Usher #2', 'Lobby Security']
+        );
+    }
+
+    function changesLobbyConflictEntries() {
+      return hasAssignments(resource.data)
+        && request.resource.data.conflictOk is map
+        && changedConflictEntries().size() > 0
+        && changedConflictEntries().hasOnly([
+          resource.data.assignments.get('Lobby Desk #1', ''),
+          resource.data.assignments.get('Lobby Desk #2', '')
+        ])
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Lobby Desk #1', ''),
+          ['Lobby Desk #1', 'Lobby Desk #2']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Lobby Desk #2', ''),
+          ['Lobby Desk #1', 'Lobby Desk #2']
+        );
+    }
+
+    function changesTranslationConflictEntries() {
+      return hasAssignments(resource.data)
+        && request.resource.data.conflictOk is map
+        && changedConflictEntries().size() > 0
+        && changedConflictEntries().hasOnly([
+          resource.data.assignments.get('Translation #1', ''),
+          resource.data.assignments.get('Translation #2', '')
+        ])
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Translation #1', ''),
+          ['Translation #1', 'Translation #2']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Translation #2', ''),
+          ['Translation #1', 'Translation #2']
+        );
+    }
+
+    function changesMediaConflictEntries() {
+      return hasAssignments(resource.data)
+        && request.resource.data.conflictOk is map
+        && changedConflictEntries().size() > 0
+        && changedConflictEntries().hasOnly([
+          resource.data.assignments.get('Media Booth #1', ''),
+          resource.data.assignments.get('Media Booth #2', '')
+        ])
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Media Booth #1', ''),
+          ['Media Booth #1', 'Media Booth #2']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Media Booth #2', ''),
+          ['Media Booth #1', 'Media Booth #2']
+        );
+    }
+
+    function changesParkingConflictEntries() {
+      return hasAssignments(resource.data)
+        && request.resource.data.conflictOk is map
+        && changedConflictEntries().size() > 0
+        && changedConflictEntries().hasOnly([
+          resource.data.assignments.get('Parking #1', ''),
+          resource.data.assignments.get('Parking #2', ''),
+          resource.data.assignments.get('Parking #3', ''),
+          resource.data.assignments.get('Parking #4', ''),
+          resource.data.assignments.get('Parking #5', '')
+        ])
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Parking #1', ''),
+          ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Parking #2', ''),
+          ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Parking #3', ''),
+          ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Parking #4', ''),
+          ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Parking #5', ''),
+          ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5']
+        );
+    }
+
+    function changesOfferingConflictEntries() {
+      return hasAssignments(resource.data)
+        && request.resource.data.conflictOk is map
+        && changedConflictEntries().size() > 0
+        && changedConflictEntries().hasOnly([
+          resource.data.assignments.get('Offering #1', ''),
+          resource.data.assignments.get('Offering #2', ''),
+          resource.data.assignments.get('Offering #3', ''),
+          resource.data.assignments.get('Offering #4', ''),
+          resource.data.assignments.get('Offering #5', ''),
+          resource.data.assignments.get('Offering #6', '')
+        ])
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Offering #1', ''),
+          ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Offering #2', ''),
+          ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Offering #3', ''),
+          ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Offering #4', ''),
+          ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Offering #5', ''),
+          ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6']
+        )
+        && conflictEntryIsForDepartment(
+          resource.data.assignments.get('Offering #6', ''),
+          ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6']
+        );
+    }
+
+    function canAcknowledgeScheduleConflict() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'conflictOk',
+          'updatedAt',
+          'updatedBy',
+          'updatedByUid'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['conflictOk'])
+        && actorMetadataIsOwned(request.resource.data)
+        && (
+          (managesDepartment('Worship') && changesWorshipConflictEntries())
+          || (managesDepartment('Usher Sisters') && changesUsherSistersConflictEntries())
+          || (managesDepartment('Usher Brothers') && changesUsherBrothersConflictEntries())
+          || (managesDepartment('Lobby') && changesLobbyConflictEntries())
+          || (managesDepartment('Translation') && changesTranslationConflictEntries())
+          || (managesDepartment('Media') && changesMediaConflictEntries())
+          || (managesDepartment('Parking Lot') && changesParkingConflictEntries())
+          || (managesDepartment('Offering') && changesOfferingConflictEntries())
+        );
+    }
+
+    function isRequestOwner(data) {
+      return hasCallerUid(data)
+        || (!hasExplicitOwnerUid(data) && belongsToCaller(data))
+        || (
+          !hasExplicitOwnerUid(data)
+          &&
+          data.keys().hasAny(['name'])
+          && hasMemberName(data.name)
+        );
+    }
+
+    function hasRequestDepartment(data) {
+      return data.keys().hasAny(['department', 'departmentId']);
+    }
+
+    function requestDepartment(data) {
+      return data.keys().hasAny(['department'])
+        ? data.department
+        : (data.keys().hasAny(['departmentId']) ? data.departmentId : '');
+    }
+
+    function isRequestDepartmentLeader(data) {
+      return hasRequestDepartment(data)
+        && requestDepartment(data) is string
+        && managesDepartment(requestDepartment(data));
+    }
+
+    function isConflictParticipant(data) {
+      return isRequestDepartmentLeader(data)
+        || (
+          data.keys().hasAny(['departments'])
+          && data.departments is list
+          && signedIn()
+          && request.auth.token.departments is list
+          && data.departments.hasAny(request.auth.token.departments)
+        )
+        || isRequestOwner(data);
+    }
+
+    function conflictAcknowledgementOnly() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'acknowledgedByUid',
+          'acknowledgedAt',
+          'acknowledgedDuties',
+          'updatedAt'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'acknowledgedByUid',
+          'acknowledgedAt',
+          'acknowledgedDuties'
+        ])
+        && request.resource.data.keys().hasAny(['acknowledgedByUid'])
+        && request.resource.data.acknowledgedByUid == request.auth.uid;
+    }
+
+    function isNotificationRecipient(data) {
+      return isAdmin()
+        || isRequestOwner(data)
+        || isRequestDepartmentLeader(data)
+        || (
+          data.keys().hasAny(['departments'])
+          && data.departments is list
+          && signedIn()
+          && request.auth.token.departments is list
+          && data.departments.hasAny(request.auth.token.departments)
+        );
+    }
+
+    function isAuditViewer(data) {
+      return isAdmin()
+        || isGlobalLeaderManager()
+        || isRequestDepartmentLeader(data)
+        || (
+          data.keys().hasAny(['departments'])
+          && data.departments is list
+          && signedIn()
+          && request.auth.token.departments is list
+          && data.departments.hasAny(request.auth.token.departments)
+        );
+    }
+
+    function isTokenOwner(data) {
+      return (hasCallerUid(data)
+        || (!hasExplicitOwnerUid(data) && belongsToCaller(data)))
+        && (
+          !data.keys().hasAny(['name'])
+          || hasMemberName(data.name)
+        );
+    }
+
+    function requestIsOwned(data) {
+      return isRequestOwner(data);
+    }
+
+    function tokenBelongsToCaller(data) {
+      return isTokenOwner(data);
+    }
+
+    function requestResolutionOnly() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly([
+          'status',
+          'resolvedAt',
+          'resolvedByUid',
+          'resolvedBy',
+          'resolvedByName',
+          'updatedAt'
+        ])
+        && resource.data.keys().hasAny(['status'])
+        && resource.data.status == 'pending'
+        && request.resource.data.keys().hasAny(['status'])
+        && request.resource.data.status in ['approved', 'declined']
+        && (
+          (
+            request.resource.data.keys().hasAny(['resolvedByUid'])
+            && request.resource.data.resolvedByUid == request.auth.uid
+          )
+          || (
+            request.resource.data.keys().hasAny(['resolvedBy'])
+            && request.resource.data.resolvedBy == request.auth.uid
+          )
+        )
+        && request.resource.data.keys().hasAny(['resolvedAt']);
+    }
+
+    // Public schedule reads are intentional. Structural service changes and
+    // deletions stay admin-only. Leaders can change only duties in a claimed
+    // department, and song edits are limited to editors or the service presider.
     match /schedule/{scheduleId} {
       allow read: if true;
-      allow create: if canCreateStructuralSchedule();
-      allow update: if canUpdateSchedule();
-      allow delete: if isCoordinator();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || changesWorshipAssignments()
+        || changesUsherSistersAssignments()
+        || changesUsherBrothersAssignments()
+        || changesLobbyAssignments()
+        || changesTranslationAssignments()
+        || changesMediaAssignments()
+        || changesParkingAssignments()
+        || changesOfferingAssignments()
+        || canAcknowledgeScheduleConflict()
+        || changesOnlyServiceSongs();
     }
 
-    // These explicit paths support department-scoped schedules without making
-    // a department leader a global schedule editor.
+    // Legacy department-scoped documents are retained for staged clients.
+    // Their reads require a signed-in session and their writes remain limited
+    // to the department named by the document, with deletes admin-only.
     match /departmentSchedules/{scheduleId} {
-      allow read: if isMember();
-      allow create, update: if canEditDepartmentDocument(request.resource.data);
-      allow delete: if canEditDepartmentDocument(resource.data);
+      allow read: if signedIn() && secretFieldsAbsent(resource.data);
+      allow create: if isAdmin() || canEditDepartmentDocument(request.resource.data);
+      allow update: if isAdmin()
+        || (
+          canEditDepartmentDocument(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'assignments',
+            'conflictOk',
+            'updatedAt',
+            'updatedBy'
+          ])
+        );
+      allow delete: if isAdmin();
     }
 
     match /departmentAssignments/{assignmentId} {
-      allow read: if isMember();
-      allow create, update: if canEditDepartmentDocument(request.resource.data);
-      allow delete: if canEditDepartmentDocument(resource.data);
+      allow read: if signedIn() && secretFieldsAbsent(resource.data);
+      allow create: if isAdmin() || canEditDepartmentDocument(request.resource.data);
+      allow update: if isAdmin()
+        || (
+          canEditDepartmentDocument(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'assignment',
+            'member',
+            'memberUid',
+            'status',
+            'updatedAt',
+            'updatedBy'
+          ])
+        );
+      allow delete: if isAdmin();
     }
 
-    match /app/config {
-      allow read: if isMember() && secretFieldsAbsent(resource.data);
-      allow write: if isCoordinator();
-    }
-
+    // Safe, non-secret app documents. Hashes and other account material are
+    // kept on protected documents and are never readable from the client.
     match /app/members {
-      allow read: if isMember();
-      allow write: if isCoordinator();
-    }
-
-    match /app/membership/{memberId} {
-      allow read: if isCoordinator() ||
-        (isMember() && callerMemberId() == memberId);
-      allow write: if isCoordinator();
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if isAdmin();
     }
 
     match /app/departments {
-      allow read: if isMember();
-      allow write: if isCoordinator();
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
+    }
+
+    match /app/departmentConfig {
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
+    }
+
+    match /app/leaderConfig {
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
+    }
+
+    match /app/roles {
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
     }
 
     match /app/nameMap {
-      allow read: if isMember();
-      allow write: if isCoordinator();
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
+    }
+
+    match /app/config {
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
+    }
+
+    match /app/publicConfig {
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
+    }
+
+    match /app/songPublicConfig {
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
     }
 
     match /app/presiders {
-      allow read: if isMember();
-      allow write: if isCoordinator();
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
     }
 
-    // PIN and hash documents are never directly readable. Callable auth or
-    // Admin SDK code must handle verification without exposing these fields.
+    match /app/songEditors {
+      allow read: if secretFieldsAbsent(resource.data);
+      allow write: if canManageOrgConfig();
+    }
+
+    // These documents may contain pinHash, sitePinHash, editorPinHash, or
+    // equivalent secret material. Client reads and writes are denied. Server
+    // callables use Admin SDK and write audit records separately.
     match /app/settings {
-      allow read: if false;
-      allow write: if isCoordinator();
+      allow read, write: if false;
     }
 
     match /app/songSettings {
-      allow read: if false;
-      allow write: if isCoordinator();
+      allow read, write: if false;
     }
 
+    match /app/accounts/{accountUid} {
+      // secretFieldsAbsent(resource.data) is intentionally not sufficient
+      // here because account documents may hold identity and PIN material.
+      allow read, write: if false;
+    }
+
+    // Exact one-document app paths retained during migration. The allowlist
+    // prevents this compatibility match from opening arbitrary new docs.
     match /app/{appDocument} {
-      allow read: if appDocument != 'settings' &&
-        appDocument != 'songSettings' && canReadMemberDocument(resource.data);
-      allow write: if appDocument != 'settings' &&
-        appDocument != 'songSettings' && isCoordinator();
+      allow read: if appDocument != 'settings'
+        && appDocument != 'songSettings'
+        && appDocument != 'accounts'
+        && (appDocument in [
+          'config',
+          'members',
+          'membership',
+          'departments',
+          'departmentConfig',
+          'leaderConfig',
+          'roles',
+          'nameMap',
+          'publicConfig',
+          'songPublicConfig',
+          'presiders',
+          'songEditors'
+        ])
+        && secretFieldsAbsent(resource.data);
+      // Explicit matches above own every supported write. Keeping this
+      // compatibility wildcard closed prevents its OR semantics from
+      // widening a stricter document boundary.
+      allow write: if false;
     }
 
-    match /accounts/{accountUid} {
-      allow read: if (request.auth != null && request.auth.uid == accountUid ||
-        isCoordinator()) && secretFieldsAbsent(resource.data);
-      allow create, update, delete: if isCoordinator();
+    match /app/membership/{memberId} {
+      allow read: if secretFieldsAbsent(resource.data)
+        && (
+          isAdmin()
+          || (
+            resource.data.keys().hasAny(['department'])
+            && managesDepartment(resource.data.department)
+          )
+          || (signedIn() && request.auth.uid == memberId)
+        );
+      allow create: if secretFieldsAbsent(request.resource.data)
+        && (
+          isAdmin()
+          || (
+          request.resource.data.keys().hasAny(['department'])
+          && managesDepartment(request.resource.data.department)
+          )
+        );
+      allow update: if secretFieldsAbsent(request.resource.data)
+        && (
+          isAdmin()
+          || (
+          resource.data.keys().hasAny(['department'])
+          && managesDepartment(resource.data.department)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'archivedAt',
+            'updatedAt',
+            'updatedByUid'
+          ])
+          )
+        );
+      allow delete: if isAdmin();
     }
 
+    // Deny unknown app documents and nested app paths by default.
+    match /app/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Department membership is document-scoped. Leaders may archive or
+    // re-activate records in their own department, but only admins may delete.
     match /memberships/{membershipId} {
-      allow read: if isCoordinator() ||
-        (isMember() && belongsToCaller(resource.data));
-      allow write: if isCoordinator();
+      allow read: if secretFieldsAbsent(resource.data)
+        && (
+          isAdmin()
+          || (
+            resource.data.keys().hasAny(['department'])
+            && managesDepartment(resource.data.department)
+          )
+          || isRequestOwner(resource.data)
+        );
+
+      allow create: if secretFieldsAbsent(request.resource.data)
+        && (
+          isAdmin()
+          || (
+          request.resource.data.keys().hasAll(['department', 'memberUid'])
+          && request.resource.data.department is string
+          && request.resource.data.memberUid is string
+          && managesDepartment(request.resource.data.department)
+          )
+        );
+
+      allow update: if secretFieldsAbsent(request.resource.data)
+        && (
+          isAdmin()
+          || (
+          resource.data.keys().hasAll(['department', 'memberUid'])
+          && request.resource.data.keys().hasAll(['department', 'memberUid'])
+          && resource.data.department == request.resource.data.department
+          && resource.data.memberUid == request.resource.data.memberUid
+          && managesDepartment(resource.data.department)
+          && request.resource.data.keys().hasAny(['status'])
+          && request.resource.data.status in ['active', 'archived']
+          && (
+            !request.resource.data.keys().hasAny(['updatedByUid'])
+            || request.resource.data.updatedByUid == request.auth.uid
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'archivedAt',
+            'updatedAt',
+            'updatedByUid'
+          ])
+          )
+        );
+
+      allow delete: if isAdmin();
     }
 
+    match /departments/{department}/members/{memberId} {
+      allow read: if secretFieldsAbsent(resource.data)
+        && (isAdmin() || managesDepartment(department));
+      allow create: if secretFieldsAbsent(request.resource.data)
+        && (isAdmin() || managesDepartment(department));
+      allow update: if isAdmin()
+        || (
+          managesDepartment(department)
+          && secretFieldsAbsent(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'archivedAt',
+            'updatedAt',
+            'updatedByUid'
+          ])
+        );
+      allow delete: if isAdmin();
+    }
+
+    // A requester can see their own request. A department leader or admin can
+    // resolve it, with the original requester and duty fields immutable.
     match /requests/{requestId} {
-      allow read: if isCoordinator() ||
-        (isMember() && requestIsOwned(resource.data));
-      allow create: if isMember() && requestIsOwned(request.resource.data) &&
-        request.resource.data.status == 'pending';
-      allow update: if isCoordinator() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'resolvedAt', 'resolvedBy', 'updatedAt', 'note'
-        ]);
-      allow delete: if isCoordinator();
+      allow read: if isAdmin()
+        || isRequestDepartmentLeader(resource.data)
+        || isRequestOwner(resource.data);
+
+      allow create: if isMember()
+        && hasRequestDepartment(request.resource.data)
+        && (
+          (
+            request.resource.data.keys().hasAny(['department'])
+            && request.resource.data.department is string
+          )
+          || (
+            request.resource.data.keys().hasAny(['departmentId'])
+            && request.resource.data.departmentId is string
+          )
+        )
+        && request.resource.data.keys().hasAny(['duty'])
+        && request.resource.data.duty is string
+        && isRequestOwner(request.resource.data)
+        && request.resource.data.keys().hasAny(['status'])
+        && request.resource.data.status == 'pending';
+
+      allow update: if isAdmin()
+        || (
+          isRequestDepartmentLeader(resource.data)
+          && requestResolutionOnly()
+        )
+        || (
+          isRequestOwner(resource.data)
+          && resource.data.keys().hasAny(['status'])
+          && resource.data.status == 'pending'
+          && request.resource.data.keys().hasAny(['status'])
+          && request.resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'note',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if isAdmin();
     }
 
+    // Conflict records are created by trusted server functions. Involved
+    // leaders may acknowledge only the acknowledgement fields, and admins
+    // retain global resolution authority.
     match /conflicts/{conflictId} {
-      allow read: if isMember();
-      allow create, update: if isMember() &&
-        (isCoordinator() || canEditDepartmentDocument(request.resource.data));
-      allow delete: if isCoordinator();
+      allow read: if isAdmin() || isConflictParticipant(resource.data);
+      allow create: if false;
+      allow update: if isAdmin()
+        || (
+          isConflictParticipant(resource.data)
+          && conflictAcknowledgementOnly()
+        );
+      allow delete: if isAdmin();
     }
 
-    match /alerts/{alertId} {
-      allow read: if isCoordinator() ||
-        (isMember() && belongsToCaller(resource.data));
-      allow create: if isCoordinator();
-      allow update, delete: if isCoordinator();
-    }
-
+    // Device tokens are private and bound to the authenticated owner. The
+    // token document id is not treated as a credential.
     match /tokens/{tokenId} {
-      allow read: if isCoordinator() ||
-        (isMember() && tokenBelongsToCaller(resource.data));
-      allow create, update: if isMember() &&
-        tokenBelongsToCaller(request.resource.data);
-      allow delete: if isMember() && tokenBelongsToCaller(resource.data);
+      allow read: if false;
+      allow create: if isTokenOwner(request.resource.data);
+      allow update: if isTokenOwner(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name',
+          'updatedAt',
+          'lastSeenAt'
+        ]);
+      allow delete: if isAdmin() || isTokenOwner(resource.data);
     }
 
+    // Audit is append-only through trusted server functions. Direct client
+    // writes are denied so actors cannot forge or remove privileged history.
     match /audit/{auditId} {
-      allow read: if isCoordinator() && secretFieldsAbsent(resource.data);
-      allow create: if isCoordinator() &&
-        secretFieldsAbsent(request.resource.data);
+      allow read: if isAuditViewer(resource.data);
+      allow create: if false;
       allow update, delete: if false;
     }
 
-    // Anonymous song-ingest and the embedded song picker depend on these
-    // legacy shared collections remaining open until ingest gets credentials.
-    match /songStats/{songId} { allow read, write: if true; }
-    match /setlists/{setlistId} { allow read, write: if true; }
+    // Notifications and alerts are read-only projections for their recipient
+    // or involved department. Delivery and mutation remain server-only.
+    match /notifications/{notificationId} {
+      allow read: if isNotificationRecipient(resource.data);
+      allow write: if false;
+    }
 
-    // The daily counter has no member data, but writes still require auth.
+    match /alerts/{alertId} {
+      allow read: if isNotificationRecipient(resource.data);
+      allow write: if false;
+    }
+
+    match /accounts/{accountUid} {
+      // secretFieldsAbsent(resource.data) is intentionally not sufficient
+      // here because account documents may hold identity and PIN material.
+      allow read, write: if false;
+    }
+
+    // Signal ingestion currently writes these two collections without Firebase
+    // Auth. Preserve that source path until ingestion can attach verified
+    // claims. Authenticated schedule choirSong writes remain protected above.
+    match /songStats/{songId} {
+      allow read, write: if true;
+    }
+
+    match /setlists/{setlistId} {
+      allow read, write: if true;
+    }
+
     match /pulse/{day} {
       allow read: if true;
       allow write: if signedIn();
     }
 
-    match /sent/{markerId} { allow read, write: if false; }
+    // Internal delivery receipts are server-only.
+    match /sent/{markerId} {
+      allow read, write: if false;
+    }
 
-    // New collections are denied until they receive an explicit boundary.
+    // Every collection not explicitly listed above is deny-by-default.
     match /{document=**} { allow read, write: if false; }
   }
 }
