@@ -115,9 +115,10 @@ Tap **Schedule** to see every upcoming service for everyone, grouped by day.
 - **Department chips** sit above the list — tap one (like "Usher Sisters")
   to narrow the whole Schedule tab down to just that department's duties
   for every date. Tap **All** to go back to seeing everything.
-- When the Prism design opens, it selects the next service still ahead of the
-  current local time. For example, after Morning and Afternoon have passed,
-  it opens on Evening for that day.
+- When a selected-service design opens, Prism, Aurora, and Navy select the next
+  service still ahead of the current local time. For example, after Morning
+  and Afternoon have passed, they open on Evening for that day. Original shows
+  the full upcoming list instead of one selected service.
 - Tap **"Show past services"** near the bottom if you want to look back at
   services that already happened.
 

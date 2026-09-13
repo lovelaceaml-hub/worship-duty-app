@@ -27,11 +27,28 @@ const NavyDesign = (() => {
     view?.querySelectorAll('[data-nc-hidden]').forEach(n=>n.removeAttribute('data-nc-hidden'));
     view?.querySelectorAll('[data-nc-selected]').forEach(n=>n.removeAttribute('data-nc-selected'));
   }
+  function serviceStartMs(svc){
+    const [hour,minute]=String(svc.time||'00:00').split(':').map(Number);
+    const d=new Date(String(svc.date||'')+'T00:00:00');
+    d.setHours(Number.isFinite(hour)?hour:0,Number.isFinite(minute)?minute:0,0,0);
+    return d.getTime();
+  }
+  function nextUpcomingEntry(entries){
+    const now=Date.now();
+    return entries.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.time||'').localeCompare(String(b.time||''))).find(x=>serviceStartMs(x)>=now)||null;
+  }
   function schedule(view,s){
     const cards=[...view.children].filter(n=>n.classList.contains('card')),entries=s.entries||[],dates=[...new Set(entries.map(x=>x.date))].sort();
+    if(!selected){
+      const next=nextUpcomingEntry(entries);
+      if(next){month=next.date.slice(0,7);selected=next.id;}
+    }
     if(!month)month=(dates.find(d=>d>=s.today)||dates[0]||s.today).slice(0,7);
-    const inMonth=entries.filter(x=>x.date.startsWith(month));
-    if(!inMonth.some(x=>x.id===selected))selected=(inMonth.find(x=>x.date>=s.today)||inMonth[0])?.id||'';
+    let inMonth=entries.filter(x=>x.date.startsWith(month));
+    if(!inMonth.some(x=>x.id===selected)){
+      const next=nextUpcomingEntry(inMonth);
+      selected=(next||inMonth[0])?.id||'';
+    }
     const svc=entries.find(x=>x.id===selected),chosenDate=svc?.date,monthDates=dates.filter(d=>d.startsWith(month));
     const rail=`<div class="nc-date-rail" role="group" aria-label="Service dates">${monthDates.map(d=>btn('date',`<small>${date(d,{weekday:'short'})}</small><strong>${date(d,{day:'numeric'})}</strong><span class="nc-date-dots">${'•'.repeat(Math.min(3,entries.filter(x=>x.date===d).length))}</span>`,`data-date="${d}" aria-pressed="${d===chosenDate}" aria-label="${date(d,{weekday:'long',month:'long',day:'numeric'})}"`)).join('')}</div>`;
     const times=`<div class="nc-times" role="group" aria-label="Service times">${inMonth.filter(x=>x.date===chosenDate).map(x=>btn('service',`${icon(x.time<'18:00'?'sun':'moon')}${escape(time(x.time))}`,`data-id="${escape(x.id)}" aria-pressed="${x.id===selected}"`)).join('')}</div>`;

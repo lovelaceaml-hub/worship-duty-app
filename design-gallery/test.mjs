@@ -92,6 +92,7 @@ try{
   check('Chooser explains one shared app',await p.locator('#wd-design-description').innerText().then(t=>t.includes('One app')&&t.includes('song plans')&&t.includes('permissions')));
   await shot(p,'01-four-design-chooser');
   const writes0=await domainWrites(p);await p.keyboard.press('Escape');
+  await p.clock.setSystemTime(new Date('2026-07-04T16:00:00-07:00'));
   for(const mode of ['prism','navy','aurora','classic']){
     await choose(p,mode);
     check('Switch to '+mode,await p.evaluate(()=>WorshipDesign.getMode()),mode);
@@ -103,6 +104,9 @@ try{
     if(mode==='aurora')check('Aurora shell mounted',await p.locator('#wd-aurora-root').count(),1);
     if(mode==='navy')check('Navy live schedule decoration mounted',await p.locator('.nc-heading').count(),1);
     if(mode==='classic')check('Original app shell restored',await p.locator('.wrap header.app').count(),1);
+    if(mode==='prism')check('Prism selects the next service',await p.locator('.prism-service-times button.selected small').innerText(),'Evening');
+    if(mode==='aurora')check('Aurora selects the next service',await p.locator('[data-aurora="service"].selected small').innerText(),'Evening');
+    if(mode==='navy')check('Navy selects the next service',await p.locator('.nc-times [aria-pressed="true"]').getAttribute('data-id'),'2026-07-04_evening');
     await shot(p,'02-'+mode+'-schedule');
   }
   check('Unrelated local storage survives all switches',await p.evaluate(()=>localStorage.getItem('UNRELATED')),'keep');
