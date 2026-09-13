@@ -185,6 +185,16 @@ test('the active service is replaced when filters hide it', () => {
   assert.match(runtime.markup(), /data-id="2026-07-04_morning" aria-pressed="true" class="selected"/);
 });
 
+test('the active service clears when every service on the day is hidden', () => {
+  const runtime = createRuntime({ visible: new Set() });
+  runtime.aui.day = '2026-07-04';
+  runtime.aui.service = '2026-07-04_afternoon';
+  runtime.renderSchedule();
+
+  assert.equal(runtime.snapshot().service, '');
+  assert.match(runtime.markup(), /No services in this view/);
+});
+
 test('returning to Schedule resets the calendar to today', () => {
   const runtime = createRuntime({ now: '2026-07-04T16:00:00' });
   runtime.aui.day = '2026-07-25';

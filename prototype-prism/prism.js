@@ -31,7 +31,7 @@ ensureSelection=function(){
   const next=day.find(s=>prismServiceStartMs(s)>=Date.now());
   aui.service=next?svcId(next):(day[0]?svcId(day[0]):'');
  }
- if(day.some(matches)&&!day.some(s=>svcId(s)===aui.service&&matches(s))){
+ if(!day.some(s=>svcId(s)===aui.service&&matches(s))){
   const visible=day.find(matches);
   aui.service=visible?svcId(visible):'';
  }
