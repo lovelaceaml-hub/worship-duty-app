@@ -2,6 +2,8 @@
 
 Status: Reviewed implementation on a feature branch. Production is unchanged.
 
+Pull request: https://github.com/lovelaceaml-hub/worship-duty-app/pull/10
+
 ## Architecture summary
 
 - `permissions.js` is the shared pure authorization model for browser and server use.

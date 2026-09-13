@@ -1,6 +1,6 @@
 # Authentication, Department, Notifications, Prism, Presider, and Choir Song Upgrade
 
-Status: Implementation complete, pull request pending
+Status: Implementation complete, pull request 10 open
 
 Baseline: `694a538d8c48b154ead681e10605c29f52fea850`
 
