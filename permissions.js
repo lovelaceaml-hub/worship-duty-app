@@ -120,7 +120,14 @@ function roleKey(value) {
   return key(value).replace(/[^a-z0-9]/g, '');
 }
 
-function identityValues(identity) {
+function identityFields() {
+  return [
+    'name', 'memberName', 'member', 'memberId', 'displayName', 'uid', 'userId',
+    'id', 'sub', 'user_id', 'email'
+  ];
+}
+
+function identityValues(identity, seen) {
   if (identity == null) return [];
   if (typeof identity === 'string' || typeof identity === 'number') {
     const value = text(identity);
@@ -128,19 +135,28 @@ function identityValues(identity) {
   }
   if (typeof identity !== 'object') return [];
 
+  const visited = Array.isArray(seen) ? seen : [];
+  if (visited.indexOf(identity) !== -1) return [];
+  visited.push(identity);
+
   const values = [];
-  [
-    identity.name,
-    identity.memberName,
-    identity.displayName,
-    identity.uid,
-    identity.userId,
-    identity.id,
-    identity.email
-  ].forEach(value => {
+  const add = value => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      identityValues(value, visited).forEach(add);
+      return;
+    }
     const item = text(value);
     if (item && !values.some(existing => key(existing) === key(item))) values.push(item);
+  };
+  identityFields().forEach(field => add(identity[field]));
+
+  // Firebase adapters commonly pass the verified auth record as { token }
+  // or { claims }. Compare its member identity as well as the outer object.
+  ['token', 'claims', 'customClaims'].forEach(field => {
+    identityValues(identity[field], visited).forEach(add);
   });
+
+  visited.pop();
   return values;
 }
 
@@ -153,7 +169,7 @@ function sameIdentity(left, right) {
 function isIdentityObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   return [
-    'name', 'memberName', 'displayName', 'uid', 'userId', 'id', 'email',
+    ...identityFields(),
     'role', 'roles', 'claims', 'customClaims', 'token', 'isAdmin',
     'department', 'departments', 'managedDepartments', 'memberships',
     'departmentMemberships', 'memberDepartments', 'assignments', 'duty',
@@ -163,9 +179,7 @@ function isIdentityObject(value) {
 
 function hasStableIdentity(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  return [
-    'name', 'memberName', 'displayName', 'uid', 'userId', 'id', 'email'
-  ].some(field => Object.prototype.hasOwnProperty.call(value, field));
+  return identityFields().some(field => Object.prototype.hasOwnProperty.call(value, field));
 }
 
 function isConfig(value) {
@@ -178,13 +192,14 @@ function isConfig(value) {
   const markers = [
     'roles', 'roleMembers', 'roleAssignments', 'users', 'members', 'people',
     'admin', 'admins', 'adminNames', 'globalLeaderManager', 'globalLeaderManagers',
-    'globalLeaders', 'globalManagers', 'departmentLeaders', 'deptLeaders',
+    'globalLeaders', 'globalManagers', 'departmentLeaders', 'departmentLeader',
+    'deptLeaders', 'leadersByDepartment',
     'songEditor', 'songEditors', 'songEditorNames', 'departmentDuties',
     'departments', 'dutyDepartments', 'dutyToDepartment', 'dutyMap',
     'permissions', 'access', 'presiders', 'editSongs', 'createService',
     'resetPin', 'serviceCreators', 'pinResetters',
     'roleConfig', 'departmentConfig', 'departmentMembers', 'membersByDepartment',
-    'departmentMemberships'
+    'departmentMemberships', 'memberships', 'memberDepartments'
   ];
   if (Object.prototype.hasOwnProperty.call(value, 'roles')) {
     // A roles array is an actor claim. A roles object is a role config.
@@ -304,20 +319,57 @@ function roleEntries(config, role) {
   return entries.reduce((out, value) => out.concat(asArray(value)), []);
 }
 
+function roleForAlias(value) {
+  const normalized = roleKey(value);
+  if (!normalized) return '';
+  return Object.keys(ROLE_ALIASES).find(role => ROLE_ALIASES[role].indexOf(normalized) !== -1) || '';
+}
+
 function actorRoles(actor) {
   const roles = [];
   const add = value => asArray(value).forEach(item => {
     const normalized = roleKey(item);
     if (normalized && roles.indexOf(normalized) === -1) roles.push(normalized);
   });
+  const addRoleValue = value => {
+    if (value == null) return;
+    if (typeof Set !== 'undefined' && value instanceof Set) {
+      value.forEach(addRoleValue);
+      return;
+    }
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      if (Object.prototype.hasOwnProperty.call(value, 'role')) addRoleValue(value.role);
+      if (Object.prototype.hasOwnProperty.call(value, 'roles')) addRoleValue(value.roles);
+      Object.keys(value).forEach(field => {
+        if (value[field] !== true) return;
+        const canonical = roleForAlias(field);
+        if (canonical) add(canonical);
+      });
+      return;
+    }
+    asArray(value).forEach(item => add(item));
+  };
+  const addClaimSource = (source, seen) => {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+    const visited = Array.isArray(seen) ? seen : [];
+    if (visited.indexOf(source) !== -1) return;
+    visited.push(source);
+    addRoleValue(source.role);
+    addRoleValue(source.roles);
+    if (source.isAdmin === true) add('admin');
+    Object.keys(source).forEach(field => {
+      if (source[field] !== true) return;
+      const canonical = roleForAlias(field);
+      if (canonical) add(canonical);
+    });
+    ['token', 'claims', 'customClaims'].forEach(field => addClaimSource(source[field], visited));
+    visited.pop();
+  };
   if (actor && typeof actor === 'object') {
-    add(actor.role);
-    add(actor.roles);
-    add(actor.claims && (actor.claims.role || actor.claims.roles));
-    add(actor.customClaims && (actor.customClaims.role || actor.customClaims.roles));
-    add(actor.token && (actor.token.role || actor.token.roles));
-    if (actor.claims && actor.claims.isAdmin === true) add('admin');
-    if (actor.customClaims && actor.customClaims.isAdmin === true) add('admin');
+    // Direct role fields are retained for the existing adapter contract.
+    addRoleValue(actor.role);
+    addRoleValue(actor.roles);
+    ['claims', 'customClaims', 'token'].forEach(field => addClaimSource(actor[field]));
   }
   return roles;
 }
@@ -343,14 +395,12 @@ function hasActionRole(actor, config, action) {
 
 function configuredDepartmentDuties(config) {
   const maps = [];
-  ['departmentDuties', 'departments', 'dutiesByDepartment', 'departmentConfig'].forEach(path => {
-    const value = config && config[path];
-    if (value && typeof value === 'object' && !Array.isArray(value)) maps.push(value);
+  getPathObjects(config).forEach(source => {
+    ['departmentDuties', 'departments', 'dutiesByDepartment', 'departmentConfig'].forEach(path => {
+      const value = source && source[path];
+      if (value && typeof value === 'object' && !Array.isArray(value)) maps.push(value);
+    });
   });
-  const roles = config && config.roles;
-  if (roles && roles.departmentDuties && typeof roles.departmentDuties === 'object') {
-    maps.push(roles.departmentDuties);
-  }
   return maps;
 }
 
@@ -433,18 +483,12 @@ function departmentForDuty(duty, config) {
 
 function departmentLeaderMaps(config) {
   const maps = [];
-  ['departmentLeaders', 'deptLeaders', 'leadersByDepartment'].forEach(path => {
-    const map = config && config[path];
-    if (map && typeof map === 'object' && !Array.isArray(map)) maps.push(map);
+  getPathObjects(config).forEach(source => {
+    ['departmentLeaders', 'departmentLeader', 'deptLeaders', 'leadersByDepartment'].forEach(path => {
+      const map = source && source[path];
+      if (map && typeof map === 'object' && !Array.isArray(map)) maps.push(map);
+    });
   });
-  const roles = config && config.roles;
-  if (roles && roles.departmentLeaders && typeof roles.departmentLeaders === 'object') {
-    maps.push(roles.departmentLeaders);
-  }
-  if (roles && roles.departmentLeader && typeof roles.departmentLeader === 'object') {
-    maps.push(roles.departmentLeader);
-  }
-  if (roles && roles.deptLeaders && typeof roles.deptLeaders === 'object') maps.push(roles.deptLeaders);
   return maps;
 }
 
@@ -480,19 +524,31 @@ function actorDepartments(actor, config) {
     const department = normalizeDepartment(item, config);
     if (department && out.indexOf(department) === -1) out.push(department);
   });
-  if (actor && typeof actor === 'object') {
-    add(actor.departments);
-    add(actor.department);
-    add(actor.managedDepartments);
-    add(actor.manages);
-  }
-  ['users', 'members', 'people'].forEach(path => {
-    const source = config && config[path];
+  const actorSources = [];
+  const collectActorSource = (source, seen) => {
     if (!source || typeof source !== 'object' || Array.isArray(source)) return;
-    Object.keys(source).forEach(identity => {
-      const value = source[identity];
-      if (!sameIdentity(actor, identity) || !value || typeof value !== 'object' || Array.isArray(value)) return;
-      add(value.departments || value.managedDepartments || value.manages);
+    const visited = Array.isArray(seen) ? seen : [];
+    if (visited.indexOf(source) !== -1) return;
+    visited.push(source);
+    actorSources.push(source);
+    ['token', 'claims', 'customClaims'].forEach(field => collectActorSource(source[field], visited));
+  };
+  collectActorSource(actor);
+  actorSources.forEach(source => {
+    add(source.departments);
+    add(source.department);
+    add(source.managedDepartments);
+    add(source.manages);
+  });
+  getPathObjects(config).forEach(source => {
+    ['users', 'members', 'people'].forEach(path => {
+      const members = source && source[path];
+      if (!members || typeof members !== 'object' || Array.isArray(members)) return;
+      Object.keys(members).forEach(identity => {
+        const value = members[identity];
+        if (!sameIdentity(actor, identity) || !value || typeof value !== 'object' || Array.isArray(value)) return;
+        add(value.departments || value.managedDepartments || value.manages);
+      });
     });
   });
   return out;
@@ -768,8 +824,13 @@ function departmentsForPinTarget(values, config) {
     }
   });
 
-  ['departmentMembers', 'membersByDepartment', 'departmentMemberships', 'departments'].forEach(path => {
-    addMembershipMap(config && config[path]);
+  getPathObjects(config).forEach(source => {
+    [
+      'departmentMembers', 'membersByDepartment', 'departmentMemberships',
+      'memberships', 'memberDepartments', 'departments'
+    ].forEach(path => {
+      addMembershipMap(source && source[path]);
+    });
   });
   return out;
 }

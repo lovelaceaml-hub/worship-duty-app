@@ -223,3 +223,62 @@ test('verified role claims work without privileged name matching', () => {
   assert.equal(permissions.isAdmin('B. Anthony', {}), false);
   assert.equal(permissions.isAdmin({ uid: 'untrusted', isAdmin: true }, {}), false);
 });
+
+test('access-scoped leader and membership maps feed every department boundary', () => {
+  const accessConfig = {
+    access: {
+      departmentLeaders: {
+        Media: ['Lead']
+      },
+      memberships: {
+        Media: ['Target']
+      }
+    }
+  };
+  const leader = { claims: { memberName: 'Lead' } };
+  const target = { token: { memberName: 'Target' } };
+
+  assert.deepEqual(permissions.departmentsForLeader(leader, accessConfig), ['Media']);
+  assert.equal(permissions.canManageDepartment(leader, 'Media', accessConfig), true);
+  assert.equal(permissions.canEditDuty(leader, 'Media Booth #1', accessConfig), true);
+  assert.equal(permissions.canManageDepartmentMember(leader, 'Media', 'New member', accessConfig), true);
+  assert.equal(permissions.canResolveRequest(leader, { duty: 'Media Booth #1' }, accessConfig), true);
+  assert.equal(permissions.canAcknowledgeConflict(leader, {
+    assignments: {
+      'Media Booth #1': 'Target',
+      'Media Booth #2': 'Target'
+    }
+  }, accessConfig), true);
+  assert.equal(permissions.canResetPin(leader, target, accessConfig), true);
+});
+
+test('nested token and claims normalize identity and boolean role claims', () => {
+  assert.equal(permissions.isAdmin({ token: { admin: true } }, {}), true);
+  assert.equal(permissions.isAdmin({ claims: { admin: true } }, {}), true);
+  assert.equal(permissions.canManageLeaders({ customClaims: { globalManager: true } }, {}), true);
+  assert.equal(permissions.canCreateService({ customClaims: { globalManager: true } }, {}), false);
+  assert.equal(permissions.canCreateService({ token: { admin: true } }, {}), true);
+
+  const configWithLeader = {
+    access: {
+      departmentLeaders: {
+        Media: ['Lead']
+      }
+    }
+  };
+  assert.equal(permissions.canManageDepartment(
+    { token: { memberName: 'Lead' } },
+    'Media',
+    configWithLeader
+  ), true);
+  assert.equal(permissions.canManageDepartment(
+    { claims: { member: { name: 'Lead' } } },
+    'Media',
+    configWithLeader
+  ), true);
+  assert.equal(permissions.canEditSongs(
+    { claims: { uid: 'presider-id' } },
+    { assignments: { Presider: { token: { uid: 'presider-id' } } } },
+    {}
+  ), true);
+});
