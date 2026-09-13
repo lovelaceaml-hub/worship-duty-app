@@ -1,139 +1,345 @@
 'use strict';
 
-/*
+/**
  * Pure department workflow helpers.
  *
- * The browser app currently stores department rosters as arrays.  These
- * helpers accept that legacy shape as well as the audit-friendly membership
- * record shape used by the authorization work.  No function in this module
- * mutates its input.
+ * This module deliberately knows nothing about Firestore, UI state, or auth
+ * tokens. Callers provide the current membership, leader, and authorization
+ * snapshots, then persist the returned values through their own boundary.
  */
 
 const MEMBERSHIP_ACTIVE = 'active';
 const MEMBERSHIP_ARCHIVED = 'archived';
 const MEMBERSHIP_STATUSES = [MEMBERSHIP_ACTIVE, MEMBERSHIP_ARCHIVED];
-
 const REQUEST_PENDING = 'pending';
 const REQUEST_APPROVED = 'approved';
 const REQUEST_DECLINED = 'declined';
 const REQUEST_CANCELLED = 'cancelled';
-const REQUEST_STATUSES = [REQUEST_PENDING, REQUEST_APPROVED, REQUEST_DECLINED, REQUEST_CANCELLED];
-
+const REQUEST_RESOLVED = 'resolved';
+const REQUEST_STATUSES = [
+  REQUEST_PENDING,
+  REQUEST_APPROVED,
+  REQUEST_DECLINED,
+  REQUEST_CANCELLED,
+  REQUEST_RESOLVED
+];
 const TERMINAL_REQUEST_STATUSES = new Set([
   REQUEST_APPROVED,
   REQUEST_DECLINED,
-  REQUEST_CANCELLED
+  REQUEST_CANCELLED,
+  REQUEST_RESOLVED
+]);
+
+const DEFAULT_DUTY_DEPARTMENTS = Object.freeze({
+  'Presider': 'Worship',
+  'Sermon': 'Worship',
+  'Opening Prayer': 'Worship',
+  'Closing Prayer': 'Worship',
+  'Prayer': 'Worship',
+  'Prayer #1': 'Worship',
+  'Prayer #2': 'Worship',
+  'Translation #1': 'Translation',
+  'Translation #2': 'Translation',
+  'Usher Sisters': 'Usher Sisters',
+  'Usher Brothers': 'Usher Brothers',
+  'Lobby': 'Lobby',
+  'Lobby Desk #1': 'Lobby',
+  'Lobby Desk #2': 'Lobby',
+  'Media': 'Media',
+  'Media Booth': 'Media',
+  'Parking Lot': 'Parking Lot',
+  'Offering': 'Offering'
+});
+
+const DUTY_PREFIX_RULES = Object.freeze([
+  [/^translation(?:\s|#|-|$)/i, 'Translation'],
+  [/^usher\s+sisters?(?:\s|#|-|$)/i, 'Usher Sisters'],
+  [/^usher\s+brothers?(?:\s|#|-|$)/i, 'Usher Brothers'],
+  [/^lobby(?:\s|#|-|$)/i, 'Lobby'],
+  [/^media(?:\s|#|-|$)/i, 'Media'],
+  [/^parking(?:\s+lot)?(?:\s|#|-|$)/i, 'Parking Lot'],
+  [/^offering(?:\s|#|-|$)/i, 'Offering'],
+  [/^(?:presider|sermon|opening\s+prayer|closing\s+prayer|prayer)(?:\s|#|-|$)/i, 'Worship']
 ]);
 
 function text(value) {
-  return String(value == null ? '' : value).trim();
+  return String(value == null ? '' : value).trim().replace(/\s+/g, ' ');
 }
 
-function unique(values) {
-  return Array.from(new Set((values || []).map(text).filter(Boolean)));
+function key(value) {
+  return text(value).toLocaleLowerCase();
 }
 
-function sortedUnique(values) {
-  return unique(values).sort((a, b) => a.localeCompare(b));
-}
-
-function providedTime(value) {
-  return Number.isFinite(Number(value)) ? Number(value) : Date.now();
+function firstText(...values) {
+  for (const value of values) {
+    const result = text(value);
+    if (result) return result;
+  }
+  return '';
 }
 
 function memberName(value) {
   if (typeof value === 'string' || typeof value === 'number') return text(value);
   if (!value || typeof value !== 'object') return '';
-  return text(value.member || value.name || value.memberName || value.memberId);
+  return firstText(value.member, value.name, value.memberName, value.memberId);
 }
 
 function departmentName(value) {
   if (typeof value === 'string') return text(value);
   if (!value || typeof value !== 'object') return '';
-  return text(value.department || value.category || value.departmentName);
+  return firstText(value.department, value.category, value.departmentName);
 }
 
 function membershipStatus(value, fallback) {
-  const status = text(value).toLowerCase();
+  const status = key(value);
   return MEMBERSHIP_STATUSES.includes(status) ? status : fallback;
 }
 
-function pushMembership(records, department, value, status, extra) {
-  const member = memberName(value);
-  const dept = text(department) || departmentName(value);
-  if (!member || !dept) return;
+function finiteTimestamp(value, fallback) {
+  if (Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return fallback;
+}
 
-  const source = value && typeof value === 'object' ? value : {};
-  records.push(Object.assign({}, source, extra || {}, {
-    department: dept,
+function uniqueStrings(values) {
+  const result = [];
+  const seen = new Set();
+  for (const value of values || []) {
+    const normalized = text(value);
+    const normalizedKey = key(normalized);
+    if (!normalized || seen.has(normalizedKey)) continue;
+    seen.add(normalizedKey);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function sortedStrings(values) {
+  return uniqueStrings(values).sort((left, right) => left.localeCompare(right));
+}
+
+function statusFromRecord(record) {
+  if (record && record.archived === true) return MEMBERSHIP_ARCHIVED;
+  const status = key(record && record.status);
+  return status === MEMBERSHIP_ARCHIVED ? MEMBERSHIP_ARCHIVED : MEMBERSHIP_ACTIVE;
+}
+
+function normalizeMembershipRecord(record, fallbackDepartment) {
+  if (typeof record === 'string') {
+    const department = text(fallbackDepartment);
+    const member = text(record);
+    return department && member ? { department, member, status: MEMBERSHIP_ACTIVE } : null;
+  }
+  if (!record || typeof record !== 'object') return null;
+  const department = firstText(record.department, record.departmentId, fallbackDepartment);
+  const member = firstText(record.member, record.memberName, record.name, record.person);
+  if (!department || !member) return null;
+  return {
+    ...record,
+    department,
     member,
-    status: membershipStatus(source.status, status)
-  }));
+    status: statusFromRecord(record)
+  };
 }
 
-function expandDepartmentValue(records, department, value, status) {
-  if (Array.isArray(value)) {
-    value.forEach(item => pushMembership(records, department, item, status));
-    return;
+function membershipRecords(input) {
+  if (Array.isArray(input)) {
+    return input
+      .map(record => normalizeMembershipRecord(record))
+      .filter(Boolean);
   }
-  if (!value || typeof value !== 'object') return;
+  if (!input || typeof input !== 'object') return [];
 
-  if (Array.isArray(value.active) || Array.isArray(value.archived)) {
-    expandDepartmentValue(records, department, value.active || [], MEMBERSHIP_ACTIVE);
-    expandDepartmentValue(records, department, value.archived || [], MEMBERSHIP_ARCHIVED);
-    return;
-  }
-  if (value.member || value.name || value.memberName || value.memberId) {
-    pushMembership(records, department, value, status);
-  }
-}
-
-/* Convert legacy roster maps or record arrays into one stable record list. */
-function normalizeMemberships(source) {
-  const records = [];
-  if (Array.isArray(source)) {
-    source.forEach(item => {
-      if (item && typeof item === 'object' && (item.member || item.name || item.memberName || item.memberId)) {
-        pushMembership(records, item.department || item.category, item,
-          membershipStatus(item.status, MEMBERSHIP_ACTIVE));
+  const groupedRecords = [];
+  const hasGroupedStatus = Object.prototype.hasOwnProperty.call(input, MEMBERSHIP_ACTIVE) ||
+    Object.prototype.hasOwnProperty.call(input, MEMBERSHIP_ARCHIVED);
+  if (hasGroupedStatus) {
+    for (const status of [MEMBERSHIP_ACTIVE, MEMBERSHIP_ARCHIVED]) {
+      const grouped = input[status];
+      if (!grouped || typeof grouped !== 'object' || Array.isArray(grouped)) continue;
+      for (const [departmentKey, value] of Object.entries(grouped)) {
+        const department = text(departmentKey);
+        if (!department || value == null) continue;
+        const entries = Array.isArray(value) ? value : [value];
+        for (const entry of entries) {
+          if (entry && typeof entry === 'object' &&
+              (Array.isArray(entry.active) || Array.isArray(entry.archived))) {
+            for (const nestedStatus of [MEMBERSHIP_ACTIVE, MEMBERSHIP_ARCHIVED]) {
+              for (const nestedEntry of entry[nestedStatus] || []) {
+                const record = normalizeMembershipRecord(
+                  typeof nestedEntry === 'string'
+                    ? { member: nestedEntry, status: nestedStatus }
+                    : { ...nestedEntry, status: nestedStatus },
+                  department
+                );
+                if (record) groupedRecords.push(record);
+              }
+            }
+            continue;
+          }
+          const record = normalizeMembershipRecord(
+            typeof entry === 'string' ? { member: entry, status } : { ...entry, status },
+            department
+          );
+          if (record) groupedRecords.push(record);
+        }
       }
-    });
-    return records;
+    }
+    return groupedRecords;
   }
-  if (!source || typeof source !== 'object') return records;
 
-  if (source.active && typeof source.active === 'object') {
-    Object.keys(source.active).forEach(dept => {
-      expandDepartmentValue(records, dept, source.active[dept], MEMBERSHIP_ACTIVE);
-    });
-  }
-  if (source.archived && typeof source.archived === 'object') {
-    Object.keys(source.archived).forEach(dept => {
-      expandDepartmentValue(records, dept, source.archived[dept], MEMBERSHIP_ARCHIVED);
-    });
-  }
-  if (source.active || source.archived) return records;
+  const records = [];
+  for (const [departmentKey, value] of Object.entries(input)) {
+    const department = text(departmentKey);
+    if (!department || value == null) continue;
 
-  Object.keys(source).forEach(dept => {
-    expandDepartmentValue(records, dept, source[dept], MEMBERSHIP_ACTIVE);
-  });
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const record = normalizeMembershipRecord(entry, department);
+        if (record) records.push(record);
+      }
+      continue;
+    }
+
+    if (typeof value !== 'object') continue;
+    for (const status of [MEMBERSHIP_ACTIVE, MEMBERSHIP_ARCHIVED]) {
+      const members = value[status];
+      if (!Array.isArray(members)) continue;
+      for (const member of members) {
+        const record = normalizeMembershipRecord(
+          typeof member === 'string' ? { member, status } : { ...member, status },
+          department
+        );
+        if (record) records.push(record);
+      }
+    }
+    if (Array.isArray(value.members)) {
+      for (const member of value.members) {
+        const record = normalizeMembershipRecord(member, department);
+        if (record) records.push(record);
+      }
+    }
+    if (value.member || value.name || value.memberName || value.memberId) {
+      const record = normalizeMembershipRecord(value, department);
+      if (record) records.push(record);
+    }
+  }
   return records;
 }
 
-function membershipKey(department, member) {
-  return text(department) + '\u0000' + text(member);
+function membershipArguments(departmentOrInput, member, status, metadata) {
+  if (departmentOrInput && typeof departmentOrInput === 'object') {
+    return { ...departmentOrInput };
+  }
+  return {
+    ...(metadata && typeof metadata === 'object' ? metadata : {}),
+    department: departmentOrInput,
+    member,
+    status
+  };
+}
+
+/**
+ * Add or update one department membership without deleting a global member or
+ * any membership in another department. The returned value is a new array.
+ */
+function upsertDepartmentMembership(memberships, departmentOrInput, member, status, metadata) {
+  const input = membershipArguments(departmentOrInput, member, status, metadata);
+  const record = normalizeMembershipRecord(input);
+  if (!record) throw new TypeError('department and member are required');
+
+  const records = membershipRecords(memberships);
+  const targetDepartment = key(record.department);
+  const targetMember = key(record.member);
+  const index = records.findIndex(candidate => (
+    key(candidate.department) === targetDepartment && key(candidate.member) === targetMember
+  ));
+  if (index === -1) {
+    if (record.status === MEMBERSHIP_ARCHIVED) {
+      record.archivedAt = record.archivedAt !== undefined
+        ? record.archivedAt
+        : finiteTimestamp(input.at, Date.now());
+      if (input.by) record.archivedBy = memberName(input.by) || text(input.by);
+    }
+    return [...records, record];
+  }
+
+  records[index] = { ...records[index], ...record, status: record.status };
+  if (record.status === MEMBERSHIP_ARCHIVED) {
+    records[index].archivedAt = records[index].archivedAt !== undefined
+      ? records[index].archivedAt
+      : finiteTimestamp(input.at, Date.now());
+    if (input.by) records[index].archivedBy = memberName(input.by) || text(input.by);
+  } else if (input.at !== undefined) {
+    records[index].restoredAt = input.at;
+    if (input.by) records[index].restoredBy = memberName(input.by) || text(input.by);
+  }
+  return records;
+}
+
+function archiveDepartmentMember(memberships, department, member, metadata) {
+  return upsertDepartmentMembership(
+    memberships,
+    { ...(metadata || {}), department, member, status: MEMBERSHIP_ARCHIVED }
+  );
+}
+
+function reactivateDepartmentMember(memberships, department, member, metadata) {
+  return upsertDepartmentMembership(
+    memberships,
+    { ...(metadata || {}), department, member, status: MEMBERSHIP_ACTIVE }
+  );
+}
+
+function membershipsForMember(memberships, member, options) {
+  const includeArchived = Boolean(options && options.includeArchived);
+  const memberKey = key(member);
+  return membershipRecords(memberships)
+    .filter(record => key(record.member) === memberKey)
+    .filter(record => includeArchived || record.status === MEMBERSHIP_ACTIVE)
+    .sort((left, right) => left.department.localeCompare(right.department));
+}
+
+function membersForDepartment(memberships, department, options) {
+  const includeArchived = Boolean(options && options.includeArchived);
+  const departmentKey = key(department);
+  return sortedStrings(
+    membershipRecords(memberships)
+      .filter(record => key(record.department) === departmentKey)
+      .filter(record => includeArchived || record.status === MEMBERSHIP_ACTIVE)
+      .map(record => record.member)
+  );
+}
+
+function activeMembersForDepartment(memberships, department) {
+  return membersForDepartment(memberships, department);
+}
+
+function membershipState(memberships, department, member) {
+  const departmentKey = key(department);
+  const memberKey = key(member);
+  const record = membershipRecords(memberships).find(candidate => (
+    key(candidate.department) === departmentKey && key(candidate.member) === memberKey
+  ));
+  return record ? record.status : null;
+}
+
+function isActiveDepartmentMember(memberships, department, member) {
+  return membershipState(memberships, department, member) === MEMBERSHIP_ACTIVE;
 }
 
 function departmentMemberships(source, department, status) {
   const wantedDepartment = text(department);
   const wantedStatus = membershipStatus(status, MEMBERSHIP_ACTIVE);
-  return normalizeMemberships(source).filter(record =>
+  return membershipRecords(source).filter(record => (
     record.department === wantedDepartment && record.status === wantedStatus
-  );
+  ));
 }
 
 function departmentMembers(source, department, status) {
-  return sortedUnique(departmentMemberships(source, department, status).map(record => record.member));
+  return sortedStrings(departmentMemberships(source, department, status).map(record => record.member));
 }
 
 function activeDepartmentMembers(source, department) {
@@ -144,10 +350,6 @@ function archivedDepartmentMembers(source, department) {
   return departmentMembers(source, department, MEMBERSHIP_ARCHIVED);
 }
 
-function isActiveDepartmentMember(source, department, member) {
-  return activeDepartmentMembers(source, department).includes(memberName(member));
-}
-
 function setDepartmentMembershipStatus(source, department, member, status, metadata) {
   const wantedDepartment = text(department);
   const wantedMember = memberName(member);
@@ -155,44 +357,14 @@ function setDepartmentMembershipStatus(source, department, member, status, metad
   if (!wantedDepartment || !wantedMember || !wantedStatus) {
     throw new TypeError('department, member, and a valid membership status are required');
   }
-
-  const records = normalizeMemberships(source);
-  const key = membershipKey(wantedDepartment, wantedMember);
-  let found = false;
-  const next = records.map(record => {
-    if (membershipKey(record.department, record.member) !== key) return Object.assign({}, record);
-    found = true;
-    const updated = Object.assign({}, record, metadata || {}, {
-      department: wantedDepartment,
-      member: wantedMember,
-      status: wantedStatus
-    });
-    if (wantedStatus === MEMBERSHIP_ARCHIVED) {
-      updated.archivedAt = updated.archivedAt !== undefined
-        ? updated.archivedAt : providedTime(metadata && metadata.at);
-      if (metadata && metadata.by) updated.archivedBy = metadata.by;
-    } else if (metadata && metadata.at !== undefined) {
-      updated.restoredAt = metadata.at;
-      if (metadata.by) updated.restoredBy = metadata.by;
-    }
-    return updated;
+  return upsertDepartmentMembership(source, {
+    ...(metadata || {}),
+    department: wantedDepartment,
+    member: wantedMember,
+    status: wantedStatus
   });
-
-  if (!found) {
-    const record = { department: wantedDepartment, member: wantedMember, status: wantedStatus };
-    if (metadata && typeof metadata === 'object') Object.assign(record, metadata);
-    if (wantedStatus === MEMBERSHIP_ARCHIVED) {
-      record.archivedAt = record.archivedAt !== undefined
-        ? record.archivedAt : providedTime(metadata && metadata.at);
-      if (metadata && metadata.by) record.archivedBy = metadata.by;
-    }
-    next.push(record);
-  }
-  return next;
 }
 
-/* Removing someone from a department is an archival action, never a global
- * member deletion.  The caller keeps its separate member list unchanged. */
 function archiveDepartmentMembership(source, department, member, metadata) {
   return setDepartmentMembershipStatus(source, department, member, MEMBERSHIP_ARCHIVED, metadata);
 }
@@ -205,41 +377,171 @@ function removeDepartmentMembership(source, department, member, metadata) {
   return archiveDepartmentMembership(source, department, member, metadata);
 }
 
+function mapDutyDepartments(dutyDepartments) {
+  if (!dutyDepartments || typeof dutyDepartments !== 'object') {
+    return new Map();
+  }
+  const entries = dutyDepartments instanceof Map
+    ? Array.from(dutyDepartments.entries())
+    : Object.entries(dutyDepartments);
+  return new Map(entries.map(([duty, department]) => [key(duty), text(department)])
+    .filter(([duty, department]) => duty && department));
+}
+
+function departmentForDuty(duty, dutyDepartments) {
+  const normalizedDuty = text(duty);
+  if (!normalizedDuty) return null;
+
+  const configured = mapDutyDepartments(dutyDepartments);
+  const configuredDepartment = configured.get(key(normalizedDuty));
+  if (configuredDepartment) return configuredDepartment;
+
+  const defaultDepartment = mapDutyDepartments(DEFAULT_DUTY_DEPARTMENTS).get(key(normalizedDuty));
+  if (defaultDepartment) return defaultDepartment;
+
+  for (const [pattern, department] of DUTY_PREFIX_RULES) {
+    if (pattern.test(normalizedDuty)) return department;
+  }
+  return null;
+}
+
+function departmentsForDuties(duties, dutyDepartments) {
+  const result = [];
+  const seen = new Set();
+  for (const duty of uniqueStrings(duties)) {
+    const department = departmentForDuty(duty, dutyDepartments);
+    const departmentKey = key(department);
+    if (!department || seen.has(departmentKey)) continue;
+    seen.add(departmentKey);
+    result.push(department);
+  }
+  return result;
+}
+
+function leaderEntries(leadersByDepartment) {
+  if (leadersByDepartment instanceof Map) return Array.from(leadersByDepartment.entries());
+  if (Array.isArray(leadersByDepartment)) {
+    return leadersByDepartment
+      .filter(record => record && typeof record === 'object')
+      .map(record => [record.department, record.leaders || record.members || record.member]);
+  }
+  if (!leadersByDepartment || typeof leadersByDepartment !== 'object') return [];
+  return Object.entries(leadersByDepartment);
+}
+
+function leadersForDepartment(leadersByDepartment, department) {
+  const departmentKey = key(department);
+  for (const [candidateDepartment, leaders] of leaderEntries(leadersByDepartment)) {
+    if (key(candidateDepartment) !== departmentKey) continue;
+    if (Array.isArray(leaders)) return uniqueStrings(leaders);
+    if (leaders instanceof Set) return uniqueStrings(Array.from(leaders));
+    if (leaders && typeof leaders === 'object') {
+      return uniqueStrings(leaders.leaders || leaders.members || []);
+    }
+    if (typeof leaders === 'string') return [text(leaders)];
+  }
+  return [];
+}
+
+function optionNames(options, ...names) {
+  const values = [];
+  for (const name of names) {
+    const value = options && options[name];
+    if (Array.isArray(value)) values.push(...value);
+    else if (value instanceof Set) values.push(...Array.from(value));
+    else if (typeof value === 'string') values.push(value);
+  }
+  return uniqueStrings(values);
+}
+
+function requestStatus(request) {
+  const status = key(request && (request.status || request.state));
+  if (!status) return REQUEST_PENDING;
+  if (status === 'open' || status === 'outstanding') return REQUEST_PENDING;
+  if (status === 'closed' || status === 'complete') return REQUEST_RESOLVED;
+  if (REQUEST_STATUSES.includes(status)) return status;
+  return status;
+}
+
+function requestNeedsAttention(request) {
+  return Boolean(request && requestStatus(request) === REQUEST_PENDING);
+}
+
+function requestDepartment(request, options) {
+  return firstText(
+    departmentName(request && request.department),
+    request && request.category,
+    departmentForDuty(request && (request.duty || request.dutyName), options && options.dutyDepartments)
+  ) || null;
+}
+
+function requestAudit(request) {
+  return Array.isArray(request && request.audit)
+    ? request.audit.map(event => ({ ...event }))
+    : [];
+}
+
 function slug(value) {
-  return text(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return text(value).toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 function requestId(requestOrServiceId, dutyValue, atValue) {
   if (typeof requestOrServiceId === 'string' && dutyValue !== undefined) {
-    const at = Number.isFinite(Number(atValue)) ? Number(atValue) : Date.now();
+    const at = finiteTimestamp(atValue, Date.now());
     return text(requestOrServiceId) + '_' + slug(dutyValue) + '_' + at;
   }
   if (typeof requestOrServiceId === 'string') return requestOrServiceId;
   const source = requestOrServiceId || {};
   if (source.id) return text(source.id);
   const service = source.serviceId || source.svcId || source.service || 'service';
-  const duty = source.duty || 'duty';
-  const createdAt = Number.isFinite(Number(source.createdAt)) ? Number(source.createdAt) : Date.now();
+  const duty = source.duty || source.dutyName || 'duty';
+  const createdAt = finiteTimestamp(source.createdAt, Date.now());
   return text(service) + '_' + slug(duty) + '_' + createdAt;
 }
 
 function auditEntry(action, data) {
   const source = data || {};
   const timestamp = source.at !== undefined ? source.at : source.timestamp;
-  return Object.assign({}, source, {
+  return {
+    ...source,
     action: text(action),
-    at: providedTime(timestamp)
-  });
+    at: finiteTimestamp(timestamp, Date.now())
+  };
 }
 
 function recordRequestAudit(request, action, data) {
-  const entry = auditEntry(action, data);
-  const existing = Array.isArray(request && request.audit) ? request.audit : [];
-  return Object.assign({}, request, { audit: existing.concat([entry]) });
+  return {
+    ...(request || {}),
+    audit: requestAudit(request).concat([auditEntry(action, data)])
+  };
+}
+
+function routeRequest(request, leadersByDepartment, options) {
+  if (leadersByDepartment && (leadersByDepartment.departmentLeaders ||
+      leadersByDepartment.routes || leadersByDepartment.defaultScheduler)) {
+    return routeChangeRequest(request, leadersByDepartment);
+  }
+  const routingOptions = options || {};
+  const department = requestDepartment(request, routingOptions);
+  const departments = department ? [department] : [];
+  const leaders = department ? leadersForDepartment(leadersByDepartment, department) : [];
+  const admins = optionNames(routingOptions, 'adminNames', 'admins', 'adminName');
+  const allRecipients = uniqueStrings([...leaders, ...admins]);
+  const actionable = requestNeedsAttention(request) && Boolean(department);
+  return {
+    department,
+    departments,
+    recipients: actionable ? allRecipients : [],
+    allRecipients,
+    status: requestStatus(request),
+    actionable,
+    unroutable: requestNeedsAttention(request) && !department
+  };
 }
 
 function routeValues(value) {
   if (Array.isArray(value)) return value.map(memberName).filter(Boolean);
+  if (value instanceof Set) return Array.from(value).map(memberName).filter(Boolean);
   if (value == null) return [];
   return [memberName(value)].filter(Boolean);
 }
@@ -247,46 +549,75 @@ function routeValues(value) {
 function configuredRoute(config, department) {
   const source = config || {};
   const byDepartment = source.departmentLeaders || source.leaders || source.routes || {};
+  if (byDepartment instanceof Map) return routeValues(byDepartment.get(department));
   return routeValues(byDepartment[department]);
 }
 
+/* Compatibility adapter for the original config shape. New callers should
+ * use routeRequest(request, leadersByDepartment, options), which keeps admin
+ * recipients explicit and does not silently fall back to a global scheduler.
+ */
 function routeChangeRequest(request, config) {
   const source = request || {};
-  const department = text(source.department || source.category);
-  const requester = memberName(source.requester || source.requesterName || source.name);
-  const departmentRecipients = configuredRoute(config, department);
-  let recipients = departmentRecipients;
-  if (!recipients.filter(name => name !== requester).length) {
-    recipients = routeValues((config || {}).scheduler || (config || {}).defaultScheduler);
+  const settings = config || {};
+  const department = requestDepartment(source, settings) || departmentName(source);
+  const requester = memberName(source.requester || source.requesterName || source.name || source.originalRequester);
+  const departmentRecipients = configuredRoute(settings, department);
+  const admins = optionNames(settings, 'adminNames', 'admins', 'adminName');
+  let recipients = uniqueStrings([...departmentRecipients, ...admins])
+    .filter(name => name !== requester);
+  let route = 'department-leaders';
+  if (!departmentRecipients.filter(name => name !== requester).length) {
+    recipients = uniqueStrings([
+      ...routeValues(settings.scheduler || settings.defaultScheduler),
+      ...admins
+    ]).filter(name => name !== requester);
+    route = recipients.length ? 'scheduler' : 'unroutable';
   }
-  recipients = sortedUnique(recipients.filter(name => name !== requester));
   return {
-    requestId: requestId(source),
-    department,
-    recipients,
-    route: recipients.length && departmentRecipients.filter(name => name !== requester).length
-      ? 'department-leaders' : 'scheduler',
-    status: text(source.status) || REQUEST_PENDING
+    requestId: requestId({ ...source, department }),
+    department: department || '',
+    recipients: sortedStrings(recipients),
+    route,
+    status: requestStatus(source)
   };
 }
 
-function createChangeRequest(input) {
-  const source = Object.assign({}, input || {});
-  const createdAt = Number.isFinite(Number(source.createdAt)) ? Number(source.createdAt) : Date.now();
-  const request = Object.assign({}, source, {
-    id: requestId(Object.assign({}, source, { createdAt })),
+function createChangeRequest(input, leadersByDepartment, options) {
+  const requestInput = input && typeof input === 'object' ? input : {};
+  const creationOptions = options || {};
+  const createdAt = finiteTimestamp(
+    requestInput.createdAt,
+    finiteTimestamp(creationOptions.now, Date.now())
+  );
+  const originalRequester = firstText(
+    requestInput.originalRequester,
+    requestInput.requester,
+    requestInput.requestedBy
+  );
+  const request = {
+    ...requestInput,
+    id: requestId({ ...requestInput, createdAt }),
     status: REQUEST_PENDING,
-    createdAt
-  });
-  return recordRequestAudit(request, 'created', {
-    at: createdAt,
-    by: source.requester || source.requesterName || source.name || ''
-  });
+    createdAt,
+    originalRequester,
+    audit: requestAudit(requestInput)
+  };
+  if (!request.audit.some(event => event && event.action === 'created')) {
+    request.audit.push({
+      action: 'created',
+      by: originalRequester || null,
+      at: createdAt
+    });
+  }
+  const route = routeRequest(request, leadersByDepartment, creationOptions);
+  if (route.department) request.department = route.department;
+  return request;
 }
 
 function canTransitionRequest(from, to) {
-  const current = text(from) || REQUEST_PENDING;
-  const next = text(to);
+  const current = key(from) || REQUEST_PENDING;
+  const next = key(to);
   if (!REQUEST_STATUSES.includes(current) || !REQUEST_STATUSES.includes(next)) return false;
   if (current === next) return true;
   return current === REQUEST_PENDING && TERMINAL_REQUEST_STATUSES.has(next);
@@ -294,67 +625,135 @@ function canTransitionRequest(from, to) {
 
 function transitionRequestStatus(request, status, options) {
   const source = request || {};
-  const current = text(source.status) || REQUEST_PENDING;
-  const nextStatus = text(status);
+  const current = key(source.status) || REQUEST_PENDING;
+  const nextStatus = key(status);
   if (!canTransitionRequest(current, nextStatus)) {
     throw new RangeError('request status cannot transition from ' + current + ' to ' + nextStatus);
   }
-  if (current === nextStatus) return Object.assign({}, source, { audit: (source.audit || []).slice() });
+  if (current === nextStatus) return { ...source, audit: requestAudit(source) };
 
-  const meta = options || {};
-  const timestamp = meta.at !== undefined ? meta.at : meta.timestamp;
-  const at = providedTime(timestamp);
-  const next = Object.assign({}, source, { status: nextStatus });
+  const details = options || {};
+  const at = finiteTimestamp(
+    details.at !== undefined ? details.at : details.timestamp,
+    Date.now()
+  );
+  const by = memberName(details.by || details.actor || details.resolvedBy) ||
+    text(details.by || details.actor || details.resolvedBy) || 'editor';
+  const next = { ...source, status: nextStatus, audit: requestAudit(source) };
   if (TERMINAL_REQUEST_STATUSES.has(nextStatus)) {
     next.resolvedAt = at;
-    next.resolvedBy = memberName(meta.by || meta.actor || meta.resolvedBy) || 'editor';
+    next.resolvedBy = by;
   }
-  return recordRequestAudit(next, 'status-changed', {
+  const audit = {
+    action: 'status-changed',
     at,
-    by: meta.by || meta.actor || meta.resolvedBy || 'editor',
+    by,
     from: current,
     to: nextStatus,
-    reason: text(meta.reason)
-  });
+    reason: text(details.reason)
+  };
+  next.audit.push(audit);
+  return next;
 }
 
 function isOutstandingRequest(request) {
-  return text(request && request.status || REQUEST_PENDING) === REQUEST_PENDING;
+  return requestNeedsAttention(request);
+}
+
+function resolveRequest(request, resolution) {
+  if (!request || typeof request !== 'object') throw new TypeError('request is required');
+  if (!requestNeedsAttention(request)) return { ...request, audit: requestAudit(request) };
+
+  const details = resolution && typeof resolution === 'object' ? resolution : {};
+  const resolvedBy = firstText(details.resolvedBy, details.by);
+  if (!resolvedBy) throw new TypeError('resolvedBy is required');
+  const resolvedAt = finiteTimestamp(details.resolvedAt, Date.now());
+  const next = {
+    ...request,
+    status: REQUEST_RESOLVED,
+    resolvedBy,
+    resolvedAt,
+    audit: requestAudit(request)
+  };
+  if (Object.prototype.hasOwnProperty.call(details, 'notes')) next.notes = details.notes;
+  const event = {
+    action: 'resolved',
+    by: resolvedBy,
+    resolvedBy,
+    at: resolvedAt,
+    resolvedAt
+  };
+  if (Object.prototype.hasOwnProperty.call(details, 'notes')) event.notes = details.notes;
+  next.audit.push(event);
+  return next;
+}
+
+function conflictMember(conflict) {
+  return memberName(conflict && (conflict.member || conflict.memberName || conflict.name));
+}
+
+function conflictDuties(conflict) {
+  if (!conflict || typeof conflict !== 'object') return [];
+  const raw = conflict.duties || conflict.dutyNames || conflict.dutiesInvolved;
+  const duties = [];
+  if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      if (typeof entry === 'string') duties.push(entry);
+      else if (entry && typeof entry === 'object') duties.push(
+        firstText(entry.duty, entry.dutyName, entry.name)
+      );
+    }
+  }
+  if (raw && !Array.isArray(raw) && typeof raw === 'object') duties.push(...Object.keys(raw));
+  if (!duties.length && conflict.assignments && typeof conflict.assignments === 'object') {
+    const member = key(conflictMember(conflict));
+    for (const [duty, assigned] of Object.entries(conflict.assignments)) {
+      if (!member || key(memberName(assigned)) === member) duties.push(duty);
+    }
+  }
+  if (!duties.length && conflict.duty) duties.push(conflict.duty);
+  return uniqueStrings(duties);
 }
 
 function dutyCategory(duty, options) {
-  const source = options || {};
-  const map = source.dutyDepartments || source.categories || {};
-  return text(map[duty]);
+  const settings = options || {};
+  const configured = settings.dutyDepartments || settings.categories || {};
+  return departmentForDuty(duty, configured);
 }
 
 function normalizedDuties(duties) {
-  return unique(Array.isArray(duties) ? duties : []).sort((a, b) => a.localeCompare(b));
+  return sortedStrings(Array.isArray(duties) ? duties : []);
 }
 
 function conflictCompositionKey(serviceId, member, duties) {
-  return JSON.stringify([text(serviceId), memberName(member), normalizedDuties(duties)]);
+  return JSON.stringify([
+    text(serviceId),
+    memberName(member),
+    normalizedDuties(duties)
+  ]);
 }
 
 function isPrayerDuty(duty, options) {
   const category = dutyCategory(duty, options);
-  return category === 'Worship' && /prayer/i.test(duty) || (!category && /prayer/i.test(duty));
+  return (category === 'Worship' && /prayer/i.test(text(duty))) ||
+    (!category && /prayer/i.test(text(duty)));
 }
 
 function isUsherDuty(duty, options) {
   const category = dutyCategory(duty, options);
-  return category === 'Usher Sisters' || category === 'Usher Brothers' || /usher/i.test(duty);
+  return category === 'Usher Sisters' || category === 'Usher Brothers' || /usher/i.test(text(duty));
 }
 
 function hasNonExemptPair(duties, options) {
-  const source = options || {};
-  if (typeof source.intentionalPair === 'function') {
-    return duties.some((left, i) => duties.slice(i + 1).some(right => !source.intentionalPair(left, right)));
+  const settings = options || {};
+  if (typeof settings.intentionalPair === 'function') {
+    return duties.some((left, index) => duties.slice(index + 1)
+      .some(right => !settings.intentionalPair(left, right)));
   }
-  for (let i = 0; i < duties.length; i++) {
-    for (let j = i + 1; j < duties.length; j++) {
-      const prayerUsher = (isPrayerDuty(duties[i], source) && isUsherDuty(duties[j], source)) ||
-        (isUsherDuty(duties[i], source) && isPrayerDuty(duties[j], source));
+  for (let index = 0; index < duties.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < duties.length; otherIndex += 1) {
+      const prayerUsher = (isPrayerDuty(duties[index], settings) && isUsherDuty(duties[otherIndex], settings)) ||
+        (isUsherDuty(duties[index], settings) && isPrayerDuty(duties[otherIndex], settings));
       if (!prayerUsher) return true;
     }
   }
@@ -366,104 +765,367 @@ function composeConflicts(service, options) {
   const settings = options || {};
   const assignments = source.assignments || source.duties || {};
   const byMember = {};
-  Object.keys(assignments).forEach(duty => {
-    const member = memberName(assignments[duty]);
-    if (!member) return;
+  for (const [duty, assigned] of Object.entries(assignments)) {
+    const member = memberName(assigned);
+    if (!member) continue;
     (byMember[member] || (byMember[member] = [])).push(duty);
-  });
+  }
   const serviceId = source.serviceId || source.id || source.svcId;
   return Object.keys(byMember).filter(member => {
     const duties = normalizedDuties(byMember[member]);
     return duties.length >= 2 && hasNonExemptPair(duties, settings);
   }).map(member => {
     const duties = normalizedDuties(byMember[member]);
-    const departments = sortedUnique(duties.map(duty => dutyCategory(duty, settings)).filter(Boolean));
+    const departments = sortedStrings(duties.map(duty => dutyCategory(duty, settings)).filter(Boolean));
+    const compositionKey = conflictCompositionKey(serviceId, member, duties);
     return {
       serviceId: text(serviceId),
       member,
       name: member,
       duties,
       departments,
-      compositionKey: conflictCompositionKey(serviceId, member, duties)
+      compositionKey,
+      composition: compositionKey
     };
   });
 }
 
-function acknowledgeConflict(conflict, metadata) {
+function conflictServiceIdentity(conflict) {
+  const id = firstText(conflict && (conflict.serviceId || conflict.service || conflict.id));
+  if (id) return id;
+  return JSON.stringify({
+    date: firstText(conflict && conflict.date),
+    worship: firstText(conflict && (conflict.worship || conflict.worshipType || conflict.serviceType))
+  });
+}
+
+/**
+ * A stable composition key makes an acknowledgement valid only for the exact
+ * service, member, and duty set that was reviewed.
+ */
+function conflictComposition(conflict) {
+  return conflictCompositionKey(
+    conflictServiceIdentity(conflict),
+    conflictMember(conflict),
+    conflictDuties(conflict)
+  );
+}
+
+function isIntentionalPrayerUsherPair(duties) {
+  const normalized = uniqueStrings(duties);
+  if (normalized.length !== 2) return false;
+  return normalized.some(duty => /\bprayer\b/i.test(duty)) &&
+    normalized.some(duty => /\busher\b/i.test(duty));
+}
+
+function conflictAcknowledgement(conflictOrAcknowledgement) {
+  if (!conflictOrAcknowledgement || typeof conflictOrAcknowledgement !== 'object') return null;
+  const nested = conflictOrAcknowledgement.acknowledgement ||
+    conflictOrAcknowledgement.acknowledgment ||
+    conflictOrAcknowledgement.ack ||
+    conflictOrAcknowledgement.conflictAck ||
+    null;
+  if (nested) return nested;
+  if (conflictOrAcknowledgement.acknowledgedBy ||
+      conflictOrAcknowledgement.acknowledgedAt !== undefined ||
+      conflictOrAcknowledgement.compositionKey) {
+    return conflictOrAcknowledgement;
+  }
+  return null;
+}
+
+function acknowledgementState(conflict, acknowledgement) {
+  const candidate = conflictAcknowledgement(acknowledgement) ||
+    acknowledgement || conflictAcknowledgement(conflict);
+  if (!candidate || typeof candidate !== 'object') return 'none';
+  const expectedComposition = conflictComposition(conflict);
+  if (candidate.composition && candidate.composition !== expectedComposition) return 'stale';
+  if (candidate.compositionKey && candidate.compositionKey !== expectedComposition) return 'stale';
+  const candidateDuties = sortedStrings(candidate.duties || candidate.dutiesInvolved);
+  const currentDuties = sortedStrings(conflictDuties(conflict));
+  if (!candidateDuties.length || candidateDuties.join('\u0000') !== currentDuties.join('\u0000')) {
+    return 'stale';
+  }
+  if (!firstText(candidate.acknowledgedBy, candidate.by) ||
+      !Number.isFinite(finiteTimestamp(candidate.acknowledgedAt, NaN))) {
+    return 'stale';
+  }
+  return 'acknowledged';
+}
+
+function isConflictAcknowledged(conflict, acknowledgement) {
+  return acknowledgementState(conflict, acknowledgement) === 'acknowledged';
+}
+
+function acknowledgeConflict(conflict, details) {
+  if (!conflict || typeof conflict !== 'object') throw new TypeError('conflict is required');
+  const input = details && typeof details === 'object' ? details : {};
+  const acknowledgedBy = firstText(input.acknowledgedBy, input.by);
+  if (!acknowledgedBy) throw new TypeError('acknowledgedBy is required');
+  const acknowledgedAt = finiteTimestamp(input.acknowledgedAt, Date.now());
+  const duties = sortedStrings(conflictDuties(conflict));
+  const acknowledgement = {
+    acknowledgedBy,
+    acknowledgedAt,
+    duties,
+    composition: conflictComposition(conflict),
+    compositionKey: conflictComposition(conflict),
+    serviceId: text(conflictServiceIdentity(conflict)),
+    member: conflictMember(conflict)
+  };
+  /* Keep the flat fields for callers that persist a standalone acknowledgement
+   * record, while also returning the shared nested shape for conflict state. */
+  return {
+    ...conflict,
+    serviceId: text(conflictServiceIdentity(conflict)),
+    member: conflictMember(conflict),
+    duties,
+    acknowledgedBy,
+    acknowledgedAt,
+    compositionKey: acknowledgement.compositionKey,
+    acknowledgement
+  };
+}
+
+function conflictStatus(conflict) {
+  const status = key(conflict && conflict.status);
+  return status === REQUEST_RESOLVED || status === 'closed' ? REQUEST_RESOLVED : REQUEST_PENDING;
+}
+
+function conflictNeedsAttention(conflict) {
+  if (!conflict || conflictStatus(conflict) !== REQUEST_PENDING ||
+      conflict.active === false || conflict.resolved === true) return false;
+  const duties = conflictDuties(conflict);
+  if (duties.length < 2 || isIntentionalPrayerUsherPair(duties)) return false;
+  if (conflict.acknowledged === true && !conflictAcknowledgement(conflict)) return false;
+  return !isConflictAcknowledged(conflict);
+}
+
+function conflictDepartments(conflict, dutyDepartments) {
+  const explicit = conflict && (conflict.departments || conflict.departmentNames || conflict.department);
+  const explicitDepartments = Array.isArray(explicit)
+    ? uniqueStrings(explicit)
+    : uniqueStrings([explicit]);
+  return explicitDepartments.length
+    ? explicitDepartments
+    : departmentsForDuties(conflictDuties(conflict), dutyDepartments);
+}
+
+function routeConflict(conflict, leadersByDepartment, options) {
+  if (leadersByDepartment && (leadersByDepartment.departmentLeaders ||
+      leadersByDepartment.leaders || leadersByDepartment.routes ||
+      leadersByDepartment.scheduler || leadersByDepartment.defaultScheduler)) {
+    return routeLegacyConflict(conflict, leadersByDepartment);
+  }
+  const routingOptions = options || {};
+  const departments = conflictDepartments(conflict, routingOptions.dutyDepartments);
+  const leaders = departments.flatMap(department => leadersForDepartment(leadersByDepartment, department));
+  const admins = optionNames(routingOptions, 'adminNames', 'admins', 'adminName');
+  const allRecipients = uniqueStrings([...leaders, ...admins]);
+  const actionable = conflictNeedsAttention(conflict);
+  return {
+    departments,
+    recipients: actionable ? allRecipients : [],
+    allRecipients,
+    composition: conflictComposition(conflict),
+    acknowledgement: conflictAcknowledgement(conflict),
+    acknowledgementState: acknowledgementState(conflict),
+    actionable
+  };
+}
+
+function routeLegacyConflict(conflict, config) {
   const source = conflict || {};
-  const meta = metadata || {};
-  const duties = normalizedDuties(source.duties);
-  const timestamp = meta.at !== undefined ? meta.at : meta.timestamp;
-  const at = providedTime(timestamp);
+  const settings = config || {};
+  const departments = sortedStrings(
+    source.departments || [source.department].filter(Boolean)
+  );
+  const departmentRecipients = departments.flatMap(department => configuredRoute(settings, department));
+  const member = memberName(source.member || source.name);
+  const admins = optionNames(settings, 'adminNames', 'admins', 'adminName');
+  let recipients = uniqueStrings([...departmentRecipients, ...admins])
+    .filter(name => name !== member);
+  let route = 'department-leaders';
+  if (!departmentRecipients.filter(name => name !== member).length) {
+    recipients = uniqueStrings([
+      ...routeValues(settings.scheduler || settings.defaultScheduler),
+      ...admins
+    ]).filter(name => name !== member);
+    route = recipients.length ? 'scheduler' : 'unroutable';
+  }
   return {
     serviceId: text(source.serviceId || source.svcId),
-    member: memberName(source.member || source.name),
-    duties,
-    compositionKey: conflictCompositionKey(source.serviceId || source.svcId, source.member || source.name, duties),
-    acknowledgedAt: at,
-    acknowledgedBy: memberName(meta.by || meta.actor) || 'editor'
+    member,
+    departments,
+    recipients: sortedStrings(recipients),
+    route
   };
 }
 
 function conflictAcknowledgementValid(acknowledgement, conflict) {
   if (!acknowledgement || !conflict) return false;
-  const serviceId = conflict.serviceId || conflict.svcId;
-  const member = conflict.member || conflict.name;
-  const key = conflictCompositionKey(serviceId, member, conflict.duties);
-  return (acknowledgement.compositionKey === key) || (
-    text(acknowledgement.serviceId || acknowledgement.svcId) === text(serviceId) &&
-    memberName(acknowledgement.member || acknowledgement.name) === memberName(member) &&
-    JSON.stringify(normalizedDuties(acknowledgement.duties)) === JSON.stringify(normalizedDuties(conflict.duties))
-  );
+  const candidate = conflictAcknowledgement(acknowledgement) || acknowledgement;
+  const expected = conflictComposition(conflict);
+  if (candidate.composition === expected || candidate.compositionKey === expected) return true;
+  const serviceId = conflictServiceIdentity(conflict);
+  const candidateServiceId = firstText(candidate.serviceId, candidate.svcId) ||
+    conflictServiceIdentity(candidate);
+  return text(candidateServiceId) === text(serviceId) &&
+    memberName(candidate.member || candidate.name) === conflictMember(conflict) &&
+    JSON.stringify(normalizedDuties(candidate.duties || candidate.dutiesInvolved)) ===
+      JSON.stringify(normalizedDuties(conflictDuties(conflict)));
 }
 
 function invalidateConflictAcknowledgements(acknowledgements, conflicts) {
   const current = Array.isArray(conflicts) ? conflicts : [];
   if (Array.isArray(acknowledgements)) {
-    return acknowledgements.filter(ack => current.some(conflict => conflictAcknowledgementValid(ack, conflict)));
+    return acknowledgements.filter(ack => current.some(conflict => (
+      conflictAcknowledgementValid(ack, conflict)
+    )));
   }
   const source = acknowledgements || {};
   const result = {};
-  Object.keys(source).forEach(member => {
-    const conflict = current.find(item => memberName(item.member || item.name) === memberName(member));
-    if (conflict && JSON.stringify(normalizedDuties(source[member])) === JSON.stringify(normalizedDuties(conflict.duties))) {
-      result[member] = normalizedDuties(source[member]);
+  for (const [member, duties] of Object.entries(source)) {
+    const conflict = current.find(item => conflictMember(item) === memberName(member));
+    if (conflict && JSON.stringify(normalizedDuties(duties)) ===
+        JSON.stringify(normalizedDuties(conflictDuties(conflict)))) {
+      result[member] = normalizedDuties(duties);
     }
-  });
+  }
   return result;
 }
 
 function activeConflicts(conflicts, acknowledgements) {
   const current = Array.isArray(conflicts) ? conflicts : [];
-  if (Array.isArray(acknowledgements)) {
-    return current.filter(conflict => !acknowledgements.some(ack => conflictAcknowledgementValid(ack, conflict)));
-  }
-  const valid = invalidateConflictAcknowledgements(acknowledgements || {}, current);
   return current.filter(conflict => {
-    const member = memberName(conflict.member || conflict.name);
-    return !valid[member] || JSON.stringify(normalizedDuties(valid[member])) !== JSON.stringify(normalizedDuties(conflict.duties));
+    if (Array.isArray(acknowledgements) && acknowledgements.some(ack => (
+      conflictAcknowledgementValid(ack, conflict)
+    ))) return false;
+    if (!Array.isArray(acknowledgements)) {
+      const valid = invalidateConflictAcknowledgements(acknowledgements || {}, [conflict]);
+      if (valid[conflictMember(conflict)]) return false;
+    }
+    if (conflict.active === false || conflict.resolved === true || conflict.acknowledged === true) {
+      return false;
+    }
+    const duties = conflictDuties(conflict);
+    return !isIntentionalPrayerUsherPair(duties);
   });
 }
 
-function routeConflict(conflict, config) {
-  const source = conflict || {};
-  const settings = config || {};
-  const departments = sortedUnique(source.departments || [source.department].filter(Boolean));
-  const departmentRecipients = departments.flatMap(department => configuredRoute(settings, department));
-  let recipients = departmentRecipients;
-  const member = memberName(source.member || source.name);
-  if (!recipients.filter(name => name !== member).length) {
-    recipients = routeValues(settings.scheduler || settings.defaultScheduler);
+function conflictIdentity(conflict) {
+  const id = firstText(conflict && conflict.id, conflict && conflict.conflictId);
+  return id || conflictComposition(conflict);
+}
+
+function requestIdentity(request) {
+  const id = firstText(request && request.id, request && request.requestId);
+  if (id) return id;
+  return JSON.stringify({
+    serviceId: firstText(request && request.serviceId, request && request.service),
+    duty: firstText(request && (request.duty || request.dutyName)),
+    requester: firstText(request && (request.originalRequester || request.requester))
+  });
+}
+
+function hasDepartmentAuthorization(item, departments, context, type) {
+  const specific = type === 'request' ? context.canManageRequest : context.canManageConflict;
+  if (typeof specific === 'function') return Boolean(specific(item, departments));
+  if (typeof context.isAuthorized === 'function') return Boolean(context.isAuthorized(item, departments, type));
+
+  const authorization = context.authorization && typeof context.authorization === 'object'
+    ? context.authorization
+    : {};
+  const authorizationSpecific = type === 'request'
+    ? authorization.canManageRequest
+    : authorization.canManageConflict;
+  if (typeof authorizationSpecific === 'function') {
+    return Boolean(authorizationSpecific(item, departments));
   }
-  recipients = sortedUnique(recipients.filter(name => name !== member));
-  return {
-    serviceId: text(source.serviceId || source.svcId),
-    member,
-    departments,
-    recipients,
-    route: recipients.length && departmentRecipients.filter(name => name !== member).length
-      ? 'department-leaders' : 'scheduler'
+  if (typeof authorization.canManage === 'function') {
+    return Boolean(authorization.canManage(item, departments, type));
+  }
+  if (authorization.all === true || authorization.admin === true || context.allDepartments === true) {
+    return true;
+  }
+
+  const allowed = context.authorizedDepartments || context.departments || authorization.departments;
+  if (allowed instanceof Set) {
+    const allowedKeys = new Set(Array.from(allowed).map(value => key(value)));
+    return departments.some(department => allowedKeys.has(key(department)));
+  }
+  if (Array.isArray(allowed)) {
+    const allowedKeys = new Set(allowed.map(value => key(value)));
+    return departments.some(department => allowedKeys.has(key(department)));
+  }
+  return false;
+}
+
+function incrementDepartmentCounts(byDepartment, departments, type) {
+  for (const department of departments) {
+    const existing = byDepartment[department] || { requests: 0, conflicts: 0 };
+    existing[type] += 1;
+    byDepartment[department] = existing;
+  }
+}
+
+function formatActionableAlert(counts) {
+  const parts = [];
+  if (counts.requests) parts.push(`${counts.requests} request${counts.requests === 1 ? '' : 's'}`);
+  if (counts.conflicts) parts.push(`${counts.conflicts} conflict${counts.conflicts === 1 ? '' : 's'}`);
+  if (!parts.length) return '';
+  const total = (counts.requests || 0) + (counts.conflicts || 0);
+  return `${parts.join(' and ')} ${total === 1 ? 'needs' : 'need'} your attention`;
+}
+
+/**
+ * Count only pending requests and unacknowledged conflicts visible to the
+ * supplied authorization snapshot. Missing authorization fails closed.
+ */
+function actionableCounts(input, leadersByDepartment, options) {
+  const context = input && typeof input === 'object' ? input : {};
+  const routingOptions = {
+    ...(options || {}),
+    ...(context.routing || {})
   };
+  const leaders = leadersByDepartment || context.leadersByDepartment || routingOptions.leadersByDepartment;
+  const requests = Array.isArray(context.requests) ? context.requests : [];
+  const conflicts = Array.isArray(context.conflicts) ? context.conflicts : [];
+  const byDepartment = {};
+  const seenRequests = new Set();
+  const seenConflicts = new Set();
+  let requestCount = 0;
+  let conflictCount = 0;
+
+  for (const request of requests) {
+    const identity = requestIdentity(request);
+    if (seenRequests.has(identity)) continue;
+    seenRequests.add(identity);
+    if (!requestNeedsAttention(request)) continue;
+    const route = routeRequest(request, leaders, routingOptions);
+    if (!hasDepartmentAuthorization(request, route.departments, context, 'request')) continue;
+    requestCount += 1;
+    incrementDepartmentCounts(byDepartment, route.departments, 'requests');
+  }
+
+  for (const conflict of conflicts) {
+    const identity = conflictIdentity(conflict);
+    if (seenConflicts.has(identity)) continue;
+    seenConflicts.add(identity);
+    if (!conflictNeedsAttention(conflict)) continue;
+    const route = routeConflict(conflict, leaders, routingOptions);
+    if (!hasDepartmentAuthorization(conflict, route.departments, context, 'conflict')) continue;
+    conflictCount += 1;
+    incrementDepartmentCounts(byDepartment, route.departments, 'conflicts');
+  }
+
+  const result = {
+    requests: requestCount,
+    conflicts: conflictCount,
+    total: requestCount + conflictCount,
+    byDepartment
+  };
+  return { ...result, message: formatActionableAlert(result) };
 }
 
 function itemKind(item, fallback) {
@@ -475,33 +1137,38 @@ function itemKind(item, fallback) {
 }
 
 function itemDepartment(item) {
-  return text(item && (item.department || item.category || (item.departments && item.departments[0])));
+  return text(item && (item.department || item.category ||
+    (Array.isArray(item.departments) && item.departments[0])));
 }
 
 function defaultAuthorized(item, viewer) {
   const person = viewer || {};
-  const role = text(person.role || person.access).toLowerCase();
+  const role = text(person.role || person.access).toLocaleLowerCase();
   if (['admin', 'coordinator', 'scheduler', 'editor'].includes(role)) return true;
   const viewerName = memberName(person);
-  const owner = memberName(item && (item.requester || item.requesterName || item.name || item.member));
+  const owner = memberName(item && (
+    item.requester || item.requesterName || item.originalRequester || item.name || item.member
+  ));
   if (viewerName && owner && viewerName === owner) return true;
   const departments = person.departments || person.department || [];
   const visibleDepartments = Array.isArray(departments) ? departments : [departments];
-  return !!itemDepartment(item) && visibleDepartments.map(text).includes(itemDepartment(item));
+  const itemDept = itemDepartment(item);
+  return Boolean(itemDept) && visibleDepartments.map(text).includes(itemDept);
 }
 
 function itemIsOutstanding(item) {
   const kind = itemKind(item);
   if (kind === 'request') return isOutstandingRequest(item);
-  if (kind === 'conflict') return item.active !== false && item.resolved !== true && item.acknowledged !== true;
-  return item && item.outstanding !== false && item.resolved !== true;
+  if (kind === 'conflict') {
+    if (conflictDuties(item).length >= 2) return conflictNeedsAttention(item);
+    return item.active !== false && item.resolved !== true && item.acknowledged !== true;
+  }
+  return Boolean(item && item.outstanding !== false && item.resolved !== true);
 }
 
-/*
- * Count only outstanding records the viewer may see.  The result is an
- * aggregate, not a raw cross-department feed, so an unauthorized viewer never
- * learns another department's count.
- */
+/* Legacy aggregate used by the existing Manage surface. It accepts either a
+ * flat item list or an object with requests/conflicts and keeps authorization
+ * outside the data transformation. */
 function aggregateAuthorizedOutstanding(input, viewer, options) {
   const settings = options || {};
   let source = input;
@@ -517,14 +1184,14 @@ function aggregateAuthorizedOutstanding(input, viewer, options) {
   const byKind = {};
   const byDepartment = {};
   const byStatus = {};
-  visible.forEach(item => {
+  for (const item of visible) {
     const kind = itemKind(item);
     const department = itemDepartment(item) || 'unassigned';
     const status = text(item.status) || 'active';
     byKind[kind] = (byKind[kind] || 0) + 1;
     byDepartment[department] = (byDepartment[department] || 0) + 1;
     byStatus[status] = (byStatus[status] || 0) + 1;
-  });
+  }
   return {
     total: visible.length,
     count: visible.length,
@@ -538,7 +1205,7 @@ function authorizedOutstandingCount(input, viewer, options) {
   return aggregateAuthorizedOutstanding(input, viewer, options).total;
 }
 
-module.exports = {
+const api = {
   MEMBERSHIP_ACTIVE,
   MEMBERSHIP_ARCHIVED,
   MEMBERSHIP_STATUSES,
@@ -546,30 +1213,53 @@ module.exports = {
   REQUEST_APPROVED,
   REQUEST_DECLINED,
   REQUEST_CANCELLED,
+  REQUEST_RESOLVED,
   REQUEST_STATUSES,
-  normalizeMemberships,
+  DEFAULT_DUTY_DEPARTMENTS,
+  membershipRecords,
+  normalizeMemberships: membershipRecords,
   departmentMemberships,
   departmentMembers,
   activeDepartmentMembers,
   archivedDepartmentMembers,
   getActiveDepartmentMembers: activeDepartmentMembers,
   getArchivedDepartmentMembers: archivedDepartmentMembers,
-  isActiveDepartmentMember,
+  upsertDepartmentMembership,
+  setDepartmentMembership: upsertDepartmentMembership,
   setDepartmentMembershipStatus,
+  archiveDepartmentMember,
   archiveDepartmentMembership,
+  reactivateDepartmentMember,
   restoreDepartmentMembership,
   removeDepartmentMembership,
+  membershipsForMember,
+  membersForDepartment,
+  activeMembersForDepartment,
+  membershipState,
+  isActiveDepartmentMember,
+  departmentForDuty,
+  departmentsForDuties,
   requestId,
-  createChangeRequest,
+  requestStatus,
+  requestNeedsAttention,
+  requestAudit,
   recordRequestAudit,
+  routeRequest,
   routeChangeRequest,
-  routeRequest: routeChangeRequest,
+  createChangeRequest,
+  createRequest: createChangeRequest,
+  resolveRequest,
   canTransitionRequest,
   transitionRequestStatus,
   isOutstandingRequest,
+  conflictDuties,
   normalizedDuties,
   conflictCompositionKey,
+  conflictComposition,
   composeConflicts,
+  conflictAcknowledgement,
+  acknowledgementState,
+  isConflictAcknowledged,
   acknowledgeConflict,
   acknowledgeSharedConflict: acknowledgeConflict,
   conflictAcknowledgementValid,
@@ -577,7 +1267,17 @@ module.exports = {
   invalidateConflictAcknowledgements,
   invalidateSharedAcknowledgements: invalidateConflictAcknowledgements,
   activeConflicts,
+  isIntentionalPrayerUsherPair,
+  conflictStatus,
+  conflictNeedsAttention,
+  conflictDepartments,
   routeConflict,
+  routeConflicts: routeConflict,
+  actionableCounts,
+  authorizedActionableCounts: actionableCounts,
+  formatActionableAlert,
   aggregateAuthorizedOutstanding,
   authorizedOutstandingCount
 };
+
+module.exports = api;
