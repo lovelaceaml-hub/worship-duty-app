@@ -526,7 +526,11 @@ function routeRequest(request, leadersByDepartment, options) {
   const departments = department ? [department] : [];
   const leaders = department ? leadersForDepartment(leadersByDepartment, department) : [];
   const admins = optionNames(routingOptions, 'adminNames', 'admins', 'adminName');
-  const allRecipients = uniqueStrings([...leaders, ...admins]);
+  const requester = memberName(request && (
+    request.requester || request.requesterName || request.name || request.originalRequester
+  ));
+  const allRecipients = uniqueStrings([...leaders, ...admins])
+    .filter(name => !requester || key(name) !== key(requester));
   const actionable = requestNeedsAttention(request) && Boolean(department);
   return {
     department,
@@ -828,29 +832,39 @@ function conflictAcknowledgement(conflictOrAcknowledgement) {
   if (nested) return nested;
   if (conflictOrAcknowledgement.acknowledgedBy ||
       conflictOrAcknowledgement.acknowledgedAt !== undefined ||
-      conflictOrAcknowledgement.compositionKey) {
+      conflictOrAcknowledgement.compositionKey ||
+      conflictOrAcknowledgement.composition ||
+      conflictOrAcknowledgement.by ||
+      conflictOrAcknowledgement.at !== undefined ||
+      conflictOrAcknowledgement.timestamp !== undefined) {
     return conflictOrAcknowledgement;
   }
   return null;
+}
+
+function acknowledgementActor(value) {
+  return firstText(value && value.acknowledgedBy, value && value.by, value && value.actor);
+}
+
+function acknowledgementTimestamp(value) {
+  const source = value || {};
+  for (const raw of [source.acknowledgedAt, source.at, source.timestamp]) {
+    const timestamp = finiteTimestamp(raw, NaN);
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return NaN;
+}
+
+function acknowledgementMetadataValid(value) {
+  return Boolean(acknowledgementActor(value) &&
+    Number.isFinite(acknowledgementTimestamp(value)));
 }
 
 function acknowledgementState(conflict, acknowledgement) {
   const candidate = conflictAcknowledgement(acknowledgement) ||
     acknowledgement || conflictAcknowledgement(conflict);
   if (!candidate || typeof candidate !== 'object') return 'none';
-  const expectedComposition = conflictComposition(conflict);
-  if (candidate.composition && candidate.composition !== expectedComposition) return 'stale';
-  if (candidate.compositionKey && candidate.compositionKey !== expectedComposition) return 'stale';
-  const candidateDuties = sortedStrings(candidate.duties || candidate.dutiesInvolved);
-  const currentDuties = sortedStrings(conflictDuties(conflict));
-  if (!candidateDuties.length || candidateDuties.join('\u0000') !== currentDuties.join('\u0000')) {
-    return 'stale';
-  }
-  if (!firstText(candidate.acknowledgedBy, candidate.by) ||
-      !Number.isFinite(finiteTimestamp(candidate.acknowledgedAt, NaN))) {
-    return 'stale';
-  }
-  return 'acknowledged';
+  return conflictAcknowledgementValid(candidate, conflict) ? 'acknowledged' : 'stale';
 }
 
 function isConflictAcknowledged(conflict, acknowledgement) {
@@ -860,9 +874,9 @@ function isConflictAcknowledged(conflict, acknowledgement) {
 function acknowledgeConflict(conflict, details) {
   if (!conflict || typeof conflict !== 'object') throw new TypeError('conflict is required');
   const input = details && typeof details === 'object' ? details : {};
-  const acknowledgedBy = firstText(input.acknowledgedBy, input.by);
+  const acknowledgedBy = firstText(input.acknowledgedBy, input.by, input.actor);
   if (!acknowledgedBy) throw new TypeError('acknowledgedBy is required');
-  const acknowledgedAt = finiteTimestamp(input.acknowledgedAt, Date.now());
+  const acknowledgedAt = finiteTimestamp(acknowledgementTimestamp(input), Date.now());
   const duties = sortedStrings(conflictDuties(conflict));
   const acknowledgement = {
     acknowledgedBy,
@@ -965,7 +979,10 @@ function routeLegacyConflict(conflict, config) {
 function conflictAcknowledgementValid(acknowledgement, conflict) {
   if (!acknowledgement || !conflict) return false;
   const candidate = conflictAcknowledgement(acknowledgement) || acknowledgement;
+  if (!acknowledgementMetadataValid(candidate)) return false;
   const expected = conflictComposition(conflict);
+  if (candidate.composition && candidate.composition !== expected) return false;
+  if (candidate.compositionKey && candidate.compositionKey !== expected) return false;
   if (candidate.composition === expected || candidate.compositionKey === expected) return true;
   const serviceId = conflictServiceIdentity(conflict);
   const candidateServiceId = firstText(candidate.serviceId, candidate.svcId) ||
@@ -1005,11 +1022,7 @@ function activeConflicts(conflicts, acknowledgements) {
       const valid = invalidateConflictAcknowledgements(acknowledgements || {}, [conflict]);
       if (valid[conflictMember(conflict)]) return false;
     }
-    if (conflict.active === false || conflict.resolved === true || conflict.acknowledged === true) {
-      return false;
-    }
-    const duties = conflictDuties(conflict);
-    return !isIntentionalPrayerUsherPair(duties);
+    return conflictNeedsAttention(conflict);
   });
 }
 
@@ -1098,10 +1111,10 @@ function actionableCounts(input, leadersByDepartment, options) {
   let conflictCount = 0;
 
   for (const request of requests) {
+    if (!requestNeedsAttention(request)) continue;
     const identity = requestIdentity(request);
     if (seenRequests.has(identity)) continue;
     seenRequests.add(identity);
-    if (!requestNeedsAttention(request)) continue;
     const route = routeRequest(request, leaders, routingOptions);
     if (!hasDepartmentAuthorization(request, route.departments, context, 'request')) continue;
     requestCount += 1;
@@ -1109,10 +1122,10 @@ function actionableCounts(input, leadersByDepartment, options) {
   }
 
   for (const conflict of conflicts) {
+    if (!conflictNeedsAttention(conflict)) continue;
     const identity = conflictIdentity(conflict);
     if (seenConflicts.has(identity)) continue;
     seenConflicts.add(identity);
-    if (!conflictNeedsAttention(conflict)) continue;
     const route = routeConflict(conflict, leaders, routingOptions);
     if (!hasDepartmentAuthorization(conflict, route.departments, context, 'conflict')) continue;
     conflictCount += 1;

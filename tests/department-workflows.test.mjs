@@ -7,10 +7,12 @@ const {
   MEMBERSHIP_ARCHIVED,
   REQUEST_PENDING,
   REQUEST_RESOLVED,
+  activeConflicts,
   acknowledgeConflict,
   actionableCounts,
   archiveDepartmentMember,
   conflictComposition,
+  conflictAcknowledgementValid,
   conflictNeedsAttention,
   departmentForDuty,
   isConflictAcknowledged,
@@ -89,6 +91,21 @@ test('routes requests by duty and sends them to every leader plus explicit admin
     { adminNames: ['B. Anthony'] }
   );
   assert.deepEqual(worshipRoute.recipients, ['E. Simon', 'B. Anthony']);
+});
+
+test('modern request routing excludes the requester from leaders and admins', () => {
+  const route = routeRequest(
+    {
+      duty: 'Translation #1',
+      status: REQUEST_PENDING,
+      requester: 'S. Paola'
+    },
+    { Translation: ['S. Paola', 'B. Ben'] },
+    { adminNames: ['S. Paola', 'B. Anthony'] }
+  );
+
+  assert.deepEqual(route.recipients, ['B. Ben', 'B. Anthony']);
+  assert.deepEqual(route.allRecipients, ['B. Ben', 'B. Anthony']);
 });
 
 test('does not route an unresolved request to everyone when its duty is unknown', () => {
@@ -186,6 +203,73 @@ test('conflict acknowledgement is shared and invalidated by a composition change
   }).acknowledgementState, 'stale');
 });
 
+test('conflict acknowledgement validity requires actor, timestamp, and composition', () => {
+  const conflict = {
+    serviceId: 'svc-ack-validity',
+    member: 'M. Chloe',
+    duties: ['Translation #1', 'Lobby Desk #1']
+  };
+  const composition = conflictComposition(conflict);
+
+  assert.equal(conflictAcknowledgementValid({ compositionKey: composition }, conflict), false);
+  assert.equal(conflictAcknowledgementValid({
+    acknowledgedBy: 'S. Paola',
+    compositionKey: composition
+  }, conflict), false);
+  assert.equal(conflictAcknowledgementValid({
+    acknowledgedAt: 100,
+    compositionKey: composition
+  }, conflict), false);
+  assert.equal(conflictAcknowledgementValid({
+    acknowledgedBy: 'S. Paola',
+    acknowledgedAt: 100,
+    compositionKey: 'different-composition'
+  }, conflict), false);
+  assert.equal(conflictAcknowledgementValid({
+    acknowledgedBy: 'S. Paola',
+    acknowledgedAt: 100,
+    compositionKey: composition
+  }, conflict), true);
+});
+
+test('acknowledgeConflict preserves legacy at and timestamp fields', () => {
+  const conflict = {
+    serviceId: 'svc-legacy-ack-time',
+    member: 'M. Chloe',
+    duties: ['Translation #1', 'Lobby Desk #1']
+  };
+
+  const atAcknowledgement = acknowledgeConflict(conflict, { at: '300', by: 'scheduler' });
+  assert.equal(atAcknowledgement.acknowledgedAt, 300);
+  assert.equal(atAcknowledgement.acknowledgedBy, 'scheduler');
+  assert.equal(conflictAcknowledgementValid(atAcknowledgement, conflict), true);
+
+  const timestampAcknowledgement = acknowledgeConflict(conflict, {
+    timestamp: 400,
+    actor: 'coordinator'
+  });
+  assert.equal(timestampAcknowledgement.acknowledgedAt, 400);
+  assert.equal(timestampAcknowledgement.acknowledgedBy, 'coordinator');
+  assert.equal(conflictAcknowledgementValid(timestampAcknowledgement, conflict), true);
+});
+
+test('activeConflicts uses the shared predicate for embedded acknowledgements and resolved status', () => {
+  const conflict = {
+    serviceId: 'svc-embedded-state',
+    member: 'M. Chloe',
+    duties: ['Translation #1', 'Lobby Desk #1']
+  };
+  const acknowledged = acknowledgeConflict(conflict, {
+    acknowledgedBy: 'S. Paola',
+    acknowledgedAt: 300
+  });
+  const resolved = { ...conflict, status: REQUEST_RESOLVED };
+
+  assert.deepEqual(activeConflicts([acknowledged]), []);
+  assert.deepEqual(activeConflicts([resolved]), []);
+  assert.equal(activeConflicts([conflict]).length, 1);
+});
+
 test('a shared acknowledgement requires an actor and timestamp', () => {
   const conflict = {
     serviceId: 'svc-ack-fields',
@@ -272,6 +356,36 @@ test('counts only authorized actionable items and aggregates departments', () =>
     authorization: { all: true }
   });
   assert.equal(adminCounts.total, 1);
+});
+
+test('actionable counts do not let a resolved duplicate hide a pending duplicate', () => {
+  const pendingRequest = {
+    id: 'request-duplicate',
+    duty: 'Translation #1',
+    status: REQUEST_PENDING
+  };
+  const resolvedRequest = { ...pendingRequest, status: REQUEST_RESOLVED };
+  const pendingConflict = {
+    id: 'conflict-duplicate',
+    serviceId: 'svc-duplicate',
+    member: 'M. Chloe',
+    duties: ['Translation #1', 'Lobby Desk #1']
+  };
+  const resolvedConflict = { ...pendingConflict, status: REQUEST_RESOLVED };
+
+  const counts = actionableCounts({
+    requests: [resolvedRequest, pendingRequest],
+    conflicts: [resolvedConflict, pendingConflict],
+    leadersByDepartment: {
+      Translation: ['S. Paola'],
+      Lobby: ['S. Anessa']
+    },
+    authorizedDepartments: ['Translation', 'Lobby']
+  });
+
+  assert.equal(counts.requests, 1);
+  assert.equal(counts.conflicts, 1);
+  assert.equal(counts.total, 2);
 });
 
 test('maps the requested duty families to their owning departments', () => {
