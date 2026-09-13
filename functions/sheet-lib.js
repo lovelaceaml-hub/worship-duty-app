@@ -2,7 +2,7 @@
 
 /**
  * Pure sheet-parsing logic for the scheduled server-side Sheet -> Firestore
- * sync. Ported line-for-line from app.js ("google sheet sync — pure parsers")
+ * sync. Ported line-for-line from app.js ("google sheet sync - pure parsers")
  * so the Cloud Function and the in-app sync agree on every edge case. If you
  * change the parsing rules in app.js, mirror the change here.
  */
@@ -21,6 +21,21 @@ const CATEGORIES = [
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv';
 
 function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+/* Validate a local calendar date without converting it through UTC. The sheet
+   carries month/day values without a year, so the year inference below must
+   never let JavaScript normalize February 30 into a different service date. */
+function isCalendarDate(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  const date = new Date(year, month, day, 12, 0, 0, 0);
+  return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day;
+}
+
+function isValidMonthDay(month, day) {
+  // Use a leap year here so February 29 remains a valid sheet date. The
+  // candidate year is checked separately by inferYearISO().
+  return isCalendarDate(2000, month, day);
+}
 
 /* Same id scheme as the app's svcId() (app.js): date + '_' + service label
    with every non-alphanumeric run collapsed to '-'. MUST match app.js exactly
@@ -78,26 +93,38 @@ const SHEET_MONTHS = {
 
 function parseSheetDate(raw) {
   if (!raw) return null;
-  const cleaned = String(raw).replace(/^[a-z]+,?\s*/i, '').trim();
+  // A weekday prefix is optional. Remove it only when it has a comma, so the
+  // valid no-weekday form "May 02" is not mistaken for a weekday prefix.
+  let cleaned = String(raw).trim().replace(/^[a-z]+,\s*/i, '');
+  const parts = cleaned.split(/\s+/);
+  // Also accept a space-only weekday prefix such as "Sat May 02". The
+  // second token must be a known month, which keeps "May 02" untouched.
+  if (parts.length === 3 && SHEET_MONTHS[parts[1].slice(0, 3).toLowerCase()] != null) {
+    cleaned = parts.slice(1).join(' ');
+  }
   const m = cleaned.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
   if (!m) return null;
   const mon = SHEET_MONTHS[m[1].slice(0, 3).toLowerCase()];
   if (mon == null) return null;
   const day = parseInt(m[2], 10);
-  if (!(day >= 1 && day <= 31)) return null;
+  if (!isValidMonthDay(mon, day)) return null;
   return { month: mon, day: day };
 }
 
 function inferYearISO(month, day, today) {
-  const base = today || new Date();
+  if (!isValidMonthDay(month, day)) return null;
+  const base = today && typeof today.getTime === 'function' && !Number.isNaN(today.getTime())
+    ? today : new Date();
   const y0 = base.getFullYear();
   const nowT = base.getTime();
   let best = null, bestDiff = Infinity;
   [y0 - 1, y0, y0 + 1].forEach(y => {
+    if (!isCalendarDate(y, month, day)) return;
     const d = new Date(y, month, day, 12, 0, 0);
     const diff = Math.abs(d.getTime() - nowT);
     if (diff < bestDiff) { bestDiff = diff; best = d; }
   });
+  if (!best) return null;
   return best.getFullYear() + '-' + pad(best.getMonth() + 1) + '-' + pad(best.getDate());
 }
 
@@ -107,6 +134,7 @@ function parseSheetTime(raw) {
   if (!m) return '';
   let h = parseInt(m[1], 10);
   const min = m[2];
+  if (h < 1 || h > 12 || parseInt(min, 10) > 59) return '';
   const pm = m[3].toLowerCase() === 'p';
   if (h === 12) h = 0;
   if (pm) h += 12;
@@ -126,9 +154,20 @@ function sheetRowsToServices(rows, today) {
     return result;
   }
   const valid = validDutySet();
-  const byKey = {};
-  const membersSeen = {};
-  const unknownDuties = {};
+  // Service identity is the exact inferred date plus the trimmed service
+  // label. This keeps two services on one date separate and prevents duties
+  // from one date or service carrying into another.
+  const byKey = new Map();
+  const seenRows = new Set();
+  const duplicateWarnings = new Set();
+  const unknownDuties = new Set();
+  const membersSeen = new Set();
+
+  /* Duplicate policy: source rows are applied in order, preserving the
+     existing last-row-wins behavior. A duplicate is warned once per exact
+     date/service/duty key, including when the later row is blank. The warning
+     makes the ambiguity visible while keeping the result deterministic for a
+     given CSV. */
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const cell = i => (i >= 0 && i < row.length ? String(row[i] == null ? '' : row[i]).trim() : '');
@@ -144,26 +183,48 @@ function sheetRowsToServices(rows, today) {
     const md = parseSheetDate(rawDate);
     if (!md) continue;
     const iso = inferYearISO(md.month, md.day, today);
+    if (!iso) continue;
     const isChoirSong = duty === 'Choir Song';
     if (!isChoirSong && !valid[duty]) {
-      if (!unknownDuties[duty]) { unknownDuties[duty] = true; result.warnings.push('Unknown duty in sheet: "' + duty + '"'); }
+      if (!unknownDuties.has(duty)) {
+        unknownDuties.add(duty);
+        result.warnings.push('Unknown duty in sheet: "' + duty + '"');
+      }
       continue;
     }
-    const key = iso + '|' + serviceLabel;
-    let svc = byKey[key];
+    const serviceKey = JSON.stringify([iso, serviceLabel]);
+    const rowKey = JSON.stringify([iso, serviceLabel, duty]);
+    if (seenRows.has(rowKey) && !duplicateWarnings.has(rowKey)) {
+      duplicateWarnings.add(rowKey);
+      result.warnings.push('Duplicate sheet row for ' + iso + ' / ' + serviceLabel + ' / ' + duty + '; later row wins.');
+    }
+    seenRows.add(rowKey);
+    let svc = byKey.get(serviceKey);
     if (!svc) {
-      svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {}, choirSong: '' };
-      byKey[key] = svc;
+      svc = {
+        date: iso,
+        service: serviceLabel,
+        worship: iWorship >= 0 ? cell(iWorship) : '',
+        time: parseSheetTime(cell(iTime)),
+        assignments: {},
+        choirSong: '',
+        _sheetChoirSongSeen: false
+      };
+      byKey.set(serviceKey, svc);
       result.services.push(svc);
     }
     if (isChoirSong) {
-      if (member) svc.choirSong = member; // never clear the song on a blank cell
+      svc._sheetChoirSongSeen = true;
+      svc.choirSong = member; // an explicit blank row clears a stale song
       continue;
     }
     svc.assignments[duty] = member; // '' explicitly clears the slot
-    if (member) membersSeen[member] = true;
+    if (member) membersSeen.add(member);
   }
-  result.members = Object.keys(membersSeen).sort();
+  // Keep every non-empty assignment name found in the sheet, including a
+  // name later replaced by a duplicate row. The app's member roster is
+  // cumulative, while the assignment itself follows the duplicate policy.
+  result.members = Array.from(membersSeen).sort();
   return result;
 }
 
@@ -174,9 +235,10 @@ function sheetRowsToServices(rows, today) {
    caller controls Firestore I/O and can count zero-write runs. */
 function planMerge(sheetServices, existingById) {
   const creates = [], updates = [];
-  sheetServices.forEach(sheetSvc => {
+  (Array.isArray(sheetServices) ? sheetServices : []).forEach(sheetSvc => {
+    if (!sheetSvc || typeof sheetSvc !== 'object') return;
     const id = svcId(sheetSvc);
-    const existing = existingById[id];
+    const existing = (existingById || {})[id];
     if (!existing) {
       creates.push({
         id: id,
@@ -194,11 +256,18 @@ function planMerge(sheetServices, existingById) {
     const patch = {};
     if (sheetSvc.time && existing.time !== sheetSvc.time) patch.time = sheetSvc.time;
     if (sheetSvc.worship && existing.worship !== sheetSvc.worship) patch.worship = sheetSvc.worship;
-    if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong) patch.choirSong = sheetSvc.choirSong;
+    // A Choir Song row is authoritative for this exact date/service. Its
+    // presence marker lets a blank row clear a stale synced song, while a
+    // service with no Choir Song row preserves a manual-only value.
+    const choirSongSeen = sheetSvc._sheetChoirSongSeen === true
+      || (!Object.prototype.hasOwnProperty.call(sheetSvc, '_sheetChoirSongSeen') && Boolean(sheetSvc.choirSong));
+    if (choirSongSeen && existing.choirSong !== sheetSvc.choirSong) {
+      patch.choirSong = sheetSvc.choirSong;
+    }
     const existingAssignments = existing.assignments || {};
     const changedAssignments = {};
     let assignmentsChanged = false;
-    Object.keys(sheetSvc.assignments).forEach(duty => {
+    Object.keys(sheetSvc.assignments || {}).forEach(duty => {
       if (existingAssignments[duty] !== sheetSvc.assignments[duty]) {
         changedAssignments[duty] = sheetSvc.assignments[duty];
         assignmentsChanged = true;
@@ -214,5 +283,6 @@ function planMerge(sheetServices, existingById) {
 
 module.exports = {
   CATEGORIES, DEFAULT_SHEET_URL,
-  parseCSV, sheetRowsToServices, planMerge, svcId, dutyCategory
+  parseCSV, parseSheetDate, inferYearISO, parseSheetTime,
+  sheetRowsToServices, planMerge, svcId, dutyCategory
 };
