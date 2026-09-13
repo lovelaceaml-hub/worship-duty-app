@@ -149,17 +149,17 @@ test('initial selection moves to the next service day after the final service', 
   assert.equal(runtime.snapshot().service, '2026-07-11_evening');
 });
 
-test('clicking an empty date keeps that date active and leaves the inspector empty', () => {
+test('clicking an empty date advances to the next service date', () => {
   const runtime = createRuntime();
   runtime.renderSchedule();
   runtime.dispatch('click', runtime.dateButton('2026-07-02'));
 
-  assert.equal(runtime.snapshot().day, '2026-07-02');
-  assert.equal(runtime.snapshot().service, '');
-  assert.match(runtime.markup(), /class="month-cell date-tile selected" data-prism="date" data-date="2026-07-02"/);
+  assert.equal(runtime.snapshot().day, '2026-07-04');
+  assert.equal(runtime.snapshot().service, '2026-07-04_morning');
+  assert.match(runtime.markup(), /class="month-cell date-tile selected has-services" data-prism="date" data-date="2026-07-04"/);
   assert.match(runtime.markup(), /aria-pressed="true"/);
-  assert.match(runtime.markup(), /No services in this view/);
-  assert.equal(runtime.focused(), '2026-07-02');
+  assert.doesNotMatch(runtime.markup(), /No services in this view/);
+  assert.equal(runtime.focused(), '2026-07-04');
 });
 
 test('moving forward into an empty month clears the stale service selection', () => {

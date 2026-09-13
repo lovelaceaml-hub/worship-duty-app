@@ -1065,13 +1065,15 @@ service cloud.firestore {
       allow write: if canManageOrgConfig();
     }
 
-    // These documents may contain pinHash, sitePinHash, editorPinHash, or
-    // equivalent secret material. Client reads and writes are denied. Server
-    // callables use Admin SDK and write audit records separately.
+    // The legacy site lock hash remains readable because it is needed before
+    // member login. It grants no Firestore authority. Only an authenticated
+    // administrator may change these compatibility settings.
     match /app/settings {
-      allow read, write: if false;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
+    // The retired song editor PIN is not an authorization boundary.
     match /app/songSettings {
       allow read, write: if false;
     }

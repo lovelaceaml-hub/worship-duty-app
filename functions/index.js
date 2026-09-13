@@ -232,6 +232,118 @@ exports.verifyMemberPin = exposeMemberAuthCallable(memberAuthCallables.verifyMem
 exports.changeMemberPin = exposeMemberAuthCallable(memberAuthCallables.changeMemberPin);
 exports.resetMemberPin = exposeMemberAuthCallable(memberAuthCallables.resetMemberPin);
 
+function callableActor(request) {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'A verified member session is required.');
+  return Object.assign({}, request.auth.token || {}, { uid: request.auth.uid });
+}
+
+async function runtimePermissionConfig() {
+  const snapshot = await db.collection('app').doc('leaderConfig').get();
+  return snapshot.exists
+    ? Object.assign({}, PERMISSION_CONFIG, snapshot.data())
+    : PERMISSION_CONFIG;
+}
+
+exports.updateDepartmentMembership = onCall({ region: REGION }, async request => {
+  const actor = callableActor(request);
+  const data = request.data || {};
+  const department = String(data.department || '').trim();
+  const memberName = canonicalMemberName(data.memberName);
+  const status = data.status === 'archived' ? 'archived' : 'active';
+  if (!department || !memberName) {
+    throw new HttpsError('invalid-argument', 'Department and member name are required.');
+  }
+  const config = await runtimePermissionConfig();
+  if (!permissions.canManageDepartmentMember(actor, department, { name: memberName }, config)) {
+    throw new HttpsError('permission-denied', 'You cannot manage this department membership.');
+  }
+  const membershipId = encodeURIComponent(department) + '__' + encodeURIComponent(memberName);
+  const actorName = canonicalMemberName(actor.memberName || actor.name || actor.uid);
+  await db.runTransaction(async transaction => {
+    const departmentsRef = db.collection('app').doc('departments');
+    const membersRef = db.collection('app').doc('members');
+    const membershipRef = db.collection('memberships').doc(membershipId);
+    const [departmentsSnap, membersSnap] = await Promise.all([
+      transaction.get(departmentsRef), transaction.get(membersRef)
+    ]);
+    const map = Object.assign({}, departmentsSnap.exists ? departmentsSnap.data().map : {});
+    const roster = Array.isArray(map[department]) ? map[department].map(canonicalMemberName) : [];
+    map[department] = status === 'active'
+      ? Array.from(new Set(roster.concat(memberName))).sort()
+      : roster.filter(name => name !== memberName);
+    const members = listFromMemberDocument(membersSnap.exists ? membersSnap.data() : null)
+      .map(canonicalMemberName);
+    transaction.set(departmentsRef, { map }, { merge: true });
+    if (status === 'active' && !members.includes(memberName)) {
+      transaction.set(membersRef, { list: members.concat(memberName).sort() }, { merge: true });
+    }
+    transaction.set(membershipRef, {
+      department, memberName, memberId: memberName, status,
+      updatedAt: Date.now(), updatedByUid: request.auth.uid, updatedByName: actorName
+    }, { merge: true });
+    transaction.set(db.collection('audit').doc(), {
+      actor: actorName, actorUid: request.auth.uid,
+      action: status === 'active' ? 'department-member-activated' : 'department-member-archived',
+      target: memberName, department, timestamp: Date.now()
+    });
+  });
+  return { ok: true, department, memberName, status };
+});
+
+exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
+  const actor = callableActor(request);
+  const data = request.data || {};
+  const roleType = data.roleType === 'songEditor' ? 'songEditor' : 'departmentLeader';
+  const department = String(data.department || '').trim();
+  const memberName = canonicalMemberName(data.memberName);
+  const enabled = data.enabled === true;
+  const current = await runtimePermissionConfig();
+  if (!memberName || (roleType === 'departmentLeader' && !department)) {
+    throw new HttpsError('invalid-argument', 'A valid role target is required.');
+  }
+  if (!permissions.canManageLeaders(actor, current)) {
+    throw new HttpsError('permission-denied', 'Only global leader managers can change role assignments.');
+  }
+  const next = {
+    admin: Array.from(current.admin || PERMISSION_CONFIG.admin),
+    globalLeaderManager: Array.from(current.globalLeaderManager || PERMISSION_CONFIG.globalLeaderManager),
+    departmentLeaders: Object.assign({}, current.departmentLeaders || PERMISSION_CONFIG.departmentLeaders),
+    songEditors: Array.from(current.songEditors || PERMISSION_CONFIG.songEditors)
+  };
+  const key = roleType === 'songEditor' ? 'songEditors' : department;
+  const list = roleType === 'songEditor'
+    ? next.songEditors
+    : Array.from(next.departmentLeaders[department] || []);
+  const updated = enabled
+    ? Array.from(new Set(list.concat(memberName))).sort()
+    : list.filter(name => canonicalMemberName(name) !== memberName);
+  if (roleType === 'songEditor') next.songEditors = updated;
+  else next.departmentLeaders[department] = updated;
+  const actorName = canonicalMemberName(actor.memberName || actor.name || actor.uid);
+  await db.collection('app').doc('leaderConfig').set(next, { merge: false });
+  const roleDefaults = memberRoleRecord(memberName);
+  const memberActor = { name: memberName };
+  const departments = permissions.departmentsForLeader(memberActor, next);
+  const roles = [];
+  if (permissions.isAdmin(memberActor, next)) roles.push('admin');
+  if (permissions.isGlobalManager(memberActor, next)) roles.push('globalLeaderManager');
+  if (departments.length) roles.push('departmentLeader');
+  if (permissions.canEditSongs(memberActor, {}, next)) roles.push('songEditor');
+  await db.collection('accounts').doc(memberName).set({
+    roles, departments,
+    role: roles[0] || 'member',
+    globalLeaderManager: roles.includes('globalLeaderManager'),
+    mustChangePin: roles.length ? true : roleDefaults.mustChangePin
+  }, { merge: true });
+  await db.collection('audit').add({
+    actor: actorName, actorUid: request.auth.uid,
+    action: 'role-configuration-changed', target: memberName,
+    roleType, department: roleType === 'departmentLeader' ? department : '',
+    enabled, timestamp: Date.now()
+  });
+  return { ok: true, config: next };
+});
+
 function dateInTimeZone(date) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: TZ,

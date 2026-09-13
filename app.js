@@ -426,7 +426,7 @@ function permissionApi() {
 }
 function permissionConfig() {
   const api = permissionApi();
-  return (state.settings && state.settings.permissionConfig) ||
+  return state.permissionConfig || (state.settings && state.settings.permissionConfig) ||
     api.DEFAULT_PERMISSION_CONFIG || {};
 }
 function canPermission(method, ...args) {
@@ -579,6 +579,10 @@ function persistSettings() {
 function persistDepartments() {
   if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'departments'), { map: state.departments })).catch(() => {});
   else saveLocal();
+}
+function persistDepartmentMembership(department, memberName, status) {
+  if (!fb) { saveLocal(); return Promise.resolve({ ok: true }); }
+  return authCall('updateDepartmentMembership', { department, memberName, status });
 }
 function persistNameMap(map) {
   if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'app', 'nameMap'), { map: map })).catch(() => {});
@@ -1929,10 +1933,18 @@ function renderLeaderConfig() {
     '<p class="hint">Leader configuration is visible to authorized global managers. Operational tools remain scoped to the selected department.</p>';
   CATEGORIES.forEach(category => {
     const names = Array.isArray(leaders[category.name]) ? leaders[category.name] : [];
-    html += '<div class="list-row"><span style="flex:1;font-weight:650">' + esc(category.name) + '</span>' +
-      '<span class="count">' + esc(names.join(', ') || 'No leader listed') + '</span></div>';
+    html += '<div class="list-row" style="display:block"><div style="font-weight:650;margin-bottom:6px">' + esc(category.name) + '</div>' +
+      state.members.map(member => '<label style="display:inline-flex;gap:4px;margin:3px 10px 3px 0;font-size:12px">' +
+        '<input type="checkbox" data-chg="role-config" data-role="departmentLeader" data-dept="' + esc(category.name) + '" data-name="' + esc(member) + '"' +
+        (names.indexOf(member) !== -1 ? ' checked' : '') + '>' + esc(member) + '</label>').join('') + '</div>';
   });
-  return html + '</div>';
+  const songEditors = Array.isArray(config.songEditors) ? config.songEditors : [];
+  html += '</div><div class="card"><div class="f-label">Choir song editors</div>' +
+    '<p class="hint">Song editors can change songs only. They do not receive Worship management access.</p>' +
+    state.members.map(member => '<label style="display:inline-flex;gap:4px;margin:3px 10px 3px 0;font-size:12px">' +
+      '<input type="checkbox" data-chg="role-config" data-role="songEditor" data-name="' + esc(member) + '"' +
+      (songEditors.indexOf(member) !== -1 ? ' checked' : '') + '>' + esc(member) + '</label>').join('') + '</div>';
+  return html;
 }
 
 /* Coordinator Planning View: every upcoming double-duty conflict with
@@ -2417,6 +2429,7 @@ function canRunAction(act, el) {
   }
   if (act === 'member-name') return canPermission('isAdmin', actor);
   if (act === 'member-cat') return canPermission('canManageDepartmentMember', actor, el.dataset.cat, { name: el.dataset.name });
+  if (act === 'role-config') return canPermission('canManageLeaders', actor);
   if (act === 'manage-dept') return authorizedDepartments().indexOf(el.value) !== -1;
   if (['change-site-pin', 'set-pin', 'unlock', 'change-pin', 'feature', 'scheduler-name',
     'sheet-url', 'import-file', 'export', 'reset', 'unify-names'].indexOf(act) !== -1) {
@@ -2606,7 +2619,11 @@ function handleAct(act, el) {
       if (roster.indexOf(name) !== -1) { alert(name + ' is already in this department.'); return; }
       roster.push(name);
       roster.sort();
-      persistDepartments();
+      persistDepartmentMembership(department, name, 'active').catch(error => {
+        state.departments[department] = roster.filter(member => member !== name);
+        addBanner(safeAuthMessage(error), true);
+        render();
+      });
     } else {
       if (state.members.indexOf(name) !== -1) { alert(name + ' is already on the list.'); return; }
       state.members.push(name);
@@ -2626,7 +2643,11 @@ function handleAct(act, el) {
       if (department) {
         const roster = (state.departments && state.departments[department]) || [];
         state.departments[department] = roster.filter(member => member !== name);
-        persistDepartments();
+        persistDepartmentMembership(department, name, 'archived').catch(error => {
+          state.departments[department] = roster;
+          addBanner(safeAuthMessage(error), true);
+          render();
+        });
         afterDataChange();
         return;
       }
@@ -2862,8 +2883,29 @@ function handleChg(chg, el) {
     if (el.checked) { if (idx === -1) roster.push(name); }
     else if (idx !== -1) roster.splice(idx, 1);
     roster.sort();
-    persistDepartments();
+    persistDepartmentMembership(cat, name, el.checked ? 'active' : 'archived').catch(error => {
+      if (el.checked) state.departments[cat] = roster.filter(member => member !== name);
+      else state.departments[cat] = roster.concat(name).sort();
+      addBanner(safeAuthMessage(error), true);
+      render();
+    });
     render();
+  }
+  else if (chg === 'role-config') {
+    const roleType = el.dataset.role;
+    const department = el.dataset.dept || '';
+    const memberName = canonicalMemberName(el.dataset.name);
+    authCall('updateRoleConfiguration', {
+      roleType, department, memberName, enabled: el.checked
+    }).then(result => {
+      if (result && result.data && result.data.config) state.permissionConfig = result.data.config;
+      addBanner('Role access updated.');
+      render();
+    }).catch(error => {
+      el.checked = !el.checked;
+      addBanner(safeAuthMessage(error), true);
+      render();
+    });
   }
   else if (chg === 'feature') {
     if (!state.settings.features) state.settings.features = {};
@@ -3126,6 +3168,10 @@ async function initFirebase(config) {
     departmentsLoaded = true;
     renderSoon();
   }, () => { /* connection errors are surfaced by the schedule listener */ });
+  fsMod.onSnapshot(fsMod.doc(db, 'app', 'leaderConfig'), snap => {
+    if (snap.exists()) state.permissionConfig = snap.data();
+    renderSoon();
+  }, () => { /* built-in role configuration remains the safe fallback */ });
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'nameMap'), snap => {
     const map = snap.exists() ? (snap.data().map || {}) : null;
     if (!map || !Object.keys(map).length) {

@@ -195,11 +195,10 @@ function requireEditor(action, target, permissionAction, permissionCheck) {
       ? canEditSongsForService(target, permissionAction || 'edit')
       : canManageSongCatalog(permissionAction || 'manage');
   if (!allowed) { denySongEdit(); return false; }
-  if (editorUnlocked()) { action(); return true; }
-  state.ui.pendingEditorAction = action;
-  state.ui.editorGate = editorPinHash() ? 'unlock' : 'create';
-  state.ui.pinError = '';
-  render();
+  // Member authentication and the service-scoped permission check above are
+  // the authorization boundary. The retired shared editor PIN must not block
+  // a verified presider, song editor, or administrator.
+  action();
   return true;
 }
 function resolvePendingEditorAction() {

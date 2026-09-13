@@ -19,6 +19,10 @@ function prismNextUpcomingService(){
   .sort((a,b)=>a.date.localeCompare(b.date)||prismServiceStartMs(a)-prismServiceStartMs(b))
   .find(s=>prismServiceStartMs(s)>=now)||null;
 }
+function prismServiceOnOrAfter(date){
+ return state.services.slice().filter(s=>s&&typeof s.date==='string'&&s.date>=date&&matches(s))
+  .sort((a,b)=>a.date.localeCompare(b.date)||prismServiceStartMs(a)-prismServiceStartMs(b))[0]||null;
+}
 ensureSelection=function(){
  let all=allInMonth();
  if(!aui.day){
@@ -95,7 +99,8 @@ document.addEventListener('click',e=>{
  if(e.target.closest('[data-aurora="reference-month"]')){aui.day='';aui.service='';render();return;}
  const b=e.target.closest('[data-prism="date"]');if(!b)return;
  e.preventDefault();
- aui.month=b.dataset.date.slice(0,7);aui.day=b.dataset.date;aui.service='';aui.query='';aui.mode='day';render();
+ const next=prismServiceOnOrAfter(b.dataset.date);
+ aui.day=next?next.date:b.dataset.date;aui.month=aui.day.slice(0,7);aui.service=next?svcId(next):'';aui.query='';aui.mode='day';render();
  document.querySelector('[data-prism="date"][data-date="'+aui.day+'"]')?.focus();
 });
 // A calendar is navigable without a pointer. Focus follows the actual date,

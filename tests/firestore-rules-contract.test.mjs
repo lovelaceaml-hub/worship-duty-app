@@ -96,9 +96,11 @@ test('schedule keeps public reads but separates structural and scoped writes', (
   assert.doesNotMatch(schedule, /allow\s+read,\s*write:\s*if\s+true/);
 });
 
-test('protected documents deny direct reads and writes', () => {
+test('protected account documents stay closed while legacy site settings remain admin writable', () => {
+  const settings = matchBody('/app/settings');
+  assert.match(settings, /allow read: if true;/);
+  assert.match(settings, /allow write: if isAdmin\(\);/);
   for (const marker of [
-    '/app/settings',
     '/app/songSettings',
     '/app/accounts/{accountUid}',
     '/accounts/{accountUid}'

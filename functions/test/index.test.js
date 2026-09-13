@@ -22,3 +22,11 @@ test('keeps member PIN material server-only', () => {
   assert.doesNotMatch(source, /logger\.(info|warn|error)\([^\n]*\bpin\b/i);
   assert.doesNotMatch(source, /console\.(log|warn|error)\([^\n]*\bpin\b/i);
 });
+
+test('exports permission checked department and role management callables', () => {
+  assert.match(source, /exports\.updateDepartmentMembership\s*=/);
+  assert.match(source, /canManageDepartmentMember/);
+  assert.match(source, /exports\.updateRoleConfiguration\s*=/);
+  assert.match(source, /canManageLeaders/);
+  assert.match(source, /collection\('audit'\)/);
+});

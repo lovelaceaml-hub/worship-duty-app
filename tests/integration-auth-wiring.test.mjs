@@ -26,14 +26,18 @@ test('browser runtime requires verified member auth and gates mutations', () => 
   assert.match(app, /canPermission\('canAcknowledgeConflict'/);
   assert.match(app, /canPermission\('canEditSongs'/);
   assert.match(app, /_sheetChoirSongSeen/);
+  assert.match(app, /updateDepartmentMembership/);
+  assert.match(app, /updateRoleConfiguration/);
   assert.doesNotMatch(app, /data-chg="me"/);
   assert.match(app, /D\. Chloe.*M\. Chloe/);
 });
 
-test('Cloud Functions expose the three member PIN callables', () => {
+test('Cloud Functions expose member auth and privileged management callables', () => {
   const functions = read(path.join('functions', 'index.js'));
   assert.match(functions, /exports\.verifyMemberPin\s*=/);
   assert.match(functions, /exports\.changeMemberPin\s*=/);
   assert.match(functions, /exports\.resetMemberPin\s*=/);
+  assert.match(functions, /exports\.updateDepartmentMembership\s*=/);
+  assert.match(functions, /exports\.updateRoleConfiguration\s*=/);
   assert.doesNotMatch(functions, /logger\.(info|warn|error).*\bpin\b/i);
 });
