@@ -12,7 +12,7 @@
  */
 
 const FIREBASE_VERSION = '10.12.2';
-const CLEANUP_MARKER = 'wds-member-cleanup-v3';
+const CLEANUP_MARKER = 'wds-member-cleanup-v4';
 
 const STATIC_ALIASES = {
   'B. Anthony L': 'B. Anthony',
@@ -44,6 +44,33 @@ const SHORT_PREFIXES = {
   m: 'M.',
   e: 'E.'
 };
+
+const NAME_FIELDS = [
+  'name', 'memberName', 'displayName', 'canonicalName', 'requestedBy',
+  'resolvedBy', 'createdBy', 'updatedBy', 'presider', 'schedulerName',
+  'leaderName', 'editorName', 'ownerName', 'fromMember', 'toMember',
+  'requesterName', 'recipientName', 'senderName', 'approverName',
+  'accountName', 'targetName', 'member', 'assignedTo', 'confirmedBy',
+  'editedBy', 'markedBy', 'archivedBy', 'restoredBy', 'actor', 'actorName',
+  'targetMember', 'subjectMember', 'affectedMember', 'memberId', 'leaderId',
+  'acknowledgedBy', 'acknowledgedFor', 'changedBy', 'reviewedBy', 'removedBy', 'by',
+  'requester', 'recipient', 'assignee', 'leader', 'editor', 'account', 'subject'
+];
+
+const NAME_ARRAY_FIELDS = [
+  'members', 'memberNames', 'names', 'departmentLeaders', 'leaderNames',
+  'songEditors', 'songEditorNames', 'editorNames', 'presiders', 'leaders',
+  'admins', 'globalLeaderManager', 'globalLeaderManagers', 'privilegedMembers',
+  'recipients', 'owners', 'editors', 'targets', 'targetMembers',
+  'membersToNotify', 'affectedMembers', 'acknowledgedMembers', 'departmentMembers'
+];
+
+const NAME_MAP_FIELDS = [
+  'memberRoles', 'membersByDepartment', 'accounts', 'leadersByDepartment',
+  'notificationsByMember', 'recipientsByMember', 'membershipsByMember',
+  'byMember', 'memberMap', 'departmentLeaders', 'leaders', 'memberships',
+  'acknowledgments', 'conflictAcknowledgements', 'notificationTargets'
+];
 
 function normalizeMemberName(value) {
   let name = String(value == null ? '' : value).trim().replace(/\s+/g, ' ');
@@ -102,19 +129,49 @@ function sameJson(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function remapNestedIdentityReferences(value, canon, fieldName) {
+  if (Array.isArray(value)) {
+    if (NAME_ARRAY_FIELDS.includes(fieldName)) return uniqueSorted(value.map(canon));
+    return value.map(item => remapNestedIdentityReferences(item, canon, fieldName));
+  }
+  if (!isPlainObject(value)) return value;
+
+  const output = {};
+  Object.keys(value).forEach(key => {
+    const child = value[key];
+    if (NAME_FIELDS.includes(key) && typeof child === 'string' && child) {
+      output[key] = canon(child);
+    } else if (key === 'history' && Array.isArray(child)) {
+      output[key] = child.map(entry => {
+        const next = remapNestedIdentityReferences(entry, canon, 'history') || {};
+        if (typeof next.by === 'string' && next.by) next.by = canon(next.by);
+        if (typeof next.memberName === 'string' && next.memberName) next.memberName = canon(next.memberName);
+        return next;
+      });
+    } else if (NAME_ARRAY_FIELDS.includes(key) && Array.isArray(child)) {
+      output[key] = uniqueSorted(child.map(canon));
+    } else if (NAME_MAP_FIELDS.includes(key) && isPlainObject(child)) {
+      const mapped = {};
+      Object.keys(child).forEach(rawKey => {
+        const canonicalKey = canon(rawKey);
+        mapped[canonicalKey || rawKey] = remapNestedIdentityReferences(child[rawKey], canon, key);
+      });
+      output[key] = mapped;
+    } else {
+      output[key] = remapNestedIdentityReferences(child, canon, key);
+    }
+  });
+  return output;
+}
+
 function remapNamedDocument(input, canon) {
-  const output = Object.assign({}, input || {});
-  [
-    'name', 'memberName', 'displayName', 'requestedBy', 'resolvedBy',
-    'createdBy', 'updatedBy', 'presider', 'schedulerName', 'leaderName',
-    'editorName', 'ownerName', 'fromMember', 'toMember', 'requesterName',
-    'recipientName', 'senderName', 'approverName', 'accountName', 'targetName', 'confirmedBy'
-  ].forEach(field => {
-    if (typeof output[field] === 'string' && output[field]) output[field] = canon(output[field]);
-  });
-  ['members', 'memberNames', 'names', 'departmentLeaders', 'leaderNames', 'songEditors', 'editorNames', 'presiders'].forEach(field => {
-    if (Array.isArray(output[field])) output[field] = uniqueSorted(output[field].map(canon));
-  });
+  const output = remapNestedIdentityReferences(input || {}, canon, 'document') || {};
   if (Array.isArray(output.recipients)) output.recipients = uniqueSorted(output.recipients.map(canon));
   if (output.assignments && typeof output.assignments === 'object') {
     const assignments = {};
@@ -137,49 +194,105 @@ function remapNamedDocument(input, canon) {
   return output;
 }
 
-function migrateCachedMemberReferences() {
-  const canon = makeCanonicalizer(STATIC_ALIASES);
-  const moveKey = (prefix, rawName) => {
-    const target = canon(rawName);
-    if (!target || target === rawName) return;
-    const fromKey = prefix + rawName;
-    const toKey = prefix + target;
-    const oldValue = localStorage.getItem(fromKey);
-    if (oldValue == null) return;
-    if (localStorage.getItem(toKey) == null) localStorage.setItem(toKey, oldValue);
-    localStorage.removeItem(fromKey);
-  };
+function mergeCachedValues(existing, incoming) {
+  if (existing == null) return incoming;
+  if (incoming == null) return existing;
+  try {
+    const left = JSON.parse(existing);
+    const right = JSON.parse(incoming);
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return JSON.stringify(left.concat(right.filter(item => !left.some(old => sameJson(old, item)))));
+    }
+    if (isPlainObject(left) && isPlainObject(right)) {
+      return JSON.stringify(Object.assign({}, right, left));
+    }
+  } catch (error) {
+    // Preserve non-JSON values and let the existing app loader handle them.
+  }
+  return existing;
+}
 
-  const me = localStorage.getItem('wds-me');
-  if (me) localStorage.setItem('wds-me', canon(me));
-  ['wds-seen-', 'wds-alerts-', 'wds-unread-'].forEach(prefix => {
+function remapCachedState(cached, canon) {
+  if (!cached || typeof cached !== 'object') return cached;
+  const output = remapNamedDocument(cached, canon);
+  if (Array.isArray(output.members)) output.members = uniqueSorted(output.members.map(canon));
+  if (Array.isArray(output.presiders)) output.presiders = uniqueSorted(output.presiders.map(canon));
+  if (output.settings) output.settings = remapNamedDocument(output.settings, canon);
+  if (output.departments) output.departments = remapNamedDocument(output.departments, canon);
+  if (output.nameMap && typeof output.nameMap === 'object') {
+    if (output.nameMap.map && typeof output.nameMap.map === 'object') {
+      output.nameMap = Object.assign({}, output.nameMap, { map: remapNameMap(output.nameMap.map, canon) });
+    } else {
+      output.nameMap = remapNameMap(output.nameMap, canon);
+    }
+  }
+  if (Array.isArray(output.services)) output.services = output.services.map(item => remapNamedDocument(item, canon));
+  if (Array.isArray(output.requests)) output.requests = output.requests.map(item => remapNamedDocument(item, canon));
+  if (output.setlists && typeof output.setlists === 'object') {
+    Object.keys(output.setlists).forEach(id => { output.setlists[id] = remapNamedDocument(output.setlists[id], canon); });
+  }
+  if (output.stats && typeof output.stats === 'object') {
+    Object.keys(output.stats).forEach(id => { output.stats[id] = remapNamedDocument(output.stats[id], canon); });
+  }
+  return output;
+}
+
+function migrateCachedMemberReferences() {
+  if (typeof localStorage === 'undefined') return;
+  const canon = makeCanonicalizer(STATIC_ALIASES);
+  const moveNameKeys = prefix => {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.indexOf(prefix) === 0) keys.push(key.slice(prefix.length));
+      if (key && key.indexOf(prefix) === 0) keys.push(key);
     }
-    keys.forEach(name => moveKey(prefix, name));
-  });
-  const cachedName = localStorage.getItem('wds-fcm-name');
-  if (cachedName) localStorage.setItem('wds-fcm-name', canon(cachedName));
+    keys.forEach(fromKey => {
+      const rawName = fromKey.slice(prefix.length);
+      const target = canon(rawName);
+      if (!target || target === rawName) return;
+      const toKey = prefix + target;
+      const oldValue = localStorage.getItem(fromKey);
+      const newValue = localStorage.getItem(toKey);
+      localStorage.setItem(toKey, mergeCachedValues(newValue, oldValue));
+      localStorage.removeItem(fromKey);
+    });
+  };
 
-  const dataKey = 'wds-data-v2';
-  try {
-    const cached = JSON.parse(localStorage.getItem(dataKey) || 'null');
-    if (!cached || typeof cached !== 'object') return;
-    if (Array.isArray(cached.members)) cached.members = uniqueSorted(cached.members.map(canon));
-    if (cached.settings) cached.settings = remapNamedDocument(cached.settings, canon);
-    if (cached.departments) cached.departments = remapNamedDocument(cached.departments, canon);
-    if (Array.isArray(cached.services)) cached.services = cached.services.map(item => remapNamedDocument(item, canon));
-    if (Array.isArray(cached.requests)) cached.requests = cached.requests.map(item => remapNamedDocument(item, canon));
-    if (cached.setlists && typeof cached.setlists === 'object') {
-      Object.keys(cached.setlists).forEach(id => { cached.setlists[id] = remapNamedDocument(cached.setlists[id], canon); });
+  ['wds-me', 'wds-fcm-name'].forEach(key => {
+    const value = localStorage.getItem(key);
+    if (value) localStorage.setItem(key, canon(value));
+  });
+  ['wds-seen-', 'wds-alerts-', 'wds-unread-'].forEach(moveNameKeys);
+
+  const reminded = localStorage.getItem('wds-reminded');
+  if (reminded) {
+    try {
+      const source = JSON.parse(reminded);
+      if (isPlainObject(source)) {
+        const output = {};
+        Object.keys(source).forEach(key => {
+          const parts = key.split('|');
+          if (parts.length) parts[0] = canon(parts[0]);
+          const target = parts.join('|');
+          if (target && (output[target] == null || output[target] < source[key])) output[target] = source[key];
+        });
+        localStorage.setItem('wds-reminded', JSON.stringify(output));
+      }
+    } catch (error) {
+      // Keep malformed reminder state unchanged.
     }
-    if (Array.isArray(cached.presiders)) cached.presiders = uniqueSorted(cached.presiders.map(canon));
-    localStorage.setItem(dataKey, JSON.stringify(cached));
-  } catch (error) {
-    console.warn('Cached member identity cleanup skipped:', error);
   }
+
+  ['wds-data-v2', 'nss-data-v1'].forEach(key => {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    try {
+      const cached = JSON.parse(raw);
+      localStorage.setItem(key, JSON.stringify(remapCachedState(cached, canon)));
+    } catch (error) {
+      console.warn('Cached member identity cleanup skipped:', key);
+    }
+  });
 }
 
 function remapConflictOk(conflictOk, canon) {
@@ -189,6 +302,20 @@ function remapConflictOk(conflictOk, canon) {
     const target = canon(name);
     const duties = Array.isArray(input[name]) ? input[name] : [];
     output[target] = Array.from(new Set((output[target] || []).concat(duties)));
+  });
+  return output;
+}
+
+function remapNameMap(map, canon) {
+  const output = {};
+  Object.keys(map || {}).forEach(rawKey => {
+    const key = String(rawKey).trim().replace(/\s+/g, ' ');
+    const target = canon(map[rawKey] || key);
+    if (key && target && key !== target) output[key] = target;
+  });
+  Object.keys(STATIC_ALIASES).forEach(rawKey => {
+    const target = canon(rawKey);
+    if (rawKey !== target) output[rawKey] = target;
   });
   return output;
 }
@@ -220,7 +347,11 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
   const settingsRef = fsMod.doc(db, 'app', 'settings');
   const songSettingsRef = fsMod.doc(db, 'app', 'songSettings');
   const presidersRef = fsMod.doc(db, 'app', 'presiders');
-  const extraCollections = ['tokens', 'notifications', 'accounts', 'memberships', 'setlists', 'songStats'];
+  const extraCollections = [
+    'notifications', 'leaders',
+    'leaderConfig', 'conflictAcknowledgements', 'acknowledgments',
+    'setlists', 'songStats'
+  ];
 
   const [membersSnap, departmentsSnap, nameMapSnap, settingsSnap, songSettingsSnap, presidersSnap, scheduleSnap, requestsSnap, ...extraSnaps] =
     await Promise.all([
@@ -232,7 +363,7 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
       fsMod.getDoc(presidersRef),
       fsMod.getDocs(fsMod.collection(db, 'schedule')),
       fsMod.getDocs(fsMod.collection(db, 'requests')),
-      ...extraCollections.map(name => fsMod.getDocs(fsMod.collection(db, name)))
+      ...extraCollections.map(name => fsMod.getDocs(fsMod.collection(db, name)).catch(() => null))
     ]);
 
   const storedMap = nameMapSnap.exists() ? (nameMapSnap.data().map || {}) : {};
@@ -332,7 +463,7 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
   const nextPresiders = remapNamedDocument(presiders, remember);
   if (!sameJson(presiders, nextPresiders)) writes.push({ ref: presidersRef, data: nextPresiders });
 
-  extraSnaps.forEach((collectionSnap, collectionIndex) => {
+  extraSnaps.filter(Boolean).forEach(collectionSnap => {
     collectionSnap.forEach(snap => {
       const before = snap.data() || {};
       const after = remapNamedDocument(before, remember);
@@ -341,26 +472,40 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
   });
 
   const settings = settingsSnap.exists() ? (settingsSnap.data() || {}) : {};
-  const nextSettings = Object.assign({}, settings);
-  if (settings.schedulerName) {
-    const scheduler = remember(settings.schedulerName);
-    if (scheduler !== settings.schedulerName) {
-      nextSettings.schedulerName = scheduler;
-      settingsChanged = true;
-    }
-  }
+  const nextSettings = remapNamedDocument(settings, remember);
   if (Array.isArray(settings.departmentLeaders)) {
-    const leaders = uniqueSorted(settings.departmentLeaders.map(remember));
-    if (!sameArray(settings.departmentLeaders, leaders)) {
-      nextSettings.departmentLeaders = leaders;
-      settingsChanged = true;
-    }
+    nextSettings.departmentLeaders = uniqueSorted(settings.departmentLeaders.map(remember));
+  } else if (settings.departmentLeaders && typeof settings.departmentLeaders === 'object') {
+    nextSettings.departmentLeaders = {};
+    Object.keys(settings.departmentLeaders).forEach(category => {
+      nextSettings.departmentLeaders[category] = uniqueSorted(
+        (settings.departmentLeaders[category] || []).map(remember)
+      );
+    });
   }
+  ['access', 'roles', 'memberAccess'].forEach(field => {
+    if (settings[field] && typeof settings[field] === 'object') {
+      nextSettings[field] = remapNamedDocument(settings[field], remember);
+      if (nextSettings[field].departmentLeaders && typeof nextSettings[field].departmentLeaders === 'object') {
+        Object.keys(nextSettings[field].departmentLeaders).forEach(category => {
+          nextSettings[field].departmentLeaders[category] = uniqueSorted(
+            (nextSettings[field].departmentLeaders[category] || []).map(remember)
+          );
+        });
+      }
+    }
+  });
+  settingsChanged = !sameJson(settings, nextSettings);
   if (settingsChanged) writes.push({ ref: settingsRef, data: nextSettings });
 
   const mergedNameMap = Object.assign({}, storedMap, STATIC_ALIASES, learnedAliases);
+  Object.keys(mergedNameMap).forEach(rawKey => {
+    const target = remember(mergedNameMap[rawKey]);
+    if (target) mergedNameMap[rawKey] = target;
+  });
   if (!sameJson(storedMap, mergedNameMap)) {
-    writes.push({ ref: nameMapRef, data: { map: mergedNameMap } });
+    const nameMapData = Object.assign({}, nameMapSnap.exists() ? nameMapSnap.data() : {}, { map: mergedNameMap });
+    writes.push({ ref: nameMapRef, data: nameMapData });
   }
 
   if (writes.length) await commitWrites(fsMod, db, writes);
@@ -391,7 +536,20 @@ function setupLeaderAccess(app, db, fsMod) {
   let settingsLoaded = false;
   let renderQueued = false;
 
-  const leaders = () => uniqueSorted((settings.departmentLeaders || []).map(normalizeMemberName));
+  const leaders = () => {
+    const names = [];
+    const collect = value => {
+      if (Array.isArray(value)) names.push(...value);
+      else if (value && typeof value === 'object') {
+        Object.keys(value).forEach(key => collect(value[key]));
+      }
+    };
+    collect(settings.departmentLeaders);
+    collect(settings.access && settings.access.departmentLeaders);
+    collect(settings.roles && settings.roles.departmentLeaders);
+    collect(settings.memberAccess && settings.memberAccess.departmentLeaders);
+    return uniqueSorted(names.map(normalizeMemberName));
+  };
   const restrictionActive = () => leaders().length > 0;
   const canManage = () => settingsLoaded && (!restrictionActive() || leaders().includes(currentMember()));
 
@@ -534,7 +692,7 @@ function escapeHtml(value) {
 
 async function start() {
   if (typeof localStorage !== 'undefined') migrateCachedMemberReferences();
-  if (!window.FIREBASE_CONFIG) return;
+  if (typeof window === 'undefined' || !window.FIREBASE_CONFIG) return;
 
   const [appMod, fsMod] = await Promise.all([
     import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
@@ -571,4 +729,22 @@ async function start() {
   }
 }
 
-start().catch(error => console.warn('Member access module did not start:', error));
+const API = {
+  FIREBASE_VERSION,
+  CLEANUP_MARKER,
+  STATIC_ALIASES,
+  normalizeMemberName,
+  makeCanonicalizer,
+  remapNamedDocument,
+  remapNameMap,
+  remapCachedState,
+  migrateCachedMemberReferences,
+  cleanMemberIdentities,
+  setupLeaderAccess
+};
+
+if (typeof module !== 'undefined' && module.exports) module.exports = API;
+if (typeof window !== 'undefined') {
+  window.MemberAccess = API;
+  start().catch(error => console.warn('Member access module did not start:', error));
+}
