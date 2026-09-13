@@ -1,6 +1,6 @@
 # LV Zion Worship Service — Handoff Document
 
-Last updated: 2026-09-12. Owner: Anthony (alovelace144@gmail.com).
+Last updated: 2026-09-13. Owner: Anthony (alovelace144@gmail.com).
 
 For day-to-day operation (schedule edits, passcodes, notifications,
 deploying, troubleshooting) and the AI-delegation briefs, see
@@ -34,9 +34,9 @@ service still stay under the member's control after the initial view opens.
 Original shows the full upcoming list, so it has no single selected service or
 Morning default.
 
-The source change is local and verified in the design previews and the
-deployable live-build integration. The live Hosting site has not been
-redeployed for this change.
+The source change was verified in the design previews and the deployable
+live-build integration, then published to the live Hosting site on
+2026-09-13. The live release includes the four-choice Appearance gallery.
 
 ## Architecture
 
