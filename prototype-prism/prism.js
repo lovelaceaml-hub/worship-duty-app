@@ -1,12 +1,40 @@
 /* Layout-only alternative. Shared offline safeguards and original domain
  * handlers come from Aurora. Prism gets a separate storage namespace. */
 window.Prism=A;
+function prismTodayISO(){
+ if(typeof todayISO==='function')return todayISO();
+ const d=new Date(),pad=n=>String(n).padStart(2,'0');
+ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+}
+function prismServiceStartMs(svc){
+ const d=new Date(String(svc?.date||'')+'T00:00:00');
+ if(Number.isNaN(d.getTime()))return Number.POSITIVE_INFINITY;
+ const [hour,minute]=String(svc?.time||'00:00').split(':').map(Number);
+ d.setHours(Number.isFinite(hour)?hour:0,Number.isFinite(minute)?minute:0,0,0);
+ return d.getTime();
+}
+function prismNextUpcomingService(){
+ const now=Date.now(),today=prismTodayISO();
+ return state.services.slice().filter(s=>s&&typeof s.date==='string'&&s.date>=today)
+  .sort((a,b)=>a.date.localeCompare(b.date)||prismServiceStartMs(a)-prismServiceStartMs(b))
+  .find(s=>prismServiceStartMs(s)>=now)||null;
+}
 ensureSelection=function(){
- const all=allInMonth();
+ let all=allInMonth();
+ if(!aui.day){
+  const next=prismNextUpcomingService();
+  if(next){aui.month=next.date.slice(0,7);aui.day=next.date;aui.service=svcId(next);all=allInMonth();}
+ }
  if(!aui.day.startsWith(aui.month))aui.day=all[0]?.date||aui.month+'-01';
  const day=all.filter(s=>s.date===aui.day);
- if(!day.some(s=>svcId(s)===aui.service))aui.service=day[0]?svcId(day[0]):'';
- if(day.some(matches)&&!day.some(s=>svcId(s)===aui.service&&matches(s)))aui.service=svcId(day.find(matches));
+ if(!day.some(s=>svcId(s)===aui.service)){
+  const next=day.find(s=>prismServiceStartMs(s)>=Date.now());
+  aui.service=next?svcId(next):(day[0]?svcId(day[0]):'');
+ }
+ if(day.some(matches)&&!day.some(s=>svcId(s)===aui.service&&matches(s))){
+  const visible=day.find(matches);
+  aui.service=visible?svcId(visible):'';
+ }
  return {all,day,selected:day.find(s=>svcId(s)===aui.service)};
 };
 function prismCount(all){return '<span>'+all.length+' services</span><i></i><span>'+new Set(all.map(s=>s.date)).size+' service days</span>';}
@@ -53,10 +81,22 @@ decorate=function(){
  const next=dutiesFor(ui.me)[0];
  document.getElementById('heading-action').innerHTML=ui.tab==='schedule'&&next?'<button class="prism-next" data-aurora="jump-service" data-id="'+svcId(next.svc)+'"><span class="next-icon">'+ai('my')+'</span><span><small>YOUR NEXT DUTY</small><strong>'+esc(next.duty)+'</strong><span>'+esc(fmtDate(next.svc.date))+' · '+fmtTime(next.svc.time)+'</span></span><b>↗</b></button>':'';
 };
+function resetPrismToToday(){
+ const today=prismTodayISO();
+ aui.month=today.slice(0,7);aui.day=today;aui.service='';aui.query='';aui.mode='day';
+}
+document.addEventListener('click',e=>{
+ const nav=e.target.closest?.('[data-act="tab"],[data-act="home"]');
+ if(!nav)return;
+ const target=nav.dataset.tab||(nav.dataset.act==='home'?'schedule':'');
+ if(target==='schedule'&&ui.tab!=='schedule')resetPrismToToday();
+},true);
 document.addEventListener('click',e=>{
  if(e.target.closest('[data-aurora="reference-month"]')){aui.day='';aui.service='';render();return;}
  const b=e.target.closest('[data-prism="date"]');if(!b)return;
+ e.preventDefault();
  aui.month=b.dataset.date.slice(0,7);aui.day=b.dataset.date;aui.service='';aui.query='';aui.mode='day';render();
+ document.querySelector('[data-prism="date"][data-date="'+aui.day+'"]')?.focus();
 });
 // A calendar is navigable without a pointer. Focus follows the actual date,
 // including adjacent months; Enter/Space still use the native button behavior.
