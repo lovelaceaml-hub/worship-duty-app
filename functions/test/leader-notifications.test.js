@@ -205,6 +205,31 @@ test('infers the owning department from a duty and supports department leader ma
   ]);
 });
 
+test('an explicit leader opt-out wins regardless of department map order', () => {
+  const request = {
+    id: 'request-107b',
+    name: 'Member Requester',
+    department: 'Worship',
+    duty: 'Presider',
+    status: 'pending'
+  };
+  const firstOrder = {
+    leadersByDepartment: {
+      Worship: [{ name: 'Shared Leader', pushOptIn: false }],
+      Translation: [{ name: 'Shared Leader', pushOptIn: true }]
+    }
+  };
+  const reverseOrder = {
+    leadersByDepartment: {
+      Translation: [{ name: 'Shared Leader', pushOptIn: true }],
+      Worship: [{ name: 'Shared Leader', pushOptIn: false }]
+    }
+  };
+
+  assert.deepEqual(routeRequestNotifications(request, firstOrder), []);
+  assert.deepEqual(routeRequestNotifications(request, reverseOrder), []);
+});
+
 test('routes a cross-department conflict to every involved department and the admin', () => {
   const routes = routeConflictNotifications({
     id: 'conflict-107',
