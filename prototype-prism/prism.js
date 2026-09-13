@@ -2,10 +2,17 @@
  * handlers come from Aurora. Prism gets a separate storage namespace. */
 window.Prism=A;
 ensureSelection=function(){
- const all=allInMonth();
+ let all=allInMonth();
+ if(!aui.day){
+  const next=nextUpcomingService();
+  if(next){aui.month=next.date.slice(0,7);aui.day=next.date;aui.service=svcId(next);all=allInMonth();}
+ }
  if(!aui.day.startsWith(aui.month))aui.day=all[0]?.date||aui.month+'-01';
  const day=all.filter(s=>s.date===aui.day);
- if(!day.some(s=>svcId(s)===aui.service))aui.service=day[0]?svcId(day[0]):'';
+ if(!day.some(s=>svcId(s)===aui.service)){
+  const next=day.find(s=>serviceStartMs(s)>=Date.now());
+  aui.service=next?svcId(next):(day[0]?svcId(day[0]):'');
+ }
  if(day.some(matches)&&!day.some(s=>svcId(s)===aui.service&&matches(s)))aui.service=svcId(day.find(matches));
  return {all,day,selected:day.find(s=>svcId(s)===aui.service)};
 };

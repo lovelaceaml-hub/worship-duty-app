@@ -40,12 +40,29 @@ function matches(s){
  return (!q||[s.date,s.service,s.worship,...Object.entries(s.assignments||{}).flat()].join(' ').toLowerCase().includes(q))&&(ui.deptFilter==='All'||categoryHasAssignments(s,ui.deptFilter));
 }
 function allInMonth(){return state.services.filter(s=>s.date.startsWith(aui.month)&&(s.date>=todayISO()||(feat('pastServices')&&ui.showPast))).sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));}
+function serviceStartMs(svc){
+ const [hour,minute]=String(svc.time||'00:00').split(':').map(Number);
+ const d=new Date(svc.date+'T00:00:00');
+ d.setHours(Number.isFinite(hour)?hour:0,Number.isFinite(minute)?minute:0,0,0);
+ return d.getTime();
+}
+function nextUpcomingService(){
+ const now=Date.now(),today=todayISO();
+ return state.services.slice().filter(s=>s.date>=today).sort((a,b)=>a.date.localeCompare(b.date)||String(a.time||'').localeCompare(String(b.time||''))).find(s=>serviceStartMs(s)>=now)||null;
+}
 function ensureSelection(){
- const all=allInMonth();
+ let all=allInMonth();
+ if(!aui.day){
+  const next=nextUpcomingService();
+  if(next){aui.month=next.date.slice(0,7);aui.day=next.date;aui.service=svcId(next);all=allInMonth();}
+ }
  if(!all.some(s=>s.date===aui.day))aui.day=all[0]?.date||'';
  const day=all.filter(s=>s.date===aui.day);
  if(day.some(matches)&&!day.some(s=>svcId(s)===aui.service&&matches(s)))aui.service=svcId(day.find(matches));
- if(!day.some(s=>svcId(s)===aui.service))aui.service=day[0]?svcId(day[0]):'';
+ if(!day.some(s=>svcId(s)===aui.service)){
+  const next=day.find(s=>serviceStartMs(s)>=Date.now());
+  aui.service=next?svcId(next):(day[0]?svcId(day[0]):'');
+ }
  return {all,day,selected:day.find(s=>svcId(s)===aui.service)};
 }
 function personBadge(name,large=false){return '<span class="a-avatar'+(large?' large':'')+'">'+esc(selectedInitials(name))+'</span>';}

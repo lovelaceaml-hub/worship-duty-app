@@ -97,6 +97,12 @@ try{
  check('Same existing member retained',await p.evaluate(()=>localStorage.getItem('wds-me')),'B. Anthony L');
  check('Live status not replaced by demo status',await p.locator('#sync-pill').innerText().then(t=>t.includes('Live sync')));
  check('No sample-data labels in active live UI',await p.locator('body').innerText().then(t=>!t.includes('Local preview')&&!t.includes('reference clock')));
+ await p.clock.setSystemTime(new Date('2026-07-04T16:00:00-07:00'));
+ await p.locator('[data-aurora="reference-month"]').click();
+ check('Prism opens on the current service day',await p.locator('.prism-inspector h2').innerText(),'July 4');
+ check('Prism opens on the next service after earlier services',await p.locator('.prism-service-times button.selected small').innerText(),'Evening');
+ await p.clock.setSystemTime(new Date('2026-07-01T12:00:00-07:00'));
+ await p.locator('[data-aurora="reference-month"]').click();
  await shot(p,'02-live-prism');
  await choose(p,'classic');check('Original schedule markup restored exactly',await p.locator('#view').innerHTML(),originalMarkup);
  check('Switching did not create another Firebase instance',await p.evaluate(()=>__apps),1);

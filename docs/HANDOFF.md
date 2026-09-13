@@ -1,6 +1,6 @@
 # LV Zion Worship Service — Handoff Document
 
-Last updated: 2026-09-03. Owner: Anthony (alovelace144@gmail.com).
+Last updated: 2026-09-12. Owner: Anthony (alovelace144@gmail.com).
 
 For day-to-day operation (schedule edits, passcodes, notifications,
 deploying, troubleshooting) and the AI-delegation briefs, see
@@ -24,6 +24,17 @@ members' devices.
 | Schedule | Everyone | Every upcoming service, grouped by day, all duty assignments |
 | My Duties | Each member | Pick your name once; see only your duties, alerts, calendar export |
 | Manage | Editors (passcode) | Add/edit services, assign people, manage members, feature toggles, backups |
+
+## Prism service startup selection
+
+The Prism schedule view now opens on the next service that has not started in
+the browser's local time. If Morning and Afternoon have already passed on the
+current day, Evening is selected. The selected day and service still stay under
+the member's control after the initial view opens.
+
+The source change is local and verified in the Prism preview and the deployable
+live-build integration. The live Hosting site has not been redeployed for this
+change.
 
 ## Architecture
 
