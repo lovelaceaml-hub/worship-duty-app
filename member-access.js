@@ -23,7 +23,8 @@ const STATIC_ALIASES = {
   'S. Martha B': 'S. Martha',
   'S. Monica Salazar': 'S. Monica S',
   'M.Chad': 'M. Chad',
-  'B. Gio': 'B. Giomar'
+  'B. Gio': 'B. Giomar',
+  'D. Chloe': 'M. Chloe'
 };
 
 const LONG_PREFIXES = {
@@ -68,7 +69,7 @@ function normalizeMemberName(value) {
 }
 
 function makeCanonicalizer(aliasMap) {
-  const aliases = Object.assign({}, STATIC_ALIASES, aliasMap || {});
+  const aliases = Object.assign({}, aliasMap || {}, STATIC_ALIASES);
   return value => {
     const original = String(value == null ? '' : value).trim().replace(/\s+/g, ' ');
     if (!original) return '';
@@ -99,6 +100,86 @@ function sameArray(a, b) {
 
 function sameJson(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function remapNamedDocument(input, canon) {
+  const output = Object.assign({}, input || {});
+  [
+    'name', 'memberName', 'displayName', 'requestedBy', 'resolvedBy',
+    'createdBy', 'updatedBy', 'presider', 'schedulerName', 'leaderName',
+    'editorName', 'ownerName', 'fromMember', 'toMember', 'requesterName',
+    'recipientName', 'senderName', 'approverName', 'accountName', 'targetName', 'confirmedBy'
+  ].forEach(field => {
+    if (typeof output[field] === 'string' && output[field]) output[field] = canon(output[field]);
+  });
+  ['members', 'memberNames', 'names', 'departmentLeaders', 'leaderNames', 'songEditors', 'editorNames', 'presiders'].forEach(field => {
+    if (Array.isArray(output[field])) output[field] = uniqueSorted(output[field].map(canon));
+  });
+  if (Array.isArray(output.recipients)) output.recipients = uniqueSorted(output.recipients.map(canon));
+  if (output.assignments && typeof output.assignments === 'object') {
+    const assignments = {};
+    Object.keys(output.assignments).forEach(duty => {
+      assignments[duty] = output.assignments[duty] ? canon(output.assignments[duty]) : output.assignments[duty];
+    });
+    output.assignments = assignments;
+  }
+  if (output.conflictOk && typeof output.conflictOk === 'object') {
+    output.conflictOk = remapConflictOk(output.conflictOk, canon);
+  }
+  if (Array.isArray(output.history)) {
+    output.history = output.history.map(entry => {
+      const next = Object.assign({}, entry);
+      if (typeof next.by === 'string' && next.by) next.by = canon(next.by);
+      if (typeof next.memberName === 'string' && next.memberName) next.memberName = canon(next.memberName);
+      return next;
+    });
+  }
+  return output;
+}
+
+function migrateCachedMemberReferences() {
+  const canon = makeCanonicalizer(STATIC_ALIASES);
+  const moveKey = (prefix, rawName) => {
+    const target = canon(rawName);
+    if (!target || target === rawName) return;
+    const fromKey = prefix + rawName;
+    const toKey = prefix + target;
+    const oldValue = localStorage.getItem(fromKey);
+    if (oldValue == null) return;
+    if (localStorage.getItem(toKey) == null) localStorage.setItem(toKey, oldValue);
+    localStorage.removeItem(fromKey);
+  };
+
+  const me = localStorage.getItem('wds-me');
+  if (me) localStorage.setItem('wds-me', canon(me));
+  ['wds-seen-', 'wds-alerts-', 'wds-unread-'].forEach(prefix => {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.indexOf(prefix) === 0) keys.push(key.slice(prefix.length));
+    }
+    keys.forEach(name => moveKey(prefix, name));
+  });
+  const cachedName = localStorage.getItem('wds-fcm-name');
+  if (cachedName) localStorage.setItem('wds-fcm-name', canon(cachedName));
+
+  const dataKey = 'wds-data-v2';
+  try {
+    const cached = JSON.parse(localStorage.getItem(dataKey) || 'null');
+    if (!cached || typeof cached !== 'object') return;
+    if (Array.isArray(cached.members)) cached.members = uniqueSorted(cached.members.map(canon));
+    if (cached.settings) cached.settings = remapNamedDocument(cached.settings, canon);
+    if (cached.departments) cached.departments = remapNamedDocument(cached.departments, canon);
+    if (Array.isArray(cached.services)) cached.services = cached.services.map(item => remapNamedDocument(item, canon));
+    if (Array.isArray(cached.requests)) cached.requests = cached.requests.map(item => remapNamedDocument(item, canon));
+    if (cached.setlists && typeof cached.setlists === 'object') {
+      Object.keys(cached.setlists).forEach(id => { cached.setlists[id] = remapNamedDocument(cached.setlists[id], canon); });
+    }
+    if (Array.isArray(cached.presiders)) cached.presiders = uniqueSorted(cached.presiders.map(canon));
+    localStorage.setItem(dataKey, JSON.stringify(cached));
+  } catch (error) {
+    console.warn('Cached member identity cleanup skipped:', error);
+  }
 }
 
 function remapConflictOk(conflictOk, canon) {
@@ -137,15 +218,21 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
   const departmentsRef = fsMod.doc(db, 'app', 'departments');
   const nameMapRef = fsMod.doc(db, 'app', 'nameMap');
   const settingsRef = fsMod.doc(db, 'app', 'settings');
+  const songSettingsRef = fsMod.doc(db, 'app', 'songSettings');
+  const presidersRef = fsMod.doc(db, 'app', 'presiders');
+  const extraCollections = ['tokens', 'notifications', 'accounts', 'memberships', 'setlists', 'songStats'];
 
-  const [membersSnap, departmentsSnap, nameMapSnap, settingsSnap, scheduleSnap, requestsSnap] =
+  const [membersSnap, departmentsSnap, nameMapSnap, settingsSnap, songSettingsSnap, presidersSnap, scheduleSnap, requestsSnap, ...extraSnaps] =
     await Promise.all([
       fsMod.getDoc(membersRef),
       fsMod.getDoc(departmentsRef),
       fsMod.getDoc(nameMapRef),
       fsMod.getDoc(settingsRef),
+      fsMod.getDoc(songSettingsRef),
+      fsMod.getDoc(presidersRef),
       fsMod.getDocs(fsMod.collection(db, 'schedule')),
-      fsMod.getDocs(fsMod.collection(db, 'requests'))
+      fsMod.getDocs(fsMod.collection(db, 'requests')),
+      ...extraCollections.map(name => fsMod.getDocs(fsMod.collection(db, name)))
     ]);
 
   const storedMap = nameMapSnap.exists() ? (nameMapSnap.data().map || {}) : {};
@@ -235,6 +322,24 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
     }
   });
 
+  const songSettings = songSettingsSnap.exists() ? (songSettingsSnap.data() || {}) : {};
+  const nextSongSettings = remapNamedDocument(songSettings, remember);
+  if (!sameJson(songSettings, nextSongSettings)) {
+    writes.push({ ref: songSettingsRef, data: nextSongSettings });
+  }
+
+  const presiders = presidersSnap.exists() ? (presidersSnap.data() || {}) : {};
+  const nextPresiders = remapNamedDocument(presiders, remember);
+  if (!sameJson(presiders, nextPresiders)) writes.push({ ref: presidersRef, data: nextPresiders });
+
+  extraSnaps.forEach((collectionSnap, collectionIndex) => {
+    collectionSnap.forEach(snap => {
+      const before = snap.data() || {};
+      const after = remapNamedDocument(before, remember);
+      if (!sameJson(before, after)) writes.push({ ref: snap.ref, data: after });
+    });
+  });
+
   const settings = settingsSnap.exists() ? (settingsSnap.data() || {}) : {};
   const nextSettings = Object.assign({}, settings);
   if (settings.schedulerName) {
@@ -253,7 +358,7 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
   }
   if (settingsChanged) writes.push({ ref: settingsRef, data: nextSettings });
 
-  const mergedNameMap = Object.assign({}, STATIC_ALIASES, storedMap, learnedAliases);
+  const mergedNameMap = Object.assign({}, storedMap, STATIC_ALIASES, learnedAliases);
   if (!sameJson(storedMap, mergedNameMap)) {
     writes.push({ ref: nameMapRef, data: { map: mergedNameMap } });
   }
@@ -428,6 +533,7 @@ function escapeHtml(value) {
 }
 
 async function start() {
+  if (typeof localStorage !== 'undefined') migrateCachedMemberReferences();
   if (!window.FIREBASE_CONFIG) return;
 
   const [appMod, fsMod] = await Promise.all([
