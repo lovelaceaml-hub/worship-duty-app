@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const migration = require('../functions/migrate-member-access.js');
+const memberAccess = require('../member-access.js');
 
 const PRIVILEGED_HASH = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
@@ -222,4 +223,175 @@ test('local cache migration updates identity-bearing keys while preserving token
   assert.equal(JSON.parse(next['wds-data-v2']).services[0].assignments.Presider, 'M. Chloe');
   assert.equal(JSON.parse(next['nss-data-v1']).setlists.service.presider, 'M. Chloe');
   assert.equal(next.unrelated, 'keep');
+});
+
+test('full remapper covers tokens, accounts, memberships, requestedBy, and nested acknowledgments', () => {
+  const result = migration.transformDatabase({
+    app: {},
+    tokens: { token1: { name: 'D. Chloe', metadata: { requestedBy: 'D. Chloe' } } },
+    accounts: {
+      'D. Chloe': { name: 'D. Chloe', aliasOnly: true },
+      'M. Chloe': { name: 'M. Chloe', canonicalOnly: true }
+    },
+    memberships: {
+      'D. Chloe': { memberName: 'D. Chloe', departments: ['Worship'] },
+      'M. Chloe': { memberName: 'M. Chloe', departments: ['Media'] }
+    },
+    requests: {
+      request1: {
+        requestedBy: 'D. Chloe',
+        audit: { acknowledgment: { acknowledgedBy: 'D. Chloe', acknowledgedFor: 'D. Chloe' } }
+      }
+    }
+  });
+
+  assert.equal(result.database.tokens.token1.name, 'M. Chloe');
+  assert.equal(result.database.tokens.token1.metadata.requestedBy, 'M. Chloe');
+  assert.equal(result.database.requests.request1.requestedBy, 'M. Chloe');
+  assert.equal(result.database.requests.request1.audit.acknowledgment.acknowledgedBy, 'M. Chloe');
+  assert.equal(result.database.requests.request1.audit.acknowledgment.acknowledgedFor, 'M. Chloe');
+  assert.deepEqual(result.database.accounts['M. Chloe'], {
+    name: 'M. Chloe', aliasOnly: true, canonicalOnly: true
+  });
+  assert.deepEqual(result.database.memberships['M. Chloe'].departments, ['Media', 'Worship']);
+  assert.equal(result.database.accounts['D. Chloe'], undefined);
+  assert.equal(result.database.memberships['D. Chloe'], undefined);
+  assert.ok(result.writes.some(write => write.path === 'accounts/D. Chloe' && write.delete));
+  assert.ok(result.writes.some(write => write.path === 'memberships/D. Chloe' && write.delete));
+  assert.equal(migration.transformDatabase(result.database).writes.length, 0);
+});
+
+test('browser cleanup remapper merges identity maps and nested acknowledgment references', () => {
+  const canon = memberAccess.makeCanonicalizer();
+  const next = memberAccess.remapNamedDocument({
+    requestedBy: 'D. Chloe',
+    acknowledgment: { acknowledgedBy: 'D. Chloe' },
+    memberships: {
+      'D. Chloe': { legacyOnly: true, roles: ['legacy'] },
+      'M. Chloe': { canonicalOnly: true, roles: ['canonical'] }
+    }
+  }, canon);
+
+  assert.equal(next.requestedBy, 'M. Chloe');
+  assert.equal(next.acknowledgment.acknowledgedBy, 'M. Chloe');
+  assert.deepEqual(next.memberships['M. Chloe'], {
+    legacyOnly: true,
+    roles: ['canonical', 'legacy'],
+    canonicalOnly: true
+  });
+  assert.equal(next.memberships['D. Chloe'], undefined);
+});
+
+test('browser collection cleanup coalesces alias account records', () => {
+  const canon = memberAccess.makeCanonicalizer();
+  const remember = value => canon(value);
+  const docs = [
+    { id: 'D. Chloe', ref: { id: 'alias' }, data: () => ({ name: 'D. Chloe', aliasOnly: true }) },
+    { id: 'M. Chloe', ref: { id: 'canonical' }, data: () => ({ name: 'M. Chloe', canonicalOnly: true }) }
+  ];
+  const result = memberAccess.remapFirestoreCollection(
+    'accounts',
+    { forEach(callback) { docs.forEach(callback); } },
+    remember,
+    { doc(_db, collection, id) { return { collection, id }; } },
+    {}
+  );
+
+  const write = result.writes.find(item => item.ref.id === 'canonical');
+  assert.deepEqual(write.data, { name: 'M. Chloe', aliasOnly: true, canonicalOnly: true });
+  assert.ok(result.writes.some(item => item.delete && item.ref.id === 'alias'));
+});
+
+test('plaintext PIN input is rejected unless it is explicitly hashed through the injected function', async () => {
+  await assert.rejects(
+    migration.migrateMemberAccess({ snapshot: { app: {} }, privilegedPin: 'fixture-plaintext-value' }),
+    /plaintext PIN input is not accepted/
+  );
+
+  await assert.rejects(
+    migration.migrateMemberAccess({
+      snapshot: { app: {} },
+      privilegedPin: 'fixture-plaintext-value',
+      privilegedPinHash: PRIVILEGED_HASH,
+      hashPin: async () => PRIVILEGED_HASH
+    }),
+    /provide a PIN hash or plaintext PIN/
+  );
+
+  assert.throws(
+    () => migration.transformDatabase({ app: { settings: { privilegedPin: 'fixture-plaintext-value' } } }, {
+      privilegedPinHash: PRIVILEGED_HASH
+    }),
+    /plaintext PIN field/
+  );
+
+  let received;
+  const converted = await migration.migrateMemberAccess({
+    snapshot: { app: {} },
+    privilegedPin: 'fixture-plaintext-value',
+    hashPin: async value => { received = value; return PRIVILEGED_HASH; }
+  });
+  assert.equal(received, 'fixture-plaintext-value');
+  assert.equal(converted.privilegedPinHashApplied, true);
+  assert.equal(JSON.stringify(converted.database).includes('fixture-plaintext-value'), false);
+});
+
+test('invalid existing privileged hashes are replaced and require a PIN change', () => {
+  const result = migration.transformDatabase({
+    app: {},
+    accounts: { account1: { name: 'B. Anthony', pinHash: 'not-a-hash', mustChangePin: false } },
+    songSettings: { editorPinHash: 'also-not-a-hash' }
+  }, { privilegedPinHash: PRIVILEGED_HASH });
+
+  assert.equal(result.database.accounts.account1.pinHash, PRIVILEGED_HASH);
+  assert.equal(result.database.accounts.account1.mustChangePin, true);
+  assert.equal(result.database.app.songSettings.editorPinHash, PRIVILEGED_HASH);
+});
+
+test('invalid existing settings hash is rejected unless a replacement hash is supplied', () => {
+  assert.throws(
+    () => migration.transformDatabase({ app: { settings: { pinHash: 'not-a-hash' } } }),
+    /app\/settings\.pinHash must be/
+  );
+
+  const result = migration.transformDatabase({ app: { settings: { pinHash: 'not-a-hash' } } }, {
+    settingsPinHash: PRIVILEGED_HASH
+  });
+  assert.equal(result.database.app.settings.pinHash, PRIVILEGED_HASH);
+});
+
+test('local unread cache collisions preserve the larger count', () => {
+  const next = migration.migrateLocalStorageSnapshot({
+    'wds-unread-D. Chloe': '7',
+    'wds-unread-M. Chloe': '2'
+  });
+  assert.equal(next['wds-unread-D. Chloe'], undefined);
+  assert.equal(next['wds-unread-M. Chloe'], '7');
+  assert.equal(memberAccess.mergeCachedValues('7', '2'), '7');
+  assert.equal(memberAccess.mergeCachedValues('2', '7'), '7');
+});
+
+test('non-dry collision writes the merged canonical record and removes the alias record', async () => {
+  const calls = [];
+  const source = {
+    app: {},
+    memberships: {
+      'D. Chloe': { memberName: 'D. Chloe', legacyOnly: true },
+      'M. Chloe': { memberName: 'M. Chloe', canonicalOnly: true }
+    }
+  };
+  const result = await migration.migrateMemberAccess({
+    store: {
+      async read() { return structuredClone(source); },
+      async write(path, data, options) { calls.push({ path, data, options }); }
+    },
+    dryRun: false
+  });
+
+  assert.equal(result.dryRun, false);
+  assert.deepEqual(calls.find(call => call.path === 'memberships/M. Chloe').data, {
+    memberName: 'M. Chloe', legacyOnly: true, canonicalOnly: true
+  });
+  assert.equal(calls.find(call => call.path === 'memberships/D. Chloe').data, undefined);
+  assert.equal(calls.find(call => call.path === 'memberships/D. Chloe').options.delete, true);
 });

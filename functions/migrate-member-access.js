@@ -5,8 +5,8 @@
  *
  * This module is deliberately independent of Firebase. The pure planner can
  * be tested with plain objects, while migrateMemberAccess accepts a small
- * store adapter for a real Firestore run. The migration only updates existing
- * records and is safe to run repeatedly.
+ * store adapter for a real Firestore run. The migration only updates or removes
+ * existing records, never resets a collection, and is safe to run repeatedly.
  */
 
 const STATIC_ALIASES = Object.freeze({
@@ -164,6 +164,80 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
+function isEmptyMergeValue(value) {
+  return value == null || value === '';
+}
+
+/*
+ * Merge an alias record into its canonical record without dropping fields.
+ * The canonical value is the primary value when both records have a scalar,
+ * while arrays and nested objects retain information from both records.
+ */
+function mergeCanonicalValues(primary, fallback) {
+  if (isEmptyMergeValue(primary)) return clone(fallback);
+  if (isEmptyMergeValue(fallback)) return clone(primary);
+
+  if (Array.isArray(primary) && Array.isArray(fallback)) {
+    const output = primary.map(clone);
+    fallback.forEach(value => {
+      if (!output.some(existing => sameJson(existing, value))) output.push(clone(value));
+    });
+    return output;
+  }
+
+  if (isPlainObject(primary) && isPlainObject(fallback)) {
+    const output = clone(fallback);
+    Object.keys(primary).forEach(key => {
+      output[key] = Object.prototype.hasOwnProperty.call(fallback, key)
+        ? mergeCanonicalValues(primary[key], fallback[key])
+        : clone(primary[key]);
+    });
+    return output;
+  }
+
+  if (typeof primary === 'number' && typeof fallback === 'number') {
+    return Math.max(primary, fallback);
+  }
+  return clone(primary);
+}
+
+function remapIdentityMap(value, canon, fieldName) {
+  const rows = Object.keys(value || {}).map((rawKey, index) => {
+    const canonicalKey = canon(rawKey) || rawKey;
+    return {
+      rawKey,
+      canonicalKey,
+      index,
+      isCanonical: canonicalKey === rawKey,
+      data: transformNestedIdentityReferences(value[rawKey], canon, fieldName)
+    };
+  });
+
+  // Process aliases first so the canonical record is always the primary side
+  // of a collision merge, independent of Firestore/object enumeration order.
+  rows.sort((left, right) => Number(left.isCanonical) - Number(right.isCanonical) || left.index - right.index);
+  const output = {};
+  rows.forEach(row => {
+    if (!Object.prototype.hasOwnProperty.call(output, row.canonicalKey)) {
+      output[row.canonicalKey] = row.data;
+    } else if (row.isCanonical) {
+      output[row.canonicalKey] = mergeCanonicalValues(row.data, output[row.canonicalKey]);
+    } else {
+      output[row.canonicalKey] = mergeCanonicalValues(output[row.canonicalKey], row.data);
+    }
+  });
+  return output;
+}
+
+function remapAcknowledgment(value, canon, fieldName) {
+  const keys = Object.keys(value || {});
+  const usesNamedFields = keys.some(key => NAME_FIELDS.includes(key) ||
+    NAME_ARRAY_FIELDS.includes(key) || NAME_MAP_FIELDS.includes(key));
+  return usesNamedFields
+    ? transformNestedIdentityReferences(value, canon, fieldName)
+    : remapIdentityMap(value, canon, fieldName);
+}
+
 function canonicalizeArrayMap(value, canon) {
   const output = {};
   Object.keys(value || {}).forEach(key => {
@@ -187,14 +261,12 @@ function transformNestedIdentityReferences(value, canon, fieldName) {
       output[key] = canon(child);
     } else if (NAME_ARRAY_FIELDS.includes(key) && Array.isArray(child)) {
       output[key] = uniqueSorted(child, canon);
+    } else if ((key === 'acknowledgment' || key === 'acknowledgement' ||
+      key === 'acknowledgments' || key === 'acknowledgements' ||
+      key === 'conflictAcknowledgment' || key === 'conflictAcknowledgements') && isPlainObject(child)) {
+      output[key] = remapAcknowledgment(child, canon, key);
     } else if (NAME_MAP_FIELDS.includes(key) && isPlainObject(child)) {
-      const mapped = {};
-      Object.keys(child).forEach(rawKey => {
-        const canonicalKey = canon(rawKey);
-        const mappedValue = child[rawKey];
-        mapped[canonicalKey || rawKey] = transformNestedIdentityReferences(mappedValue, canon, key);
-      });
-      output[key] = mapped;
+      output[key] = remapIdentityMap(child, canon, key);
     } else {
       output[key] = transformNestedIdentityReferences(child, canon, key);
     }
@@ -260,11 +332,49 @@ function assertNoPlaintextPinFields(value, path) {
   if (!isPlainObject(value)) return;
   Object.keys(value).forEach(key => {
     const child = value[key];
-    if (PLAINTEXT_PIN_FIELDS.includes(key) && typeof child === 'string' && child.trim()) {
+    if (PLAINTEXT_PIN_FIELDS.includes(key) && !isEmptyMergeValue(child)) {
       throw new Error('plaintext PIN field is not allowed at ' + path + '.' + key);
     }
     assertNoPlaintextPinFields(child, path + '.' + key);
   });
+}
+
+function normalizeExistingHash(value, path) {
+  if (isEmptyMergeValue(value)) return '';
+  try {
+    return assertHash(value);
+  } catch (error) {
+    throw new Error(path + ' must be a 64-character SHA-256 hex string');
+  }
+}
+
+function applyHashField(target, field, replacement, path, options) {
+  options = options || {};
+  const current = target[field];
+  if (replacement && options.force) {
+    const replacementHash = assertHash(replacement);
+    target[field] = replacementHash;
+    return { replaced: !isEmptyMergeValue(current), changed: current !== replacementHash };
+  }
+  if (isEmptyMergeValue(current)) {
+    if (!replacement) return { replaced: false, changed: false };
+    const replacementHash = assertHash(replacement);
+    target[field] = replacementHash;
+    return { replaced: false, changed: true };
+  }
+  if (!isEmptyMergeValue(current)) {
+    try {
+      const normalized = normalizeExistingHash(current, path + '.' + field);
+      target[field] = normalized;
+      return { replaced: false, changed: current !== normalized };
+    } catch (error) {
+      if (!replacement) throw error;
+      const replacementHash = assertHash(replacement);
+      target[field] = replacementHash;
+      return { replaced: true, changed: current !== replacementHash };
+    }
+  }
+  return { replaced: false, changed: false };
 }
 
 function accountName(data, id, canon) {
@@ -336,16 +446,18 @@ function entriesFor(snapshot, collection) {
       const wrapped = isPlainObject(doc) && isPlainObject(doc.data) ? doc : null;
       return {
         id: String((wrapped && wrapped.id) || (doc && doc.id) || index),
-        data: wrapped ? wrapped.data : doc
+        data: wrapped ? wrapped.data : doc,
+        wrapped: !!wrapped,
+        explicitId: !!(wrapped ? Object.prototype.hasOwnProperty.call(wrapped, 'id') : doc && Object.prototype.hasOwnProperty.call(doc, 'id'))
       };
     });
   }
   return Object.keys(value).map(id => {
     const doc = value[id];
     if (isPlainObject(doc) && isPlainObject(doc.data)) {
-      return { id: String(doc.id || id), data: doc.data };
+      return { id: String(doc.id || id), data: doc.data, wrapped: true, explicitId: true };
     }
-    return { id, data: doc || {} };
+    return { id, data: doc || {}, wrapped: false, explicitId: false };
   });
 }
 
@@ -381,6 +493,98 @@ function setAppDoc(snapshot, name, data) {
 
 function pushIfChanged(writes, path, before, after, options) {
   if (!sameJson(before, after)) writes.push({ path, data: after, options: options || { merge: false } });
+}
+
+function replaceSetWrite(writes, path, data, options) {
+  const existing = writes.find(write => write.path === path && !write.delete);
+  if (existing) {
+    existing.data = data;
+    existing.options = options || existing.options || { merge: false };
+    return;
+  }
+  writes.push({ path, data, options: options || { merge: false } });
+}
+
+function canonicalCollectionId(id, canon) {
+  const raw = String(id == null ? '' : id);
+  const target = canon(raw);
+  return target && target !== raw ? target : raw;
+}
+
+function planCollection(database, collection, canon) {
+  const source = database[collection];
+  const entries = entriesFor(database, collection);
+  if (!entries.length) return { writes: [], changed: 0, database: source };
+
+  const groups = new Map();
+  entries.forEach((entry, index) => {
+    const id = String(entry.id);
+    const targetId = canonicalCollectionId(id, canon);
+    const transformed = transformNamedDocument(entry.data || {}, canon);
+    if (targetId !== id && transformed.id === id) transformed.id = targetId;
+    const row = {
+      id,
+      targetId,
+      index,
+      isCanonical: id === targetId,
+      original: clone(entry.data || {}),
+      data: transformed,
+      wrapped: !!entry.wrapped,
+      explicitId: !!entry.explicitId
+    };
+    if (!groups.has(targetId)) groups.set(targetId, []);
+    groups.get(targetId).push(row);
+  });
+
+  const writes = [];
+  const outputEntries = [];
+  for (const [targetId, group] of groups) {
+    group.sort((left, right) => Number(left.isCanonical) - Number(right.isCanonical) || left.index - right.index);
+    let merged = group[0].data;
+    for (let i = 1; i < group.length; i++) {
+      merged = group[i].isCanonical
+        ? mergeCanonicalValues(group[i].data, merged)
+        : mergeCanonicalValues(merged, group[i].data);
+    }
+
+    const canonicalRow = group.find(row => row.id === targetId);
+    const before = canonicalRow ? canonicalRow.original : undefined;
+    if (!sameJson(before, merged)) {
+      writes.push({
+        path: collection + '/' + targetId,
+        data: merged,
+        options: { merge: false }
+      });
+    }
+    group.filter(row => row.id !== targetId).forEach(row => {
+      writes.push({ path: collection + '/' + row.id, delete: true });
+    });
+
+    outputEntries.push({ targetId, group, data: merged });
+  }
+
+  if (Array.isArray(source)) {
+    database[collection] = outputEntries.map(entry => {
+      const first = entry.group[0];
+      if (first.wrapped) return { id: entry.targetId, data: clone(entry.data) };
+      const row = clone(entry.data) || {};
+      if (first.explicitId || entry.targetId !== first.id) row.id = entry.targetId;
+      return row;
+    });
+  } else {
+    const output = {};
+    outputEntries.forEach(entry => { output[entry.targetId] = entry.data; });
+    database[collection] = output;
+  }
+
+  return {
+    writes,
+    changed: outputEntries.filter(entry => {
+      const canonicalRow = entry.group.find(row => row.id === entry.targetId);
+      return !canonicalRow || !sameJson(canonicalRow.original, entry.data) || entry.group.some(row => row.id !== entry.targetId);
+    }).length,
+    database: database[collection]
+  };
 }
 
 function transformDatabase(input, options) {
@@ -434,22 +638,20 @@ function transformDatabase(input, options) {
     'memberships', 'leaders', 'leaderConfig', 'conflictAcknowledgements',
     'acknowledgments', 'presiders', 'setlists'
   ]) {
-    entriesFor(database, collection).forEach(entry => {
-      const before = entry.data || {};
-      const next = transformNamedDocument(before, canon);
-      if (collection === 'schedule' && before.conflictOk) {
-        counts.conflicts += sameJson(before.conflictOk, next.conflictOk) ? 0 : 1;
-      }
-      if (!sameJson(before, next)) {
-        if (collection === 'schedule') counts.schedules++;
-        if (collection === 'requests') counts.requests++;
-        if (collection === 'tokens' || collection === 'notifications') counts.notifications++;
-        if (collection === 'accounts' || collection === 'memberships') counts.accounts++;
-        if (collection === 'setlists') counts.songs++;
-        writes.push({ path: collection + '/' + entry.id, data: next, options: { merge: false } });
-        setEntry(database, collection, entry.id, next);
-      }
-    });
+    const beforeEntries = entriesFor(database, collection);
+    const plan = planCollection(database, collection, canon);
+    writes.push(...plan.writes);
+    if (collection === 'schedule') {
+      beforeEntries.forEach(entry => {
+        const next = transformNamedDocument(entry.data || {}, canon);
+        if (entry.data && entry.data.conflictOk && !sameJson(entry.data.conflictOk, next.conflictOk)) counts.conflicts++;
+      });
+      counts.schedules += plan.changed;
+    }
+    if (collection === 'requests') counts.requests += plan.changed;
+    if (collection === 'tokens' || collection === 'notifications') counts.notifications += plan.changed;
+    if (collection === 'accounts' || collection === 'memberships') counts.accounts += plan.changed;
+    if (collection === 'setlists') counts.songs += plan.changed;
   }
 
   const settings = readAppDoc(database, 'settings') || {};
@@ -465,7 +667,8 @@ function transformDatabase(input, options) {
   nextSettings[LEADER_FIELD] = Array.isArray(options.leaderNames)
     ? uniqueSorted(options.leaderNames, canon)
     : clone(access.departmentLeaders);
-  if (options.settingsPinHash) nextSettings.pinHash = assertHash(options.settingsPinHash);
+  applyHashField(nextSettings, 'pinHash', options.settingsPinHash, 'app/settings', { force: true });
+  applyHashField(nextSettings, 'sitePinHash', '', 'app/settings');
   if (Object.keys(nextSettings).length) {
     if (!sameJson(settings, nextSettings)) counts.leaders = 1;
     setAppDoc(database, 'settings', nextSettings);
@@ -480,9 +683,7 @@ function transformDatabase(input, options) {
   nextSongSettings[SONG_EDITOR_NAMES_FIELD] = configuredEditors;
   if (songSettings.songEditors || options.songEditors) nextSongSettings.songEditors = configuredEditors;
   const songEditorHash = options.songEditorPinHash || options.editorPinHash || options.privilegedPinHash;
-  if (!nextSongSettings[SONG_EDITOR_HASH_FIELD] && songEditorHash) {
-    nextSongSettings[SONG_EDITOR_HASH_FIELD] = assertHash(songEditorHash);
-  }
+  applyHashField(nextSongSettings, SONG_EDITOR_HASH_FIELD, songEditorHash, 'app/songSettings');
   setAppDoc(database, 'songSettings', nextSongSettings);
   pushIfChanged(writes, 'app/songSettings', songSettings, nextSongSettings);
 
@@ -542,16 +743,28 @@ function transformDatabase(input, options) {
       if (!privilegedNames.includes(name)) return;
       matched.add(name);
       const next = transformNamedDocument(before, canon);
-      const hadPinHash = typeof next.pinHash === 'string' && next.pinHash.length > 0;
-      if (!hadPinHash) {
+      const currentHash = next.pinHash;
+      let validHash = false;
+      if (!isEmptyMergeValue(currentHash)) {
+        try {
+          next.pinHash = normalizeExistingHash(currentHash, 'accounts/' + entry.id);
+          validHash = true;
+        } catch (error) {
+          // An invalid privileged hash cannot be used for login. Replace it
+          // with the injected bootstrap hash and force a private PIN change.
+          next.pinHash = assertHash(options.privilegedPinHash);
+          next.mustChangePin = true;
+        }
+      }
+      if (!validHash && isEmptyMergeValue(currentHash)) {
         next.pinHash = assertHash(options.privilegedPinHash);
         next.mustChangePin = true;
-      } else if (next.mustChangePin == null) {
+      } else if (validHash && next.mustChangePin == null) {
         next.mustChangePin = true;
       }
       if (!sameJson(before, next)) {
         counts.accounts++;
-        writes.push({ path: 'accounts/' + entry.id, data: next, options: { merge: false } });
+        replaceSetWrite(writes, 'accounts/' + entry.id, next, { merge: false });
         setEntry(database, 'accounts', entry.id, next);
       }
     });
@@ -568,6 +781,21 @@ function transformDatabase(input, options) {
       counts.accounts++;
     });
   }
+
+  // Non-privileged accounts still need a valid stored hash. Do not let an
+  // invalid legacy value survive merely because it is outside the bootstrap
+  // role list; callers can repair it explicitly with their own hash policy.
+  entriesFor(database, 'accounts').forEach(entry => {
+    const account = entry.data || {};
+    if (!isEmptyMergeValue(account.pinHash)) {
+      const normalized = normalizeExistingHash(account.pinHash, 'accounts/' + entry.id);
+      if (normalized !== account.pinHash) {
+        const next = Object.assign({}, account, { pinHash: normalized });
+        replaceSetWrite(writes, 'accounts/' + entry.id, next, { merge: false });
+        setEntry(database, 'accounts', entry.id, next);
+      }
+    }
+  });
 
   const cacheKey = database.cache ? 'cache' : (database.localStorage ? 'localStorage' : '');
   if (cacheKey) {
@@ -630,15 +858,21 @@ function migrateCachedMemberState(input, options) {
 function mergeCacheValues(existing, incoming) {
   if (existing == null) return incoming;
   if (incoming == null) return existing;
+  const leftNumber = typeof existing === 'number' ? existing :
+    (typeof existing === 'string' && /^\s*-?\d+(?:\.\d+)?\s*$/.test(existing) ? Number(existing) : NaN);
+  const rightNumber = typeof incoming === 'number' ? incoming :
+    (typeof incoming === 'string' && /^\s*-?\d+(?:\.\d+)?\s*$/.test(incoming) ? Number(incoming) : NaN);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+    const maximum = Math.max(leftNumber, rightNumber);
+    return typeof existing === 'number' && typeof incoming === 'number' ? maximum : String(maximum);
+  }
   try {
     const left = JSON.parse(existing);
     const right = JSON.parse(incoming);
     if (Array.isArray(left) && Array.isArray(right)) {
       return JSON.stringify(left.concat(right.filter(item => !left.some(old => sameJson(old, item)))));
     }
-    if (isPlainObject(left) && isPlainObject(right)) {
-      return JSON.stringify(Object.assign({}, right, left));
-    }
+    if (isPlainObject(left) && isPlainObject(right)) return JSON.stringify(mergeCanonicalValues(left, right));
   } catch (error) {
     // Non-JSON cache values are intentionally preserved as strings below.
   }
@@ -707,15 +941,26 @@ function assertHash(hash) {
 
 async function resolvePrivilegedPinHash(options) {
   options = options || {};
+  const plaintext = [options.privilegedPin, options.initialPin, options.pin]
+    .find(value => !isEmptyMergeValue(value));
+  if (!isEmptyMergeValue(options.plaintextPin)) {
+    throw new Error('plaintext PIN input is not accepted; inject hashPin instead');
+  }
   const suppliedHash = options.privilegedPinHash || options.initialPinHash ||
     options.initialPrivilegedPinHash || options.pinHash;
+  if (!isEmptyMergeValue(plaintext)) {
+    if (suppliedHash) throw new Error('provide a PIN hash or plaintext PIN, not both');
+    if (typeof options.hashPin !== 'function') {
+      throw new Error('plaintext PIN input is not accepted without an injected hashPin function');
+    }
+    return assertHash(await options.hashPin(plaintext));
+  }
   if (suppliedHash) return assertHash(suppliedHash);
   if (typeof options.hashPin !== 'function') return '';
-  const plaintext = options.privilegedPin || options.initialPin || options.pin;
-  if (!plaintext && options.hashPin.length > 0) {
+  if (options.hashPin.length > 0) {
     throw new TypeError('hashPin requires an injected initial PIN value');
   }
-  const hash = plaintext ? await options.hashPin(plaintext) : await options.hashPin();
+  const hash = await options.hashPin();
   return assertHash(hash);
 }
 
@@ -724,9 +969,6 @@ async function migrateMemberAccess(options, overrides) {
     options = Object.assign({}, overrides || {}, { store: options });
   }
   options = options || {};
-  if (options.privilegedPin || options.initialPin || options.pin || options.plaintextPin) {
-    if (options.plaintextPin) throw new Error('plaintext PIN input is not accepted; inject hashPin instead');
-  }
   if (!options.store && options.db) options.store = createFirestoreStore(options.db);
   const store = options.store;
   const hasStore = store && typeof store.read === 'function';
@@ -744,7 +986,12 @@ async function migrateMemberAccess(options, overrides) {
   const dryRun = options.dryRun !== false;
   if (!dryRun) {
     if (!hasStore || typeof store.write !== 'function') throw new TypeError('migration requires write(path, data) when dryRun is false');
-    for (const write of planned.writes) await store.write(write.path, write.data, write.options);
+    for (const write of planned.writes) {
+      const writeOptions = write.delete
+        ? Object.assign({}, write.options || {}, { delete: true })
+        : write.options;
+      await store.write(write.path, write.delete ? undefined : write.data, writeOptions);
+    }
   }
 
   return {
@@ -763,7 +1010,7 @@ function createFirestoreStore(db) {
   if (!db || typeof db.collection !== 'function') throw new TypeError('createFirestoreStore requires a Firestore db');
   const appDocs = [
     'members', 'departments', 'settings', 'nameMap', 'songSettings',
-    'presiders', 'leaderConfig', 'memberAccess'
+    'presiders', 'leaderConfig', 'memberAccess', 'accounts', 'notifications'
   ];
   const collections = [
     'schedule', 'requests', 'tokens', 'notifications', 'accounts',
@@ -784,10 +1031,13 @@ function createFirestoreStore(db) {
       }
       return database;
     },
-    async write(path, data) {
+    async write(path, data, options) {
       const parts = path.split('/');
       if (parts.length !== 2) throw new Error('invalid migration path: ' + path);
-      await db.collection(parts[0]).doc(parts[1]).set(data);
+      const ref = db.collection(parts[0]).doc(parts[1]);
+      if (options && options.delete) await ref.delete();
+      else if (options) await ref.set(data, options);
+      else await ref.set(data);
     }
   };
 }
@@ -810,14 +1060,18 @@ const API = {
   canonicalizeAccessConfiguration,
   configuredPrivilegedNames,
   transformNestedIdentityReferences,
+  remapIdentityMap,
+  mergeCanonicalValues,
   remapConflictOk,
   remapAssignments,
+  planCollection,
   transformNamedDocument,
   canonicalizeMemberDocument,
   transformDatabase,
   planMemberAccessMigration,
   migrateCachedMemberState,
   migrateLocalStorageSnapshot,
+  mergeCacheValues,
   assertHash,
   resolvePrivilegedPinHash,
   migrateMemberAccess,

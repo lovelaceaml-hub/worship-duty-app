@@ -135,6 +135,76 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
+function cloneValue(value) {
+  if (value === undefined || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(cloneValue);
+  if (!isPlainObject(value)) return value;
+  const output = {};
+  Object.keys(value).forEach(key => { output[key] = cloneValue(value[key]); });
+  return output;
+}
+
+function isEmptyMergeValue(value) {
+  return value == null || value === '';
+}
+
+function mergeCanonicalValues(primary, fallback) {
+  if (isEmptyMergeValue(primary)) return cloneValue(fallback);
+  if (isEmptyMergeValue(fallback)) return cloneValue(primary);
+  if (Array.isArray(primary) && Array.isArray(fallback)) {
+    const output = primary.map(cloneValue);
+    fallback.forEach(value => {
+      if (!output.some(existing => sameJson(existing, value))) output.push(cloneValue(value));
+    });
+    return output;
+  }
+  if (isPlainObject(primary) && isPlainObject(fallback)) {
+    const output = cloneValue(fallback);
+    Object.keys(primary).forEach(key => {
+      output[key] = Object.prototype.hasOwnProperty.call(fallback, key)
+        ? mergeCanonicalValues(primary[key], fallback[key])
+        : cloneValue(primary[key]);
+    });
+    return output;
+  }
+  if (typeof primary === 'number' && typeof fallback === 'number') return Math.max(primary, fallback);
+  return cloneValue(primary);
+}
+
+function remapIdentityMap(value, canon, fieldName) {
+  const rows = Object.keys(value || {}).map((rawKey, index) => {
+    const canonicalKey = canon(rawKey) || rawKey;
+    return {
+      rawKey,
+      canonicalKey,
+      index,
+      isCanonical: canonicalKey === rawKey,
+      data: remapNestedIdentityReferences(value[rawKey], canon, fieldName)
+    };
+  });
+  rows.sort((left, right) => Number(left.isCanonical) - Number(right.isCanonical) || left.index - right.index);
+  const output = {};
+  rows.forEach(row => {
+    if (!Object.prototype.hasOwnProperty.call(output, row.canonicalKey)) {
+      output[row.canonicalKey] = row.data;
+    } else if (row.isCanonical) {
+      output[row.canonicalKey] = mergeCanonicalValues(row.data, output[row.canonicalKey]);
+    } else {
+      output[row.canonicalKey] = mergeCanonicalValues(output[row.canonicalKey], row.data);
+    }
+  });
+  return output;
+}
+
+function remapAcknowledgment(value, canon, fieldName) {
+  const keys = Object.keys(value || {});
+  const usesNamedFields = keys.some(key => NAME_FIELDS.includes(key) ||
+    NAME_ARRAY_FIELDS.includes(key) || NAME_MAP_FIELDS.includes(key));
+  return usesNamedFields
+    ? remapNestedIdentityReferences(value, canon, fieldName)
+    : remapIdentityMap(value, canon, fieldName);
+}
+
 function remapNestedIdentityReferences(value, canon, fieldName) {
   if (Array.isArray(value)) {
     if (NAME_ARRAY_FIELDS.includes(fieldName)) return uniqueSorted(value.map(canon));
@@ -156,13 +226,12 @@ function remapNestedIdentityReferences(value, canon, fieldName) {
       });
     } else if (NAME_ARRAY_FIELDS.includes(key) && Array.isArray(child)) {
       output[key] = uniqueSorted(child.map(canon));
+    } else if ((key === 'acknowledgment' || key === 'acknowledgement' ||
+      key === 'acknowledgments' || key === 'acknowledgements' ||
+      key === 'conflictAcknowledgment' || key === 'conflictAcknowledgements') && isPlainObject(child)) {
+      output[key] = remapAcknowledgment(child, canon, key);
     } else if (NAME_MAP_FIELDS.includes(key) && isPlainObject(child)) {
-      const mapped = {};
-      Object.keys(child).forEach(rawKey => {
-        const canonicalKey = canon(rawKey);
-        mapped[canonicalKey || rawKey] = remapNestedIdentityReferences(child[rawKey], canon, key);
-      });
-      output[key] = mapped;
+      output[key] = remapIdentityMap(child, canon, key);
     } else {
       output[key] = remapNestedIdentityReferences(child, canon, key);
     }
@@ -197,15 +266,21 @@ function remapNamedDocument(input, canon) {
 function mergeCachedValues(existing, incoming) {
   if (existing == null) return incoming;
   if (incoming == null) return existing;
+  const leftNumber = typeof existing === 'number' ? existing :
+    (typeof existing === 'string' && /^\s*-?\d+(?:\.\d+)?\s*$/.test(existing) ? Number(existing) : NaN);
+  const rightNumber = typeof incoming === 'number' ? incoming :
+    (typeof incoming === 'string' && /^\s*-?\d+(?:\.\d+)?\s*$/.test(incoming) ? Number(incoming) : NaN);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+    const maximum = Math.max(leftNumber, rightNumber);
+    return typeof existing === 'number' && typeof incoming === 'number' ? maximum : String(maximum);
+  }
   try {
     const left = JSON.parse(existing);
     const right = JSON.parse(incoming);
     if (Array.isArray(left) && Array.isArray(right)) {
       return JSON.stringify(left.concat(right.filter(item => !left.some(old => sameJson(old, item)))));
     }
-    if (isPlainObject(left) && isPlainObject(right)) {
-      return JSON.stringify(Object.assign({}, right, left));
-    }
+    if (isPlainObject(left) && isPlainObject(right)) return JSON.stringify(mergeCanonicalValues(left, right));
   } catch (error) {
     // Preserve non-JSON values and let the existing app loader handle them.
   }
@@ -331,11 +406,63 @@ async function commitWrites(fsMod, db, writes) {
   for (let i = 0; i < writes.length; i += 400) {
     const batch = fsMod.writeBatch(db);
     writes.slice(i, i + 400).forEach(write => {
-      if (write.options) batch.set(write.ref, write.data, write.options);
+      if (write.delete) batch.delete(write.ref);
+      else if (write.options) batch.set(write.ref, write.data, write.options);
       else batch.set(write.ref, write.data);
     });
     await batch.commit();
   }
+}
+
+function canonicalDocumentId(id, remember) {
+  const raw = String(id == null ? '' : id);
+  const target = remember(raw);
+  return target && target !== raw ? target : raw;
+}
+
+function remapFirestoreCollection(collectionName, snapshot, remember, fsMod, db) {
+  const groups = new Map();
+  let index = 0;
+  snapshot.forEach(doc => {
+    const before = doc.data() || {};
+    const targetId = canonicalDocumentId(doc.id, remember);
+    const transformed = remapNamedDocument(before, remember);
+    if (targetId !== doc.id && transformed.id === doc.id) transformed.id = targetId;
+    const row = {
+      id: doc.id,
+      targetId,
+      index: index++,
+      isCanonical: doc.id === targetId,
+      original: before,
+      data: transformed,
+      ref: doc.ref
+    };
+    if (!groups.has(targetId)) groups.set(targetId, []);
+    groups.get(targetId).push(row);
+  });
+
+  const writes = [];
+  let changed = 0;
+  for (const [targetId, group] of groups) {
+    group.sort((left, right) => Number(left.isCanonical) - Number(right.isCanonical) || left.index - right.index);
+    let merged = group[0].data;
+    for (let i = 1; i < group.length; i++) {
+      merged = group[i].isCanonical
+        ? mergeCanonicalValues(group[i].data, merged)
+        : mergeCanonicalValues(merged, group[i].data);
+    }
+    const targetRow = group.find(row => row.id === targetId);
+    const targetRef = targetRow ? targetRow.ref : fsMod.doc(db, collectionName, targetId);
+    if (!targetRow || !sameJson(targetRow.original, merged)) {
+      writes.push({ ref: targetRef, data: merged });
+      changed++;
+    }
+    group.filter(row => row.id !== targetId).forEach(row => {
+      writes.push({ ref: row.ref, delete: true });
+      changed++;
+    });
+  }
+  return { writes, changed };
 }
 
 async function cleanMemberIdentities(app, db, fsMod, interactive) {
@@ -348,7 +475,7 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
   const songSettingsRef = fsMod.doc(db, 'app', 'songSettings');
   const presidersRef = fsMod.doc(db, 'app', 'presiders');
   const extraCollections = [
-    'notifications', 'leaders',
+    'tokens', 'notifications', 'accounts', 'memberships', 'leaders',
     'leaderConfig', 'conflictAcknowledgements', 'acknowledgments',
     'setlists', 'songStats'
   ];
@@ -363,7 +490,7 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
       fsMod.getDoc(presidersRef),
       fsMod.getDocs(fsMod.collection(db, 'schedule')),
       fsMod.getDocs(fsMod.collection(db, 'requests')),
-      ...extraCollections.map(name => fsMod.getDocs(fsMod.collection(db, name)).catch(() => null))
+      ...extraCollections.map(name => fsMod.getDocs(fsMod.collection(db, name)))
     ]);
 
   const storedMap = nameMapSnap.exists() ? (nameMapSnap.data().map || {}) : {};
@@ -408,49 +535,15 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
     writes.push({ ref: departmentsRef, data: { map: cleanedDepartments } });
   }
 
-  scheduleSnap.forEach(snap => {
-    const service = snap.data() || {};
-    const assignments = Object.assign({}, service.assignments || {});
-    let changed = false;
-
-    Object.keys(assignments).forEach(duty => {
-      const oldName = assignments[duty];
-      const target = remember(oldName);
-      if (target !== oldName) {
-        assignments[duty] = target;
-        changed = true;
-      }
-    });
-
-    const oldConflictOk = service.conflictOk || {};
-    const conflictOk = remapConflictOk(oldConflictOk, remember);
-    if (!sameJson(oldConflictOk, conflictOk)) changed = true;
-
-    if (changed) {
-      servicesChanged++;
-      writes.push({
-        ref: snap.ref,
-        data: Object.assign({}, service, { assignments, conflictOk })
-      });
-    }
-  });
-
-  requestsSnap.forEach(snap => {
-    const request = snap.data() || {};
-    const next = Object.assign({}, request);
-    let changed = false;
-    ['name', 'resolvedBy'].forEach(field => {
-      if (!request[field] || request[field] === 'editor') return;
-      const target = remember(request[field]);
-      if (target !== request[field]) {
-        next[field] = target;
-        changed = true;
-      }
-    });
-    if (changed) {
-      requestsChanged++;
-      writes.push({ ref: snap.ref, data: next });
-    }
+  [
+    ['schedule', scheduleSnap],
+    ['requests', requestsSnap],
+    ...extraCollections.map((name, index) => [name, extraSnaps[index]])
+  ].forEach(([collectionName, collectionSnap]) => {
+    const result = remapFirestoreCollection(collectionName, collectionSnap, remember, fsMod, db);
+    writes.push(...result.writes);
+    if (collectionName === 'schedule') servicesChanged += result.changed;
+    if (collectionName === 'requests') requestsChanged += result.changed;
   });
 
   const songSettings = songSettingsSnap.exists() ? (songSettingsSnap.data() || {}) : {};
@@ -462,14 +555,6 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
   const presiders = presidersSnap.exists() ? (presidersSnap.data() || {}) : {};
   const nextPresiders = remapNamedDocument(presiders, remember);
   if (!sameJson(presiders, nextPresiders)) writes.push({ ref: presidersRef, data: nextPresiders });
-
-  extraSnaps.filter(Boolean).forEach(collectionSnap => {
-    collectionSnap.forEach(snap => {
-      const before = snap.data() || {};
-      const after = remapNamedDocument(before, remember);
-      if (!sameJson(before, after)) writes.push({ ref: snap.ref, data: after });
-    });
-  });
 
   const settings = settingsSnap.exists() ? (settingsSnap.data() || {}) : {};
   const nextSettings = remapNamedDocument(settings, remember);
@@ -509,7 +594,7 @@ async function cleanMemberIdentities(app, db, fsMod, interactive) {
   }
 
   if (writes.length) await commitWrites(fsMod, db, writes);
-  localStorage.setItem(CLEANUP_MARKER, '1');
+  if (typeof localStorage !== 'undefined') localStorage.setItem(CLEANUP_MARKER, '1');
 
   if (interactive) {
     const details = [
@@ -735,6 +820,10 @@ const API = {
   STATIC_ALIASES,
   normalizeMemberName,
   makeCanonicalizer,
+  mergeCanonicalValues,
+  remapIdentityMap,
+  mergeCachedValues,
+  remapFirestoreCollection,
   remapNamedDocument,
   remapNameMap,
   remapCachedState,
