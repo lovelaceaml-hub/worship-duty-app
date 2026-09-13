@@ -3,8 +3,10 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = '/Users/anthony/Projects/worship-duty-app-worktrees/auth-l1';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const permissions = require(`${root}/permissions.js`);
 
