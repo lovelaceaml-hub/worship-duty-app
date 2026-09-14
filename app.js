@@ -531,6 +531,10 @@ const ui = {
    status, eligibility, schedulability, availability, and attribution. */
 const departmentRuntime = {
   rosters: Object.create(null),
+  ownProfiles: Object.create(null),
+  ownLoading: false,
+  ownLoaded: false,
+  ownError: '',
   loading: Object.create(null),
   errors: Object.create(null),
   drafts: Object.create(null),
@@ -539,6 +543,10 @@ const departmentRuntime = {
 
 function clearDepartmentRuntime() {
   departmentRuntime.rosters = Object.create(null);
+  departmentRuntime.ownProfiles = Object.create(null);
+  departmentRuntime.ownLoading = false;
+  departmentRuntime.ownLoaded = false;
+  departmentRuntime.ownError = '';
   departmentRuntime.loading = Object.create(null);
   departmentRuntime.errors = Object.create(null);
   departmentRuntime.drafts = Object.create(null);
@@ -622,8 +630,23 @@ function departmentProfiles(department) {
   return Array.isArray(departmentRuntime.rosters[department]) ? departmentRuntime.rosters[department] : [];
 }
 
+function currentMemberUid() {
+  return String((authUser && authUser.uid) || (verifiedSession && verifiedSession.uid) || '').trim();
+}
+
+function ownDepartmentProfiles() {
+  return Object.keys(departmentRuntime.ownProfiles).reduce((profiles, department) => {
+    const own = departmentRuntime.ownProfiles[department];
+    if (Array.isArray(own)) profiles.push.apply(profiles, own);
+    return profiles;
+  }, []);
+}
+
 function departmentProfile(department, memberUid) {
-  return departmentProfiles(department).find(profile => profile.memberUid === String(memberUid || '')) || null;
+  const wanted = String(memberUid || '');
+  return departmentProfiles(department).find(profile => profile.memberUid === wanted) ||
+    (departmentRuntime.ownProfiles[department] || []).find(profile => profile.memberUid === wanted) ||
+    null;
 }
 
 function departmentProfileByName(department, name) {
@@ -674,9 +697,26 @@ function replaceDepartmentProfile(profile) {
   if (index === -1) current.push(normalized);
   else current[index] = normalized;
   current.sort((left, right) => String(left.memberName).localeCompare(String(right.memberName)));
-  departmentRuntime.rosters[normalized.departmentId] = current;
+  if (Array.isArray(departmentRuntime.rosters[normalized.departmentId])) {
+    departmentRuntime.rosters[normalized.departmentId] = current;
+  }
+  const own = Array.isArray(departmentRuntime.ownProfiles[normalized.departmentId])
+    ? departmentRuntime.ownProfiles[normalized.departmentId]
+    : [];
+  const ownIndex = own.findIndex(item => item.memberUid === normalized.memberUid);
+  if (ownIndex !== -1) own[ownIndex] = normalized;
+  else if (isOwnDepartmentProfile(normalized.departmentId, normalized.memberUid)) own.push(normalized);
+  if (own.length) departmentRuntime.ownProfiles[normalized.departmentId] = own;
   delete departmentRuntime.drafts[departmentRuntimeKey(normalized.departmentId, normalized.memberUid)];
   return true;
+}
+
+function isOwnDepartmentProfile(department, memberUid) {
+  const wanted = String(memberUid || '').trim();
+  if (!wanted) return false;
+  const uid = currentMemberUid();
+  if (uid) return uid === wanted;
+  return !fb && !!ui.me && departmentProfile(department, wanted)?.memberName === ui.me;
 }
 
 function departmentRosterError(department, message) {
@@ -737,6 +777,55 @@ function loadDepartmentRoster(department, options = {}) {
   return request;
 }
 
+function loadOwnDepartmentProfiles() {
+  if (!isVerifiedSession()) return Promise.resolve([]);
+  if (departmentRuntime.ownLoaded) return Promise.resolve(ownDepartmentProfiles());
+  if (departmentRuntime.ownLoading) return departmentRuntime.ownLoading;
+  const uid = currentMemberUid();
+  departmentRuntime.ownError = '';
+  departmentRuntime.ownProfiles = Object.create(null);
+  departmentRuntime.ownLoading = true;
+  renderSoon();
+  if (!fb || !uid || typeof fb.getDoc !== 'function') {
+    const localProfiles = CATEGORIES.reduce((profiles, category) => {
+      const match = localDepartmentRoster(category.name).find(profile => profile.memberName === ui.me);
+      if (match) profiles.push(match);
+      return profiles;
+    }, []);
+    localProfiles.forEach(profile => { departmentRuntime.ownProfiles[profile.departmentId] = [profile]; });
+    departmentRuntime.ownLoaded = true;
+    departmentRuntime.ownLoading = false;
+    renderSoon();
+    return Promise.resolve(localProfiles);
+  }
+  const request = Promise.all(CATEGORIES.map(async category => {
+    try {
+      const reference = fb.doc(fb.db, 'departments', category.name, 'members', uid);
+      const snapshot = await fb.getDoc(reference);
+      if (!snapshot || !snapshot.exists()) return null;
+      return normalizeDepartmentProfile(snapshot.data(), category.name);
+    } catch (_error) {
+      return null;
+    }
+  })).then(profiles => {
+    profiles.filter(Boolean).forEach(profile => {
+      departmentRuntime.ownProfiles[profile.departmentId] = [profile];
+    });
+    departmentRuntime.ownLoaded = true;
+    departmentRuntime.ownLoading = false;
+    renderSoon();
+    return ownDepartmentProfiles();
+  }).catch(error => {
+    departmentRuntime.ownLoaded = false;
+    departmentRuntime.ownLoading = false;
+    departmentRuntime.ownError = departmentErrorMessage(error, 'Your shared availability could not be loaded.');
+    renderSoon();
+    throw error;
+  });
+  departmentRuntime.ownLoading = request;
+  return request;
+}
+
 function departmentPatch(department, memberUid, patch) {
   const profile = departmentProfile(department, memberUid);
   if (!profile || !patch || typeof patch !== 'object') return Promise.reject(new Error('The department member is not loaded.'));
@@ -763,7 +852,7 @@ function saveDepartmentProfile(department, memberUid) {
     return Promise.resolve(next);
   }
   const availabilityOnly = Object.keys(patch).length === 1 && Object.prototype.hasOwnProperty.call(patch, 'availability') &&
-    authUser && authUser.uid === memberUid;
+    isOwnDepartmentProfile(department, memberUid);
   const callable = availabilityOnly ? 'updateMemberAvailability' : 'updateDepartmentProfile';
   return authCall(callable, {
     departmentId: department,
@@ -782,6 +871,17 @@ function saveDepartmentProfile(department, memberUid) {
     renderSoon();
     throw error;
   });
+}
+
+function saveOwnDepartmentAvailability(department, memberUid) {
+  const draft = departmentRuntime.drafts[departmentRuntimeKey(department, memberUid)];
+  if (!isOwnDepartmentProfile(department, memberUid)) {
+    return Promise.reject(new Error('Only the signed-in member may save this availability.'));
+  }
+  if (!draft || Object.keys(draft).some(field => field !== 'availability')) {
+    return Promise.reject(new Error('Only availability changes may be saved from My Duties.'));
+  }
+  return saveDepartmentProfile(department, memberUid);
 }
 
 function departmentAssignmentPayload(svc, duty, profile, extra = {}) {
@@ -804,7 +904,9 @@ function applyScheduleAssignment(svc, duty, profile) {
   }
   if (!svc.assignments) svc.assignments = {};
   svc.assignments[duty] = name;
-  persistService(svc);
+  // The authorized callable is the assignment write boundary. This only
+  // updates the in-memory schedule projection after the callable succeeds;
+  // writing schedule/{id} here would bypass the UID/profile checks.
   afterDataChange();
 }
 
@@ -1874,6 +1976,8 @@ function renderMy() {
       '</div>';
   }
 
+  html += renderOwnAvailability();
+
   const duties = dutiesFor(ui.me);
   if (!duties.length) {
     html += '<div class="empty">You have no upcoming duties right now. ' +
@@ -2693,6 +2797,69 @@ function departmentTimeOptions(profile, includeAny) {
   return ordered.map(key => '<option value="' + esc(key) + '">' + esc(departmentServiceTimeLabel(key)) + '</option>').join('');
 }
 
+function departmentHistoryEntries(profile) {
+  const seed = profile && (profile.historySeed || profile.provenance);
+  if (seed && Array.isArray(seed.evidence)) return seed.evidence;
+  return profile && Array.isArray(profile.history) ? profile.history : [];
+}
+
+function departmentHistoryDate(value) {
+  const raw = String(value == null ? '' : value).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? fmtDate(raw) : raw;
+}
+
+function renderDepartmentHistory(profile) {
+  const evidence = departmentHistoryEntries(profile);
+  if (!evidence.length) return '';
+  const rows = evidence.map(entry => {
+    const duty = String(entry && (entry.duty || entry.role) || 'Historical duty').trim();
+    const details = [
+      entry && entry.service,
+      entry && (entry.serviceTime || entry.time) && departmentServiceTimeLabel(entry.serviceTime || entry.time),
+      entry && entry.date && departmentHistoryDate(entry.date),
+      entry && entry.result
+    ].map(value => String(value == null ? '' : value).trim()).filter(Boolean);
+    return '<li><strong>' + esc(duty) + '</strong><span>' + esc(details.join(' · ') || 'Historical assignment') + '</span></li>';
+  }).join('');
+  return '<section class="card department-history"><div class="department-eyebrow">History and provenance</div><h3>Historical duty suggestions</h3><p class="hint">Past assignments suggest duties for review. They never override a member or leader decision.</p><ul class="department-history-list">' + rows + '</ul></section>';
+}
+
+function renderOwnAvailabilityProfile(profile) {
+  const department = profile.departmentId;
+  const memberUid = profile.memberUid;
+  const draft = departmentDraftProfile(department, memberUid) || profile;
+  const recurring = draft.availability && draft.availability.recurring || {};
+  const exceptions = draft.availability && draft.availability.exceptions || {};
+  const draftExists = !!departmentRuntime.drafts[departmentRuntimeKey(department, memberUid)];
+  const fieldAttribution = draft.fieldAttribution && draft.fieldAttribution.availability;
+  const recurringControls = SERVICE_LABELS.map(label => {
+    const key = departmentServiceTimeKey(label);
+    const status = recurring[key] || 'unavailable';
+    return '<label class="department-availability-row"><span>' + esc(label) + '</span><select data-chg="member-availability-recurring" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '" data-key="' + esc(key) + '"><option value="available"' + (status === 'available' ? ' selected' : '') + '>Available</option><option value="unavailable"' + (status !== 'available' ? ' selected' : '') + '>Unavailable</option></select></label>';
+  }).join('');
+  const exceptionRows = Object.keys(exceptions).sort().map(date => Object.keys(exceptions[date] || {}).sort().map(key =>
+    '<div class="department-exception-row"><span><strong>' + esc(departmentHistoryDate(date)) + '</strong><small>' + esc(departmentServiceTimeLabel(key)) + '</small></span><span class="department-exception-status ' + (exceptions[date][key] === 'available' ? 'available' : 'unavailable') + '">' + esc(exceptions[date][key]) + '</span><button class="danger-link" data-act="member-availability-exception-remove" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '" data-date="' + esc(date) + '" data-key="' + esc(key) + '">Remove</button></div>'
+  ).join('')).join('');
+  const attributionProfile = fieldAttribution && !profile.updatedAt
+    ? Object.assign({}, profile, { updatedBy: fieldAttribution.by, updatedAt: fieldAttribution.at })
+    : profile;
+  const attribution = departmentAttribution(attributionProfile);
+  return '<section class="card department-editor own-availability-card" data-department="' + esc(department) + '" data-member-uid="' + esc(memberUid) + '"><div class="department-section-heading"><div><div class="department-eyebrow">Shared availability</div><h2>Your availability</h2></div><span class="department-editor-state">' + (draftExists ? 'Unsaved changes' : 'Saved profile') + '</span></div><p class="hint">You can update this shared record. Your department leader can update the same record from Manage. Status, duties, and schedulability stay leader-controlled.</p><p class="department-attribution">' + attribution + '</p><h3>Recurring service times</h3><div class="department-availability-grid">' + recurringControls + '</div><h3 style="margin-top:18px">Date exceptions</h3><p class="hint">A date exception overrides the recurring choice for that service date.</p><div class="department-exceptions">' + (exceptionRows || '<p class="department-empty-note">No date exceptions.</p>') + '</div><form class="department-exception-form" data-act="member-availability-exception-add" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '"><input type="date" required aria-label="Exception date"><select aria-label="Exception service time">' + departmentTimeOptions(draft, true) + '</select><select aria-label="Exception availability"><option value="unavailable">Unavailable</option><option value="available">Available</option></select><button class="ghost" type="submit">Add exception</button></form><div class="department-save-bar"><button class="primary" data-act="member-availability-save" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '"' + (draftExists ? '' : ' disabled') + '>Save availability</button>' + (draftExists ? '<button class="ghost" data-act="member-availability-reset" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '">Discard changes</button>' : '') + '</div></section>';
+}
+
+function renderOwnAvailability() {
+  if (!departmentRuntime.ownLoaded && !departmentRuntime.ownLoading) loadOwnDepartmentProfiles().catch(() => {});
+  const profiles = ownDepartmentProfiles();
+  if (!profiles.length && departmentRuntime.ownLoading) {
+    return '<section class="card department-loading" role="status"><div class="department-eyebrow">Shared availability</div><h2>Loading your availability</h2><p class="hint">Your profile is being requested through the signed-in account.</p></section>';
+  }
+  if (!profiles.length && departmentRuntime.ownError) {
+    return '<section class="card department-error" role="alert"><h2>Availability unavailable</h2><p class="hint">' + esc(departmentRuntime.ownError) + '</p><button class="primary" data-act="member-availability-retry">Try again</button></section>';
+  }
+  if (!profiles.length) return '';
+  return profiles.map(renderOwnAvailabilityProfile).join('');
+}
+
 function renderDepartmentMember() {
   const department = selectedManageDepartment();
   const memberUid = ui.departmentMember;
@@ -2731,9 +2898,7 @@ function renderDepartmentMember() {
     ).join('')).join('') + (!Object.keys(exceptions).length ? '<p class="department-empty-note">No date exceptions.</p>' : '') + '</div>' +
     (canEdit ? '<form class="department-exception-form" data-act="department-exception-add"><input id="department-exception-date" type="date" required aria-label="Exception date"><select id="department-exception-time" aria-label="Exception service time">' + departmentTimeOptions(profile, true) + '</select><select id="department-exception-status" aria-label="Exception availability"><option value="unavailable">Unavailable</option><option value="available">Available</option></select><button class="ghost" type="submit">Add exception</button></form>' : '') +
     '</section>';
-  if (profile.historySeed || profile.provenance) {
-    html += '<section class="card department-history"><div class="department-eyebrow">History and provenance</div><h3>Existing evidence</h3><p class="hint">Imported history remains evidence. Manual decisions shown above are authoritative for scheduling.</p><pre>' + esc(JSON.stringify(profile.historySeed || profile.provenance, null, 2)) + '</pre></section>';
-  }
+  html += renderDepartmentHistory(profile);
   const fieldRows = ['status', 'eligibleDuties', 'schedulable', 'availability'].filter(field => fieldAttribution[field]).map(field => {
     const decision = fieldAttribution[field];
     return '<li><strong>' + esc(field) + '</strong>: ' + esc(decision.authority || decision.source || 'recorded') + ' by ' + esc(decision.by || 'account') + '</li>';
@@ -2957,6 +3122,14 @@ function canRunAction(act, el) {
     const department = el.dataset.dept || selectedManageDepartment();
     return canManageSelectedDepartment(department);
   }
+  if (['member-availability-save', 'member-availability-reset',
+    'member-availability-exception-add', 'member-availability-exception-remove'].indexOf(act) !== -1) {
+    return isOwnDepartmentProfile(el.dataset.dept, el.dataset.uid);
+  }
+  if (act === 'member-availability-retry') return isVerifiedSession();
+  if (act === 'member-availability-recurring') {
+    return isOwnDepartmentProfile(el.dataset.dept, el.dataset.uid);
+  }
   if (['department-eligible', 'department-schedulable', 'department-recurring'].indexOf(act) !== -1) {
     return canManageSelectedDepartment(el.dataset.dept || selectedManageDepartment());
   }
@@ -3086,6 +3259,50 @@ function handleAct(act, el) {
     const department = el.dataset.department || selectedManageDepartment();
     if (department) loadDepartmentRoster(department, { force: true }).catch(() => {});
     render();
+  }
+  else if (act === 'member-availability-retry') {
+    departmentRuntime.ownLoaded = false;
+    departmentRuntime.ownError = '';
+    loadOwnDepartmentProfiles().catch(() => {});
+    render();
+  }
+  else if (act === 'member-availability-save') {
+    saveOwnDepartmentAvailability(el.dataset.dept, el.dataset.uid).catch(error => {
+      addBanner('Your availability was not saved: ' + departmentErrorMessage(error), true);
+      renderSoon();
+    });
+  }
+  else if (act === 'member-availability-reset') {
+    delete departmentRuntime.drafts[departmentRuntimeKey(el.dataset.dept, el.dataset.uid)];
+    render();
+  }
+  else if (act === 'member-availability-exception-add') {
+    const department = el.dataset.dept;
+    const memberUid = el.dataset.uid;
+    if (!isOwnDepartmentProfile(department, memberUid)) return;
+    const fields = el.querySelectorAll('input, select');
+    const date = String(fields[0] && fields[0].value || '').trim();
+    const key = String(fields[1] && fields[1].value || '').trim().toLocaleLowerCase();
+    const status = String(fields[2] && fields[2].value || '').trim().toLocaleLowerCase();
+    const profile = departmentDraftProfile(department, memberUid);
+    if (!profile || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !key || !['available', 'unavailable'].includes(status)) return;
+    const availability = normalizeDepartmentAvailability(profile.availability);
+    if (!availability.exceptions[date]) availability.exceptions[date] = {};
+    availability.exceptions[date][key] = status;
+    departmentPatch(department, memberUid, { availability });
+  }
+  else if (act === 'member-availability-exception-remove') {
+    const department = el.dataset.dept;
+    const memberUid = el.dataset.uid;
+    if (!isOwnDepartmentProfile(department, memberUid)) return;
+    const profile = departmentDraftProfile(department, memberUid);
+    if (!profile) return;
+    const availability = normalizeDepartmentAvailability(profile.availability);
+    if (availability.exceptions[el.dataset.date]) {
+      delete availability.exceptions[el.dataset.date][el.dataset.key];
+      if (!Object.keys(availability.exceptions[el.dataset.date]).length) delete availability.exceptions[el.dataset.date];
+    }
+    departmentPatch(department, memberUid, { availability });
   }
   else if (act === 'department-member-add') {
     const department = selectedManageDepartment();
@@ -3491,6 +3708,16 @@ function handleChg(chg, el) {
     return;
   }
   if (chg === 'me') return;
+  if (chg === 'member-availability-recurring') {
+    const department = el.dataset.dept;
+    const memberUid = el.dataset.uid;
+    const profile = departmentDraftProfile(department, memberUid);
+    if (!isOwnDepartmentProfile(department, memberUid) || !profile) return;
+    const availability = normalizeDepartmentAvailability(profile.availability);
+    availability.recurring[el.dataset.key] = el.value === 'available' ? 'available' : 'unavailable';
+    departmentPatch(department, memberUid, { availability });
+    return;
+  }
   if (chg === 'manage-dept') {
     ui.manageDept = el.value;
     if (ui.manageDept !== 'All' && authorizedDepartments().indexOf(ui.manageDept) === -1) {

@@ -97,6 +97,15 @@ const departmentRoster = {
       memberUid: 'member:S. Lisa', uid: 'member:S. Lisa', departmentId: 'Media', department: 'Media',
       role: 'member', memberName: 'S. Lisa', status: 'active', eligibleDuties: ['Media Booth #1'], schedulable: true,
       availability: {recurring: {morning: 'available', evening: 'unavailable'}, exceptions: {'2026-07-02': {'evening': 'available'}}},
+      historySeed: {
+        source: 'historical-assignments',
+        seededBy: 'history-import',
+        seededAt: Date.parse('2026-06-19T10:00:00Z'),
+        evidence: [{
+          department: 'Media', member: 'S. Lisa', duty: 'Media Booth #1',
+          service: 'Evening', serviceTime: 'evening', date: '2026-06-19'
+        }]
+      },
       updatedBy: 'E. Simon', updatedByUid: 'member:E. Simon', updatedAt: Date.parse('2026-06-22T10:00:00Z'),
       attribution: {updatedBy: 'E. Simon', updatedAt: Date.parse('2026-06-22T10:00:00Z')}
     },
@@ -147,6 +156,7 @@ const fixture = {
     }
   }
 };
+fixture.docs['departments/Media/members/member:S. Lisa'] = departmentRoster.Media.find(profile => profile.memberUid === 'member:S. Lisa');
 
 function authRecords(forcedMember = '') {
   const records = {
@@ -177,7 +187,7 @@ function authRecords(forcedMember = '') {
       pin: TEST_PIN,
       claims: {
         memberId: 'S. Lisa', memberName: 'S. Lisa', role: 'member',
-        roles: ['member'], departments: [], mustChangePin: false, roleVersion: 1
+        roles: ['member'], departments: ['Media'], mustChangePin: false, roleVersion: 1
       }
     }
   };
@@ -268,6 +278,9 @@ function functionsModule() {
       if (name === 'updateDepartmentProfile' || name === 'updateMemberAvailability') {
         const profile = profileFor(data.departmentId, data.memberUid);
         if (!profile) fail('not-found');
+        (window.__profileWrites || (window.__profileWrites = [])).push({
+          name, payload: clone(data), before: clone(profile)
+        });
         Object.assign(profile, clone(data.patch || {}));
         profile.updatedByUid = actorUid();
         profile.updatedBy = (window.__fixtureAuthRecords || {})[actorUid().replace(/^member:/, '')]?.claims?.memberName || actorUid();
@@ -391,10 +404,12 @@ async function login(page, member, forced = false) {
 }
 
 async function changeForcedPin(page) {
-  await page.locator('form[data-act="member-change-pin"]').evaluate((form, pin) => {
+  await page.waitForFunction(() => !document.querySelector('form[data-act="member-change-pin"] button')?.disabled);
+  await page.evaluate(pin => {
+    const form = document.querySelector('form[data-act="member-change-pin"]');
     form.querySelector('#member-new-pin').value = pin;
     form.querySelector('#member-new-pin-confirm').value = pin;
-    form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+    form.requestSubmit();
   }, CHANGED_PIN);
   try {
     await page.waitForFunction(() => !document.querySelector('nav.tabs')?.classList.contains('hidden'));
@@ -526,13 +541,16 @@ try {
   await page.locator('[data-act="sub"][data-sub="services"]').click();
   await page.locator('[data-act="expand"][data-id="m:2026-07-02_evening"]').click();
   const mediaDuty = page.locator('[data-chg="assign"][data-duty="Media Booth #1"]').first();
+  const scheduleWritesBeforeDepartmentAssignment = await domainWrites(page);
   await mediaDuty.selectOption('member:S. Lisa');
   await page.waitForFunction(() => (window.__departmentWrites || []).some(write => write.name === 'assignDepartmentDuty'));
   check('Normal assignment records the UID keyed callable write', await page.evaluate(() =>
     window.__departmentWrites.some(write => write.name === 'assignDepartmentDuty' && write.assignment.memberUid === 'member:S. Lisa')));
+  check('Normal assignment does not write schedule directly after the callable', await domainWrites(page), scheduleWritesBeforeDepartmentAssignment);
   await page.locator('.department-override summary').first().click();
   const overrideTarget = page.locator('.department-override select').first();
   const overrideReason = page.locator('.department-override input').first();
+  const scheduleWritesBeforeDepartmentOverride = await domainWrites(page);
   await overrideTarget.selectOption('member:D. Caleb');
   await overrideReason.fill('Emergency coverage approved by administrator');
   await page.locator('[data-act="department-override-submit"]').first().click();
@@ -542,6 +560,7 @@ try {
     const profile = (window.__fixtureDepartmentRoster.Media || []).find(item => item.memberUid === 'member:D. Caleb');
     return !!write && write.assignment.override === true && write.assignment.overrideReason && profile.status === 'inactive';
   }));
+  check('Administrator override does not write schedule directly after the callable', await domainWrites(page), scheduleWritesBeforeDepartmentOverride);
   check('Manage alert banner shows request and conflict attention', await page.locator('#banners .banner.alert').allInnerTexts()
     .then(texts => texts.some(text => text.includes('request') && text.includes('conflict'))));
 
@@ -621,6 +640,7 @@ try {
   const leaderOptions = await current.page.locator('#manage-dept option').allTextContents();
   check('Leader Manage selector is scoped to configured departments', leaderOptions, ['Worship', 'Media']);
   check('Leader cannot see the global Manage option', leaderOptions.includes('All Departments'), false);
+  check('Non-admin leader cannot activate administrator override UI', await current.page.locator('.department-override').count(), 0);
   await current.page.locator('[data-act="department-open"][data-department="Media"]').click();
   await current.page.waitForSelector('.department-hero');
   check('Leader department page shows returned leader records', await current.page.locator('.department-leader-strip').innerText().then(text => /E\. Simon/.test(text)));
@@ -634,6 +654,9 @@ try {
   check('Leader member profile exposes eligibility and availability editors', await current.page.locator('.department-editor').allTextContents().then(texts => texts.join(' ')).then(text =>
     text.includes('Eligible duties') && text.includes('Recurring availability') && text.includes('Date exceptions')));
   check('Date exception wins in the rendered profile model', await current.page.locator('.department-exception-row').innerText().then(text => /2026-07-02/.test(text)));
+  check('Historical evidence renders as readable duty suggestions', await current.page.locator('.department-history').innerText()
+    .then(text => text.includes('Historical duty suggestions') && text.includes('Media Booth #1') && text.includes('Evening')));
+  check('Historical evidence does not render raw JSON', await current.page.locator('.department-history pre').count(), 0);
   for (const mode of ['prism', 'navy', 'aurora', 'classic']) {
     await choose(current.page, mode);
     await navigate(current.page, 'manage');
@@ -654,6 +677,37 @@ try {
   check('Unauthorized member cannot see Manage', await current.page.locator('#tab-manage').isVisible(), false);
   check('Unauthorized member has no visible Manage destination', await current.page.locator('nav.tabs').allTextContents()
     .then(labels => labels.includes('Manage')), false);
+  await closeSession(current);
+  current = undefined;
+
+  current = await make({member: 'S. Lisa'});
+  sessions.add(current.context);
+  await releaseSettings(current.page);
+  await unlockSite(current.page);
+  await login(current.page, 'S. Lisa');
+  await current.page.waitForTimeout(260);
+  await current.page.keyboard.press('Escape');
+  await navigate(current.page, 'my');
+  await current.page.waitForSelector('.own-availability-card');
+  check('Member sees shared availability outside Manage', await current.page.locator('.own-availability-card').count(), 1);
+  check('Member sees availability attribution', await current.page.locator('.own-availability-card .department-attribution').innerText()
+    .then(text => text.includes('E. Simon') && text.includes('2026')));
+  const ownAvailability = current.page.locator('.own-availability-card').first();
+  const ownAvailabilitySelect = ownAvailability.locator('[data-chg="member-availability-recurring"]').first();
+  await ownAvailabilitySelect.selectOption('unavailable');
+  await current.page.locator('[data-act="member-availability-save"]').click();
+  await current.page.waitForFunction(() => (window.__profileWrites || []).some(write => write.name === 'updateMemberAvailability'));
+  check('Member availability uses the availability callable with its own UID', await current.page.evaluate(() => {
+    const write = (window.__profileWrites || []).find(item => item.name === 'updateMemberAvailability');
+    return !!write && write.payload.departmentId === 'Media' &&
+      write.payload.memberUid === 'member:S. Lisa' &&
+      Object.keys(write.payload.patch || {}).join(',') === 'availability';
+  }));
+  check('Member availability update keeps profile identity and role', await current.page.evaluate(() => {
+    const profile = (window.__fixtureDepartmentRoster.Media || []).find(item => item.memberUid === 'member:S. Lisa');
+    return !!profile && profile.status === 'active' && profile.role === 'member' && profile.memberUid === 'member:S. Lisa';
+  }));
+  check('Member availability update does not write schedule directly', await domainWrites(current.page), []);
   await closeSession(current);
   current = undefined;
 

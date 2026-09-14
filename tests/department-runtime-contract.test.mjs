@@ -48,6 +48,44 @@ test('runtime preserves date exception precedence and attribution rendering', ()
   assert.match(app, /configured service timezone/);
 });
 
+test('assignment callables are the only normal and override write boundary', () => {
+  const applyStart = app.indexOf('function applyScheduleAssignment(');
+  const applyEnd = app.indexOf('function assignDepartmentDutyForService(', applyStart);
+  assert.ok(applyStart >= 0 && applyEnd > applyStart, 'assignment projection boundary is present');
+  assert.doesNotMatch(app.slice(applyStart, applyEnd), /persistService/);
+  const assignmentStart = app.indexOf('function assignDepartmentDutyForService(');
+  const assignmentEnd = app.indexOf('function seedState(', assignmentStart);
+  const assignment = app.slice(assignmentStart, assignmentEnd);
+  assert.match(assignment, /authCall\(callable, payload\)/);
+  assert.match(app, /function departmentAssignmentPayload\([\s\S]*memberUid:\s*profile\.memberUid/);
+  assert.match(assignment, /overrideDepartmentAssignment/);
+  assert.match(assignment, /profileMutated !== false/);
+});
+
+test('history seed evidence is rendered as readable duty suggestions', () => {
+  const start = app.indexOf('function renderDepartmentHistory(');
+  const end = app.indexOf('function renderOwnAvailabilityProfile(', start);
+  assert.ok(start >= 0 && end > start, 'history renderer boundary is present');
+  const history = app.slice(start, end);
+  assert.match(history, /Historical duty suggestions/);
+  assert.match(history, /entry\.duty/);
+  assert.match(history, /departmentHistoryDate/);
+  assert.doesNotMatch(history, /JSON\.stringify/);
+  assert.doesNotMatch(app, /JSON\.stringify\(profile\.historySeed/);
+});
+
+test('members receive an own-profile availability editor outside Manage', () => {
+  assert.match(app, /function loadOwnDepartmentProfiles\(/);
+  assert.match(app, /fb\.doc\(fb\.db, 'departments', category\.name, 'members', uid\)/);
+  assert.match(app, /function renderOwnAvailability\(/);
+  assert.match(app, /member-availability-recurring/);
+  assert.match(app, /member-availability-exception-add/);
+  assert.match(app, /saveOwnDepartmentAvailability/);
+  assert.match(app, /isOwnDepartmentProfile\(department, memberUid\)/);
+  assert.match(app, /updateMemberAvailability/);
+  assert.match(app, /data-act=\"member-availability-save\"/);
+});
+
 test('all appearance adapters keep the shared Manage runtime and release stamping', () => {
   assert.match(bridge, /renderManage/);
   assert.match(bridge, /renderSiteLock/);
