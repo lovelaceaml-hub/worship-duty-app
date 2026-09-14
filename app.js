@@ -53,6 +53,33 @@ const NAME_UNIFY_MAP = {
 let sharedNameMap = null;
 function unifiedNameMap() { return Object.assign({}, NAME_UNIFY_MAP, sharedNameMap || {}); }
 
+/* Presentation-only cleanup. Stored member IDs and auth claims stay unchanged. */
+function memberLabel(value) {
+  const raw = String(value == null ? '' : value).trim().replace(/\s+/g, ' ');
+  if (!raw) return '';
+  const fixed = {
+    'B,James': 'B. James', 'BJason': 'B. Jason', 'D,Armani': 'D. Armani',
+    'H.Elena': 'H. Elena', 'S. Melisaa': 'S. Melissa'
+  }[raw];
+  const source = fixed || raw;
+  const match = source.match(/^([A-Za-z])(?:\.|,)?\s*(.*)$/);
+  if (!match) return source;
+  const title = match[1].toUpperCase() + '.';
+  const words = match[2].trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return title;
+  const first = words[0].replace(/[.,]+$/g, '');
+  const key = title.toLowerCase() + ' ' + first.toLowerCase();
+  const peers = (state && state.members || []).filter(name => {
+    const parsed = String(name || '').trim().match(/^([A-Za-z])(?:\.|,)?\s*(.*)$/);
+    if (!parsed) return false;
+    const peerFirst = parsed[2].trim().split(/\s+/)[0]?.replace(/[.,]+$/g, '') || '';
+    return parsed[1].toLowerCase() + '. ' + peerFirst.toLowerCase() === key;
+  });
+  if (peers.length < 2 || words.length < 2) return title + ' ' + first;
+  const lastInitial = words[words.length - 1].replace(/[^A-Za-z]/g, '').charAt(0).toUpperCase();
+  return title + ' ' + first + (lastInitial ? ' ' + lastInitial + '.' : '');
+}
+
 /* Feature toggles, managed live in Manage → Features, synced to every device */
 const FEATURES = [
   { id: 'siteLock',       label: 'Site passcode',             desc: 'Everyone must enter the 4-digit passcode before the app opens on a new device.', def: true },
@@ -1276,7 +1303,7 @@ async function memberLogout() {
 function renderMemberLogin() {
   const members = Array.from(new Set((state.members || []).map(canonicalMemberName).filter(Boolean))).sort();
   const options = '<option value="">Choose your name</option>' + members.map(member =>
-    '<option value="' + esc(member) + '"' + (member === ui.loginMember ? ' selected' : '') + '>' + esc(member) + '</option>'
+    '<option value="' + esc(member) + '"' + (member === ui.loginMember ? ' selected' : '') + '>' + esc(memberLabel(member)) + '</option>'
   ).join('');
   const status = authStatus === 'loading'
     ? '<p class="hint">Checking for a verified session...</p>'
@@ -1395,7 +1422,7 @@ function renderBanners() {
         esc(counts.message) + '</button></div>');
     }
   }
-  items.push('<div class="banner"><span>Signed in as <b>' + esc(ui.me) + '</b></span>' +
+  items.push('<div class="banner"><span>Signed in as <b>' + esc(memberLabel(ui.me)) + '</b></span>' +
     '<button class="linkish" data-act="member-logout">Sign out</button></div>');
   items.push.apply(items, ui.banners.map((b, i) =>
     '<div class="banner' + (b.alert ? ' alert' : '') + '"><span>' + esc(b.txt) + '</span>' +
@@ -1406,7 +1433,7 @@ function renderBanners() {
 
 function pillFor(member) {
   const mine = ui.me && member === ui.me;
-  return '<span class="pill' + (mine ? ' me' : '') + '">' + esc(member) + (mine ? ' (You)' : '') + '</span>';
+  return '<span class="pill' + (mine ? ' me' : '') + '">' + esc(memberLabel(member)) + (mine ? ' (You)' : '') + '</span>';
 }
 
 function renderCatRows(svc, showEmpty, only) {
@@ -1932,7 +1959,7 @@ function renderFeatures() {
     '<div class="f-desc">Who receives a notification when a member submits a change request.</div>' +
     '<select data-chg="scheduler-name" style="margin-top:10px">' +
     '<option value="">None</option>' +
-    state.members.map(m => '<option value="' + esc(m) + '"' + (m === (state.settings.schedulerName || '') ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+    state.members.map(m => '<option value="' + esc(m) + '"' + (m === (state.settings.schedulerName || '') ? ' selected' : '') + '>' + esc(memberLabel(m)) + '</option>').join('') +
     '</select></div>';
   return html;
 }
@@ -1948,14 +1975,14 @@ function renderLeaderConfig() {
     html += '<div class="list-row" style="display:block"><div style="font-weight:650;margin-bottom:6px">' + esc(category.name) + '</div>' +
       state.members.map(member => '<label style="display:inline-flex;gap:4px;margin:3px 10px 3px 0;font-size:12px">' +
         '<input type="checkbox" data-chg="role-config" data-role="departmentLeader" data-dept="' + esc(category.name) + '" data-name="' + esc(member) + '"' +
-        (names.indexOf(member) !== -1 ? ' checked' : '') + '>' + esc(member) + '</label>').join('') + '</div>';
+        (names.indexOf(member) !== -1 ? ' checked' : '') + '>' + esc(memberLabel(member)) + '</label>').join('') + '</div>';
   });
   const songEditors = Array.isArray(config.songEditors) ? config.songEditors : [];
   html += '</div><div class="card"><div class="f-label">Choir song editors</div>' +
     '<p class="hint">Song editors can change songs only. They do not receive Worship management access.</p>' +
     state.members.map(member => '<label style="display:inline-flex;gap:4px;margin:3px 10px 3px 0;font-size:12px">' +
       '<input type="checkbox" data-chg="role-config" data-role="songEditor" data-name="' + esc(member) + '"' +
-      (songEditors.indexOf(member) !== -1 ? ' checked' : '') + '>' + esc(member) + '</label>').join('') + '</div>';
+      (songEditors.indexOf(member) !== -1 ? ' checked' : '') + '>' + esc(memberLabel(member)) + '</label>').join('') + '</div>';
   return html;
 }
 
@@ -1976,7 +2003,7 @@ function renderManagePlanning() {
     activeConflicts(svc).filter(c => canPermission('canAcknowledgeConflict', authActor(), Object.assign({}, c, {
       serviceId: svcId(svc), date: svc.date, service: svc.service
     }))).forEach(c => {
-      confHtml += '<div class="plan-conflict"><div class="plan-when"><b>' + esc(c.name) + '</b> | ' +
+      confHtml += '<div class="plan-conflict"><div class="plan-when"><b>' + esc(memberLabel(c.name)) + '</b> | ' +
         esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) +
         ' <span class="plan-duties">(' + c.duties.map(esc).join(' + ') + ')</span></div>';
       c.duties.forEach(duty => {
@@ -1984,7 +2011,7 @@ function renderManagePlanning() {
         confHtml += '<div class="plan-suggest"><span class="lab">' + esc(duty) + ' →</span> ' +
           (subs.length
             ? subs.map(m => '<button class="ghost mini" data-act="plan-assign" data-svc="' + svcId(svc) +
-                '" data-duty="' + esc(duty) + '" data-name="' + esc(m) + '">' + esc(m) + '</button>').join(' ')
+                '" data-duty="' + esc(duty) + '" data-name="' + esc(m) + '">' + esc(memberLabel(m)) + '</button>').join(' ')
             : '<span class="plan-duties">no free member in this department</span>') +
           '</div>';
       });
@@ -2061,7 +2088,7 @@ function memberSelect(svc, duty) {
   return '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '"' +
     (conflicted ? ' class="conflict"' : '') + '>' +
     '<option value="">-</option>' +
-    options.map(m => '<option value="' + esc(m) + '"' + (m === cur ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+    options.map(m => '<option value="' + esc(m) + '"' + (m === cur ? ' selected' : '') + '>' + esc(memberLabel(m)) + '</option>').join('') +
     '</select>';
 }
 
@@ -2075,7 +2102,7 @@ function renderManageConflicts(svc, expanded) {
     serviceId: id, date: svc.date, service: svc.service
   }))).forEach(c => {
     html += '<div class="conflict-note"><span class="dot-c" style="background:var(--warn)"></span>' +
-      esc(c.name) + ' has ' + c.duties.length + ' duties this service' +
+      esc(memberLabel(c.name)) + ' has ' + c.duties.length + ' duties this service' +
       (expanded ? ' <button class="linkish" data-act="conflict-ok" data-svc="' + id + '" data-name="' + esc(c.name) + '">Mark as OK</button>' : '') +
       '</div>';
   });
@@ -2083,7 +2110,7 @@ function renderManageConflicts(svc, expanded) {
     conflictsFor(svc).filter(c => sameDuties(ok[c.name], c.duties) && canPermission('canAcknowledgeConflict', authActor(), Object.assign({}, c, {
       serviceId: id, date: svc.date, service: svc.service
     }))).forEach(c => {
-      html += '<div class="conflict-note ok">' + esc(c.name) + ' has ' + c.duties.length + ' duties (marked OK) ' +
+      html += '<div class="conflict-note ok">' + esc(memberLabel(c.name)) + ' has ' + c.duties.length + ' duties (marked OK) ' +
         '<button class="linkish" data-act="conflict-unok" data-svc="' + id + '" data-name="' + esc(c.name) + '">show warning again</button></div>';
     });
   }
@@ -2107,7 +2134,7 @@ function renderManageRequests() {
   } else {
     pending.forEach(r => {
       html += '<div class="card">' +
-        '<div class="req-head"><span class="req-when">' + esc(r.name) + ' | ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
+        '<div class="req-head"><span class="req-when">' + esc(memberLabel(r.name)) + ' | ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
         '<div class="req-note" style="margin-top:2px">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) + '</div>' +
         (r.note ? '<div class="req-note">' + esc(r.note) + '</div>' : '') +
         '<div class="req-meta">Submitted ' + esc(reqSubmittedAt(r)) + '</div>' +
@@ -2128,7 +2155,7 @@ function renderManageRequests() {
       resolved.slice(0, 10).forEach(r => {
         const when = r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
         html += '<div class="req-item">' +
-          '<div class="req-head"><span class="req-when">' + esc(r.name) + ' | ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
+          '<div class="req-head"><span class="req-when">' + esc(memberLabel(r.name)) + ' | ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
           '<div class="req-meta">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) +
           (when ? ' · resolved ' + esc(when) + ((r.resolvedByName || r.resolvedBy) ? ' by ' + esc(r.resolvedByName || r.resolvedBy) : '') : '') + '</div>' +
           '</div>';
@@ -2204,7 +2231,7 @@ function renderManagePeople() {
     const targetDepartments = department ? [department] : authorizedDepartments();
     const canReset = canPermission('canResetPin', authActor(), { name: m, departments: targetDepartments });
     html += '<div class="list-row" style="flex-wrap:wrap">' +
-      (canRename ? '<input type="text" value="' + esc(m) + '" data-chg="member-name" data-old="' + esc(m) + '" style="flex:1">' : '<span style="flex:1;font-weight:650">' + esc(m) + '</span>') +
+      (canRename ? '<input type="text" value="' + esc(m) + '" data-chg="member-name" data-old="' + esc(m) + '" style="flex:1" aria-label="Stored member ID for ' + esc(memberLabel(m)) + '">' : '<span style="flex:1;font-weight:650">' + esc(memberLabel(m)) + '</span>') +
       '<span class="count">' + n + ' upcoming</span>' +
       '<button class="danger-link" data-act="del-member" data-name="' + esc(m) + '" data-dept="' + esc(department || 'All') + '">' +
       (department ? 'Archive here' : 'Remove') + '</button>' +

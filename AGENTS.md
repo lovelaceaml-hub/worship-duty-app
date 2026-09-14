@@ -6,7 +6,7 @@ This is the live LV Zion Worship Duty Firebase PWA at https://lv-zion-duties.web
 
 ## Active plan and Build log
 
-The active plan is `docs/PLAN-AUTH-DEPARTMENT-NOTIFICATIONS-PRESIDER.md`. Its `## Build log` is the authoritative implementation record.
+The active plan is `docs/PLAN-DESIGN-GALLERY-AUTH-RECONCILE.md`. Its `## Build log` is the authoritative implementation record.
 
 ## Verification
 

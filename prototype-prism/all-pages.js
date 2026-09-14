@@ -68,8 +68,10 @@ renderManageServices=function(){
   meta.after(columns);
  });
  const holder=document.createElement('div');holder.append(f);
- const upcoming=upcomingServices(),count=upcoming.reduce((n,s)=>n+Object.values(s.assignments||{}).filter(Boolean).length,0);
- return '<section data-ps-page="manage-services">'+PS.section('Service planning','Create services and assign every role from one workspace.','MANAGE / SERVICES')+PS.stats([['Upcoming services',upcoming.length,'Visible reference services'],['Assigned duty slots',count,'Across these services'],['People on the roster',state.members.length,'Managed in People']])+compose+'<div class="ps-service-list">'+holder.innerHTML+'</div></section>';
+ const department=manageDepartment(),upcoming=upcomingServices().filter(manageServiceVisible);
+ const count=upcoming.reduce((n,s)=>n+Object.entries(s.assignments||{}).filter(([duty,name])=>name&&(!department||actionableDepartmentForDuty(duty)===department)).length,0);
+ const people=department?((state.departments||{})[department]||[]).length:state.members.length;
+ return '<section data-ps-page="manage-services">'+PS.section('Service planning','Create services and assign every role from one workspace.','MANAGE / SERVICES')+PS.stats([['Upcoming services',upcoming.length,'Visible services'],['Assigned duty slots',count,'Across these services'],['People on the roster',people,'Managed in People']])+compose+'<div class="ps-service-list">'+holder.innerHTML+'</div></section>';
 };
 
 const psPlanningBase=renderManagePlanning;
@@ -79,8 +81,8 @@ renderManagePlanning=function(){
 };
 const psRequestsBase=renderManageRequests;
 renderManageRequests=function(){
- const pending=pendingRequestsCount(),resolved=state.requests.length-pending;
- return '<section data-ps-page="manage-requests">'+PS.section('Requests inbox','Keep each member’s change request connected to the service.','MANAGE / REQUESTS')+PS.stats([['Pending',pending,'Needs review'],['Resolved',resolved,'Approved or declined'],['Total requests',state.requests.length,'Stored in this preview']])+'<div class="ps-requests">'+psRequestsBase()+'</div></section>';
+ const requests=state.requests.filter(manageRequestVisible),pending=requests.filter(request=>request.status==='pending').length,resolved=requests.length-pending;
+ return '<section data-ps-page="manage-requests">'+PS.section('Requests inbox','Keep each member’s change request connected to the service.','MANAGE / REQUESTS')+PS.stats([['Pending',pending,'Needs review'],['Resolved',resolved,'Approved or declined'],['Total requests',requests.length,'Visible to you']])+'<div class="ps-requests">'+psRequestsBase()+'</div></section>';
 };
 const psPeopleBase=renderManagePeople;
 renderManagePeople=function(){
@@ -90,7 +92,8 @@ renderManagePeople=function(){
   if(input){input.setAttribute('aria-label','Member name: '+input.value);input.insertAdjacentHTML('beforebegin','<span class="ps-person-avatar" aria-hidden="true">'+esc(selectedInitials(input.value))+'</span>');}
  });
  const hints=[...f.children].filter(el=>!el.matches('.list-row')).map(el=>el.outerHTML).join('');
- return '<section data-ps-page="manage-people">'+PS.section('Your people','Edit names and manage department eligibility in one directory.','MANAGE / PEOPLE')+'<div class="ps-directory-tools">'+PS.stats([['Members',state.members.length,'Original roster + your edits'],['Departments',CATEGORIES.length,'Eligibility used by duty pickers']])+PS.panel('Add someone',PS.html(form),'people')+'</div>'+hints+'<div class="ps-people-grid">'+rows.map(el=>el.outerHTML).join('')+'</div></section>';
+ const department=manageDepartment(),departments=department?1:CATEGORIES.length;
+ return '<section data-ps-page="manage-people">'+PS.section('Your people','Edit names and manage department eligibility in one directory.','MANAGE / PEOPLE')+'<div class="ps-directory-tools">'+PS.stats([['Members',rows.length,'Visible roster'],['Departments',departments,'Eligibility used by duty pickers']])+PS.panel('Add someone',PS.html(form),'people')+'</div>'+hints+'<div class="ps-people-grid">'+rows.map(el=>el.outerHTML).join('')+'</div></section>';
 };
 const psFeaturesBase=renderFeatures;
 renderFeatures=function(){

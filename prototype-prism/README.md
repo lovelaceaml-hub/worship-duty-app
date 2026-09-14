@@ -22,7 +22,7 @@ node prototype-prism/tests/preview.mjs
 - **A true full-month calendar**: all dates align to weekdays, services show at a glance, personal duties are marked, keyboard arrows move between dates and months. Selecting a date opens its service team in the adjacent inspector. An empty date stays empty rather than silently selecting another service.
 - **Service inspector**: choose morning, afternoon or evening and read all original assigned names, duty categories and choir details. Desktop has a scrollable team panel; mobile expands it below the compact calendar.
 - **Month / Agenda**: full assignment-detail list, people/duty search, department filtering, past services and month navigation remain available.
-- **Song studio**: the real Presider library and its original setlist builder are visible side by side on desktop. The original Home, Library, Services, Insights, song search/sort/categories, Glory/Thanks slots, order/duration totals, confirmation and history controls still work. There is no invented cue-order workflow.
+- **Song studio**: the real Presider library and its original setlist builder are visible side by side on desktop. The original Home, Library and Insights views, including Home's My Services and All Services filters, plus song search/sort/categories, Glory/Thanks slots, order/duration totals, confirmation and history controls still work. There is no invented cue-order workflow.
 - **My Duties / Manage** retain the original actions and data, restyled to match. Light/dark, reduced-motion/manual pause, keyboard focus and local reset are included.
 
 ## Data and boundaries

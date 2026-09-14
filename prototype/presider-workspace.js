@@ -53,7 +53,7 @@ renderLibrary = function () {
   nodes.slice(0,start).forEach(el => {
     // The original onboarding banner stays readable above the workspace.
     if (el.matches('.banner') && el.querySelector('[data-song-act="dismiss-help"]')) {
-      el.querySelector('span').innerHTML = '<b>Build your service plan.</b> Choose your service, add songs from the catalog, then confirm your list. After the service, use <b>Mark as sung</b> in Services.';
+      el.querySelector('span').innerHTML = '<b>Build your service plan.</b> Choose your service, add songs from the catalog, then confirm your list. After the service, use <b>Mark as sung</b> on the service card in Home.';
       help += el.outerHTML;
     } else builder.append(el);
   });
@@ -81,10 +81,6 @@ renderHome = function () {
   const hero = '<section class="day-hero aw-hero aw-presider-hero"><div class="hero-orbits" aria-hidden="true"><i></i><i></i><i></i></div><div class="hero-copy"><div class="hero-eyebrow">YOUR NEXT PRESIDER SERVICE</div><h2>' + (next ? esc(fmtDate(next.date)) : 'Your song workspace.') + '</h2><p>' + (next ? esc((next.worship || '') + ' · ' + next.service + ' · ' + (next.time || '') + ' Pacific time') : 'Keep your catalog, plans and history together.') + '</p>' + (next ? '<button class="aw-hero-action" data-song-act="build-for" data-date="' + esc(next.date) + '" data-worship="' + esc(next.worship || '') + '" data-label="' + esc(next.service) + '">Open service plan ' + awSongIcon('arrow') + '</button>' : '') + '</div><div class="aw-music-emblem" aria-hidden="true">' + awSongIcon('songs') + '</div></section>';
   const side = '<aside class="aw-presider-aside"><section class="aw-panel"><span class="overline">YOUR UPCOMING PLANS</span><div class="aw-presider-numbers"><div><strong>' + mine.length + '</strong><span>Presider services</span></div><div><strong>' + confirmed + '</strong><span>Songs confirmed</span></div></div><p class="hint">Counts reflect your reference assignments and local song plans.</p></section><section class="aw-panel aw-song-cta"><div class="music-tile">' + awSongIcon('songs') + '</div><h3>A library to explore.</h3><p>Browse ' + state.songs.length + ' original songs, with categories, durations and your local history.</p><button class="primary" data-song-act="tab" data-tab="library">Explore the library ' + awSongIcon('arrow') + '</button></section><section class="aw-panel"><h3>Keep a thoughtful history</h3><p>Review least-sung songs and category coverage. No live song history is loaded in this preview.</p><button class="linkish" data-song-act="tab" data-tab="insights">Open Insights →</button></section></aside>';
   return '<div data-aw-song-view="home">' + hero + '<div class="aw-personal-grid"><section class="aw-home-services">' + dom.innerHTML + '</section>' + side + '</div></div>';
-};
-const awOriginalSongServices = renderServices;
-renderServices = function () {
-  return '<div data-aw-song-view="services">' + awSongTitle('SERVICE PLANS','Songs for every service','Review the roster, open a setlist and confirm or record what was sung.') + '<div class="aw-song-service-grid">' + awOriginalSongServices() + '</div></div>';
 };
 const awOriginalInsights = renderInsights;
 renderInsights = function () {
