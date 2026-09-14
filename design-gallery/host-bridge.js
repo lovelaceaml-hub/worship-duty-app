@@ -3,8 +3,7 @@
 if (window.WorshipDesign) {
   const design = window.WorshipDesign;
   const originals = {renderSchedule,renderMy,renderManage,renderManageServices,renderManagePlanning,
-    renderManageRequests,renderManagePeople,renderFeatures,renderManageData,
-    renderSiteLock,renderUnlock,renderCreatePin};
+    renderManageRequests,renderManagePeople,renderFeatures,renderManageData,renderSiteLock};
 
   let prismPaint;
   {
@@ -39,7 +38,7 @@ if (window.WorshipDesign) {
       if(act==='reference-month'){aui.month=todayISO().slice(0,7);aui.day='';aui.service='';aui.query='';render();}
       if(act==='clear-filters'){aui.query='';ui.deptFilter='All';render();}
       if(act==='jump-service')prismJump(b.dataset.id);
-      if(act==='edit'){ui.tab='manage';ui.sub='services';ui.expanded['m:'+b.dataset.id]=true;render();}
+      if(act==='edit'&&isVerifiedSession()&&!isForcedSession()&&canManageAnyDepartment()){ui.tab='manage';ui.sub='services';ui.expanded['m:'+b.dataset.id]=true;render();}
       if(act==='theme'){document.body.classList.toggle('dark');try{localStorage.setItem('wds-prism-palette',document.body.classList.contains('dark')?'dark':'light');}catch{}}
       if(act==='motion'){document.body.classList.toggle('still');const off=document.body.classList.contains('still');b.textContent=off?'▷':'Ⅱ';b.setAttribute('aria-label',off?'Enable animation':'Pause animation');try{localStorage.setItem('wds-prism-motion',off?'off':'on');}catch{}}
     });
@@ -58,8 +57,7 @@ if (window.WorshipDesign) {
     });
   }
   const prismVariants={renderSchedule,renderMy,renderManageServices,renderManagePlanning,
-    renderManageRequests,renderManagePeople,renderFeatures,renderManageData,
-    renderSiteLock,renderUnlock,renderCreatePin};
+    renderManageRequests,renderManagePeople,renderFeatures,renderManageData,renderSiteLock};
 
   let auroraPaint, auroraVariants;
   {
@@ -87,7 +85,7 @@ if (window.WorshipDesign) {
       if(act==='reference-month'){aui.month=todayISO().slice(0,7);aui.day='';aui.service='';aui.query='';render();}
       if(act==='clear-filters'){aui.query='';ui.deptFilter='All';render();}
       if(act==='jump-service')auroraJump(b.dataset.id);
-      if(act==='edit'){ui.tab='manage';ui.sub='services';ui.expanded['m:'+b.dataset.id]=true;render();requestAnimationFrame(()=>document.querySelector('[data-id="m:'+b.dataset.id+'"]')?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}));}
+      if(act==='edit'&&isVerifiedSession()&&!isForcedSession()&&canManageAnyDepartment()){ui.tab='manage';ui.sub='services';ui.expanded['m:'+b.dataset.id]=true;render();requestAnimationFrame(()=>document.querySelector('[data-id="m:'+b.dataset.id+'"]')?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}));}
       if(act==='theme'){document.body.classList.toggle('dark');try{localStorage.setItem('wds-aurora-palette',document.body.classList.contains('dark')?'dark':'light');}catch{}}
       if(act==='motion'){document.body.classList.toggle('still');const off=document.body.classList.contains('still');b.textContent=off?'▷':'Ⅱ';b.setAttribute('aria-label',off?'Enable animation':'Pause animation');try{localStorage.setItem('wds-aurora-motion',off?'off':'on');}catch{}}
     });
@@ -118,8 +116,6 @@ if (window.WorshipDesign) {
   renderFeatures=function(...args){return (design.isPrism()?prismVariants.renderFeatures:originals.renderFeatures)(...args);};
   renderManageData=function(...args){return (design.isPrism()?prismVariants.renderManageData:originals.renderManageData)(...args);};
   renderSiteLock=function(...args){return (design.isPrism()?prismVariants.renderSiteLock:originals.renderSiteLock)(...args);};
-  renderUnlock=function(...args){return (design.isPrism()?prismVariants.renderUnlock:originals.renderUnlock)(...args);};
-  renderCreatePin=function(...args){return (design.isPrism()?prismVariants.renderCreatePin:originals.renderCreatePin)(...args);};
 
   const classicRoot=document.querySelector('.wrap');
   const classicClass=document.body.className;
@@ -132,7 +128,7 @@ if (window.WorshipDesign) {
   const roots={classic:{root:classicRoot,slots:classicSlots},navy:{root:classicRoot,slots:classicSlots},prism,aurora};
   let currentRoot=classicRoot;
   const classicNames={schedule:'Schedule',my:'My Duties',songs:'Presider',manage:'Manage'};
-  const isAccessible=()=>__designSettingsReady&&(!feat('siteLock')||siteUnlocked());
+  const isAccessible=()=>__designSettingsReady&&(!feat('siteLock')||siteUnlocked())&&isVerifiedSession()&&!isForcedSession();
   let auroraCatalogLoading=null;
   function ensureAuroraCatalog(){
     if(window.SONG_SEED?.songs)return Promise.resolve();
@@ -157,12 +153,20 @@ if (window.WorshipDesign) {
     parts.nav.querySelectorAll('button[data-tab]').forEach(b=>{const dot=b.querySelector('.dot')?'<span class="dot"></span>':'';b.innerHTML=(classicNames[b.dataset.tab]||b.textContent)+dot;b.removeAttribute('aria-current');});
   }
   function liveContext(){
-    const toView=svc=>({id:svcId(svc),date:svc.date,time:svc.time,service:svc.service,worship:svc.worship,assignments:{...svc.assignments}});
+    const toView=svc=>({id:svcId(svc),date:svc.date,time:svc.time,service:svc.service,worship:svc.worship,choirSong:svc.choirSong||'',assignments:{...svc.assignments}});
     const up=upcomingServices();let entries=up.concat(feat('pastServices')&&ui.showPast?pastServices().slice().reverse():[]);
     if(ui.deptFilter!=='All')entries=entries.filter(s=>categoryHasAssignments(s,ui.deptFilter));
-    const next=ui.me?dutiesFor(ui.me)[0]:null,assigned=up.flatMap(s=>Object.values(s.assignments||{}).filter(Boolean));
-    const canEdit=!feat('editorLock')||!!state.settings.pinHash&&localStorage.getItem('wds-unlock')===state.settings.pinHash;
-    return {ready:true,tab:ui.tab,sub:ui.sub,today:todayISO(),member:ui.me,entries:entries.map(toView),canEdit,nextDuty:next?{duty:next.duty,svc:toView(next.svc)}:null,stats:{services:up.length,assignments:assigned.length,people:new Set(assigned).size}};
+    const next=ui.me?dutiesFor(ui.me)[0]:null;
+    const manageable=ui.tab==='manage'&&isVerifiedSession()&&!isForcedSession()&&canManageAnyDepartment();
+    const manageDepartment=manageable?selectedManageDepartment():'';
+    const managed=manageable&&manageDepartment&&manageDepartment!=='All'?up.filter(manageServiceVisible):up;
+    const roster=manageDepartment&&manageDepartment!=='All'?(state.departments?.[manageDepartment]||[]):[];
+    const scopedAssignments=service=>Object.entries(service.assignments||{})
+      .filter(([duty,name])=>manageDepartment==='All'||actionableDepartmentForDuty(duty)===manageDepartment||roster.indexOf(name)!==-1)
+      .map(([,name])=>name).filter(Boolean);
+    const assigned=(manageable?managed:up).flatMap(service=>manageable?scopedAssignments(service):Object.values(service.assignments||{}).filter(Boolean));
+    const canEdit=manageable;
+    return {ready:isAccessible(),tab:ui.tab,sub:ui.sub,today:todayISO(),member:ui.me,entries:entries.map(toView),canEdit,nextDuty:next?{duty:next.duty,svc:toView(next.svc)}:null,stats:{services:manageable?managed.length:up.length,assignments:assigned.length,people:new Set(assigned).size}};
   }
 
   const coreRender=render;

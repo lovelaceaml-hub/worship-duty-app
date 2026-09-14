@@ -91,5 +91,5 @@ if(result.error)throw result.error;if(result.status!==0)throw Error('Firebase de
 if(args.includes('--publish')){
   const check=await fetch(origin+'/design-gallery-release.json?verify='+Date.now());
   if(!check.ok||(await check.json()).release!==manifest.release)throw Error('CLI completed but the live gallery release could not be verified.');
-  console.log('Verified live: '+origin+'/ — Original + Prism + Navy & Cream + Aurora.');
+  console.log('Verified live: '+origin+'/ Original + Prism + Navy & Cream + Aurora.');
 }else console.log('Preview deployed. It reads REAL Firebase records; use read-only review for production data.');
