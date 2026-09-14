@@ -18,7 +18,8 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   **14 September 2026: department rosters are live with UID-keyed profiles,
   duty eligibility, schedulability, recurring availability, date exceptions,
   leader scope, and audited administrator overrides. Production release
-  `20260914142833` migrated and verified 28 authenticated profiles.**
+  `gallery1789403828659` migrated and verified 28 authenticated profiles and
+  preserves Original, Prism, Navy & Cream, and Aurora.**
   Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
   deploy with that script), the presider song files load only for presiders, sign-in no longer
   blocks startup, and the calendar button subscribes to the live feed instead of downloading a

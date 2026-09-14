@@ -10,7 +10,8 @@ found zero legacy identity occurrences outside `app/nameMap`, where aliases
 remain intentionally to prevent reintroduction. The active next plan is
 [PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md](PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md).
 
-Department roster release: production Hosting release `20260914142833` is live.
+Department roster release: production Hosting release `gallery1789403828659`
+is live with Original, Prism, Navy & Cream, and Aurora.
 The ordered release captured and verified a 940-document backup, deployed seven
 new department callables and the updated schedule trigger, atomically created
 28 UID-backed department profiles, verified the migration was idempotent,

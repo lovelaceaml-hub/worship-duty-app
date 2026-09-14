@@ -4,7 +4,7 @@ Status: Released to production on 14 September 2026.
 
 Live app: https://lv-zion-duties.web.app
 
-Hosting release: `20260914142833`
+Hosting release: `gallery1789403828659`
 
 ## What is live
 
@@ -28,11 +28,13 @@ Hosting release: `20260914142833`
 - A new dry run after migration reported 28 unchanged profiles, zero creates,
   zero updates, and zero attempted writes.
 - Firestore rules compiled and released successfully.
-- Hosting release `20260914142833` completed successfully.
+- The first Hosting command published the plain repository shell and temporarily
+  hid the Appearance gallery. The guarded gallery publisher immediately
+  replaced it with release `gallery1789403828659`.
 - The live desktop and phone smoke checks found zero accessibility violations,
   console errors, and failed responses.
 - The served HTML and service worker both carry release stamp
-  `20260914142833`.
+  `gallery1789403828659` and exposes Original, Prism, Navy & Cream, and Aurora.
 
 ## Retained history
 
