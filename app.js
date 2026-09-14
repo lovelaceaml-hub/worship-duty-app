@@ -3066,7 +3066,7 @@ async function initFirebase(config) {
 
   const db = fsMod.getFirestore(app);
   const auth = authMod.getAuth(app);
-  const functions = functionsMod.getFunctions(app, REGION);
+  const functions = functionsMod.getFunctions(app, 'us-central1');
   fb = {
     db,
     auth,
