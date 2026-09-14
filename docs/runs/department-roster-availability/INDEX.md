@@ -22,7 +22,7 @@ Coordinator: Terra coordinator, non-editing; Sol owns integration and user commu
 | S3 | Authorization and Firestore boundary | reviewed | gpt-5.6-luna max escalation | /Users/anthony/Projects/worship-duty-app-worktrees/department-auth | High failed; Max failed; Sol corrected | S1 reviewed |
 | S4 | Shared runtime and four appearance adapters | reviewed | gpt-5.6-luna max escalation | /Users/anthony/Projects/worship-duty-app-worktrees/department-runtime | Luna High failed; Luna Max failed; Sol corrected | S1, S2 approved, S3 reviewed |
 | S5 | History seed and sheet-sync protection | reviewed | gpt-5.6-luna max escalation | /Users/anthony/Projects/worship-duty-app-worktrees/department-seed | Luna High failed; Luna Max passed | S1 and S3 reviewed |
-| S6 | Integration, verification, migration, and release | running | gpt-5.6-sol high | /Users/anthony/Projects/worship-duty-app | one Opus review complete; Sol corrected all findings | S0 through S5 reviewed |
+| S6 | Integration, verification, migration, and release | complete | gpt-5.6-sol high | /Users/anthony/Projects/worship-duty-app | one Opus review complete; Sol corrected all findings | S0 through S5 reviewed |
 
 ## Folders
 

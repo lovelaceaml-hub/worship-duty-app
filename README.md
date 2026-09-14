@@ -15,9 +15,10 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   **14 September 2026: confirmed duplicate member identities were removed from
   the live roster and schedule history. Hosting release `gallery1789369159506`
   and all 12 named Functions now prevent those variants from returning.**
-  **Local candidate, not released: department rosters now use UID-keyed profiles
-  with duty eligibility, schedulability, recurring availability, date exceptions,
-  leader scope, and audited administrator overrides. Production is unchanged.**
+  **14 September 2026: department rosters are live with UID-keyed profiles,
+  duty eligibility, schedulability, recurring availability, date exceptions,
+  leader scope, and audited administrator overrides. Production release
+  `20260914142833` migrated and verified 28 authenticated profiles.**
   Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
   deploy with that script), the presider song files load only for presiders, sign-in no longer
   blocks startup, and the calendar button subscribes to the live feed instead of downloading a
@@ -37,7 +38,8 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   - [Playbook](docs/PLAYBOOK.md) — day-to-day operation and AI-delegation guide
   - [User Guide](docs/USER-GUIDE.md) — simple guide to using the app
   - [Handoff](docs/HANDOFF.md) — architecture reference document
-  - [Active plan](docs/PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md) - department rosters, duty eligibility, and availability
+  - [Department roster release](docs/DEPARTMENT-ROSTER-AVAILABILITY-RELEASE.md) - production evidence and retained history
+  - [Completed plan](docs/PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md) - department rosters, duty eligibility, and availability
   - [Merge Handoff](docs/MERGE-HANDOFF.md) — record of the completed song-app merge
   - [Design](docs/DESIGN.md) — the WATV-inspired service design system
   - [Features](docs/FEATURES.md) — list of feature toggles and defaults

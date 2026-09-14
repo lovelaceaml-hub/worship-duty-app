@@ -10,13 +10,14 @@ found zero legacy identity occurrences outside `app/nameMap`, where aliases
 remain intentionally to prevent reintroduction. The active next plan is
 [PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md](PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md).
 
-Department roster candidate: Sections 0 through 5 are integrated locally. The
-single Opus completion review returned findings that Sol corrected. This
-candidate has not been deployed and its department-profile migration has not
-run. Release order is locked: back up and verify production, deploy the new
-Functions while the current client remains live, run and verify the atomic
-department-profile migration, then deploy Firestore rules and Hosting. Do not
-reverse this order because the new client and rules require migrated profiles.
+Department roster release: production Hosting release `20260914142833` is live.
+The ordered release captured and verified a 940-document backup, deployed seven
+new department callables and the updated schedule trigger, atomically created
+28 UID-backed department profiles, verified the migration was idempotent,
+released Firestore rules, and released Hosting. Anthony approved retaining
+1,035 historical assignment rows across 36 names that do not yet have an
+authenticated account UID. See
+[DEPARTMENT-ROSTER-AVAILABILITY-RELEASE.md](DEPARTMENT-ROSTER-AVAILABILITY-RELEASE.md).
 
 Current release: The authentication and department upgrade is live. Production Hosting release `20260914032034` includes secure member login, department-scoped permissions, notification routing, Prism date fixes, Presider Home consolidation, and canonical choir-song synchronization. See [AUTH-DEPARTMENT-UPGRADE-RELEASE.md](AUTH-DEPARTMENT-UPGRADE-RELEASE.md) for release evidence and remaining risks.
 
