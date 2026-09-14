@@ -83,6 +83,19 @@ class FakeCollection {
     await this.doc(id).set(value);
     return { id };
   }
+
+  async get() {
+    const prefix = `${this.path.join('/')}/`;
+    const docs = [];
+    for (const [key, value] of this.store.entries()) {
+      if (!key.startsWith(prefix) || key.slice(prefix.length).includes('/')) continue;
+      docs.push({
+        id: key.slice(prefix.length),
+        data: () => clone(value)
+      });
+    }
+    return { docs, empty: docs.length === 0, size: docs.length };
+  }
 }
 
 class FakeDb {
@@ -194,6 +207,23 @@ test('profile creation and patch helpers reject protected fields', () => {
     /protected or unknown field/);
 });
 
+test('availability aliases normalize to canonical exceptions and reject ambiguity', () => {
+  const normalized = authz.normalizeProfilePatch({ availability: {
+    recurring: { morning: 'available' },
+    dateExceptions: { '2026-09-20': { morning: 'unavailable' } }
+  } }).availability;
+  assert.deepEqual(normalized, {
+    recurring: { morning: 'available' },
+    exceptions: { '2026-09-20': { morning: 'unavailable' } }
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'dateExceptions'), false);
+  assert.throws(() => authz.normalizeProfilePatch({ availability: {
+    recurring: {},
+    exceptions: {},
+    dateExceptions: {}
+  } }), /patch\.availability/);
+});
+
 test('normal assignments require active eligible schedulable available targets', () => {
   assert.equal(authz.authorizeAssignment(leader, assignment(), profile()).allowed, true);
   assert.equal(authz.authorizeAssignment(otherLeader, assignment(), profile()).reason, 'cross-department');
@@ -244,6 +274,11 @@ test('administrator override is explicit, audited by the handler, and profile-ne
   assert.equal(authz.authorizeAssignmentOverride(admin, assignment({ override: true, overrideReason: 'Emergency coverage' }), stored).allowed, true);
   assert.equal(authz.authorizeAssignmentOverride(leader, assignment({ override: true, overrideReason: 'Emergency coverage' }), stored).reason, 'administrator-required');
   assert.equal(authz.authorizeAssignmentOverride(admin, assignment({ override: true }), stored).reason, 'explicit-override-required');
+  assert.equal(authz.authorizeAssignmentOverride(admin, assignment({
+    duty: 'Sermon',
+    override: true,
+    overrideReason: 'Emergency coverage'
+  }), stored).reason, 'duty-department-mismatch');
 
   const result = await handlers.overrideDepartmentAssignment({
     auth: admin,
@@ -259,6 +294,17 @@ test('administrator override is explicit, audited by the handler, and profile-ne
   assert.deepEqual(db.read(`departments/Translation/members/${memberUid}`), before);
   assert.equal(db.read(`audit/${result.auditId}`).profileMutated, false);
   assert.equal(db.read(`audit/${result.auditId}`).action, 'administrator-assignment-override');
+
+  await assert.rejects(
+    handlers.overrideDepartmentAssignment({
+      auth: admin,
+      data: {
+        assignmentId: 'fictional-assignment-wrong-duty',
+        ...assignment({ duty: 'Sermon', override: true, overrideReason: 'Emergency coverage' })
+      }
+    }),
+    error => error.code === 'failed-precondition' && /duty-department-mismatch/.test(error.message)
+  );
 });
 
 test('callable handlers share the same boundary for availability and normal assignment', async () => {
@@ -306,6 +352,99 @@ test('callable handlers share the same boundary for availability and normal assi
   assert.equal(assigned.assignment.authorization, 'normal-eligible-assignment');
 });
 
+test('profile handlers generate manual field attribution and reject forged metadata', async () => {
+  const db = new FakeDb();
+  const handlers = createDepartmentHandlers({ db, now: () => 710 });
+  await db.collection('departments').doc('Translation').collection('members').doc(memberUid).set(profile());
+
+  const updated = await handlers.updateDepartmentProfile({
+    auth: leader,
+    data: {
+      departmentId: 'Translation',
+      memberUid,
+      status: 'inactive',
+      eligibleDuties: ['Translation #2'],
+      schedulable: false
+    }
+  });
+  for (const field of ['status', 'eligibleDuties', 'schedulable']) {
+    assert.deepEqual(updated.profile.fieldAttribution[field], {
+      source: 'manual',
+      authority: 'leader',
+      by: leaderUid,
+      at: 710
+    });
+  }
+  assert.equal(updated.profile.fieldAttribution.availability.source, 'initial');
+
+  await assert.rejects(
+    handlers.updateDepartmentProfile({
+      auth: leader,
+      data: {
+        departmentId: 'Translation',
+        memberUid,
+        fieldAttribution: { status: { source: 'manual', authority: 'admin', by: adminUid, at: 711 } },
+        status: 'active'
+      }
+    }),
+    error => error.code === 'invalid-argument' && /Profile field is not allowed/.test(error.message)
+  );
+});
+
+test('stale role versions cannot use Admin SDK department handlers', async () => {
+  const db = new FakeDb();
+  const handlers = createDepartmentHandlers({ db, now: () => 720 });
+  await db.collection('departments').doc('Translation').collection('members').doc(memberUid).set(profile());
+  const staleLeader = {
+    uid: leaderUid,
+    token: { ...leader.token, roleVersion: 4 },
+    currentAccount: { roleVersion: 5, active: true }
+  };
+  await assert.rejects(
+    handlers.updateDepartmentProfile({
+      auth: staleLeader,
+      data: { departmentId: 'Translation', memberUid, status: 'inactive' }
+    }),
+    error => error.code === 'permission-denied'
+  );
+  const currentLeader = {
+    uid: leaderUid,
+    token: { ...leader.token, roleVersion: 5 },
+    currentAccount: { roleVersion: 5, active: true }
+  };
+  const result = await handlers.updateDepartmentProfile({
+    auth: currentLeader,
+    data: { departmentId: 'Translation', memberUid, status: 'inactive' }
+  });
+  assert.equal(result.ok, true);
+});
+
+test('department roster listing is scoped to the leader department and omits secrets', async () => {
+  const db = new FakeDb();
+  const handlers = createDepartmentHandlers({ db, now: () => 730 });
+  await db.collection('departments').doc('Translation').collection('members').doc(memberUid).set({
+    ...profile(),
+    pinHash: 'fictional-secret-that-must-not-leak'
+  });
+
+  const result = await handlers.listDepartmentRoster({
+    auth: leader,
+    data: { departmentId: 'Translation' }
+  });
+  assert.equal(result.departmentId, 'Translation');
+  assert.equal(result.members.length, 1);
+  assert.equal(result.members[0].memberUid, memberUid);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.members[0], 'pinHash'), false);
+
+  await assert.rejects(
+    handlers.listDepartmentRoster({
+      auth: otherLeader,
+      data: { departmentId: 'Translation' }
+    }),
+    error => error.code === 'permission-denied'
+  );
+});
+
 test('assigned leaders can add department members without granting a role', async () => {
   const db = new FakeDb();
   const handlers = createDepartmentHandlers({ db, now: () => 900 });
@@ -318,11 +457,20 @@ test('assigned leaders can add department members without granting a role', asyn
       memberName: 'Morgan Example',
       eligibleDuties: ['Translation #2'],
       schedulable: true,
-      availability: { recurring: { morning: 'available' }, exceptions: {} }
+      availability: {
+        recurring: { morning: 'available' },
+        dateExceptions: { '2026-09-21': { morning: 'unavailable' } }
+      }
     }
   });
   assert.equal(result.profile.memberUid, addedUid);
   assert.equal(result.profile.role, 'member');
+  assert.deepEqual(result.profile.availability.exceptions, {
+    '2026-09-21': { morning: 'unavailable' }
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(result.profile.availability, 'dateExceptions'), false);
+  assert.equal(result.profile.fieldAttribution.status.source, 'manual');
+  assert.equal(result.profile.fieldAttribution.status.authority, 'leader');
   assert.deepEqual(db.read(`departments/Translation/members/${addedUid}`), result.profile);
 
   await assert.rejects(

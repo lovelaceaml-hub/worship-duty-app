@@ -149,6 +149,7 @@ service cloud.firestore {
         )
         || (
           signedIn()
+          && claimsCurrent()
           && request.auth.token.departmentLeaders is map
           && request.auth.token.departmentLeaders[department] == true
         );
@@ -396,16 +397,94 @@ service cloud.firestore {
         && (!data.keys().hasAny(['duties']) || data.duties is list)
         && (!data.keys().hasAny(['schedulable']) || data.schedulable is bool)
         && (!data.keys().hasAny(['isSchedulable']) || data.isSchedulable is bool)
+        && profileMetadataShapeSafe(data)
         && (!data.keys().hasAny(['availability']) || availabilityShapeSafe(data.availability));
     }
 
     function availabilityShapeSafe(data) {
       return data is map
-        && data.keys().hasOnly(['recurring', 'exceptions', 'dateExceptions'])
+        && data.keys().hasOnly(['recurring', 'exceptions'])
         && (!data.keys().hasAny(['recurring']) || data.recurring is map)
         && (!data.keys().hasAny(['exceptions']) || data.exceptions is map)
-        && (!data.keys().hasAny(['dateExceptions']) || data.dateExceptions is map)
-        && !(data.keys().hasAny(['exceptions']) && data.keys().hasAny(['dateExceptions']));
+        && data.keys().hasAny(['exceptions']);
+    }
+
+    function metadataActorLabelOwned(value) {
+      return value == request.auth.uid
+        || (
+          request.auth.token.keys().hasAny(['memberName'])
+          && request.auth.token.memberName is string
+          && value == request.auth.token.memberName
+        );
+    }
+
+    function profileAttributionShapeSafe(value) {
+      return value is map
+        && value.keys().hasOnly(['createdBy', 'createdAt', 'updatedBy', 'updatedAt'])
+        && value.keys().hasAll(['createdBy', 'createdAt', 'updatedBy', 'updatedAt'])
+        && value.createdBy is string
+        && value.createdBy != ''
+        && (value.createdAt is int || value.createdAt is timestamp)
+        && value.updatedBy is string
+        && value.updatedBy != ''
+        && (value.updatedAt is int || value.updatedAt is timestamp);
+    }
+
+    function profileFieldDecisionShapeSafe(value) {
+      return value is map
+        && value.keys().hasOnly(['source', 'authority', 'by', 'at'])
+        && value.keys().hasAll(['source', 'authority', 'by', 'at'])
+        && value.source is string
+        && value.source in ['initial', 'history-seed', 'manual', 'import']
+        && value.authority is string
+        && value.authority in ['system', 'history-seed', 'member', 'leader', 'admin', 'import']
+        && value.by is string
+        && value.by != ''
+        && (value.at is int || value.at is timestamp);
+    }
+
+    function profileFieldAttributionShapeSafe(value) {
+      return value is map
+        && value.keys().hasOnly(['status', 'eligibleDuties', 'schedulable', 'availability'])
+        && value.keys().hasAll(['status', 'eligibleDuties', 'schedulable', 'availability'])
+        && profileFieldDecisionShapeSafe(value.status)
+        && profileFieldDecisionShapeSafe(value.eligibleDuties)
+        && profileFieldDecisionShapeSafe(value.schedulable)
+        && profileFieldDecisionShapeSafe(value.availability);
+    }
+
+    function profileMetadataShapeSafe(data) {
+      return (!data.keys().hasAny(['createdBy']) || data.createdBy is string)
+        && (!data.keys().hasAny(['createdAt'])
+          || data.createdAt is int
+          || data.createdAt is timestamp)
+        && (!data.keys().hasAny(['attribution']) || profileAttributionShapeSafe(data.attribution))
+        && (!data.keys().hasAny(['fieldAttribution'])
+          || profileFieldAttributionShapeSafe(data.fieldAttribution))
+        && (!data.keys().hasAny(['fieldDecisions'])
+          || profileFieldAttributionShapeSafe(data.fieldDecisions))
+        && (!data.keys().hasAny(['decisions'])
+          || profileFieldAttributionShapeSafe(data.decisions))
+        && !(data.keys().hasAny(['fieldAttribution']) && data.keys().hasAny(['fieldDecisions']))
+        && !(data.keys().hasAny(['fieldAttribution']) && data.keys().hasAny(['decisions']))
+        && !(data.keys().hasAny(['fieldDecisions']) && data.keys().hasAny(['decisions']));
+    }
+
+    function profileManualMetadataOwned(data) {
+      return data.keys().hasAny(['attribution'])
+        && data.keys().hasAny(['fieldAttribution'])
+        && profileAttributionShapeSafe(data.attribution)
+        && profileFieldAttributionShapeSafe(data.fieldAttribution)
+        && metadataActorLabelOwned(data.attribution.createdBy)
+        && metadataActorLabelOwned(data.attribution.updatedBy)
+        && data.fieldAttribution.status.source == 'manual'
+        && data.fieldAttribution.eligibleDuties.source == 'manual'
+        && data.fieldAttribution.schedulable.source == 'manual'
+        && data.fieldAttribution.availability.source == 'manual'
+        && metadataActorLabelOwned(data.fieldAttribution.status.by)
+        && metadataActorLabelOwned(data.fieldAttribution.eligibleDuties.by)
+        && metadataActorLabelOwned(data.fieldAttribution.schedulable.by)
+        && metadataActorLabelOwned(data.fieldAttribution.availability.by);
     }
 
     function departmentProfileIdentityStable(before, after) {
@@ -423,10 +502,12 @@ service cloud.firestore {
     function departmentProfileMetadataOwned(data) {
       return (!data.keys().hasAny(['updatedByUid'])
         || data.updatedByUid == request.auth.uid)
-        && (!data.keys().hasAny(['updatedBy']) || data.updatedBy is string)
+        && (!data.keys().hasAny(['updatedBy'])
+          || (data.updatedBy is string && metadataActorLabelOwned(data.updatedBy)))
         && (!data.keys().hasAny(['updatedAt'])
           || data.updatedAt is int
-          || data.updatedAt is timestamp);
+          || data.updatedAt is timestamp)
+        && profileMetadataShapeSafe(data);
     }
 
     function departmentProfileMemberPatch() {
@@ -472,6 +553,7 @@ service cloud.firestore {
         && departmentProfileKeysSafe(request.resource.data)
         && departmentProfileValuesSafe(request.resource.data)
         && profileIdentityAtPath(request.resource.data, departmentId, memberUid)
+        && profileManualMetadataOwned(request.resource.data)
         && (request.resource.data.role == 'member' || isAdmin())
         && (isAdmin() || managesDepartment(departmentId));
     }
@@ -675,6 +757,7 @@ service cloud.firestore {
         && data.overriddenByUid == request.auth.uid
         && data.keys().hasAny(['assignedByUid'])
         && data.assignedByUid == request.auth.uid
+        && assignmentDutyInDepartment(data)
         && assignmentProfileExists(data)
         && assignmentProfile(data).departmentId == assignmentDepartment(data)
         && assignmentProfile(data).memberUid == assignmentMemberUid(data);

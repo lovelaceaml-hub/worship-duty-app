@@ -210,6 +210,14 @@ function isAuthenticated(actor) {
   return !!actorUid(actor) && token.mustChangePin !== true;
 }
 
+function isCurrentRoleVersion(actor, account) {
+  if (!account || typeof account !== 'object') return false;
+  const token = actorToken(actor);
+  return Number.isSafeInteger(token.roleVersion)
+    && Number.isSafeInteger(account.roleVersion)
+    && token.roleVersion === account.roleVersion;
+}
+
 function isAdministrator(actor) {
   if (!isAuthenticated(actor)) return false;
   const token = actorToken(actor);
@@ -581,6 +589,9 @@ function authorizeAssignmentOverride(actor, assignmentInput, profile) {
     return decision(false, 'invalid-assignment');
   }
   if (!assignment.override || !assignment.overrideReason) return decision(false, 'explicit-override-required');
+  if (permissions.departmentForDuty(assignment.duty) !== assignment.departmentId) {
+    return decision(false, 'duty-department-mismatch', { assignment });
+  }
   if (!profileIdentity(profile) || !profileIdentityMatches(profile, assignment.departmentId, assignment.memberUid)) {
     return decision(false, 'target-profile-mismatch', { assignment });
   }
@@ -607,6 +618,7 @@ module.exports = {
   profileIdentityImmutable,
   actorUid,
   isAuthenticated,
+  isCurrentRoleVersion,
   isAdministrator,
   isAdmin: isAdministrator,
   isMemberActor,
@@ -621,6 +633,7 @@ module.exports = {
   canUpdateProfile: authorizeProfileUpdate,
   canDeleteProfile: authorizeProfileDelete,
   normalizeProfilePatch,
+  normalizeAvailability: normalizedAvailability,
   normalizeAssignment,
   profileForScheduling,
   authorizeAssignment,

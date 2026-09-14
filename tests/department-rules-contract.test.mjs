@@ -36,6 +36,8 @@ test('department profiles are UID keyed and department scoped', () => {
   assert.match(rules, /function departmentProfileMemberPatch\(\)/);
   assert.match(rules, /function departmentProfileLeaderPatch\(\)/);
   assert.match(rules, /function departmentProfileValuesSafe\(data\)/);
+  assert.match(rules, /function profileMetadataShapeSafe\(data\)/);
+  assert.match(rules, /function profileManualMetadataOwned\(data\)/);
   assert.match(rules, /request\.resource\.data\.role == 'member' \|\| isAdmin\(\)/);
   assert.match(rules, /'availability'/);
   assert.match(rules, /'eligibleDuties'/);
@@ -66,6 +68,7 @@ test('normal assignments require profile eligibility and explicit admin override
   assert.match(rules, /data\.overrideReason is string/);
   assert.match(rules, /data\.overriddenByUid == request\.auth\.uid/);
   assert.match(rules, /function assignmentDutyInDepartment\(data\)/);
+  assert.match(rules, /departmentAssignmentOverrideAllowed\(data\)/);
   assert.match(authSource, /target-inactive/);
   assert.match(authSource, /target-ineligible/);
   assert.match(authSource, /target-not-schedulable/);
@@ -81,12 +84,32 @@ test('callable names are wired without replacing existing routes', () => {
   assert.match(functionsIndex, /exports\.overrideDepartmentAssignment\s*=/);
   assert.match(handlersSource, /profileMutated: false/);
   assert.match(handlersSource, /administrator-assignment-override/);
+  assert.match(handlersSource, /listDepartmentRoster/);
+  assert.match(functionsIndex, /exports\.listDepartmentRoster\s*=/);
+  assert.match(functionsIndex, /async function readCurrentAccount/);
+  assert.match(functionsIndex, /token\.roleVersion/);
+  assert.match(functionsIndex, /account\.roleVersion/);
+  assert.match(functionsIndex, /const actor = await callableActor\(request\)/);
   assert.match(functionsIndex, /exports\.verifyMemberPin\s*=/);
   assert.match(functionsIndex, /exports\.onScheduleWrite\s*=|exports\.onScheduleWrite/);
   assert.match(rules, /match \/schedule\/\{scheduleId\}/);
   assert.match(rules, /match \/setlists\/\{setlistId\}/);
   assert.match(rules, /match \/requests\/\{requestId\}/);
   assert.match(rules, /match \/notifications\/\{notificationId\}/);
+});
+
+test('rules use canonical exceptions and validate attribution metadata', () => {
+  assert.match(rules, /function availabilityShapeSafe\(data\)/);
+  assert.match(rules, /data\.keys\(\)\.hasOnly\(\['recurring', 'exceptions'\]\)/);
+  assert.doesNotMatch(rules, /data\.keys\(\)\.hasOnly\(\['recurring', 'exceptions', 'dateExceptions'\]\)/);
+  assert.match(rules, /function profileAttributionShapeSafe\(value\)/);
+  assert.match(rules, /function profileFieldDecisionShapeSafe\(value\)/);
+  assert.match(rules, /function profileFieldAttributionShapeSafe\(value\)/);
+  assert.match(rules, /metadataActorLabelOwned\(value\)/);
+  assert.match(rules, /request\.resource\.data\.diff\(resource\.data\)\.affectedKeys\(\)\.hasOnly\(\[/);
+  assert.match(handlersSource, /source: 'manual'/);
+  assert.match(handlersSource, /authority/);
+  assert.match(handlersSource, /authz\.normalizeAvailability/);
 });
 
 test('owned authorization sources contain no forbidden dash characters', () => {

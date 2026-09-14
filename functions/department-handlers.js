@@ -12,6 +12,14 @@
 const authz = require('./department-auth.js');
 
 const PROFILE_PATCH_FIELDS = new Set(authz.PROFILE_MUTABLE_FIELDS);
+const PROFILE_DECISION_FIELDS = Object.freeze([
+  'status',
+  'eligibleDuties',
+  'schedulable',
+  'availability'
+]);
+const PROFILE_DECISION_SOURCES = new Set(['initial', 'history-seed', 'manual', 'import']);
+const PROFILE_DECISION_AUTHORITIES = new Set(['system', 'history-seed', 'member', 'leader', 'admin', 'import']);
 const ASSIGNMENT_COMMAND_FIELDS = new Set([
   'assignmentId',
   'department',
@@ -45,6 +53,12 @@ function plainObject(value) {
 function requestActor(request) {
   if (!request || !request.auth || !request.auth.uid) {
     throw errorWithCode('unauthenticated', 'A verified member session is required.');
+  }
+  if (request.auth.currentAccount && !authz.isCurrentRoleVersion(request.auth, request.auth.currentAccount)) {
+    throw errorWithCode('permission-denied', 'The member role has changed. Sign in again.');
+  }
+  if (request.auth.currentAccount && request.auth.currentAccount.active === false) {
+    throw errorWithCode('permission-denied', 'The member account is inactive.');
   }
   return {
     uid: request.auth.uid,
@@ -133,6 +147,43 @@ function patchFromRequest(data, options = {}) {
   return patch;
 }
 
+function validFieldDecision(value) {
+  return plainObject(value)
+    && PROFILE_DECISION_SOURCES.has(value.source)
+    && PROFILE_DECISION_AUTHORITIES.has(value.authority)
+    && typeof value.by === 'string'
+    && value.by.trim() !== ''
+    && Number.isSafeInteger(value.at)
+    && value.at >= 0;
+}
+
+function profileDecisionAuthority(actor, profile) {
+  if (authz.isAdministrator(actor)) return 'admin';
+  const identity = authz.profileIdentity(profile);
+  return identity && identity.memberUid === authz.actorUid(actor) ? 'member' : 'leader';
+}
+
+function fieldAttributionFor(before, changedFields, actor, profile, at) {
+  const existing = plainObject(before.fieldAttribution) ? before.fieldAttribution : {};
+  const output = {};
+  PROFILE_DECISION_FIELDS.forEach(field => {
+    output[field] = validFieldDecision(existing[field])
+      ? { ...existing[field] }
+      : { source: 'initial', authority: 'system', by: 'system', at: 0 };
+  });
+  const authority = profileDecisionAuthority(actor, profile || before);
+  changedFields.forEach(field => {
+    if (!PROFILE_DECISION_FIELDS.includes(field)) return;
+    output[field] = {
+      source: 'manual',
+      authority,
+      by: authz.actorUid(actor),
+      at
+    };
+  });
+  return output;
+}
+
 function profileWithPatch(before, patch, actor, at) {
   const next = { ...before };
   Object.keys(patch).forEach(field => { next[field] = patch[field]; });
@@ -151,11 +202,15 @@ function profileWithPatch(before, patch, actor, at) {
   next.updatedAt = at;
   next.updatedByUid = actor.uid;
   next.updatedBy = actor.token.memberName || actor.token.member || actor.uid;
+  next.fieldAttribution = fieldAttributionFor(before, Object.keys(patch), actor, next, at);
   const priorAttribution = plainObject(before.attribution) ? before.attribution : {};
   next.attribution = {
-    ...priorAttribution,
-    createdBy: priorAttribution.createdBy || next.createdBy || actor.uid,
-    createdAt: priorAttribution.createdAt ?? next.createdAt ?? at,
+    createdBy: typeof priorAttribution.createdBy === 'string' && priorAttribution.createdBy.trim()
+      ? priorAttribution.createdBy
+      : (next.createdBy || actor.uid),
+    createdAt: Number.isSafeInteger(priorAttribution.createdAt)
+      ? priorAttribution.createdAt
+      : (Number.isSafeInteger(next.createdAt) ? next.createdAt : at),
     updatedBy: next.updatedBy,
     updatedAt: at
   };
@@ -216,6 +271,33 @@ function assignmentRecord(assignment, profile, actor, at, extra = {}) {
   };
 }
 
+function departmentInput(data) {
+  const allowed = new Set(['department', 'departmentId']);
+  const unknown = Object.keys(data).find(key => !allowed.has(key));
+  if (unknown) throw errorWithCode('invalid-argument', `Roster field is not allowed: ${unknown}.`);
+  if (data.department != null && data.departmentId != null &&
+      String(data.department) !== String(data.departmentId)) {
+    throw errorWithCode('invalid-argument', 'department and departmentId must match.');
+  }
+  const identity = authz.profileIdentity({
+    departmentId: data.departmentId ?? data.department,
+    memberUid: 'roster-request'
+  });
+  if (!identity) throw errorWithCode('invalid-argument', 'departmentId is required.');
+  return identity.departmentId;
+}
+
+function safeRosterProfile(value, documentId, department) {
+  const profile = plainObject(value) ? { ...value } : {};
+  const identity = authz.profileIdentity(profile);
+  if (!identity || identity.departmentId !== department || identity.memberUid !== documentId) return null;
+  const output = {};
+  authz.PROFILE_ALLOWED_FIELDS.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(profile, field)) output[field] = profile[field];
+  });
+  return output;
+}
+
 async function writeAudit(db, entry) {
   if (!db || !db.collection) throw errorWithCode('internal', 'Audit storage is unavailable.');
   const audit = db.collection('audit');
@@ -238,6 +320,20 @@ function createDepartmentHandlers(options = {}) {
     throw new TypeError('createDepartmentHandlers requires a Firestore database.');
   }
 
+  async function listDepartmentRoster(request) {
+    const actor = requestActor(request);
+    const data = inputData(request);
+    const department = departmentInput(data);
+    if (!authz.managesDepartment(actor, department)) {
+      throw errorWithCode('permission-denied', 'You cannot list this department roster.');
+    }
+    const snapshot = await db.collection('departments').doc(department).collection('members').get();
+    const members = snapshot.docs
+      .map(document => safeRosterProfile(document.data(), document.id, department))
+      .filter(Boolean);
+    return { ok: true, departmentId: department, members };
+  }
+
   async function updateProfile(request, updateOptions = {}) {
     const actor = requestActor(request);
     const data = inputData(request);
@@ -256,6 +352,11 @@ function createDepartmentHandlers(options = {}) {
       authorizationCandidate.attribution = current.data.attribution;
     } else {
       delete authorizationCandidate.attribution;
+    }
+    if (Object.prototype.hasOwnProperty.call(current.data, 'fieldAttribution')) {
+      authorizationCandidate.fieldAttribution = current.data.fieldAttribution;
+    } else {
+      delete authorizationCandidate.fieldAttribution;
     }
     const result = authz.authorizeProfileUpdate(actor, current.data, authorizationCandidate);
     rejectDecision(result);
@@ -312,6 +413,8 @@ function createDepartmentHandlers(options = {}) {
     const requestedStatus = data.status == null
       ? (data.active === false ? 'inactive' : 'active')
       : data.status;
+    const availability = authz.normalizeAvailability(data.availability || {});
+    if (!availability) throw errorWithCode('invalid-argument', 'The department member availability is invalid.');
     const candidate = {
       memberUid: path.memberUid,
       uid: path.memberUid,
@@ -322,7 +425,7 @@ function createDepartmentHandlers(options = {}) {
       status: typeof requestedStatus === 'string' ? requestedStatus.trim().toLocaleLowerCase() : requestedStatus,
       eligibleDuties: data.eligibleDuties || data.duties || [],
       schedulable: data.schedulable ?? data.isSchedulable ?? false,
-      availability: data.availability || {},
+      availability,
       createdAt: at,
       createdBy: actor.uid,
       updatedAt: at,
@@ -335,6 +438,13 @@ function createDepartmentHandlers(options = {}) {
         updatedAt: at
       }
     };
+    candidate.fieldAttribution = fieldAttributionFor(
+      {},
+      PROFILE_DECISION_FIELDS,
+      actor,
+      candidate,
+      at
+    );
     const result = authz.authorizeProfileCreate(actor, candidate, {
       departmentId: path.department,
       memberUid: path.memberUid
@@ -424,6 +534,7 @@ function createDepartmentHandlers(options = {}) {
   }
 
   return Object.freeze({
+    listDepartmentRoster,
     updateDepartmentProfile,
     updateMemberAvailability,
     updateDepartmentAvailability: updateMemberAvailability,
