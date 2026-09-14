@@ -1178,7 +1178,10 @@ async function memberLogin() {
       });
       if (!result || !result.token) throw new Error('The member sign-in service is unavailable.');
       await fb.signInWithCustomToken(fb.auth, result.token);
-      if (fb.auth.currentUser) await syncAuthUser(fb.auth.currentUser, true);
+      // The member identity is carried by the custom token. Do not force an
+      // immediate refresh here, because accounts without a pre-existing Auth
+      // user would lose those one-time claims before the session is opened.
+      if (fb.auth.currentUser) await syncAuthUser(fb.auth.currentUser, false);
     } else {
       // Local mode still requires a selected member and a PIN. It grants no
       // privileged claims and is only a development fallback when Firebase
@@ -1239,7 +1242,7 @@ async function memberChangePin() {
       });
       if (!result || !result.token) throw new Error('The member sign-in service is unavailable.');
       await fb.signInWithCustomToken(fb.auth, result.token);
-      if (fb.auth.currentUser) await syncAuthUser(fb.auth.currentUser, true);
+      if (fb.auth.currentUser) await syncAuthUser(fb.auth.currentUser, false);
     } else {
       setVerifiedSession(Object.assign({}, verifiedSession, { mustChangePin: false }), null);
     }
