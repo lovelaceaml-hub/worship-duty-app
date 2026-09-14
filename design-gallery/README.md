@@ -6,6 +6,8 @@ This integration places **Original, Prism, Navy & Cream, and Aurora** behind one
 
 After the existing site passcode/login gate is cleared and shared settings have loaded, the app offers a four-card appearance chooser. Members can use **Appearance** at any time to switch again. The choice is stored only in that browser/device under `wds-design-gallery-v1`; it does not change another member's view.
 
+Schedule, My Duties, Presider, and Manage remain at the top of the screen in every appearance, including at phone widths. Every appearance exposes exactly one Appearance button in its top controls.
+
 Existing Prism users are migrated from `wds-design-choice-v1` and remain on Prism before the new gallery is shown. A previous Navy preference in `wds-appearance-navy-v1` is also recognized. The gallery is shown once after migration so those members can discover the two additional choices without silently changing their current appearance. `?design=classic` is an emergency session-only way to stay on Original if an experimental stylesheet has a problem.
 
 All four modes preserve the original app's actual actions and data model. In particular, Presider remains the real Home / Library / Services / Insights song planner, and the native single prayer + single usher double-duty exception is unchanged.

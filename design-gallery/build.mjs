@@ -181,6 +181,7 @@ const songs=baseSongs+songBridge;
 let index=await read('index.html');
 index=once(index,'<html lang="en">','<html lang="en" data-design-gallery="on">','gallery marker');
 index=once(index,'</head>','<link rel="stylesheet" href="design-choice.css?v=DEV">\n<link id="wd-prism-css" rel="stylesheet" href="prism-live.css?v=DEV" media="not all">\n<link id="wd-navy-css" rel="stylesheet" href="navy-live.css?v=DEV" media="not all">\n<link id="wd-aurora-css" rel="stylesheet" href="aurora-live.css?v=DEV" media="not all">\n<script defer src="design-choice.js?v=DEV"></script>\n</head>','gallery assets');
+index=once(index,'    <div class="sub"><span id="sync-pill" class="sync-pill">This device only</span></div>','    <div class="sub"><button class="wd-design-button nc-appearance" data-design-open hidden>Appearance</button><span id="sync-pill" class="sync-pill">This device only</span></div>','Navy Appearance button');
 index=once(index,'  <nav class="tabs">','  <div class="wd-classic-choice"><button class="wd-design-button" data-design-open hidden>Appearance</button></div>\n  <nav class="tabs">','classic Appearance button');
 const prismCSS=(await Promise.all(['prototype/aurora.css','prototype-prism/prism.css','prototype-prism/all-pages.css','prototype-prism/safety.css'].map(read))).join('\n')+'\n.wd-prism-sentinel{--ready:1}\n';
 const navyCSS=(await read('design-gallery/navy.css'))+'\n.wd-navy-sentinel{--ready:1}\n';

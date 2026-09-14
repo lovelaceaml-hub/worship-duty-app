@@ -27,6 +27,12 @@ members' devices.
 | My Duties | Each member | Pick your name once; see only your duties, alerts, calendar export |
 | Manage | Editors (passcode) | Add/edit services, assign people, manage members, feature toggles, backups |
 
+The next narrow Hosting update keeps Schedule, My Duties, Presider, and Manage
+at the top of the phone screen in all four appearances. Each appearance also
+has one visible Appearance button in its top controls. The gallery browser
+suite verifies both conditions at 390 pixels and checks for horizontal overflow
+from 320 through 1440 pixels. This update is prepared but not yet published.
+
 ## Architecture
 
 - **No framework, no build step.** `index.html` (all styles inline) +
