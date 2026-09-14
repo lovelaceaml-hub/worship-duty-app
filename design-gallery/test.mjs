@@ -34,7 +34,10 @@ assert.deepEqual(await hashes(), before, 'Gallery build must not modify original
 const TEST_PIN = '2468';
 const CHANGED_PIN = '3579';
 const pinHash = hash(Buffer.from(TEST_PIN));
-const members = ['B. Anthony', 'E. Simon', 'D. Caleb', 'S. Lisa', 'M. Chloe'];
+const members = [
+  'B. Anthony', 'E. Simon', 'D. Caleb', 'S. Lisa', 'M. Chloe',
+  'B,James', 'B. James S', 'D,Armani', 'H.Elena', 'S. Melisaa'
+];
 const services = [
   {
     date: '2026-07-01', service: 'Morning', worship: 'Sabbath Day', time: '09:00',
@@ -307,10 +310,11 @@ async function login(page, member, forced = false) {
 }
 
 async function changeForcedPin(page) {
-  await page.locator('#member-new-pin').fill(CHANGED_PIN);
-  await page.locator('#member-new-pin-confirm').fill(CHANGED_PIN);
-  await page.locator('form[data-act="member-change-pin"]').evaluate(form =>
-    form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})));
+  await page.locator('form[data-act="member-change-pin"]').evaluate((form, pin) => {
+    form.querySelector('#member-new-pin').value = pin;
+    form.querySelector('#member-new-pin-confirm').value = pin;
+    form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+  }, CHANGED_PIN);
   try {
     await page.waitForFunction(() => !document.querySelector('nav.tabs')?.classList.contains('hidden'));
   } catch (error) {
@@ -371,6 +375,16 @@ try {
   await unlockSite(page);
   check('Member authentication gate is visible after site unlock', await page.locator('#member-login').count(), 1);
   check('Navigation is hidden before member authentication', await page.locator('nav.tabs').evaluate(node => node.classList.contains('hidden')));
+  const loginOptions = await page.locator('#member-login option').evaluateAll(options =>
+    options.map(option => ({value: option.value, label: option.textContent})));
+  check('Malformed stored names receive clean display-only labels', loginOptions.filter(option =>
+    ['B,James', 'B. James S', 'D,Armani', 'H.Elena', 'S. Melisaa'].includes(option.value)), [
+    {value: 'B,James', label: 'B. James'},
+    {value: 'B. James S', label: 'B. James S.'},
+    {value: 'D,Armani', label: 'D. Armani'},
+    {value: 'H.Elena', label: 'H. Elena'},
+    {value: 'S. Melisaa', label: 'S. Melissa'}
+  ]);
   await login(page, 'B. Anthony');
   await page.waitForSelector('.wd-design-dialog[open]');
 

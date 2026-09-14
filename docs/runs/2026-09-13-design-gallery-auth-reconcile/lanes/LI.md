@@ -1,13 +1,13 @@
 ---
 lane: LI
 title: Integration and release
-state: test-deployed
+state: review-corrected
 model: Sol
 runner: /root
 worktree: /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-reconcile
-review: Opus pending after Anthony test confirmation
+review: Opus changes required, corrected by Sol
 depends_on: LV, LR, LT
-updated: 2026-09-14T03:51Z
+updated: 2026-09-14T04:49Z
 ---
 
 # LI: Integration and release
@@ -18,8 +18,8 @@ updated: 2026-09-14T03:51Z
 
 ## Result
 
-Integrated all three lanes, corrected peer findings, passed the full Playwright gallery suite, and published Hosting only to `https://lv-zion-duties-test.web.app`. Production is unchanged pending Anthony confirmation and the one requested Opus completion review.
+Integrated all three lanes, corrected peer findings, passed the full browser suite, and published Hosting only to `https://lv-zion-duties-test.web.app`. Anthony approved the test build and authorized production.
 
 ## Review
 
-(coordinator appends)
+The one requested Opus completion review found the proposed identity alias cleanup unsafe. Sol reverted those identity changes and replaced them with display-only member labels that preserve every stored ID and backend account. The corrected browser suite and 34 focused permission, authentication, and migration tests pass. Production deployment remains the final action.

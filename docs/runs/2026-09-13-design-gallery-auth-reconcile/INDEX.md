@@ -19,7 +19,7 @@ Coordinator: /root
 | LV | Preserved visual sources | reviewed | executor_luna high | /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-visuals | PASS | none |
 | LR | Gallery runtime | corrected | executor_luna high | /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-runtime | findings corrected by Sol | LV sources available |
 | LT | Gallery verification | integrated | executor_luna high | /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-tests | controller PASS | current main contracts |
-| LI | Integration and release | test-deployed | Sol | /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-reconcile | Opus pending | LV, LR, LT |
+| LI | Integration and release | review-corrected | Sol | /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-reconcile | Opus changes required, corrected by Sol | LV, LR, LT |
 
 ## Folders
 

@@ -1,6 +1,6 @@
 # Design Gallery and Authentication Reconciliation
 
-Status: In progress
+Status: Production release in progress
 
 Baseline: `5d270003afe9cdeb72299cbb0157ed7075b16668`
 
@@ -75,3 +75,6 @@ Sol owns shared integration, current-main reconciliation, test-site release, bro
 - 2026-09-13: The integrated isolated browser suite passed all authentication, forced PIN, four-design switching, state preservation, scoped Manage, alerts, Presider Home, Prism navigation, canonical choir-song, and 320 to 1440 pixel overflow checks. No production or test data was read or written by the suite.
 - 2026-09-13: Lane R peer review found two material issues: `permissions.js` was absent from the staged Hosting build, and Prism/Aurora Manage summary counts were global. Sol corrected both, added focused contracts, fixed Prism date/month event routing, and reran the complete browser suite successfully.
 - 2026-09-13: Published Hosting only to `https://lv-zion-duties-test.web.app`. It uses the existing test Firebase project and real copied test data. Production remains unchanged.
+- 2026-09-13: Anthony approved the combined test build and authorized direct production release. The one requested Opus completion review returned changes required because an attempted identity alias cleanup could map ambiguous stored values to privileged accounts and diverge from backend auth records.
+- 2026-09-13: Sol reverted every identity alias change and implemented presentation-only member labels. Visible names now use title initial, period, space, and first name, with a last initial only for duplicate display names. Stored IDs, auth claims, PIN records, assignments, and production data remain unchanged.
+- 2026-09-13: The corrected full browser suite passed every authentication, forced PIN, design switching, permission scope, Presider, Prism, choir-song, naming, and responsive viewport check. The focused permission, auth wiring, and migration suites also passed 34 of 34 tests.
