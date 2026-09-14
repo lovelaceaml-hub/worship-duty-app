@@ -17,7 +17,7 @@ const {
   hashPin,
   createMemberAuthCallables
 } = require('./member-auth');
-const permissions = require('../permissions');
+const permissions = require('./permissions');
 
 initializeApp();
 const db = getFirestore();
