@@ -81,6 +81,7 @@ test('callable names are wired without replacing existing routes', () => {
   assert.match(functionsIndex, /exports\.updateMemberAvailability\s*=/);
   assert.match(functionsIndex, /exports\.createDepartmentProfile\s*=/);
   assert.match(functionsIndex, /exports\.assignDepartmentDuty\s*=/);
+  assert.match(functionsIndex, /exports\.unassignDepartmentDuty\s*=/);
   assert.match(functionsIndex, /exports\.overrideDepartmentAssignment\s*=/);
   assert.match(handlersSource, /profileMutated: false/);
   assert.match(handlersSource, /administrator-assignment-override/);
@@ -93,6 +94,7 @@ test('callable names are wired without replacing existing routes', () => {
   assert.match(functionsIndex, /exports\.verifyMemberPin\s*=/);
   assert.match(functionsIndex, /exports\.onScheduleWrite\s*=|exports\.onScheduleWrite/);
   assert.match(rules, /match \/schedule\/\{scheduleId\}/);
+  assert.doesNotMatch(rules, /allow update: if isAdmin\(\)\s*\|\| changesWorshipAssignments/);
   assert.match(rules, /match \/setlists\/\{setlistId\}/);
   assert.match(rules, /match \/requests\/\{requestId\}/);
   assert.match(rules, /match \/notifications\/\{notificationId\}/);

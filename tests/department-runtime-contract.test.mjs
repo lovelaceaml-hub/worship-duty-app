@@ -18,6 +18,7 @@ test('department runtime exposes only secure UID keyed profile and assignment ca
     'updateMemberAvailability',
     'createDepartmentProfile',
     'assignDepartmentDuty',
+    'unassignDepartmentDuty',
     'overrideDepartmentAssignment'
   ]) assert.ok(app.includes(name), name + ' is wired into the runtime');
   assert.match(app, /departmentId:\s*department/);
@@ -60,6 +61,10 @@ test('assignment callables are the only normal and override write boundary', () 
   assert.match(app, /function departmentAssignmentPayload\([\s\S]*memberUid:\s*profile\.memberUid/);
   assert.match(assignment, /overrideDepartmentAssignment/);
   assert.match(assignment, /profileMutated !== false/);
+  assert.match(app, /function unassignDepartmentDutyForService\(/);
+  assert.match(app, /authCall\('unassignDepartmentDuty', payload\)/);
+  assert.doesNotMatch(app, /if \(!el\.value\)[\s\S]{0,180}persistService\(svc\)/);
+  assert.match(app, /data-act="plan-assign"[\s\S]{0,180}data-uid=/);
 });
 
 test('history seed evidence is rendered as readable duty suggestions', () => {

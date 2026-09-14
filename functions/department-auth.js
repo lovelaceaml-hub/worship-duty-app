@@ -640,6 +640,7 @@ module.exports = {
   authorizeAssignmentOverride,
   canAssignDepartmentDuty: authorizeAssignment,
   canOverrideAssignment: authorizeAssignmentOverride,
+  departmentForDuty: permissions.departmentForDuty,
   profilePath,
   assignmentPath
 };

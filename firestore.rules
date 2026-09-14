@@ -1407,20 +1407,13 @@ service cloud.firestore {
     }
 
     // Public schedule reads are intentional. Structural service changes and
-    // deletions stay admin-only. Leaders can change only duties in a claimed
-    // department, and song edits are limited to editors or the service presider.
+    // deletions stay admin-only. Department assignment changes are server-only
+    // so the profile decision, assignment record, and schedule projection stay
+    // atomic. Song edits remain limited to editors or the service presider.
     match /schedule/{scheduleId} {
       allow read: if true;
       allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-        || changesWorshipAssignments()
-        || changesUsherSistersAssignments()
-        || changesUsherBrothersAssignments()
-        || changesLobbyAssignments()
-        || changesTranslationAssignments()
-        || changesMediaAssignments()
-        || changesParkingAssignments()
-        || changesOfferingAssignments()
+      allow update: if (isAdmin() && scheduleStructuralChange())
         || canAcknowledgeScheduleConflict()
         || changesOnlyServiceSongs();
     }
@@ -1449,16 +1442,10 @@ service cloud.firestore {
         && secretFieldsAbsent(resource.data)
         && assignmentDepartment(resource.data) is string
         && (isAdmin() || managesDepartment(assignmentDepartment(resource.data)));
-      // Administrator overrides are server-only so assignment and audit are
-      // committed atomically by the callable. Clients may write only the
-      // ordinary eligible-assignment path.
-      allow create: if departmentAssignmentNormalAllowed(request.resource.data);
-      allow update: if departmentAssignmentNormalAllowed(request.resource.data)
-        && assignmentKeysSafe(resource.data)
-        && assignmentIdentityAtPath(resource.data)
-        && assignmentDepartment(resource.data) == assignmentDepartment(request.resource.data)
-        && assignmentMemberUid(resource.data) == assignmentMemberUid(request.resource.data);
-      allow delete: if isAdmin();
+      // All writes are server-only so the assignment record and public
+      // schedule projection are committed atomically by a callable.
+      allow create: if false;
+      allow update, delete: if false;
     }
 
     // Safe, non-secret app documents. Hashes and other account material are

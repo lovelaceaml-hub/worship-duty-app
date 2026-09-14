@@ -270,12 +270,12 @@ function suggestSubs(svc, duty, excludeName, stats) {
   Object.keys(svc.assignments || {}).forEach(d => { if (svc.assignments[d]) busy[svc.assignments[d]] = true; });
   return roster
     .filter(profile => profile.memberName !== excludeName && !busy[profile.memberName])
-    .map(profile => ({ m: profile.memberName, s: stats[profile.memberName] || { past4: 0, upcoming: 0, last: '' } }))
+    .map(profile => ({ profile, s: stats[profile.memberName] || { past4: 0, upcoming: 0, last: '' } }))
     .sort((a, b) =>
       (a.s.upcoming + a.s.past4) - (b.s.upcoming + b.s.past4) ||
       (a.s.last === b.s.last ? 0 : (a.s.last < b.s.last ? -1 : 1)))
     .slice(0, 3)
-    .map(x => x.m);
+    .map(x => x.profile);
 }
 
 /* ================= google sheet sync, pure parsers ================= */
@@ -939,6 +939,29 @@ function assignDepartmentDutyForService(svc, duty, profile, options = {}) {
     renderSoon();
     throw error;
   }).finally(() => { delete departmentRuntime.assignmentBusy[busyKey]; });
+}
+
+function unassignDepartmentDutyForService(svc, duty) {
+  if (!svc) return Promise.reject(new Error('Choose a service before clearing this duty.'));
+  const category = dutyCategory(duty);
+  const payload = {
+    departmentId: category.name,
+    duty,
+    serviceId: svcId(svc),
+    serviceDate: svc.date,
+    serviceTime: departmentServiceTimeKey(svc)
+  };
+  const save = fb ? authCall('unassignDepartmentDuty', payload) : Promise.resolve({ ok: true });
+  return save.then(result => {
+    if (!svc.assignments) svc.assignments = {};
+    delete svc.assignments[duty];
+    afterDataChange();
+    return result;
+  }).catch(error => {
+    addBanner(error.message || safeAuthMessage(error), true);
+    renderSoon();
+    throw error;
+  });
 }
 
 function seedState() {
@@ -2451,8 +2474,8 @@ function renderManagePlanning() {
         const subs = suggestSubs(svc, duty, c.name, stats);
         confHtml += '<div class="plan-suggest"><span class="lab">' + esc(duty) + ' →</span> ' +
           (subs.length
-            ? subs.map(m => '<button class="ghost mini" data-act="plan-assign" data-svc="' + svcId(svc) +
-                '" data-duty="' + esc(duty) + '" data-name="' + esc(m) + '">' + esc(memberLabel(m)) + '</button>').join(' ')
+            ? subs.map(profile => '<button class="ghost mini" data-act="plan-assign" data-svc="' + svcId(svc) +
+                '" data-duty="' + esc(duty) + '" data-uid="' + esc(profile.memberUid) + '">' + esc(memberLabel(profile.memberName)) + '</button>').join(' ')
             : '<span class="plan-duties">no free member in this department</span>') +
           '</div>';
       });
@@ -3599,7 +3622,7 @@ function handleAct(act, el) {
     const svc = findService(el.dataset.svc);
     if (!svc) return;
     const duty = el.dataset.duty;
-    const profile = departmentProfileByName(dutyCategory(duty).name, el.dataset.name);
+    const profile = departmentProfile(dutyCategory(duty).name, el.dataset.uid);
     if (!profile) {
       addBanner('The secure department roster is not loaded for this suggestion.', true);
       render();
@@ -3731,10 +3754,7 @@ function handleChg(chg, el) {
     const svc = findService(el.dataset.svc);
     if (!svc) return;
     if (!el.value) {
-      if (!svc.assignments) svc.assignments = {};
-      delete svc.assignments[el.dataset.duty];
-      persistService(svc);
-      afterDataChange();
+      unassignDepartmentDutyForService(svc, el.dataset.duty).catch(() => {});
       return;
     }
     const profile = departmentProfile(dutyCategory(el.dataset.duty).name, el.value);

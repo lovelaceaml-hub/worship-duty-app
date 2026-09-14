@@ -10,19 +10,19 @@ Coordinator: Terra coordinator, non-editing; Sol owns integration and user commu
 
 | Repo | Path | Branch | Baseline HEAD |
 |---|---|---|---|
-| worship-duty-app | /Users/anthony/Projects/worship-duty-app | change/top-navigation-secure | 8a6452e |
+| worship-duty-app | /Users/anthony/Projects/worship-duty-app | change/top-navigation-secure | b31ae73 |
 
 ## Lanes
 
 | Lane | Title | State | Model | Worktree | Review | Depends on |
 |---|---|---|---|---|---|---|
-| S0 | Adversarial plan critique | planned | pending | pending | pending | pending |
-| S1 | Department profile model and migration planner | planned | pending | pending | pending | pending |
-| S2 | Clickable department journey prototype | planned | pending | pending | pending | pending |
-| S3 | Authorization and Firestore boundary | planned | pending | pending | pending | pending |
-| S4 | Shared runtime and four appearance adapters | planned | pending | pending | pending | pending |
-| S5 | History seed and sheet-sync protection | planned | pending | pending | pending | pending |
-| S6 | Integration, verification, migration, and release | planned | pending | pending | pending | pending |
+| S0 | Adversarial plan critique | reviewed | gpt-5.6-luna high | read-only canonical repo | none | none |
+| S1 | Department profile model and migration planner | reviewed | gpt-5.6-luna max escalation | /Users/anthony/Projects/worship-duty-app-worktrees/department-model | High failed; Max failed; Sol corrected | none |
+| S2 | Clickable department journey prototype | reviewed | gpt-5.6-luna max escalation | /Users/anthony/Projects/worship-duty-app-worktrees/department-prototype | Luna High failed; Luna Max passed | none |
+| S3 | Authorization and Firestore boundary | reviewed | gpt-5.6-luna max escalation | /Users/anthony/Projects/worship-duty-app-worktrees/department-auth | High failed; Max failed; Sol corrected | S1 reviewed |
+| S4 | Shared runtime and four appearance adapters | reviewed | gpt-5.6-luna max escalation | /Users/anthony/Projects/worship-duty-app-worktrees/department-runtime | Luna High failed; Luna Max failed; Sol corrected | S1, S2 approved, S3 reviewed |
+| S5 | History seed and sheet-sync protection | reviewed | gpt-5.6-luna max escalation | /Users/anthony/Projects/worship-duty-app-worktrees/department-seed | Luna High failed; Luna Max passed | S1 and S3 reviewed |
+| S6 | Integration, verification, migration, and release | running | gpt-5.6-sol high | /Users/anthony/Projects/worship-duty-app | one Opus combined review pending | S0 through S5 reviewed |
 
 ## Folders
 
@@ -37,10 +37,10 @@ Coordinator: Terra coordinator, non-editing; Sol owns integration and user commu
 - Rule diagram: pending
 - Lane board: pending
 
-<!-- lane: S0 state: planned model: pending worktree: pending review: pending updated: 2026-09-14T08:38Z -->
-<!-- lane: S1 state: planned model: pending worktree: pending review: pending updated: 2026-09-14T08:38Z -->
-<!-- lane: S2 state: planned model: pending worktree: pending review: pending updated: 2026-09-14T08:38Z -->
-<!-- lane: S3 state: planned model: pending worktree: pending review: pending updated: 2026-09-14T08:38Z -->
-<!-- lane: S4 state: planned model: pending worktree: pending review: pending updated: 2026-09-14T08:38Z -->
-<!-- lane: S5 state: planned model: pending worktree: pending review: pending updated: 2026-09-14T08:38Z -->
-<!-- lane: S6 state: planned model: pending worktree: pending review: pending updated: 2026-09-14T08:38Z -->
+<!-- lane: S0 state: reviewed model: gpt-5.6-luna-high worktree: read-only-canonical-repo review: none updated: 2026-09-14T08:51Z -->
+<!-- lane: S1 state: reviewed model: gpt-5.6-luna-max worktree: /Users/anthony/Projects/worship-duty-app-worktrees/department-model review: High-failed-Max-failed-Sol-corrected updated: 2026-09-14T09:38Z -->
+<!-- lane: S2 state: reviewed model: gpt-5.6-luna-max worktree: /Users/anthony/Projects/worship-duty-app-worktrees/department-prototype review: Luna-High-failed-Luna-Max-passed updated: 2026-09-14T09:57Z -->
+<!-- lane: S3 state: reviewed model: gpt-5.6-luna-max worktree: /Users/anthony/Projects/worship-duty-app-worktrees/department-auth review: High-failed-Max-failed-Sol-corrected updated: 2026-09-14T11:36Z -->
+<!-- lane: S4 state: reviewed model: gpt-5.6-luna-max worktree: /Users/anthony/Projects/worship-duty-app-worktrees/department-runtime review: Luna-High-failed-Luna-Max-failed-Sol-corrected updated: 2026-09-14T15:04Z -->
+<!-- lane: S5 state: reviewed model: gpt-5.6-luna-max worktree: /Users/anthony/Projects/worship-duty-app-worktrees/department-seed review: Luna-High-failed-Luna-Max-passed updated: 2026-09-14T13:52Z -->
+<!-- lane: S6 state: running model: gpt-5.6-sol-high worktree: /Users/anthony/Projects/worship-duty-app review: one-Opus-combined-review-pending updated: 2026-09-14T15:04Z -->

@@ -247,8 +247,7 @@ function assignmentIdFor(assignment) {
     assignment.departmentId,
     assignment.serviceId || assignment.serviceDate,
     assignment.serviceTime,
-    assignment.duty,
-    assignment.memberUid
+    assignment.duty
   ];
   return pieces.map(value => encodeURIComponent(value)).join('__');
 }
@@ -478,7 +477,17 @@ function createDepartmentHandlers(options = {}) {
       authorization: 'normal-eligible-assignment'
     });
     const id = assignmentIdFor(result.assignment);
-    await db.collection('departmentAssignments').doc(id).set(record, { merge: false });
+    if (!result.assignment.serviceId || typeof db.runTransaction !== 'function') {
+      throw errorWithCode('failed-precondition', 'Atomic schedule assignment storage is unavailable.');
+    }
+    const assignmentReference = db.collection('departmentAssignments').doc(id);
+    const scheduleReference = db.collection('schedule').doc(result.assignment.serviceId);
+    await db.runTransaction(async transaction => {
+      transaction.set(assignmentReference, record, { merge: false });
+      transaction.set(scheduleReference, {
+        assignments: { [result.assignment.duty]: record.memberName }
+      }, { merge: true });
+    });
     return { ok: true, assignment: record, override: false };
   }
 
@@ -530,9 +539,16 @@ function createDepartmentHandlers(options = {}) {
     }
     const assignmentReference = db.collection('departmentAssignments').doc(id);
     const auditReference = db.collection('audit').doc(auditId);
+    if (!result.assignment.serviceId) {
+      throw errorWithCode('failed-precondition', 'A service ID is required for an assignment override.');
+    }
+    const scheduleReference = db.collection('schedule').doc(result.assignment.serviceId);
     await db.runTransaction(async transaction => {
       transaction.set(assignmentReference, record, { merge: false });
       transaction.set(auditReference, auditRecord, { merge: false });
+      transaction.set(scheduleReference, {
+        assignments: { [result.assignment.duty]: record.memberName }
+      }, { merge: true });
     });
     return {
       ok: true,
@@ -543,6 +559,44 @@ function createDepartmentHandlers(options = {}) {
     };
   }
 
+  async function unassignDepartmentDuty(request) {
+    const actor = requestActor(request);
+    const data = inputData(request);
+    const allowed = new Set(['department', 'departmentId', 'duty', 'serviceId', 'serviceDate', 'date', 'serviceTime', 'time']);
+    const unknown = Object.keys(data).find(key => !allowed.has(key));
+    if (unknown) throw errorWithCode('invalid-argument', `Assignment field is not allowed: ${unknown}.`);
+    let assignment;
+    try {
+      assignment = authz.normalizeAssignment({ ...data, memberUid: actor.uid, override: false });
+    } catch (error) {
+      throw errorWithCode('invalid-argument', error.message);
+    }
+    if (!assignment.serviceId) {
+      throw errorWithCode('invalid-argument', 'A service ID is required to clear an assignment.');
+    }
+    if (authz.departmentForDuty(assignment.duty) !== assignment.departmentId) {
+      throw errorWithCode('failed-precondition', 'Department authorization denied: duty-department-mismatch.');
+    }
+    if (!authz.isAdministrator(actor) && !authz.managesDepartment(actor, assignment.departmentId)) {
+      throw errorWithCode('permission-denied', 'Department authorization denied: profile-write-not-authorized.');
+    }
+    const assignmentReference = db.collection('departmentAssignments').doc(assignmentIdFor(assignment));
+    const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
+    if (typeof db.runTransaction !== 'function') {
+      throw errorWithCode('failed-precondition', 'Atomic schedule assignment storage is unavailable.');
+    }
+    await db.runTransaction(async transaction => {
+      transaction.delete(assignmentReference);
+      transaction.set(scheduleReference, { assignments: { [assignment.duty]: '' } }, { merge: true });
+    });
+    return {
+      ok: true,
+      departmentId: assignment.departmentId,
+      duty: assignment.duty,
+      serviceId: assignment.serviceId
+    };
+  }
+
   return Object.freeze({
     listDepartmentRoster,
     updateDepartmentProfile,
@@ -550,6 +604,7 @@ function createDepartmentHandlers(options = {}) {
     updateDepartmentAvailability: updateMemberAvailability,
     createDepartmentProfile,
     assignDepartmentDuty,
+    unassignDepartmentDuty,
     overrideDepartmentAssignment,
     adminOverrideAssignment: overrideDepartmentAssignment,
     recoverDepartmentProfile: updateDepartmentProfile

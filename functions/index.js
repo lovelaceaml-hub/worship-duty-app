@@ -314,6 +314,9 @@ exports.createDepartmentProfile = exposeDepartmentCallable(
 exports.assignDepartmentDuty = exposeDepartmentCallable(
   departmentHandlers.assignDepartmentDuty
 );
+exports.unassignDepartmentDuty = exposeDepartmentCallable(
+  departmentHandlers.unassignDepartmentDuty
+);
 exports.overrideDepartmentAssignment = exposeDepartmentCallable(
   departmentHandlers.overrideDepartmentAssignment
 );

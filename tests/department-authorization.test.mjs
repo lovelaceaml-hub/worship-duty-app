@@ -115,13 +115,32 @@ class FakeDb {
   async runTransaction(callback) {
     const writes = [];
     const transaction = {
-      set(reference, value) {
-        writes.push([reference, clone(value)]);
+      set(reference, value, options = {}) {
+        writes.push(['set', reference, clone(value), options]);
+      },
+      delete(reference) {
+        writes.push(['delete', reference]);
       }
     };
     const result = await callback(transaction);
-    writes.forEach(([reference, value]) => {
-      reference.store.set(reference.path.join('/'), value);
+    writes.forEach(([operation, reference, value, options]) => {
+      const key = reference.path.join('/');
+      if (operation === 'delete') {
+        reference.store.delete(key);
+        return;
+      }
+      if (options && options.merge) {
+        const before = reference.store.get(key) || {};
+        reference.store.set(key, {
+          ...clone(before),
+          ...value,
+          assignments: value.assignments
+            ? { ...(before.assignments || {}), ...value.assignments }
+            : before.assignments
+        });
+        return;
+      }
+      reference.store.set(key, value);
     });
     return result;
   }
@@ -132,6 +151,7 @@ function assignment(overrides = {}) {
     departmentId: 'Translation',
     memberUid,
     duty: 'Translation #1',
+    serviceId: '2026-09-20-morning',
     serviceDate: '2026-09-20',
     serviceTime: 'morning',
     ...overrides
@@ -369,6 +389,7 @@ test('callable handlers share the same boundary for availability and normal assi
   const assigned = await handlers.assignDepartmentDuty({ auth: leader, data: assignment() });
   assert.equal(assigned.override, false);
   assert.equal(assigned.assignment.authorization, 'normal-eligible-assignment');
+  assert.equal(db.read('schedule/2026-09-20-morning').assignments['Translation #1'], 'Riley Example');
 
   const attackerChosen = await handlers.assignDepartmentDuty({
     auth: leader,
@@ -376,6 +397,32 @@ test('callable handlers share the same boundary for availability and normal assi
   });
   assert.equal(db.read('departmentAssignments/existing-record-owned-by-someone-else'), undefined);
   assert.equal(db.read(`departmentAssignments/${attackerChosen.assignment.id}`).memberUid, memberUid);
+
+  const replacementUid = 'member-uid-fictional-2';
+  await db.collection('departments').doc('Translation').collection('members').doc(replacementUid).set(profile({
+    memberUid: replacementUid,
+    uid: replacementUid,
+    memberName: 'Riley Example'
+  }));
+  const replacement = await handlers.assignDepartmentDuty({
+    auth: leader,
+    data: assignment({ memberUid: replacementUid, memberName: 'Riley Example' })
+  });
+  assert.equal(replacement.assignment.id, assigned.assignment.id);
+  assert.equal(db.read(`departmentAssignments/${assigned.assignment.id}`).memberUid, replacementUid);
+
+  await handlers.unassignDepartmentDuty({
+    auth: leader,
+    data: {
+      departmentId: 'Translation',
+      duty: 'Translation #1',
+      serviceId: '2026-09-20-morning',
+      serviceDate: '2026-09-20',
+      serviceTime: 'morning'
+    }
+  });
+  assert.equal(db.read(`departmentAssignments/${assigned.assignment.id}`), undefined);
+  assert.equal(db.read('schedule/2026-09-20-morning').assignments['Translation #1'], '');
 });
 
 test('inactive current accounts cannot use availability handlers', async () => {
