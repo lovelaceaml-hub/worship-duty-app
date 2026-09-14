@@ -1,6 +1,14 @@
 # LV Zion Worship Service — Handoff Document
 
-Last updated: 2026-09-13. Owner: Anthony (alovelace144@gmail.com).
+Last updated: 2026-09-14. Owner: Anthony (alovelace144@gmail.com).
+
+September 14 identity cleanup: live Hosting release `gallery1789369159506`
+and all 12 named Cloud Functions use the same canonical identity map. The
+production migration applied 17 targeted identity writes with no account,
+request, notification, song, or document-deletion changes. A follow-up audit
+found zero legacy identity occurrences outside `app/nameMap`, where aliases
+remain intentionally to prevent reintroduction. The active next plan is
+[PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md](PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md).
 
 Current release: The authentication and department upgrade is live. Production Hosting release `20260914032034` includes secure member login, department-scoped permissions, notification routing, Prism date fixes, Presider Home consolidation, and canonical choir-song synchronization. See [AUTH-DEPARTMENT-UPGRADE-RELEASE.md](AUTH-DEPARTMENT-UPGRADE-RELEASE.md) for release evidence and remaining risks.
 

@@ -12,6 +12,9 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   the four-choice Appearance gallery are released. The page-selection tabs now
   stay at the top on phones in every appearance, and every appearance has a top
   Appearance button.**
+  **14 September 2026: confirmed duplicate member identities were removed from
+  the live roster and schedule history. Hosting release `gallery1789369159506`
+  and all 12 named Functions now prevent those variants from returning.**
   Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
   deploy with that script), the presider song files load only for presiders, sign-in no longer
   blocks startup, and the calendar button subscribes to the live feed instead of downloading a
@@ -31,6 +34,7 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   - [Playbook](docs/PLAYBOOK.md) — day-to-day operation and AI-delegation guide
   - [User Guide](docs/USER-GUIDE.md) — simple guide to using the app
   - [Handoff](docs/HANDOFF.md) — architecture reference document
+  - [Active plan](docs/PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md) - department rosters, duty eligibility, and availability
   - [Merge Handoff](docs/MERGE-HANDOFF.md) — record of the completed song-app merge
   - [Design](docs/DESIGN.md) — the WATV-inspired service design system
   - [Features](docs/FEATURES.md) — list of feature toggles and defaults
