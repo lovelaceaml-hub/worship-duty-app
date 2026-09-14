@@ -11,10 +11,6 @@
  */
 
 const crypto = require('node:crypto');
-const {
-  DEFAULT_DUTY_DEPARTMENTS,
-  mapDutyDepartment
-} = require('../department-profile-migration.js');
 const authz = require('./department-auth.js');
 
 const HISTORY_SEED_SOURCE = 'historical-assignments';
@@ -30,6 +26,56 @@ const IDENTITY_UID_FIELDS = ['uid', 'memberUid', 'authUid', 'memberId'];
 const IDENTITY_NAME_FIELDS = ['memberName', 'name', 'member', 'displayName'];
 const IDENTITY_ALIAS_FIELDS = ['aliases', 'nameAliases', 'memberAliases', 'alias'];
 const DANGEROUS_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+// Keep the planner self-contained inside the Functions package. The previous
+// import reached one directory above `functions/`, which is present in the
+// source checkout but is not present in the deployed Functions bundle.
+const DEFAULT_DUTY_DEPARTMENTS = Object.freeze({
+  Presider: 'Worship',
+  Sermon: 'Worship',
+  'Prayer of Thanks': 'Worship',
+  'Closing Prayer': 'Worship',
+  Prayer: 'Worship',
+  'Opening Prayer': 'Worship',
+  'Usher Door': 'Usher Sisters',
+  'Usher Front': 'Usher Sisters',
+  'Usher Back': 'Usher Sisters',
+  'Usher #1': 'Usher Brothers',
+  'Usher #2': 'Usher Brothers',
+  'Lobby Security': 'Usher Brothers',
+  'Lobby Desk #1': 'Lobby',
+  'Lobby Desk #2': 'Lobby',
+  'Translation #1': 'Translation',
+  'Translation #2': 'Translation',
+  'Media Booth #1': 'Media',
+  'Media Booth #2': 'Media',
+  'Media Booth': 'Media',
+  'Parking #1': 'Parking Lot',
+  'Parking #2': 'Parking Lot',
+  'Parking #3': 'Parking Lot',
+  'Parking #4': 'Parking Lot',
+  'Parking #5': 'Parking Lot',
+  'Parking Lot': 'Parking Lot',
+  'Offering #1': 'Offering',
+  'Offering #2': 'Offering',
+  'Offering #3': 'Offering',
+  'Offering #4': 'Offering',
+  'Offering #5': 'Offering',
+  'Offering #6': 'Offering',
+  Offering: 'Offering'
+});
+
+const DUTY_PREFIX_RULES = Object.freeze([
+  [/^translation(?:\s|#|-|$)/i, 'Translation'],
+  [/^usher\s+sisters?(?:\s|#|-|$)/i, 'Usher Sisters'],
+  [/^usher\s+brothers?(?:\s|#|-|$)/i, 'Usher Brothers'],
+  [/^usher\s+#/i, 'Usher Brothers'],
+  [/^lobby(?:\s|#|-|$)/i, 'Lobby'],
+  [/^media(?:\s|#|-|$)/i, 'Media'],
+  [/^parking(?:\s+lot)?(?:\s|#|-|$)/i, 'Parking Lot'],
+  [/^offering(?:\s|#|-|$)/i, 'Offering'],
+  [/^(?:presider|sermon|opening\s+prayer|closing\s+prayer|prayer)(?:\s|#|-|$)/i, 'Worship']
+]);
 
 class IdentityResolutionError extends Error {
   constructor(message, details = {}) {
@@ -90,6 +136,15 @@ function identityKey(value) {
   return text(value, { max: 160 }).toLocaleLowerCase();
 }
 
+function mapDutyDepartment(duty, dutyDepartments = DEFAULT_DUTY_DEPARTMENTS) {
+  const normalizedDuty = text(duty, { required: true, max: 100, label: 'duty' });
+  const entries = isPlainObject(dutyDepartments) ? Object.entries(dutyDepartments) : [];
+  const exact = entries.find(([knownDuty]) => identityKey(knownDuty) === identityKey(normalizedDuty));
+  if (exact) return text(exact[1], { required: true, max: 100, label: 'duty department' });
+  const prefix = DUTY_PREFIX_RULES.find(([rule]) => rule.test(normalizedDuty));
+  return prefix ? prefix[1] : '';
+}
+
 function compareText(left, right) {
   return String(left).localeCompare(String(right), undefined, { sensitivity: 'base' });
 }
@@ -127,6 +182,228 @@ function fingerprint(value) {
     .digest('hex');
 }
 
+function hasDocumentValue(value) {
+  return value !== undefined && value !== null;
+}
+
+function snapshotValue(snapshot) {
+  if (snapshot && typeof snapshot === 'object' &&
+      typeof snapshot.exists === 'boolean' && typeof snapshot.data === 'function') {
+    return snapshot.exists ? snapshot.data() : null;
+  }
+  return hasDocumentValue(snapshot) ? snapshot : null;
+}
+
+function matchesPrecondition(value, precondition) {
+  if (!precondition || typeof precondition !== 'object' ||
+      typeof precondition.exists !== 'boolean' || typeof precondition.fingerprint !== 'string') {
+    throw new TypeError('a write precondition with exists and fingerprint is required');
+  }
+  const exists = hasDocumentValue(value);
+  return exists === precondition.exists &&
+    fingerprint(exists ? value : null) === precondition.fingerprint;
+}
+
+function preconditionConflict(path, precondition, current, phase = 'write') {
+  const error = new Error(`${phase === 'rollback' ? 'Rollback' : 'Write'} precondition failed for ${path}`);
+  error.code = phase === 'rollback' ? 'rollback-conflict' : 'write-conflict';
+  error.path = path;
+  error.expected = clone(precondition);
+  error.actual = {
+    exists: hasDocumentValue(current),
+    fingerprint: fingerprint(hasDocumentValue(current) ? current : null)
+  };
+  return error;
+}
+
+function conditionalResultRejected(result) {
+  return result === false || !!(result && typeof result === 'object' &&
+    (result.applied === false || result.ok === false));
+}
+
+/**
+ * Apply one operation through an atomic adapter boundary.
+ *
+ * An executable adapter must provide either runTransaction(callback), where
+ * the callback receives get/set/delete methods over the same transaction, or
+ * setIfUnchanged/deleteIfUnchanged methods. A read followed by an ordinary
+ * set/delete is deliberately not accepted because it can overwrite a human
+ * edit made after planning.
+ */
+async function applyConditionalOperation(adapter, operation, options = {}) {
+  const phase = options.phase || 'write';
+  const path = text(operation && operation.path, { required: true, max: 240, label: 'write path' });
+  const normalized = {
+    ...operation,
+    path,
+    precondition: clone(operation && operation.precondition)
+  };
+  if (!normalized.precondition || typeof normalized.precondition !== 'object') {
+    throw new TypeError(`a precondition is required for ${path}`);
+  }
+  const expected = normalized.precondition;
+  if (typeof adapter?.runTransaction === 'function') {
+    const result = await adapter.runTransaction(async transaction => {
+      if (!transaction || typeof transaction.get !== 'function') {
+        throw new TypeError('transaction adapter must provide get');
+      }
+      const current = snapshotValue(await transaction.get(path));
+      if (!matchesPrecondition(current, expected)) {
+        throw preconditionConflict(path, expected, current, phase);
+      }
+      if (normalized.operation === 'delete') {
+        if (typeof transaction.delete !== 'function') {
+          throw new TypeError('transaction adapter must provide delete');
+        }
+        await transaction.delete(path);
+      } else {
+        if (typeof transaction.set !== 'function') {
+          throw new TypeError('transaction adapter must provide set');
+        }
+        await transaction.set(path, clone(normalized.data ?? normalized.after));
+      }
+    });
+    if (conditionalResultRejected(result)) {
+      throw preconditionConflict(path, expected, null, phase);
+    }
+    return result;
+  }
+
+  if (normalized.operation === 'delete' && typeof adapter?.deleteIfUnchanged === 'function') {
+    const result = await adapter.deleteIfUnchanged(path, clone(expected), { phase });
+    if (conditionalResultRejected(result)) throw preconditionConflict(path, expected, null, phase);
+    return result;
+  }
+  if (normalized.operation !== 'delete' && typeof adapter?.setIfUnchanged === 'function') {
+    const result = await adapter.setIfUnchanged(
+      path,
+      clone(expected),
+      clone(normalized.data ?? normalized.after),
+      { phase }
+    );
+    if (conditionalResultRejected(result)) throw preconditionConflict(path, expected, null, phase);
+    return result;
+  }
+  throw new TypeError(
+    'an executable adapter must provide runTransaction or conditional write methods'
+  );
+}
+
+function rollbackOperationFor(write) {
+  const rollback = clone(write.rollback || {});
+  if (!rollback.path) rollback.path = write.path;
+  if (!['set', 'delete'].includes(rollback.operation)) {
+    throw new TypeError(`unsupported rollback operation for ${rollback.path || write.path}`);
+  }
+  if (!rollback.precondition) {
+    rollback.precondition = {
+      exists: true,
+      fingerprint: fingerprint(write.after)
+    };
+  }
+  return rollback;
+}
+
+function serializeRollbackReport(report, seen = new Set()) {
+  if (!report || typeof report !== 'object') return report;
+  if (seen.has(report)) return { message: '[circular rollback report]' };
+  seen.add(report);
+  const output = {};
+  Object.keys(report).forEach(key => {
+    if (key === 'errors' && Array.isArray(report.errors)) {
+      output.errors = report.errors.map(item => {
+        if (!item || typeof item !== 'object') return { error: String(item) };
+        const entry = {};
+        Object.keys(item).forEach(entryKey => {
+          if (entryKey === 'nestedRollback') {
+            entry[entryKey] = serializeRollbackReport(item[entryKey], seen);
+          } else if (entryKey === 'error' && item[entryKey] && typeof item[entryKey] === 'object') {
+            entry[entryKey] = serializeError(item[entryKey], seen);
+          } else if (entryKey === 'details' && item[entryKey] && typeof item[entryKey] === 'object') {
+            entry[entryKey] = serializeError(item[entryKey], seen);
+          } else {
+            entry[entryKey] = clone(item[entryKey]);
+          }
+        });
+        return entry;
+      });
+    } else {
+      output[key] = clone(report[key]);
+    }
+  });
+  return output;
+}
+
+function serializeError(error, seen = new Set()) {
+  if (!error || typeof error !== 'object') return { message: String(error) };
+  if (seen.has(error)) return { message: '[circular error]' };
+  seen.add(error);
+  const output = {
+    name: error.name || 'Error',
+    message: String(error.message || error)
+  };
+  if (error.code) output.code = error.code;
+  if (error.path) output.path = error.path;
+  if (error.reason) output.reason = error.reason;
+  if (error.rollback) output.rollback = serializeRollbackReport(error.rollback, seen);
+  if (error.cause) output.cause = serializeError(error.cause, seen);
+  return output;
+}
+
+async function rollbackAppliedWrites(applied, options = {}) {
+  const errors = [];
+  let completed = 0;
+  const entries = Array.isArray(applied) ? applied : [];
+  for (const entry of entries.slice().reverse()) {
+    let operation;
+    try {
+      operation = rollbackOperationFor(entry.write || entry);
+    } catch (error) {
+      const details = serializeError(error);
+      errors.push({
+        path: entry && entry.write && entry.write.path,
+        operation: entry && entry.write && entry.write.rollback && entry.write.rollback.operation,
+        error: details.message,
+        code: details.code,
+        details,
+        nestedRollback: details.rollback || null
+      });
+      continue;
+    }
+    try {
+      await applyConditionalOperation(entry.adapter, operation, { phase: options.phase || 'rollback' });
+      completed += 1;
+    } catch (error) {
+      const details = serializeError(error);
+      errors.push({
+        path: operation.path,
+        operation: operation.operation,
+        error: details.message,
+        code: details.code,
+        details,
+        nestedRollback: details.rollback || null
+      });
+    }
+  }
+  return {
+    attempted: entries.length,
+    completed,
+    ok: errors.length === 0,
+    errors
+  };
+}
+
+function mergeRollbackReports(...reports) {
+  const present = reports.filter(report => report && typeof report === 'object');
+  if (!present.length) return { attempted: 0, completed: 0, ok: true, errors: [] };
+  return {
+    attempted: present.reduce((total, report) => total + Number(report.attempted || 0), 0),
+    completed: present.reduce((total, report) => total + Number(report.completed || 0), 0),
+    ok: present.every(report => report.ok !== false && !(report.errors && report.errors.length)),
+    errors: present.flatMap(report => Array.isArray(report.errors) ? report.errors : [])
+  };
+}
+
 function normalizeAliases(value) {
   if (value == null) return [];
   const values = Array.isArray(value) ? value : [value];
@@ -139,6 +416,34 @@ function firstField(value, fields) {
     if (value[field] != null && value[field] !== '') return value[field];
   }
   return '';
+}
+
+function suppliedUidAliases(value, label = 'identity') {
+  if (!isPlainObject(value)) return '';
+  const supplied = [];
+  IDENTITY_UID_FIELDS.forEach(field => {
+    if (value[field] == null || value[field] === '') return;
+    supplied.push({
+      field,
+      value: uid(value[field], `${label}.${field}`)
+    });
+  });
+  if (!supplied.length) return '';
+  const canonical = supplied[0].value;
+  const conflict = supplied.find(item => item.value !== canonical);
+  if (conflict) {
+    throw new IdentityResolutionError(
+      `Conflicting member UID aliases were supplied: ${supplied.map(item => item.field).join(', ')}.`,
+      {
+        reason: 'uid-alias-conflict',
+        aliases: supplied.reduce((output, item) => {
+          output[item.field] = item.value;
+          return output;
+        }, {})
+      }
+    );
+  }
+  return canonical;
 }
 
 function addIdentityRecord(state, rawUid, rawName, rawAliases, source = 'identity') {
@@ -202,7 +507,7 @@ function consumeIdentityDirectory(state, value, source = 'identities') {
     value.forEach((item, index) => {
       if (typeof item === 'string') return;
       if (!isPlainObject(item)) throw new TypeError(`${source}[${index}] must be an object`);
-      const rawUid = firstField(item, IDENTITY_UID_FIELDS);
+      const rawUid = suppliedUidAliases(item, `${source}[${index}]`);
       if (!rawUid) throw new TypeError(`${source}[${index}] is missing uid`);
       const name = firstField(item, IDENTITY_NAME_FIELDS);
       const aliases = firstField(item, IDENTITY_ALIAS_FIELDS);
@@ -221,7 +526,7 @@ function consumeIdentityDirectory(state, value, source = 'identities') {
       return;
     }
     if (!isPlainObject(item)) throw new TypeError(`${source}.${key} must be an object`);
-    const rawUid = firstField(item, IDENTITY_UID_FIELDS) || key;
+    const rawUid = suppliedUidAliases(item, `${source}.${key}`) || key;
     const name = firstField(item, IDENTITY_NAME_FIELDS);
     const aliases = firstField(item, IDENTITY_ALIAS_FIELDS);
     addIdentityRecord(state, rawUid, name, aliases, `${source}.${key}`);
@@ -266,7 +571,7 @@ function createIdentityResolver(options = {}) {
     size: records.size,
     identities: Object.freeze(Array.from(records.values()).sort((left, right) => compareText(left.uid, right.uid))),
     resolve(input = {}) {
-      const rawUid = firstField(input, IDENTITY_UID_FIELDS);
+      const rawUid = suppliedUidAliases(input, 'identity');
       const rawName = firstField(input, IDENTITY_NAME_FIELDS);
       const explicitUid = rawUid ? uid(rawUid, 'memberUid') : '';
       const suppliedName = rawName ? text(rawName, { max: 160, label: 'member name' }) : '';
@@ -480,15 +785,18 @@ function hasAuthoritativeDecision(profile, field, options = {}) {
 function profileIdentity(profile) {
   if (!isPlainObject(profile)) return null;
   const rawDepartment = profile.departmentId ?? profile.department;
-  const rawUid = profile.memberUid ?? profile.uid;
-  if (rawDepartment == null || rawUid == null) return null;
+  let rawUid;
+  try {
+    rawUid = suppliedUidAliases(profile, 'profile');
+  } catch (_error) {
+    return null;
+  }
+  if (rawDepartment == null || rawUid == null || rawUid === '') return null;
   try {
     const departmentId = department(rawDepartment);
     const memberUid = uid(rawUid);
     if (profile.departmentId != null && profile.department != null &&
         String(profile.departmentId) !== String(profile.department)) return null;
-    if (profile.memberUid != null && profile.uid != null &&
-        String(profile.memberUid) !== String(profile.uid)) return null;
     return { departmentId, memberUid };
   } catch (_error) {
     return null;
@@ -928,8 +1236,17 @@ function planProfileWrites(existingProfiles, seedPlan, options = {}) {
         fingerprint: fingerprint(before)
       },
       rollback: current
-        ? { operation: 'set', path, data: before }
-        : { operation: 'delete', path }
+        ? {
+            operation: 'set',
+            path,
+            data: before,
+            precondition: { exists: true, fingerprint: fingerprint(next) }
+          }
+        : {
+            operation: 'delete',
+            path,
+            precondition: { exists: true, fingerprint: fingerprint(next) }
+          }
     });
   });
   const rollbackPlan = writes.slice().reverse().map(write => clone(write.rollback));
@@ -1026,40 +1343,35 @@ async function applyProfileWritePlan(plan, adapter, options = {}) {
       rollbackPlan: clone(plan.rollbackPlan || [])
     };
   }
-  if (!adapter || typeof adapter.read !== 'function' || typeof adapter.set !== 'function' ||
-      typeof adapter.delete !== 'function') {
-    throw new TypeError('an executable adapter must provide read, set, and delete methods');
+  // Plan preconditions are only safe when the adapter evaluates and applies
+  // them atomically. Do not accept a read followed by an ordinary write.
+  const needsConditionalDelete = plan.writes.some(write =>
+    write && write.rollback && write.rollback.operation === 'delete'
+  );
+  if (!adapter || (typeof adapter.runTransaction !== 'function' &&
+      (typeof adapter.setIfUnchanged !== 'function' ||
+       (needsConditionalDelete && typeof adapter.deleteIfUnchanged !== 'function')))) {
+    throw new TypeError(
+      'an executable adapter must provide runTransaction or conditional write methods'
+    );
   }
   const applied = [];
   try {
     for (const write of plan.writes) {
-      const current = await adapter.read(write.path);
-      const currentExists = current !== undefined && current !== null;
-      if (currentExists !== write.precondition.exists ||
-          fingerprint(currentExists ? current : null) !== write.precondition.fingerprint) {
-        const error = new Error(`Write precondition failed for ${write.path}`);
-        error.code = 'write-conflict';
-        throw error;
-      }
-      await adapter.set(write.path, clone(write.after));
+      await applyConditionalOperation(adapter, {
+        operation: 'set',
+        path: write.path,
+        data: write.after,
+        precondition: write.precondition
+      });
       applied.push(write);
     }
     return { applied: true, mode: 'execute', writesAttempted: applied.length, rolledBack: false };
   } catch (error) {
-    const rollbackErrors = [];
-    for (const write of applied.slice().reverse()) {
-      try {
-        if (write.rollback.operation === 'delete') await adapter.delete(write.path);
-        else await adapter.set(write.path, clone(write.rollback.data));
-      } catch (rollbackError) {
-        rollbackErrors.push({ path: write.path, error: String(rollbackError.message || rollbackError) });
-      }
-    }
-    error.rollback = {
-      attempted: applied.length,
-      completed: applied.length - rollbackErrors.length,
-      errors: rollbackErrors
-    };
+    error.rollback = await rollbackAppliedWrites(
+      applied.map(write => ({ adapter, write })),
+      { phase: 'rollback' }
+    );
     throw error;
   }
 }
@@ -1068,9 +1380,13 @@ module.exports = {
   HISTORY_SEED_SOURCE,
   PROFILE_FIELDS,
   DEFAULT_DUTY_DEPARTMENTS,
+  mapDutyDepartment,
   IdentityResolutionError,
   stableStringify,
   fingerprint,
+  applyConditionalOperation,
+  rollbackAppliedWrites,
+  mergeRollbackReports,
   createIdentityResolver,
   normalizeIdentityResolver: createIdentityResolver,
   resolveMemberIdentity,

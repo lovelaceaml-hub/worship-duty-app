@@ -7,6 +7,33 @@ const sheetProtection = require('../sheet-protection.js');
 
 const identity = [{ uid: 'uid-avery', memberName: 'Avery Example' }];
 
+function clone(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function conditionalStore(initial = {}) {
+  const values = new Map(Object.entries(initial).map(([key, value]) => [key, clone(value)]));
+  return {
+    values,
+    async setIfUnchanged(path, precondition, value) {
+      const current = values.has(path) ? values.get(path) : null;
+      const exists = current !== null && current !== undefined;
+      if (exists !== precondition.exists ||
+          seed.fingerprint(exists ? current : null) !== precondition.fingerprint) return false;
+      values.set(path, clone(value));
+      return true;
+    },
+    async deleteIfUnchanged(path, precondition) {
+      const current = values.has(path) ? values.get(path) : null;
+      const exists = current !== null && current !== undefined;
+      if (exists !== precondition.exists ||
+          seed.fingerprint(exists ? current : null) !== precondition.fingerprint) return false;
+      values.delete(path);
+      return true;
+    }
+  };
+}
+
 test('sheet sync keeps existing per-duty merge behavior while planning protected profile evidence', () => {
   const service = {
     date: '2026-09-06',
@@ -63,6 +90,63 @@ test('sheet sync plan application is disabled unless explicitly enabled', async 
   assert.equal(result.applied, false);
   assert.equal(result.writesAttempted, 0);
   assert.equal(writes, 0);
+});
+
+test('sheet sync execution uses conditional writes and preserves a concurrent schedule edit', async () => {
+  const service = {
+    date: '2026-09-06',
+    service: 'Morning',
+    time: '09:00',
+    assignments: { Presider: 'Avery Example' }
+  };
+  const id = '2026-09-06_morning';
+  const humanEdit = {
+    date: service.date,
+    service: service.service,
+    time: service.time,
+    assignments: { Presider: 'Human leader' }
+  };
+  const plan = sheetProtection.planSheetSync({
+    services: [service],
+    identities: identity,
+    existingSchedules: { [id]: { ...humanEdit, assignments: { Presider: 'Former' } } },
+    existingProfiles: []
+  }, { seededAt: 100, seededBy: 'sheet-sync' });
+  const adapter = conditionalStore({ ['schedule/' + id]: humanEdit });
+
+  await assert.rejects(
+    () => sheetProtection.applySheetSyncPlan(plan, {
+      schedule: adapter,
+      profiles: adapter
+    }, { execute: true }),
+    error => error.code === 'write-conflict' && error.rollback.attempted === 0
+  );
+  assert.deepEqual(adapter.values.get('schedule/' + id), humanEdit);
+});
+
+test('sheet sync applies schedule and profile writes through the conditional adapter', async () => {
+  const service = {
+    date: '2026-09-06',
+    service: 'Morning',
+    time: '09:00',
+    assignments: { Presider: 'Avery Example' }
+  };
+  const plan = sheetProtection.planSheetSync({
+    services: [service],
+    identities: identity,
+    existingSchedules: {},
+    existingProfiles: []
+  }, { seededAt: 100, seededBy: 'sheet-sync' });
+  const adapter = conditionalStore();
+  const result = await sheetProtection.applySheetSyncPlan(plan, {
+    schedule: adapter,
+    profiles: adapter
+  }, { execute: true });
+
+  assert.equal(result.applied, true);
+  assert.equal(result.writesAttempted, 2);
+  assert.ok(adapter.values.has('schedule/2026-09-06_morning'));
+  assert.ok(adapter.values.has('departments/Worship/members/uid-avery'));
 });
 
 test('imported profiles preserve manual decisions while adding evidence', () => {

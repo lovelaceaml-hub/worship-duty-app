@@ -43,7 +43,11 @@ function scheduleWritePlan(sheetPlan, existingById) {
       before: null,
       after: clone(create.svc),
       precondition: { exists: false, fingerprint: seed.fingerprint(null) },
-      rollback: { operation: 'delete', path }
+      rollback: {
+        operation: 'delete',
+        path,
+        precondition: { exists: true, fingerprint: seed.fingerprint(create.svc) }
+      }
     });
   });
   (sheetPlan.updates || []).forEach(update => {
@@ -55,7 +59,15 @@ function scheduleWritePlan(sheetPlan, existingById) {
       before,
       after: mergedScheduleDocument(before, update.patch),
       precondition: { exists: true, fingerprint: seed.fingerprint(before) },
-      rollback: { operation: 'set', path, data: before }
+      rollback: {
+        operation: 'set',
+        path,
+        data: before,
+        precondition: {
+          exists: true,
+          fingerprint: seed.fingerprint(mergedScheduleDocument(before, update.patch))
+        }
+      }
     });
   });
   return writes;
@@ -127,21 +139,30 @@ async function applySheetSyncPlan(plan, adapters, options = {}) {
       rollbackPlan: clone(plan.rollbackPlan || [])
     };
   }
+  // Executable adapters must expose Firestore-like transaction semantics or
+  // an atomic compare-and-set/delete boundary. Read-then-write adapters are
+  // intentionally rejected so a human edit after planning cannot be lost.
   const scheduleAdapter = adapters && adapters.schedule;
   const profileAdapter = adapters && adapters.profiles;
-  if (!scheduleAdapter || typeof scheduleAdapter.read !== 'function' ||
-      typeof scheduleAdapter.set !== 'function' || typeof scheduleAdapter.delete !== 'function') {
-    throw new TypeError('an executable schedule adapter is required');
+  const scheduleNeedsConditionalDelete = (plan.schedule.writePlan || []).some(write =>
+    write && write.rollback && write.rollback.operation === 'delete'
+  );
+  if (!scheduleAdapter || (typeof scheduleAdapter.runTransaction !== 'function' &&
+      (typeof scheduleAdapter.setIfUnchanged !== 'function' ||
+       (scheduleNeedsConditionalDelete && typeof scheduleAdapter.deleteIfUnchanged !== 'function')))) {
+    throw new TypeError(
+      'an executable schedule adapter must provide runTransaction or conditional write methods'
+    );
   }
   const applied = [];
   try {
     for (const write of plan.schedule.writePlan) {
-      const current = await scheduleAdapter.read(write.path);
-      if ((current !== undefined && current !== null) !== write.precondition.exists ||
-          seed.fingerprint(current == null ? null : current) !== write.precondition.fingerprint) {
-        throw new Error(`Write precondition failed for ${write.path}`);
-      }
-      await scheduleAdapter.set(write.path, clone(write.after));
+      await seed.applyConditionalOperation(scheduleAdapter, {
+        operation: 'set',
+        path: write.path,
+        data: write.after,
+        precondition: write.precondition
+      });
       applied.push({ adapter: scheduleAdapter, write });
     }
     if (plan.profiles.writes.length) {
@@ -151,20 +172,8 @@ async function applySheetSyncPlan(plan, adapters, options = {}) {
     }
     return { applied: true, mode: 'execute', writesAttempted: applied.length, rolledBack: false };
   } catch (error) {
-    const rollbackErrors = [];
-    for (const entry of applied.slice().reverse()) {
-      try {
-        if (entry.write.rollback.operation === 'delete') await entry.adapter.delete(entry.write.path);
-        else await entry.adapter.set(entry.write.path, clone(entry.write.rollback.data));
-      } catch (rollbackError) {
-        rollbackErrors.push({ path: entry.write.path, error: String(rollbackError.message || rollbackError) });
-      }
-    }
-    error.rollback = {
-      attempted: applied.length,
-      completed: applied.length - rollbackErrors.length,
-      errors: rollbackErrors
-    };
+    const scheduleRollback = await seed.rollbackAppliedWrites(applied, { phase: 'rollback' });
+    error.rollback = seed.mergeRollbackReports(error.rollback, scheduleRollback);
     throw error;
   }
 }
