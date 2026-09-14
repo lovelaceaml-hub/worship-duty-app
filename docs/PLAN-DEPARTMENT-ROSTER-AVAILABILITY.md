@@ -1,15 +1,12 @@
 # Department Roster, Duty Eligibility, and Availability
 
-Status: Product interview in progress
+Status: Product decisions complete, awaiting implementation-mode selection
 
 Live baseline: `1fc07f4`
 
-## Setup
+Runner: coordinator for Parallel mode, fresh chat for Steps or Full project mode
 
-- Controller and writer: Sol, solo implementation
-- Model and effort: current Sol controller, high reasoning
-- Reviewer: independent security review for authorization and migration changes, plus controller UI review
-- Release: preview and production only after the feature journey, migration, permissions, and all four appearances pass
+Release: preview and production only after the feature journey, migration, permissions, and all four appearances pass
 
 ## Desired outcome
 
@@ -17,7 +14,7 @@ Department leaders see only the departments they lead. Each department shows its
 
 Historical assignments seed the first roster and duty eligibility. Leaders remain authoritative after that seed, so a later schedule import must not silently undo their changes.
 
-Availability uses both recurring service-time choices and date-specific exceptions. The remaining ownership question is whether members can update their own availability in addition to department leaders.
+Availability uses both recurring service-time choices and date-specific exceptions. Members and their department leaders can update one shared availability record. Every change records who changed it and when.
 
 ## Primary journey
 
@@ -29,14 +26,82 @@ Availability uses both recurring service-time choices and date-specific exceptio
 
 ## Planned sections
 
-1. Finish product decisions and freeze the department-management journey.
-2. Define the migration-safe department membership, duty eligibility, schedulability, and availability model.
-3. Build a clickable phone and desktop prototype inside the existing approved appearance system.
-4. Implement server authorization and Firestore rules for leader-scoped edits.
-5. Implement the shared runtime and all four appearance adapters.
-6. Seed profiles from schedule history without overwriting later leader decisions.
-7. Verify active/inactive filtering, duty suggestions, availability filtering, administrative override, accessibility, and mobile behavior.
-8. Review, migrate with a dry run, deploy named resources, and verify production.
+### Section 0: Adversarial plan critique
+
+Setup: gpt-5.6-sol, high effort, Lane: Codex, Review: none, Orchestration: solo read-only critic
+Worktree: read-only against `/Users/anthony/Projects/worship-duty-app`
+Depends on: none
+Agents: none
+Reviewers: none, this section is the critic
+Hygiene: none
+
+Argue against the schema, permissions, migration, availability ownership, override behavior, and release plan. Record accepted findings before final integration without blocking Sections 1 and 2.
+
+### Section 1: Department profile model and migration planner
+
+Setup: gpt-5.6-luna, max effort, Lane: Codex, Review: controller + independent, Orchestration: solo writer
+Worktree: `/Users/anthony/Projects/worship-duty-app-worktrees/department-model`
+Depends on: none
+Agents: none
+Reviewers: controller=gpt-5.6-sol high; independent=Claude Sonnet 5 high
+Hygiene: Haiku 4.5 low before review
+
+Own new pure department-profile and migration modules plus direct tests. Define active status, eligible duties, current schedulability, recurring service-time availability, date-specific exceptions, change attribution, and history-seed provenance. Do not edit shared runtime entrypoints.
+
+### Section 2: Clickable department journey prototype
+
+Setup: gpt-5.6-luna, high effort, Lane: Codex, Review: controller, Orchestration: solo writer
+Worktree: `/Users/anthony/Projects/worship-duty-app-worktrees/department-prototype`
+Depends on: none
+Agents: none
+Reviewers: controller=gpt-5.6-sol high; independent=none
+Hygiene: Haiku 4.5 low before review
+
+Own a privacy-safe phone and desktop prototype under `docs/design/prototype/department-management/`. Preserve the four existing appearances, top navigation, and Appearance control. Cover department list, leader list, active and inactive roster, member detail, duty eligibility, recurring availability, date exceptions, loading, empty, error, success, keyboard, and reduced-motion states. Anthony approves this prototype before Section 4 changes production UI.
+
+### Section 3: Authorization and Firestore boundary
+
+Setup: gpt-5.6-luna, max effort, Lane: Codex, Review: controller + independent, Orchestration: solo writer
+Worktree: `/Users/anthony/Projects/worship-duty-app-worktrees/department-auth`
+Depends on: Section 1
+Agents: none
+Reviewers: controller=gpt-5.6-sol high; independent=Claude Sonnet 5 high
+Hygiene: Haiku 4.5 low before review
+
+Own server permission modules, named callable handlers, Firestore rules, and focused emulator or pure authorization tests. A leader may edit only a department they lead. Members may edit only their own shared availability. Neither path may grant roles or cross-department access. Administrators retain recovery controls.
+
+### Section 4: Shared runtime and four appearance adapters
+
+Setup: gpt-5.6-luna, max effort, Lane: Codex, Review: controller, Orchestration: solo integration writer
+Worktree: `/Users/anthony/Projects/worship-duty-app-worktrees/department-runtime`
+Depends on: Sections 1, 2, and 3
+Agents: none
+Reviewers: controller=gpt-5.6-sol high; independent=none
+Hygiene: Haiku 4.5 low before review
+
+Own `app.js`, shared integration points, and the four appearance adapters. Build the approved journey and make duty assignment choices prefer active, eligible, schedulable, available members. Keep a clearly labeled administrator override that never silently changes a member profile.
+
+### Section 5: History seed and sheet-sync protection
+
+Setup: gpt-5.6-luna, max effort, Lane: Codex, Review: controller + independent, Orchestration: solo writer
+Worktree: `/Users/anthony/Projects/worship-duty-app-worktrees/department-seed`
+Depends on: Sections 1 and 3
+Agents: none
+Reviewers: controller=gpt-5.6-sol high; independent=Claude Sonnet 5 high
+Hygiene: Haiku 4.5 low before review
+
+Own the idempotent history-seed and import protection. Existing schedule assignments create initial department membership and suggested eligible duties. Once a leader or member edits a profile, later sheet sync may add evidence but must not reactivate, re-enable, or overwrite that decision. Provide a read-only production dry run and rollback-safe write plan.
+
+### Section 6: Integration, verification, migration, and release
+
+Setup: gpt-5.6-sol, xhigh effort, Lane: Codex, Review: controller + independent, Orchestration: solo controller
+Worktree: `/Users/anthony/Projects/worship-duty-app`
+Depends on: Sections 0 through 5
+Agents: none
+Reviewers: controller=gpt-5.6-sol xhigh; independent=Claude Opus 5 high
+Hygiene: Haiku 4.5 low before review
+
+Land the reviewed sections sequentially, resolve accepted critique findings, run complete functional and security checks, verify phone and desktop behavior in all four appearances, build a production backup and migration dry run, obtain Anthony's release approval, deploy only named resources, apply the migration, verify real leader/member/admin journeys, update documentation, and push the final receipts.
 
 ## Completion evidence
 
@@ -48,8 +113,11 @@ Availability uses both recurring service-time choices and date-specific exceptio
 - Members and leaders cannot grant themselves elevated roles.
 - Administrators retain recovery and override controls.
 - Existing schedules, member login, requests, notifications, Presider, and all four appearances remain intact.
+- A shared availability change shows the last editor and timestamp, regardless of whether a member or department leader made it.
 
 ## Build log
 
 - 2026-09-14: Anthony selected recurring service-time availability plus date-specific exceptions.
-- 2026-09-14: Recorded the requested leader-only configuration list, department-scoped active and inactive rosters, history-seeded duty eligibility, schedulability, and availability editing. Product ownership of availability remains to be confirmed before implementation.
+- 2026-09-14: Recorded the requested leader-only configuration list, department-scoped active and inactive rosters, history-seeded duty eligibility, schedulability, and availability editing.
+- 2026-09-14: Anthony selected shared availability ownership. Members and their department leaders may update one record, with editor and timestamp attribution.
+- 2026-09-14: Finalized six implementation sections plus the read-only Section 0 critic. Sections 1 and 2 are independent and make Parallel mode the recommended execution choice. No implementation starts in this planning chat.
