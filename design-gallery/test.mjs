@@ -314,7 +314,9 @@ async function changeForcedPin(page) {
 }
 
 async function choose(page, mode) {
-  await page.locator('[data-design-open]:visible').first().click();
+  if (!await page.locator('.wd-design-dialog[open]').count()) {
+    await page.locator('[data-design-open]:visible').first().click();
+  }
   await page.locator(`.wd-design-dialog[open] [data-design-select="${mode}"]`).click();
   await page.waitForFunction(expected => window.WorshipDesign?.getMode() === expected, mode);
   await page.waitForTimeout(180);
@@ -375,8 +377,6 @@ try {
     check(mode + ' keeps the same authenticated member', await page.evaluate(() => localStorage.getItem('wds-me')), 'B. Anthony');
     check(mode + ' appearance switch creates no domain writes', await domainWrites(page), writesBeforeSwitch);
     check(mode + ' keeps one Firebase app', await page.evaluate(() => window.__apps), 1);
-    check(mode + ' keeps the canonical choir song visible', await page.locator('body').innerText()
-      .then(text => text.includes('#311 I Repent of My Sin')));
     if (mode === 'classic') check('Original shell mounted', await page.locator('.wrap header.app').count(), 1);
     if (mode === 'prism') check('Prism shell mounted', await page.locator('#wd-prism-root').count(), 1);
     if (mode === 'navy') check('Navy shell remains mounted', await page.locator('.wrap header.app').count(), 1);
@@ -440,7 +440,7 @@ try {
 
   await choose(page, 'prism');
   const prismMonth = page.locator('[data-aurora="month"]').first();
-  await page.waitForSelector('[data-aurora="day"][data-date="2026-07-01"]');
+  await page.waitForSelector('[data-prism="date"][data-date="2026-07-01"]');
   const prismMonthBefore = await page.locator('.prism-month h2').innerText();
   await page.locator('[data-aurora="month"][data-step="1"]').click();
   await page.waitForTimeout(120);
@@ -449,11 +449,16 @@ try {
   await page.locator('[data-aurora="month"][data-step="-1"]').click();
   await page.waitForTimeout(120);
   check('Prism previous-month control restores the displayed month', await page.locator('.prism-month h2').innerText(), prismMonthBefore);
-  await page.locator('[data-aurora="day"][data-date="2026-07-01"]').click();
+  await page.locator('[data-prism="date"][data-date="2026-07-01"]').click();
   await page.waitForTimeout(120);
-  check('Prism day control selects the choir-song service', await page.locator('[data-aurora="day"][data-date="2026-07-01"]').getAttribute('aria-pressed'), 'true');
+  check('Prism day control selects the choir-song service', await page.locator('[data-prism="date"][data-date="2026-07-01"]').getAttribute('aria-pressed'), 'true');
   check('Prism renders the canonical choir song', await page.locator('body').innerText().then(text => text.includes('#311 I Repent of My Sin')));
   check('Prism schedule has a month control', await prismMonth.count(), 1);
+  for (const mode of ['aurora', 'navy', 'classic']) {
+    await choose(page, mode);
+    check(mode + ' renders the same canonical choir song', await page.locator('body').innerText()
+      .then(text => text.includes('#311 I Repent of My Sin')));
+  }
 
   for (const mode of ['classic', 'prism', 'navy', 'aurora']) {
     await choose(page, mode);
