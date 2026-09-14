@@ -194,10 +194,11 @@ renderManage = function () {
     }
     body = dom.innerHTML;
   } else body = '<div class="aw-' + ui.sub + '-content">' + dom.innerHTML + '</div>';
-  const up = upcomingServices();
+  const up = upcomingServices().filter(manageServiceVisible);
   const conflicts = up.reduce((n,s) => n + activeConflicts(s).length,0);
+  const pending = state.requests.filter(request => request.status === 'pending' && manageRequestVisible(request)).length;
   const copy = awManageCopy[ui.sub] || awManageCopy.services;
-  return '<div class="aw-manage" data-aw-workspace="manage" data-manage-section="' + esc(ui.sub) + '"><div class="aw-stats aw-manage-stats">' + awStat(up.length,'Upcoming services','schedule') + awStat(conflicts,'Unresolved doubles','people') + awStat(pendingRequestsCount(),'Pending requests','my') + '</div>' + navHTML + awLabel('COORDINATOR TOOLS',copy[0],copy[1]) + body + '</div>';
+  return '<div class="aw-manage" data-aw-workspace="manage" data-manage-section="' + esc(ui.sub) + '"><div class="aw-stats aw-manage-stats">' + awStat(up.length,'Upcoming services','schedule') + awStat(conflicts,'Unresolved doubles','people') + awStat(pending,'Pending requests','my') + '</div>' + navHTML + awLabel('COORDINATOR TOOLS',copy[0],copy[1]) + body + '</div>';
 };
 
 const awDecorateBase = decorate;

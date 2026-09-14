@@ -1,11 +1,11 @@
 ---
 lane: LR
 title: Gallery runtime
-state: integrated
+state: corrected
 model: executor_luna high
 runner: /root/gallery_runtime
 worktree: /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-runtime
-review: fresh Luna peer
+review: findings corrected by Sol
 depends_on: LV sources available
 updated: 2026-09-14T03:51Z
 ---
@@ -22,4 +22,4 @@ Commit `26324aefbdd50667b3fe41f2a2291e4d99766ef7`, integrated as `c72b4b2`. Four
 
 ## Review
 
-(coordinator appends)
+Luna peer found missing `permissions.js` staging and global visual Manage counters. Sol corrected both and reran the full browser suite successfully. No second Luna review was added because the integrated behavior test directly covers the corrected contracts and Anthony requested minimum review.

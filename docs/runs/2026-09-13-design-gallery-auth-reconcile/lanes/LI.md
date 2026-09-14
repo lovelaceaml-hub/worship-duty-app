@@ -1,12 +1,12 @@
 ---
 lane: LI
 title: Integration and release
-state: planned
-model: pending
-runner: pending
-worktree: pending
-review: pending
-depends_on: pending
+state: test-deployed
+model: Sol
+runner: /root
+worktree: /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-reconcile
+review: Opus pending after Anthony test confirmation
+depends_on: LV, LR, LT
 updated: 2026-09-14T03:51Z
 ---
 
@@ -18,7 +18,7 @@ updated: 2026-09-14T03:51Z
 
 ## Result
 
-(helper appends its result summary, changed files, verification evidence, limitations)
+Integrated all three lanes, corrected peer findings, passed the full Playwright gallery suite, and published Hosting only to `https://lv-zion-duties-test.web.app`. Production is unchanged pending Anthony confirmation and the one requested Opus completion review.
 
 ## Review
 

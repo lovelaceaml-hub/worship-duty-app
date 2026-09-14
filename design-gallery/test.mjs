@@ -309,8 +309,17 @@ async function login(page, member, forced = false) {
 async function changeForcedPin(page) {
   await page.locator('#member-new-pin').fill(CHANGED_PIN);
   await page.locator('#member-new-pin-confirm').fill(CHANGED_PIN);
-  await page.locator('[data-act="member-change-pin"] button').click();
-  await page.waitForFunction(() => !document.querySelector('nav.tabs')?.classList.contains('hidden'));
+  await page.locator('form[data-act="member-change-pin"]').evaluate(form =>
+    form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})));
+  try {
+    await page.waitForFunction(() => !document.querySelector('nav.tabs')?.classList.contains('hidden'));
+  } catch (error) {
+    const detail = await page.evaluate(() => ({
+      body: document.getElementById('view')?.innerText || '',
+      claims: window.__fixtureAuthRecords?.['E. Simon']?.claims || null
+    }));
+    throw new Error('Forced PIN test did not open navigation: ' + JSON.stringify(detail), {cause: error});
+  }
 }
 
 async function choose(page, mode) {
@@ -345,6 +354,11 @@ try {
     ['classic', 'prism', 'navy', 'aurora']);
   check('Permissions runtime asset staged', assets.has('permissions.js'));
   check('No rules or functions staged', assets.has('firestore.rules') || assets.has('functions'), false);
+  const stagedApp = String(assets.get('app.js'));
+  check('Alternative Manage summaries use department-scoped services',
+    stagedApp.split('.filter(manageServiceVisible)').length >= 3);
+  check('Alternative Manage summaries use authorized requests',
+    stagedApp.split('manageRequestVisible').length >= 4);
 
   current = await make();
   sessions.add(current.context);
