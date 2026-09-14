@@ -69,6 +69,14 @@ test('constructs and normalizes a safe department profile', () => {
 
 test('rejects malformed or unsafe profile writes', () => {
   assert.throws(
+    () => normalizeDepartmentProfile({
+      id: profileIdFor('Translation', 'Someone Else'),
+      department: 'Translation',
+      member: 'M. Avery'
+    }),
+    /profile\.id: must match the canonical department and member identity/
+  );
+  assert.throws(
     () => normalizeDepartmentProfile({ department: 'Translation', member: '' }),
     /profile\.member: must not be empty/
   );
@@ -292,6 +300,16 @@ test('incremental history seeds extend unprotected fields without mutating froze
   assert.deepEqual(updated.eligibleDuties, ['Translation #1', 'Translation #2']);
   assert.notEqual(updated.fieldAttribution, seeded.fieldAttribution);
   assert.equal(updated.fieldAttribution.eligibleDuties.source, 'history-seed');
+
+  const partialPlan = migration.planHistorySeed([
+    { date: '2026-09-20', assignments: { 'Translation #3': 'M. Avery' } }
+  ], { seededAt: 300, seededBy: 'history-import' });
+  const [extendedAgain] = migration.applyHistorySeedPlan([updated], partialPlan);
+  assert.deepEqual(extendedAgain.eligibleDuties, [
+    'Translation #1',
+    'Translation #2',
+    'Translation #3'
+  ]);
 });
 
 test('history planner groups evidence, deduplicates it, and reports unsafe rows', () => {
@@ -325,7 +343,7 @@ test('history planner groups evidence, deduplicates it, and reports unsafe rows'
 
 test('history seed can create a profile without touching runtime dependencies', () => {
   const suggestion = {
-    id: 'worship::t-mina',
+    id: profileIdFor('Worship', 'T. Mina'),
     department: 'Worship',
     member: 'T. Mina',
     role: 'member',
@@ -345,7 +363,7 @@ test('history seed can create a profile without touching runtime dependencies', 
     }
   };
   const created = mergeHistorySeed(null, suggestion, { at: 500 });
-  assert.equal(created.id, 'worship::t-mina');
+  assert.equal(created.id, profileIdFor('Worship', 'T. Mina'));
   assert.equal(created.fieldAttribution.status.source, 'history-seed');
   assert.equal(created.historySeed.evidence[0].duty, 'Presider');
   assert.equal(typeof createDepartmentProfile, 'function');

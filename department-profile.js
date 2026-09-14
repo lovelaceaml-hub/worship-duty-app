@@ -473,6 +473,9 @@ function normalizedProfileInput(input, options = {}) {
   const id = suppliedId == null
     ? expectedId
     : normalizeText(suppliedId, 'profile.id', { max: 240 });
+  if (id !== expectedId) {
+    fail('must match the canonical department and member identity', 'profile.id');
+  }
   const role = normalizeRole(input.role, 'profile.role');
 
   let status = normalizeStatus(input.status, 'profile.status');
@@ -751,8 +754,15 @@ function mergeHistorySeed(profile, suggestion, options = {}) {
   });
   for (const field of seedableFields) {
     if (isAuthoritativeDecision(current.fieldAttribution[field])) continue;
-    if (valuesEqual(current[field], candidate[field])) continue;
-    next[field] = candidate[field];
+    const candidateValue = field === 'eligibleDuties'
+      ? uniqueSortedStrings(
+          current.eligibleDuties.concat(candidate.eligibleDuties),
+          'profile.eligibleDuties',
+          { max: 100 }
+        )
+      : candidate[field];
+    if (valuesEqual(current[field], candidateValue)) continue;
+    next[field] = candidateValue;
     next.fieldAttribution[field] = {
       source: 'history-seed',
       authority: 'history-seed',
