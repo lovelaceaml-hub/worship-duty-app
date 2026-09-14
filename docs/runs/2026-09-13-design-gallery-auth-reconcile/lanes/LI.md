@@ -1,13 +1,13 @@
 ---
 lane: LI
 title: Integration and release
-state: review-corrected
+state: complete
 model: Sol
 runner: /root
 worktree: /Users/anthony/Projects/worship-duty-app-worktrees/design-gallery-reconcile
 review: Opus changes required, corrected by Sol
 depends_on: LV, LR, LT
-updated: 2026-09-14T04:49Z
+updated: 2026-09-14T04:52Z
 ---
 
 # LI: Integration and release
@@ -22,4 +22,4 @@ Integrated all three lanes, corrected peer findings, passed the full browser sui
 
 ## Review
 
-The one requested Opus completion review found the proposed identity alias cleanup unsafe. Sol reverted those identity changes and replaced them with display-only member labels that preserve every stored ID and backend account. The corrected browser suite and 34 focused permission, authentication, and migration tests pass. Production deployment remains the final action.
+The one requested Opus completion review found the proposed identity alias cleanup unsafe. Sol reverted those identity changes and replaced them with display-only member labels that preserve every stored ID and backend account. The corrected browser suite and 34 focused permission, authentication, and migration tests pass. Pull request 12 was merged and Hosting release `202609132150` is live at `https://lv-zion-duties.web.app`. Live verification passed. No functions, rules, or production data were changed by this release.
