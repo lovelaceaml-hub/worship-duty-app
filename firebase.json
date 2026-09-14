@@ -1,6 +1,7 @@
 {
   "hosting": {
     "site": "lv-zion-duties",
+    "predeploy": "node scripts/guard-gallery-deploy.mjs",
     "public": ".",
     "ignore": [
       "firebase.json",

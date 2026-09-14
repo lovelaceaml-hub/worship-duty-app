@@ -461,9 +461,13 @@ four files served by the service worker and no app-file network traffic.
 - The source of truth for the stamp is the literal token `DEV` in three places:
   `index.html` (the `<script src>` attributes), `app.js` (`const ASSET_V`) and
   `sw.js` (`const RELEASE`).
-- `scripts/deploy.sh` rewrites all three to a UTC timestamp, verifies no `DEV`
-  placeholder survived, deploys hosting, and restores the files. The repo
-  therefore always reads `DEV` and the working tree is never left dirty.
+- `scripts/deploy.sh` is a compatibility wrapper for
+  `design-gallery/release.mjs --publish`. The gallery builder stamps every
+  release in its staging folder, preserving all four appearance choices while
+  leaving the repository sources unchanged.
+- `firebase.json` runs `scripts/guard-gallery-deploy.mjs` before Hosting. A
+  direct Firebase Hosting deploy stops before upload unless the gallery
+  publisher supplied its release guard, preventing a root-app overwrite.
 - **If you add a new local script, stylesheet or lazily-loaded file, append
   `ASSET_V` (or `?v=DEV` in the HTML) and add it to the `headers` list in
   `firebase.json`.** An unstamped file with a one-year cache would strand

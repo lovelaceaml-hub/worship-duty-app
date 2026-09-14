@@ -128,7 +128,11 @@ const command=process.platform==='win32'?'npx.cmd':'npx';
 const firebase=['--yes','firebase-tools'];
 const releaseArgs=args.includes('--publish')?['deploy','--only','hosting']:['hosting:channel:deploy','design-gallery-review','--expires','7d'];
 console.log('Deploying hosting assets only. No functions, security rules, account settings or schedule records are deployed.');
-const result=spawnSync(command,[...firebase,...releaseArgs,'--config',path.join(dest,'firebase.gallery.json'),'--project','lv-zion-duties'],{cwd:root,stdio:'inherit'});
+const result=spawnSync(command,[...firebase,...releaseArgs,'--config',path.join(dest,'firebase.gallery.json'),'--project','lv-zion-duties'],{
+  cwd:root,
+  stdio:'inherit',
+  env:{...process.env,WDS_GALLERY_RELEASE:'1'}
+});
 if(result.error)throw result.error;if(result.status!==0)throw Error('Firebase deployment did not succeed. Authenticate with npx firebase-tools login, then rerun.');
 if(args.includes('--publish')){
   const check=await fetch(origin+'/design-gallery-release.json?verify='+Date.now());
