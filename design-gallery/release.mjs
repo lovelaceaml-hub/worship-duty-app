@@ -135,7 +135,12 @@ const result=spawnSync(command,[...firebase,...releaseArgs,'--config',path.join(
 });
 if(result.error)throw result.error;if(result.status!==0)throw Error('Firebase deployment did not succeed. Authenticate with npx firebase-tools login, then rerun.');
 if(args.includes('--publish')){
-  const check=await fetch(origin+'/design-gallery-release.json?verify='+Date.now());
-  if(!check.ok||(await check.json()).release!==manifest.release)throw Error('CLI completed but the live gallery release could not be verified.');
+  let verified=false;
+  for(let attempt=0;attempt<5&&!verified;attempt+=1){
+    if(attempt)await new Promise(resolve=>setTimeout(resolve,1000));
+    const check=await fetch(origin+'/design-gallery-release.json?verify='+Date.now());
+    verified=check.ok&&(await check.json()).release===manifest.release;
+  }
+  if(!verified)throw Error('CLI completed but the live gallery release could not be verified.');
   console.log('Verified live: '+origin+'/ Original + Prism + Navy & Cream + Aurora.');
 }else console.log('Preview deployed. It reads REAL Firebase records; use read-only review for production data.');

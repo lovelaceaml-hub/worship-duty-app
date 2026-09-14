@@ -2328,7 +2328,9 @@ function renderManage() {
   if (!isVerifiedSession() || isForcedSession() || !canManageAnyDepartment()) {
     return '<div class="empty">You do not have access to Manage.</div>';
   }
-  const pendingCount = actionableCountsForViewer().requests;
+  const actionableCounts = actionableCountsForViewer();
+  const pendingCount = actionableCounts.requests;
+  const conflictCount = actionableCounts.conflicts;
   const departments = authorizedDepartments();
   const selectedDepartment = selectedManageDepartment();
   if (selectedDepartment && selectedDepartment !== 'All' && ['departments', 'services', 'planning'].indexOf(ui.sub) !== -1) {
@@ -2341,7 +2343,9 @@ function renderManage() {
     esc(department === 'All' ? 'All Departments' : department) + '</option>'
   ).join('');
   const isAdministrator = canPermission('isAdmin', authActor());
-  const subs = [['departments', 'Departments'], ['services', 'Services'], ['planning', 'Planning'], ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')]];
+  const subs = [['departments', 'Departments'], ['services', 'Services'],
+    ['planning', 'Planning' + (conflictCount > 0 ? ' (' + conflictCount + ')' : '')],
+    ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')]];
   if (canPermission('canManageLeaders', authActor())) subs.push(['leaders', 'Leader config']);
   if (isAdministrator) subs.push(['features', 'Features'], ['data', 'Data & Sync']);
   let html = '<div class="me-picker"><label for="manage-dept">Manage department</label>' +
@@ -2491,9 +2495,9 @@ function renderManagePlanning() {
     activeConflicts(svc).filter(c => canPermission('canAcknowledgeConflict', authActor(), Object.assign({}, c, {
       serviceId: svcId(svc), date: svc.date, service: svc.service
     }))).forEach(c => {
-      confHtml += '<div class="plan-conflict"><div class="plan-when"><b>' + esc(memberLabel(c.name)) + '</b> | ' +
-        esc(fmtDate(svc.date)) + ' · ' + esc(svc.service) +
-        ' <span class="plan-duties">(' + c.duties.map(esc).join(' + ') + ')</span></div>';
+      confHtml += '<div class="card plan-conflict"><div class="req-head"><span class="req-when"><b>' + esc(memberLabel(c.name)) + '</b> | ' +
+        c.duties.map(esc).join(' + ') + '</span><span class="status-chip pending">Unresolved</span></div>' +
+        '<div class="req-note" style="margin-top:2px">' + esc(svc.worship) + ' ' + esc(svc.service) + ', ' + esc(fmtDate(svc.date)) + '</div>';
       c.duties.forEach(duty => {
         const subs = suggestSubs(svc, duty, c.name, stats);
         confHtml += '<div class="plan-suggest"><span class="lab">' + esc(duty) + ' →</span> ' +
@@ -2503,12 +2507,13 @@ function renderManagePlanning() {
             : '<span class="plan-duties">no free member in this department</span>') +
           '</div>';
       });
-      confHtml += '</div>';
+      confHtml += '<div class="req-actions-row"><button class="ghost" data-act="req-open-service" data-svc="' + esc(svcId(svc)) + '">Open service</button>' +
+        '<button class="linkish" data-act="conflict-ok" data-svc="' + esc(svcId(svc)) + '" data-name="' + esc(c.name) + '">Mark as OK</button></div></div>';
     });
   });
-  let html = '<div class="card"><div class="f-label">Double-duty conflicts, upcoming</div>' +
-    '<div class="f-desc">Tap a name to hand that duty to them. Already-acknowledged doubles (marked OK) are not listed.</div>' +
-    (confHtml || '<p class="hint" style="margin-top:12px">No unresolved double-bookings. 🎉</p>') + '</div>';
+  let html = '<div class="f-label">Double-duty conflicts, upcoming</div>' +
+    '<div class="f-desc">Review each double, open its service, or tap a suggested substitute. Already-acknowledged doubles are not listed.</div>' +
+    (confHtml || '<div class="empty">No unresolved double-bookings. 🎉</div>');
 
   /* --- unfilled slots, next 28 days --- */
   /* A service only "expects" the duties that comparable services actually

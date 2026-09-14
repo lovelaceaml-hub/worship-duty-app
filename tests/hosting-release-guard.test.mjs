@@ -30,4 +30,6 @@ test('gallery publisher is the only guarded Hosting release path', () => {
   assert.match(result.stdout, /gallery release guard passed/);
   assert.match(read('design-gallery/release.mjs'), /WDS_GALLERY_RELEASE:'1'/);
   assert.match(read('scripts/deploy.sh'), /exec node design-gallery\/release\.mjs --publish/);
+  assert.match(read('design-gallery/build.mjs'), /guard-gallery-deploy\.mjs/);
+  assert.match(read('design-gallery/build.mjs'), /'scripts\/\*\*'/);
 });

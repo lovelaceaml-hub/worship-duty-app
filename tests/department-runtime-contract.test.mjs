@@ -113,7 +113,12 @@ test('all appearance adapters keep the shared Manage runtime and release stampin
 test('request and conflict badges use the same actionable queue rules', () => {
   assert.match(app, /function requestIsActionable\(request\)/);
   assert.match(app, /service\.assignments \|\| \{\}\)\[request\.duty\]/);
-  assert.match(app, /const pendingCount = actionableCountsForViewer\(\)\.requests/);
+  assert.match(app, /const actionableCounts = actionableCountsForViewer\(\)/);
+  assert.match(app, /const pendingCount = actionableCounts\.requests/);
+  assert.match(app, /const conflictCount = actionableCounts\.conflicts/);
+  assert.match(app, /'Planning' \+ \(conflictCount > 0/);
+  assert.match(app, /status-chip pending\">Unresolved/);
+  assert.match(app, /Open service<\/button>/);
   assert.match(app, /const pending = all\.filter\(requestIsActionable\)/);
   assert.match(app, /service\.date < todayISO\(\)/);
   assert.match(auroraWorkspaces, /const counts = actionableCountsForViewer\(\)/);

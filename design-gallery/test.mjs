@@ -467,6 +467,7 @@ try {
   check('Four-choice release manifest staged', JSON.parse(assets.get('design-gallery-release.json')).choices,
     ['classic', 'prism', 'navy', 'aurora']);
   check('Permissions runtime asset staged', assets.has('permissions.js'));
+  check('Hosting release guard staged', fs.existsSync(path.join(out, 'scripts', 'guard-gallery-deploy.mjs')));
   check('No rules or functions staged', assets.has('firestore.rules') || assets.has('functions'), false);
   const stagedApp = String(assets.get('app.js'));
   check('Alternative Manage summaries use department-scoped services',
@@ -552,6 +553,10 @@ try {
     [...select.options].map(option => option.textContent)),
   ['All Departments', 'Worship', 'Usher Sisters', 'Usher Brothers', 'Lobby', 'Translation', 'Media', 'Parking Lot', 'Offering']);
   await page.locator('#manage-dept').selectOption('Media');
+  check('Planning tab shows its unresolved conflict count', await page.locator('[data-act="sub"][data-sub="planning"]').innerText(), 'Planning (2)');
+  await page.locator('[data-act="sub"][data-sub="planning"]').click();
+  check('Unresolved doubles render as review cards', await page.locator('.plan-conflict.card').count(), 2);
+  check('Every conflict review card can open its service', await page.locator('.plan-conflict [data-act="req-open-service"]').count(), 2);
   await page.locator('[data-act="sub"][data-sub="services"]').click();
   await page.locator('[data-act="expand"][data-id="m:2026-07-02_evening"]').click();
   const mediaDuty = page.locator('[data-chg="assign"][data-duty="Media Booth #1"]').first();
