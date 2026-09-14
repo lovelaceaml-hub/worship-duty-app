@@ -128,7 +128,7 @@ try{
  await choose(p,'classic');check('Songs stay selected when switching back',await p.locator('.set-row').count(),1);
  await choose(p,'prism');check('Two-pane studio restored with the SAME songs',await p.locator('.prism-set-panel .set-row').count(),1);
  check('Switching designs never duplicates song listeners',await p.evaluate(()=>__mockLive.listeners.length),listenerCount);
- for(const tab of ['home','services','insights','library']){await p.locator(`[data-song-act="tab"][data-tab="${tab}"]`).click();check('Presider '+tab+' works in Prism',(await p.locator('#song-root').innerText()).length>120);}
+ for(const tab of ['home','library','insights']){await p.locator(`[data-song-act="tab"][data-tab="${tab}"]`).click();check('Presider '+tab+' works in Prism',(await p.locator('#song-root').innerText()).length>120);}
  await shot(p,'03-live-presider');
  await nav(p,'manage');
  for(const t of ['services','planning','requests','people','features','data']){

@@ -5,7 +5,7 @@ The existing Prism design now extends through every existing route, not only the
 | Area | Themed views and nested states |
 |---|---|
 | My Duties | Next-duty summary, timeline, profile/preparation rail, expanded team, change-request form and request history |
-| Presider | Home, Library and setlist builder, song detail/history, Services, expanded order of worship, runsheet, Insights, backfill form, presider directory, separate song-editor PIN gate |
+| Presider | Home with My Services and All Services, Library and setlist builder, song detail/history, expanded order of worship, runsheet, Insights, backfill form, presider directory, separate song-editor PIN gate |
 | Manage | Services and all eight department editors; Planning/conflicts/coverage/workload; Requests/pending/resolved; People and eligibility controls; grouped Features; passcode/scheduler forms; Data & Sync, backup/import, reset and name cleanup |
 | Shared | Empty/error/locked states, status badges, light/dark surfaces, keyboard focus, mobile layouts and accessible modal confirmations |
 
