@@ -32,6 +32,15 @@ function findAncestorAppMatch(liveApp){
   return '';
 }
 
+function sourceHashExistsInHistory(file,digest){
+  if(!digest)return false;
+  const commits=git(['rev-list','HEAD','--',file]).trim().split(/\s+/).filter(Boolean);
+  return commits.some(commit=>{
+    const source=git(['show',commit+':'+file]);
+    return source&&hash(source)===digest;
+  });
+}
+
 async function matchesUnmarkedLegacyPrism(liveApp){
   // The first Prism publisher intentionally excluded release-manifest.json from
   // Hosting, so a valid Prism deployment may have no marker at all. Rebuild
@@ -92,6 +101,10 @@ async function compatibleLive(){
       const r=await fetch(origin+'/'+file+'?gallery-check='+Date.now(),{signal:AbortSignal.timeout(12000)});if(!r.ok)continue;
       const info=await r.json();
       if(info?.upstream?.app===manifest.upstream.app || info?.baseAppSha256===currentBaseSha256)return {kind,info};
+      if(kind==='gallery'&&info?.design==='appearance-gallery-v1'&&
+        sourceHashExistsInHistory('app.js',info?.upstream?.app)&&
+        sourceHashExistsInHistory('song-app.js',info?.upstream?.songs)&&
+        sourceHashExistsInHistory('index.html',info?.upstream?.index))return {kind:'gallery-history',info};
     }catch{}
   }
 
