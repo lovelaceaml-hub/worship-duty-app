@@ -168,7 +168,7 @@
 .prism .ps-danger-zone {border-color:color-mix(in srgb,var(--ps-danger) 30%,var(--line));}
 .prism .ps-danger-zone .overline {color:var(--ps-danger);}
 .prism label.ghost:focus-within {outline:3px solid #8ba5ff;outline-offset:3px;}
-/* The same card grammar in Presider Home, Services, Insights and runsheets. */
+/* The same card grammar in Presider Home, Insights, runsheets and Manage services. */
 .prism #song-root [data-ps-page] .ps-section-head {margin:0 0 22px;}
 .prism #song-root .ps-song-card-grid {display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
 .prism #song-root .ps-song-card-grid> :not(.svc-card) {grid-column:1/-1;}

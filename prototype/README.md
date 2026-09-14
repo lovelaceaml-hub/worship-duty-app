@@ -28,7 +28,7 @@ The build consumes **the original** `app.js`, `index.html` stylesheet, `song-app
 | --- | --- |
 | Schedule | Original service names, dates/times, all eight duty categories, assigned names, choir songs, personal highlights, department filtering and past services; new day/month selector and search. |
 | My Duties | Name picker, assignments, full-team expansion, change requests and actual Presider deep links. Calendar exports an explicitly labeled reference-data snapshot. |
-| Presider | **The real song workspace**: Home / Library / Services / Insights. Original 509-song catalog, searching/categories/sorting, Glory/Thanks slots, setlist order, duration totals, confirmation, history controls and service planning. No invented service-cue workflow. |
+| Presider | **The real song workspace**: Home / Library / Insights. Home includes My Services and All Services views. Original 509-song catalog, searching/categories/sorting, Glory/Thanks slots, setlist order, duration totals, confirmation, history controls and service planning. No invented service-cue workflow. |
 | Manage | Original Services / Planning / Requests / People / Features / Data & Sync screens, assignment dropdowns, workload/substitute logic, requests, member/department editing, local backups and restore. |
 | Rules | Original Presider visibility gate and song-picker feature flag; original double-duty conflicts, including the intentional single **prayer + usher** exception. Approving a change request does not silently reassign a duty. |
 

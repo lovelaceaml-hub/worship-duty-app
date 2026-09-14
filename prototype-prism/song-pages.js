@@ -20,11 +20,6 @@ renderHome=function(){
  const stats=psSongUi().stats([['Your upcoming services',mine.length,'From the reference duty roster'],['With songs selected',planned,'Continue in the Library'],['Confirmed setlists',confirmed,'Based on local song plans']]);
  return '<section data-ps-page="songs-home">'+psSongUi().section('Prepare for your next service','Your assigned services, song plans and readiness in one view.','PRESIDER / HOME')+stats+'<div class="ps-song-card-grid">'+psSongHomeBase()+'</div></section>';
 };
-const psSongServicesBase=renderServices;
-renderServices=function(){
- const upcoming=allUpcomingServices(),past=pastSetlists();
- return '<section data-ps-page="songs-services">'+psSongUi().section('Service song plans','Review upcoming services and the saved history of past setlists.','PRESIDER / SERVICES')+psSongUi().stats([['Upcoming services',upcoming.length,'All scheduled services'],['Past setlists',past.length,'Available in the history view'],['Saved song plans',Object.keys(state.setlists).length,'Stored in this preview']])+'<div class="ps-song-card-grid">'+psSongServicesBase()+'</div></section>';
-};
 const psInsightsBase=renderInsights;
 renderInsights=function(){
  const f=psSongUi().fragment(psInsightsBase()),cards=[...f.children];
