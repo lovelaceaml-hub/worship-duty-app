@@ -11,6 +11,17 @@ function withMember(state, memberId = 'lena-ortiz') {
   return prototype.reduce(state, { type: 'OPEN_MEMBER', id: memberId });
 }
 
+function contrastRatio(foreground, background) {
+  const luminance = hex => {
+    const values = [0, 2, 4].map(index => parseInt(hex.slice(index + 1, index + 3), 16) / 255);
+    const linear = values.map(value => value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  };
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 test('the leader sees only assigned departments and a split active/inactive roster', () => {
   const state = prototype.createInitialState();
   assert.equal(state.data.currentUser, 'Mara Ellison');
@@ -74,18 +85,89 @@ test('administrative override is explicit and save failure does not claim succes
   assert.equal(state.notice.kind, 'success');
 });
 
+test('administrative override resets when navigating to another member, department, or tab', () => {
+  let state = withMember(prototype.createInitialState());
+  state = prototype.reduce(state, { type: 'TOGGLE_OVERRIDE' });
+  assert.equal(state.adminOverride, true);
+
+  state = prototype.reduce(state, { type: 'OPEN_MEMBER', id: 'caleb-wren' });
+  assert.equal(state.adminOverride, false);
+  state = prototype.reduce(state, { type: 'TOGGLE_OVERRIDE' });
+  state = prototype.reduce(state, { type: 'OPEN_DEPARTMENT', id: 'media-crew' });
+  assert.equal(state.adminOverride, false);
+  state = prototype.reduce(state, { type: 'TOGGLE_OVERRIDE' });
+  state = prototype.reduce(state, { type: 'SET_NAV', id: 'schedule' });
+  assert.equal(state.adminOverride, false);
+});
+
 test('roster status changes preserve history and sample member addition is scoped', () => {
   let state = prototype.reduce(prototype.createInitialState(), { type: 'OPEN_DEPARTMENT', id: 'welcome-team' });
   state = prototype.reduce(state, { type: 'SET_MEMBER_STATUS', id: 'sage-hart', status: 'active' });
-  assert.equal(prototype.getMember(state, 'sage-hart').status, 'active');
-  assert.equal(prototype.getMember(state, 'sage-hart').schedulable, false);
-  assert.equal(prototype.getMember(state, 'sage-hart').history.length, 1);
+  let sage = prototype.getMember(state, 'sage-hart');
+  assert.equal(sage.status, 'active');
+  assert.equal(sage.schedulable, false);
+  assert.equal(sage.history.length, 1);
+  assert.equal(sage.lastChangedBy, 'Mara Ellison');
+  assert.equal(sage.lastChangedAt, '2026-09-14T09:00:00');
+
+  state = prototype.reduce(state, { type: 'SET_MEMBER_STATUS', id: 'sage-hart', status: 'inactive' });
+  sage = prototype.getMember(state, 'sage-hart');
+  assert.equal(sage.status, 'inactive');
+  assert.equal(sage.schedulable, false);
+  assert.equal(sage.lastChangedBy, 'Mara Ellison');
+  assert.equal(sage.lastChangedAt, '2026-09-14T09:00:00');
+
+  state = prototype.reduce(state, { type: 'OPEN_MEMBER', id: 'sage-hart' });
+  assert.match(prototype.renderMember(state), /Last changed by Mara Ellison/);
 
   state = prototype.reduce(state, { type: 'ADD_SAMPLE_MEMBER' });
   const welcome = prototype.getDepartment(state, 'welcome-team');
   assert.equal(welcome.memberIds.at(-1), 'sample-11');
   assert.equal(state.data.members['sample-11'].name, 'Jamie Solis');
   assert.equal(state.notice.kind, 'success');
+});
+
+test('inactive members stay unschedulable even when the editor requests true', () => {
+  let state = withMember(prototype.createInitialState(), 'sage-hart');
+  state = prototype.reduce(state, { type: 'SET_SCHEDULABLE', value: true });
+  assert.equal(prototype.getMember(state).schedulable, false);
+  assert.equal(prototype.canSchedule(prototype.getMember(state)), false);
+  assert.match(prototype.renderMember(state), /role="switch" aria-checked="false" data-field="schedulable" disabled/);
+
+  state = prototype.reduce(state, { type: 'SET_MEMBER_STATUS', id: 'sage-hart', status: 'active' });
+  state = prototype.reduce(state, { type: 'SET_SCHEDULABLE', value: true });
+  assert.equal(prototype.getMember(state).schedulable, true);
+  state = prototype.reduce(state, { type: 'SET_MEMBER_STATUS', id: 'sage-hart', status: 'inactive' });
+  assert.equal(prototype.getMember(state).schedulable, false);
+});
+
+test('both appearance close controls use keyboard-operable buttons and dialog click delegation', async () => {
+  const html = await readFile(new URL('./department-management.html', import.meta.url), 'utf8');
+  const controls = html.match(/<button[^>]*data-action="close-appearance"[^>]*>/g) || [];
+  assert.equal(controls.length, 2);
+  assert.ok(controls.every(control => /type="button"/.test(control)));
+
+  const handlers = {};
+  const dialog = { addEventListener(type, handler) { handlers[type] = handler; } };
+  let closeCount = 0;
+  prototype.bindAppearanceDialog(dialog, () => { closeCount += 1; });
+  const button = { closest() { return this; } };
+  for (const control of controls) handlers.click({ target: button, currentTarget: dialog });
+  assert.equal(closeCount, 2);
+});
+
+test('override switch exposes aria-checked and follows its current state', () => {
+  let state = withMember(prototype.createInitialState());
+  let markup = prototype.renderMember(state);
+  let control = markup.match(/<button[^>]*role="switch"[^>]*data-action="toggle-override"[^>]*>/)?.[0] || '';
+  assert.match(control, /aria-checked="false"/);
+  assert.doesNotMatch(control, /aria-pressed/);
+
+  state = prototype.reduce(state, { type: 'TOGGLE_OVERRIDE' });
+  markup = prototype.renderMember(state);
+  control = markup.match(/<button[^>]*role="switch"[^>]*data-action="toggle-override"[^>]*>/)?.[0] || '';
+  assert.match(control, /aria-checked="true"/);
+  assert.match(markup, />Disable override<\/button>/);
 });
 
 test('loading, empty, error, navigation, appearance, and reduced-motion states recover', () => {
@@ -118,4 +200,10 @@ test('prototype package is directly openable and contains the exact appearance c
   for (const label of ['Schedule', 'My Duties', 'Presider', 'Manage', 'Appearance']) assert.match(html, new RegExp(label));
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /:focus-visible/);
+
+  const aurora = css.match(/\.prototype-root\[data-appearance="aurora"\]\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+  const actionColor = aurora.match(/--accent-action:\s*(#[0-9a-f]{6})/i)?.[1];
+  assert.ok(actionColor, 'Aurora must define a dedicated primary action color');
+  assert.match(css.match(/\.button-primary\s*\{([^}]+)\}/)?.[1] || '', /background:\s*var\(--accent-action\)/);
+  assert.ok(contrastRatio('#ffffff', actionColor) >= 4.5, 'Aurora primary CTA must meet normal-text AA contrast');
 });

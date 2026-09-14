@@ -36,6 +36,8 @@
     { id: 'wed-1900', label: 'Wednesday, 7:00 PM', short: 'Wed 7:00 PM' }
   ]);
 
+  const PREVIEW_CHANGE_TIME = '2026-09-14T09:00:00';
+
   const BASE_DATA = Object.freeze({
     currentUser: 'Mara Ellison',
     departments: [
@@ -140,9 +142,16 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function normalizeScheduling(data) {
+    Object.values(data.members).forEach(member => {
+      if (member.status !== 'active') member.schedulable = false;
+    });
+    return data;
+  }
+
   function createInitialState() {
     return {
-      data: clone(BASE_DATA),
+      data: normalizeScheduling(clone(BASE_DATA)),
       appearance: 'classic',
       nav: 'manage',
       view: 'departments',
@@ -186,6 +195,7 @@
 
   function reduce(input, action) {
     const state = clone(input);
+    normalizeScheduling(state.data);
     state.notice = null;
     const type = action && action.type;
 
@@ -199,6 +209,7 @@
         state.view = action.id === 'manage' ? 'departments' : 'preview';
         state.selectedDepartmentId = '';
         state.selectedMemberId = '';
+        state.adminOverride = false;
         state.saved = false;
         state.saveError = '';
         return state;
@@ -208,6 +219,7 @@
         state.view = 'department';
         state.selectedDepartmentId = action.id;
         state.selectedMemberId = '';
+        state.adminOverride = false;
         state.saved = false;
         state.saveError = '';
         return state;
@@ -215,6 +227,7 @@
         state.view = 'departments';
         state.selectedDepartmentId = '';
         state.selectedMemberId = '';
+        state.adminOverride = false;
         state.saved = false;
         state.saveError = '';
         return state;
@@ -222,6 +235,7 @@
         if (!getMember(state, action.id) || !getDepartment(state)?.memberIds.includes(action.id)) return state;
         state.view = 'member';
         state.selectedMemberId = action.id;
+        state.adminOverride = false;
         state.saved = false;
         state.saveError = '';
         return state;
@@ -257,7 +271,7 @@
       case 'SET_SCHEDULABLE': {
         const member = getMember(state);
         if (!member) return state;
-        member.schedulable = action.value === true;
+        member.schedulable = member.status === 'active' && action.value === true;
         state.saved = false;
         return state;
       }
@@ -296,7 +310,11 @@
         const member = getMember(state, action.id);
         if (!member || !getDepartment(state)?.memberIds.includes(action.id)) return state;
         member.status = action.status === 'inactive' ? 'inactive' : 'active';
-        if (member.status === 'inactive') member.schedulable = false;
+        if (member.status !== 'active') member.schedulable = false;
+        member.lastChangedBy = state.data.currentUser;
+        member.lastChangedAt = PREVIEW_CHANGE_TIME;
+        state.saved = false;
+        state.saveError = '';
         state.notice = { kind: 'success', message: member.name + (member.status === 'active' ? ' restored to the active roster.' : ' moved to the inactive roster.') };
         return state;
       }
@@ -306,7 +324,7 @@
         const id = 'sample-' + String(Object.keys(state.data.members).length + 1);
         const member = {
           id, name: 'Jamie Solis', status: 'active', history: [], eligibleDuties: [], schedulable: false,
-          recurring: [], exceptions: [], lastChangedBy: state.data.currentUser, lastChangedAt: '2026-09-14T09:00:00'
+          recurring: [], exceptions: [], lastChangedBy: state.data.currentUser, lastChangedAt: PREVIEW_CHANGE_TIME
         };
         state.data.members[id] = member;
         department.memberIds.push(id);
@@ -323,10 +341,10 @@
           return state;
         }
         member.lastChangedBy = state.data.currentUser;
-        member.lastChangedAt = '2026-09-14T09:00:00';
+        member.lastChangedAt = PREVIEW_CHANGE_TIME;
         state.saved = true;
         state.saveError = '';
-        state.notice = { kind: 'success', message: 'Saved in this prototype. Mara Ellison is recorded as the last editor.' };
+        state.notice = { kind: 'success', message: 'Saved in this prototype. ' + state.data.currentUser + ' is recorded as the last editor.' };
         return state;
       }
       case 'RESET':
@@ -452,7 +470,8 @@
   }
 
   function renderEligibility(state, member) {
-    return '<section class="detail-card"><div class="section-heading"><div><span class="eyebrow">Duty profile</span><h2>Eligibility and schedulability</h2></div>' + renderStatusTag(canSchedule(member) ? 'Ready to schedule' : 'Needs review', canSchedule(member) ? 'ok' : 'neutral') + '</div><p class="section-note">History suggests duties. The department leader makes the final eligibility decision.</p><fieldset class="field-group"><legend>Eligible duties</legend>' + DUTIES.map(duty => '<label class="check-row"><input type="checkbox" data-field="eligible" data-duty="' + escapeHtml(duty) + '"' + (member.eligibleDuties.includes(duty) ? ' checked' : '') + '><span>' + escapeHtml(duty) + '</span></label>').join('') + '</fieldset><div class="rule"></div><label class="switch-row"><span><strong>Currently schedulable</strong><small>Keep this off when the member should remain in the roster but not appear in assignment suggestions.</small></span><input type="checkbox" role="switch" data-field="schedulable"' + (member.schedulable ? ' checked' : '') + '><span class="switch-visual" aria-hidden="true"></span></label>' + (member.status === 'inactive' ? '<div class="inline-warning">Inactive members cannot be schedulable. Restore the member to change this.</div>' : '') + '</section>';
+    const schedulable = member.status === 'active' && member.schedulable;
+    return '<section class="detail-card"><div class="section-heading"><div><span class="eyebrow">Duty profile</span><h2>Eligibility and schedulability</h2></div>' + renderStatusTag(canSchedule(member) ? 'Ready to schedule' : 'Needs review', canSchedule(member) ? 'ok' : 'neutral') + '</div><p class="section-note">History suggests duties. The department leader makes the final eligibility decision.</p><fieldset class="field-group"><legend>Eligible duties</legend>' + DUTIES.map(duty => '<label class="check-row"><input type="checkbox" data-field="eligible" data-duty="' + escapeHtml(duty) + '"' + (member.eligibleDuties.includes(duty) ? ' checked' : '') + '><span>' + escapeHtml(duty) + '</span></label>').join('') + '</fieldset><div class="rule"></div><label class="switch-row"><span><strong>Currently schedulable</strong><small>Keep this off when the member should remain in the roster but not appear in assignment suggestions.</small></span><input type="checkbox" role="switch" aria-checked="' + String(schedulable) + '" data-field="schedulable"' + (schedulable ? ' checked' : '') + (member.status === 'inactive' ? ' disabled' : '') + '><span class="switch-visual" aria-hidden="true"></span></label>' + (member.status === 'inactive' ? '<div class="inline-warning">Inactive members cannot be schedulable. Restore the member to change this.</div>' : '') + '</section>';
   }
 
   function renderAvailability(state, member) {
@@ -467,12 +486,12 @@
     const successBanner = state.saved ? '<div class="inline-success" role="status"><strong>Saved</strong><span>Local preview saved by ' + escapeHtml(member.lastChangedBy) + ' at ' + escapeHtml(formatDateTime(member.lastChangedAt)) + '.</span></div>' : '';
     return '<div class="manage-page member-page">' + renderStateControls(state) +
       '<div class="breadcrumb"><button class="text-button" type="button" data-action="back-department">' + escapeHtml(department.name) + '</button><span aria-hidden="true">/</span><span>' + escapeHtml(member.name) + '</span></div>' +
-      '<section class="member-hero"><div class="member-hero-identity"><span class="avatar avatar-hero" aria-hidden="true">' + escapeHtml(initials(member.name)) + '</span><div><span class="eyebrow">Member detail</span><h1>' + escapeHtml(member.name) + '</h1><p>' + escapeHtml(department.name) + ' / history-seeded profile</p></div></div><div class="member-hero-status">' + renderStatusTag(member.status === 'active' ? 'Active roster' : 'Inactive roster', member.status === 'active' ? 'ok' : 'neutral') + '<span>' + (member.schedulable ? 'Currently schedulable' : 'Held from scheduling') + '</span></div></section>' +
+      '<section class="member-hero"><div class="member-hero-identity"><span class="avatar avatar-hero" aria-hidden="true">' + escapeHtml(initials(member.name)) + '</span><div><span class="eyebrow">Member detail</span><h1>' + escapeHtml(member.name) + '</h1><p>' + escapeHtml(department.name) + ' / history-seeded profile</p></div></div><div class="member-hero-status">' + renderStatusTag(member.status === 'active' ? 'Active roster' : 'Inactive roster', member.status === 'active' ? 'ok' : 'neutral') + '<span>' + (member.status === 'active' && member.schedulable ? 'Currently schedulable' : 'Held from scheduling') + '</span></div></section>' +
       '<div class="journey-progress" aria-label="Department journey progress"><span class="complete">01 Departments</span><span class="complete">02 Roster</span><span class="current">03 Member detail</span><span>04 Schedule candidate</span></div>' +
       saveBanner + successBanner +
       '<div class="member-grid"><section class="detail-card history-card"><div class="section-heading"><div><span class="eyebrow">History seed</span><h2>Historical duty suggestions</h2></div><span class="status-tag status-suggested">' + member.history.length + ' records</span></div><p class="section-note">These past assignments are suggestions only. They never override a leader decision.</p>' + renderHistory(member) + '</section>' +
       renderEligibility(state, member) + renderAvailability(state, member) +
-      '<section class="detail-card attribution-card"><div class="section-heading"><div><span class="eyebrow">Change control</span><h2>Attribution and override</h2></div>' + renderStatusTag(state.adminOverride ? 'Override on' : 'Standard path', state.adminOverride ? 'warning' : 'neutral') + '</div><div class="attribution-row"><span class="avatar" aria-hidden="true">' + escapeHtml(initials(member.lastChangedBy)) + '</span><div><strong>Last changed by ' + escapeHtml(member.lastChangedBy) + '</strong><span>' + escapeHtml(formatDateTime(member.lastChangedAt)) + '</span></div></div><div class="override-box"><div><strong>Administrative override</strong><p>Allow this coordinator to schedule an otherwise ineligible member for a documented exception. This preview does not grant roles or change production data.</p></div><button class="button ' + (state.adminOverride ? 'button-warning' : 'button-subtle') + '" type="button" role="switch" aria-pressed="' + String(state.adminOverride) + '" data-action="toggle-override">' + (state.adminOverride ? 'Disable override' : 'Enable override') + '</button></div></section></div>' +
+      '<section class="detail-card attribution-card"><div class="section-heading"><div><span class="eyebrow">Change control</span><h2>Attribution and override</h2></div>' + renderStatusTag(state.adminOverride ? 'Override on' : 'Standard path', state.adminOverride ? 'warning' : 'neutral') + '</div><div class="attribution-row"><span class="avatar" aria-hidden="true">' + escapeHtml(initials(member.lastChangedBy)) + '</span><div><strong>Last changed by ' + escapeHtml(member.lastChangedBy) + '</strong><span>' + escapeHtml(formatDateTime(member.lastChangedAt)) + '</span></div></div><div class="override-box"><div><strong>Administrative override</strong><p>Allow this coordinator to schedule an otherwise ineligible member for a documented exception. This preview does not grant roles or change production data.</p></div><button class="button ' + (state.adminOverride ? 'button-warning' : 'button-subtle') + '" type="button" role="switch" aria-checked="' + String(state.adminOverride) + '" data-action="toggle-override">' + (state.adminOverride ? 'Disable override' : 'Enable override') + '</button></div></section></div>' +
       '<section class="save-panel"><div><span class="eyebrow">Review before saving</span><h2>Scheduling candidate</h2><p>' + (state.adminOverride ? 'Override is enabled for this documented exception.' : canSchedule(member) ? 'Eligible, active, and schedulable. Recurring availability still applies.' : 'This member should not appear in normal assignment suggestions yet.') + '</p></div><div class="save-actions"><div class="save-mode"><span>Save path</span><button type="button" class="text-button ' + (state.saveMode === 'success' ? 'selected' : '') + '" data-action="set-save-mode" data-mode="success" aria-pressed="' + String(state.saveMode === 'success') + '">Success</button><button type="button" class="text-button ' + (state.saveMode === 'error' ? 'selected' : '') + '" data-action="set-save-mode" data-mode="error" aria-pressed="' + String(state.saveMode === 'error') + '">Error</button></div><button class="button button-primary" type="button" data-action="save-member">Save member profile</button></div></section></div>';
   }
 
@@ -488,6 +507,17 @@
 
   function announcementText(state) {
     return state.notice ? state.notice.message : '';
+  }
+
+  function bindAppearanceDialog(dialog, closeDialog) {
+    if (!dialog || typeof dialog.addEventListener !== 'function') return;
+    dialog.addEventListener('click', event => {
+      const target = event.target;
+      const closeButton = target && typeof target.closest === 'function'
+        ? target.closest('[data-action="close-appearance"]')
+        : null;
+      if (closeButton || event.target === event.currentTarget) closeDialog();
+    });
   }
 
   function mount(doc) {
@@ -603,10 +633,7 @@
       form.reset();
     });
 
-    doc.querySelector('[data-action="close-appearance"]')?.addEventListener('click', closeDialog);
-    doc.querySelector('#appearance-dialog')?.addEventListener('click', event => {
-      if (event.target === event.currentTarget) closeDialog();
-    });
+    bindAppearanceDialog(doc.querySelector('#appearance-dialog'), closeDialog);
     render();
     return { getState: () => clone(state), dispatch, render };
   }
@@ -624,6 +651,8 @@
     splitMembers,
     canSchedule,
     appearanceById,
+    renderMember,
+    bindAppearanceDialog,
     mount
   };
 }));

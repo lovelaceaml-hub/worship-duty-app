@@ -27,6 +27,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
   --accent: #075f96;
   --accent-strong: #2383c6;
   --accent-deep: #174a6b;
+  --accent-action: #075f96;
   --accent-soft: #eaf5fb;
   --ok: #16734c;
   --ok-soft: #e8f5ed;
@@ -60,6 +61,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
   --accent: #4057d6;
   --accent-strong: #6d5fea;
   --accent-deep: #293a9e;
+  --accent-action: #4057d6;
   --accent-soft: #eef0ff;
   --shadow: 0 18px 42px rgba(58, 58, 140, 0.11);
   --shadow-soft: 0 7px 18px rgba(58, 58, 140, 0.08);
@@ -78,6 +80,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
   --accent: #662c38;
   --accent-strong: #9b6d32;
   --accent-deep: #253943;
+  --accent-action: #662c38;
   --accent-soft: #f2e5e8;
   --ok: #2c6a50;
   --ok-soft: #e7f1eb;
@@ -101,6 +104,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
   --accent: #89a2ff;
   --accent-strong: #69d2ee;
   --accent-deep: #c4ceff;
+  --accent-action: #526bc6;
   --accent-soft: #29345f;
   --ok: #82dbbd;
   --ok-soft: #1c443f;
@@ -232,7 +236,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
 .privacy-note > div { display: grid; gap: 3px; }
 
 .button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 1px solid transparent; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
-.button-primary { border-color: var(--accent); color: #fff; background: var(--accent); box-shadow: 0 7px 14px color-mix(in srgb, var(--accent) 20%, transparent); }
+.button-primary { border-color: var(--accent-action); color: #fff; background: var(--accent-action); box-shadow: 0 7px 14px color-mix(in srgb, var(--accent-action) 20%, transparent); }
 .button-subtle { border-color: var(--line); color: var(--accent-deep); background: var(--surface); }
 .button-small { min-height: 34px; padding: 6px 10px; border-color: var(--line); color: var(--muted); background: var(--surface); font-size: 11px; }
 .button-warning { border-color: var(--warning); color: var(--warning); background: var(--warning-soft); }
