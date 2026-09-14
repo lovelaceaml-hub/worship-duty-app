@@ -18,12 +18,18 @@ const {
   createMemberAuthCallables
 } = require('./member-auth');
 const permissions = require('./permissions');
+const { createDepartmentHandlers } = require('./department-handlers');
 
 initializeApp();
 const db = getFirestore();
 const REGION = 'us-central1';
 const TZ = 'America/Los_Angeles';
 const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
+const departmentHandlers = createDepartmentHandlers({
+  db,
+  now: () => Date.now(),
+  logger
+});
 
 const MEMBER_ALIASES = Object.freeze({
   'D. Chloe': 'M. Chloe',
@@ -275,12 +281,112 @@ exports.verifyMemberPin = exposeMemberAuthCallable(memberAuthCallables.verifyMem
 exports.changeMemberPin = exposeMemberAuthCallable(memberAuthCallables.changeMemberPin);
 exports.resetMemberPin = exposeMemberAuthCallable(memberAuthCallables.resetMemberPin);
 
-function callableActor(request) {
+function exposeDepartmentCallable(handler) {
+  return onCall({ region: REGION }, async request => {
+    try {
+      const actor = await callableActor(request);
+      return await handler({
+        ...request,
+        auth: actor
+      });
+    } catch (error) {
+      const code = error && AUTH_ERROR_CODES.has(error.code) ? error.code : 'internal';
+      const message = code === 'internal'
+        ? 'The department authorization service is unavailable.'
+        : String(error.message || 'The requested department action failed.');
+      throw new HttpsError(code, message);
+    }
+  });
+}
+
+exports.updateDepartmentProfile = exposeDepartmentCallable(
+  departmentHandlers.updateDepartmentProfile
+);
+exports.listDepartmentRoster = exposeDepartmentCallable(
+  departmentHandlers.listDepartmentRoster
+);
+exports.updateMemberAvailability = exposeDepartmentCallable(
+  departmentHandlers.updateMemberAvailability
+);
+exports.createDepartmentProfile = exposeDepartmentCallable(
+  departmentHandlers.createDepartmentProfile
+);
+exports.assignDepartmentDuty = exposeDepartmentCallable(
+  departmentHandlers.assignDepartmentDuty
+);
+exports.overrideDepartmentAssignment = exposeDepartmentCallable(
+  departmentHandlers.overrideDepartmentAssignment
+);
+
+async function readCurrentAccount(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'A verified member session is required.');
-  if (request.auth.token && request.auth.token.mustChangePin === true) {
+  const token = request.auth.token || {};
+  const memberId = String(token.memberId || '').trim();
+  if (!memberId) throw new HttpsError('permission-denied', 'The signed-in member account is missing.');
+  const snapshot = await db.collection('accounts').doc(memberId).get();
+  if (!snapshot.exists) throw new HttpsError('permission-denied', 'The signed-in member account is missing.');
+  const account = Object.assign({ id: snapshot.id }, snapshot.data() || {});
+  const expectedUid = String(account.authUid || `member:${memberId}`);
+  if (expectedUid !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'The signed-in member account is invalid.');
+  }
+  if (!Number.isSafeInteger(token.roleVersion)
+      || !Number.isSafeInteger(account.roleVersion)
+      || token.roleVersion !== account.roleVersion) {
+    throw new HttpsError('permission-denied', 'The member role has changed. Sign in again.');
+  }
+  if (account.active === false) {
+    throw new HttpsError('permission-denied', 'The member account is inactive.');
+  }
+  return { memberId, account };
+}
+
+function roleNames(account) {
+  const roles = Array.isArray(account.roles)
+    ? account.roles.filter(role => typeof role === 'string' && role.trim())
+    : [];
+  if (!roles.length && typeof account.role === 'string' && account.role.trim()) roles.push(account.role);
+  if (!roles.length) roles.push('member');
+  return Array.from(new Set(roles));
+}
+
+function currentTokenForAccount(requestToken, account, memberId) {
+  const roles = roleNames(account);
+  const normalizedRoles = new Set(roles.map(role => String(role).trim().toLocaleLowerCase().replace(/[^a-z0-9]/g, '')));
+  const departments = Array.isArray(account.departments)
+    ? account.departments.filter(value => typeof value === 'string' && value.trim())
+    : [];
+  return Object.assign({}, requestToken, {
+    memberId: account.memberId || memberId,
+    memberName: account.memberName || account.name || memberId,
+    role: account.role || roles[0],
+    roles,
+    departments,
+    departmentIds: Array.isArray(account.departmentIds) ? account.departmentIds : departments,
+    departmentLeaders: account.departmentLeaders && typeof account.departmentLeaders === 'object'
+      ? account.departmentLeaders
+      : {},
+    permissions: Array.isArray(account.permissions) ? account.permissions : [],
+    admin: account.admin === true || normalizedRoles.has('admin') || normalizedRoles.has('administrator'),
+    globalLeaderManager: account.globalLeaderManager === true || normalizedRoles.has('globalleadermanager'),
+    departmentLeader: account.departmentLeader === true || normalizedRoles.has('departmentleader') || normalizedRoles.has('leader'),
+    songEditor: account.songEditor === true || normalizedRoles.has('songeditor'),
+    mustChangePin: account.mustChangePin === true,
+    roleVersion: account.roleVersion
+  });
+}
+
+async function callableActor(request) {
+  const current = await readCurrentAccount(request);
+  const token = currentTokenForAccount(request.auth.token || {}, current.account, current.memberId);
+  if (token.mustChangePin === true) {
     throw new HttpsError('failed-precondition', 'Change your PIN before using privileged actions.');
   }
-  return Object.assign({}, request.auth.token || {}, { uid: request.auth.uid });
+  return Object.assign({
+    uid: request.auth.uid,
+    token,
+    currentAccount: current.account
+  }, token);
 }
 
 async function runtimePermissionConfig() {
@@ -294,7 +400,7 @@ async function runtimePermissionConfig() {
 }
 
 exports.updateDepartmentMembership = onCall({ region: REGION }, async request => {
-  const actor = callableActor(request);
+  const actor = await callableActor(request);
   const data = request.data || {};
   const department = String(data.department || '').trim();
   const memberName = canonicalMemberName(data.memberName);
@@ -340,7 +446,7 @@ exports.updateDepartmentMembership = onCall({ region: REGION }, async request =>
 });
 
 exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
-  const actor = callableActor(request);
+  const actor = await callableActor(request);
   const data = request.data || {};
   const roleType = data.roleType === 'songEditor' ? 'songEditor' : 'departmentLeader';
   const department = String(data.department || '').trim();
