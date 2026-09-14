@@ -1,6 +1,6 @@
 # Authentication, Department, Notifications, Prism, Presider, and Choir Song Upgrade
 
-Status: Implementation complete, pull request 10 open
+Status: Released to production
 
 Baseline: `694a538d8c48b154ead681e10605c29f52fea850`
 
@@ -79,3 +79,4 @@ Sol owns shared entrypoints, `app.js`, `index.html`, shared manifests and lockfi
 - 2026-09-13: The one Opus completion review returned changes required. Sol corrected server-enforced forced-PIN state, stale-role token invalidation, role configuration escalation, protected PIN reset boundaries, login throttling, migration hash compatibility and idempotence, cross-department conflict acknowledgement, failed-write feedback, and role-config response wiring.
 - 2026-09-13: Per Anthony's one-review instruction, the Opus findings moved to one Sol correction pass. No second external review was launched.
 - 2026-09-13: Real-data test deployment exposed an Auth bootstrap gap and an immediate token-refresh race. Initialized Firebase Authentication only in the test project, preserved production, and verified B. Anthony with the temporary PIN reaches the forced Change PIN screen in a real browser.
+- 2026-09-13: Anthony approved the live release after Mac and phone testing. Merged pull request 10, backed up production data, deployed only the twelve owned functions, applied the idempotent migration, released Firestore rules and stamped Hosting release `20260914032034`, and verified administrator and ordinary-member login on the live site. Preserved the two unrelated production functions discovered during deployment.
