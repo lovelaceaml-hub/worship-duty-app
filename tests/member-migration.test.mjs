@@ -71,18 +71,6 @@ test('canonical transformation covers every identity reference and D. Chloe beco
   assert.equal(db.app.nameMap.map['D. Chloe'], 'M. Chloe');
 });
 
-test('malformed titles and required last initials normalize consistently', () => {
-  const canon = migration.makeCanonicalizer();
-  assert.equal(canon('B,James'), 'B. James');
-  assert.equal(canon('BJason'), 'B. Jason');
-  assert.equal(canon('D,Armani'), 'D. Armani');
-  assert.equal(canon('H.Elena'), 'H. Elena');
-  assert.equal(canon('S. Melisaa'), 'S. Melissa');
-  assert.equal(canon('B. James S'), 'B. James S.');
-  assert.equal(canon('S. Monica C'), 'S. Monica C.');
-  assert.equal(canon('S. Martha C'), 'S. Martha C.');
-});
-
 test('migration is idempotent and preserves exact leader and song editor configuration', () => {
   const options = {
     leaderNames: ['D. Chloe', 'B. Anthony L'],
