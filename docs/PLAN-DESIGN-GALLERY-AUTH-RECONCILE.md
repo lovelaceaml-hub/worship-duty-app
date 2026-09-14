@@ -1,6 +1,6 @@
 # Design Gallery and Authentication Reconciliation
 
-Status: Production release in progress
+Status: Complete
 
 Baseline: `5d270003afe9cdeb72299cbb0157ed7075b16668`
 
@@ -78,3 +78,4 @@ Sol owns shared integration, current-main reconciliation, test-site release, bro
 - 2026-09-13: Anthony approved the combined test build and authorized direct production release. The one requested Opus completion review returned changes required because an attempted identity alias cleanup could map ambiguous stored values to privileged accounts and diverge from backend auth records.
 - 2026-09-13: Sol reverted every identity alias change and implemented presentation-only member labels. Visible names now use title initial, period, space, and first name, with a last initial only for duplicate display names. Stored IDs, auth claims, PIN records, assignments, and production data remain unchanged.
 - 2026-09-13: The corrected full browser suite passed every authentication, forced PIN, design switching, permission scope, Presider, Prism, choir-song, naming, and responsive viewport check. The focused permission, auth wiring, and migration suites also passed 34 of 34 tests.
+- 2026-09-13: Merged pull request 12 and deployed Hosting release `202609132150` to `https://lv-zion-duties.web.app`. Live verification confirmed the stamped app and chooser assets, live sync, the Aurora appearance, date selection, and corrected member labels. Functions, Firestore rules, and production data were not changed by this release.
