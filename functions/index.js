@@ -2,19 +2,397 @@
 
 const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onRequest } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const sheetLib = require('./sheet-lib');
 const icsLib = require('./ics-lib');
 const { publicScheduleService } = require('./public-schedule');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
+const {
+  DEFAULT_PIN,
+  ORDINARY_DEFAULT_PIN,
+  hashPin,
+  createMemberAuthCallables
+} = require('./member-auth');
+const permissions = require('./permissions');
 
 initializeApp();
 const db = getFirestore();
 const REGION = 'us-central1';
 const TZ = 'America/Los_Angeles';
+const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
+
+const MEMBER_ALIASES = Object.freeze({ 'D. Chloe': 'M. Chloe' });
+
+function canonicalMemberName(name) {
+  const value = String(name == null ? '' : name).trim();
+  return MEMBER_ALIASES[value] || value;
+}
+
+function memberRoleRecord(name) {
+  const memberName = canonicalMemberName(name);
+  const actor = { name: memberName };
+  const admin = permissions.isAdmin(actor, PERMISSION_CONFIG);
+  const globalLeaderManager = permissions.isGlobalManager(actor, PERMISSION_CONFIG);
+  const departments = permissions.departmentsForLeader(actor, PERMISSION_CONFIG);
+  const departmentLeader = departments.length > 0 && !admin;
+  const songEditor = permissions.canEditSongs(actor, {}, PERMISSION_CONFIG);
+  const roles = [];
+  if (admin) roles.push('admin');
+  if (globalLeaderManager) roles.push('globalLeaderManager');
+  if (departmentLeader) roles.push('departmentLeader');
+  if (songEditor) roles.push('songEditor');
+  const role = admin
+    ? 'admin'
+    : globalLeaderManager
+      ? 'globalLeaderManager'
+      : departmentLeader
+        ? 'departmentLeader'
+        : songEditor
+          ? 'songEditor'
+          : 'member';
+  return {
+    id: memberName,
+    memberId: memberName,
+    name: memberName,
+    memberName,
+    role,
+    roles,
+    departments,
+    globalLeaderManager,
+    mustChangePin: admin || globalLeaderManager || departmentLeader || songEditor
+  };
+}
+
+function listFromMemberDocument(data) {
+  if (!data || typeof data !== 'object') return [];
+  if (Array.isArray(data.list)) return data.list;
+  if (Array.isArray(data.members)) return data.members;
+  return [];
+}
+
+function namesFromDepartmentDocument(data) {
+  const result = {};
+  if (!data || typeof data !== 'object') return result;
+  Object.keys(data).forEach(department => {
+    const value = data[department];
+    const names = Array.isArray(value)
+      ? value
+      : value && typeof value === 'object'
+        ? value.members || value.list || value.names || []
+        : [];
+    if (Array.isArray(names)) {
+      result[department] = names.map(canonicalMemberName).filter(Boolean);
+    }
+  });
+  return result;
+}
+
+async function departmentsForMember(name) {
+  try {
+    const snapshot = await db.collection('app').doc('departments').get();
+    const departments = namesFromDepartmentDocument(snapshot.exists ? snapshot.data() : null);
+    return Object.keys(departments).filter(department => departments[department].some(item => item === name));
+  } catch (_error) {
+    return [];
+  }
+}
+
+async function decorateMember(record) {
+  if (!record || typeof record !== 'object') return null;
+  const next = Object.assign({}, record);
+  const name = canonicalMemberName(next.name || next.memberName || next.id || next.memberId);
+  if (!name) return null;
+  next.id = String(next.id || next.memberId || name);
+  next.memberId = String(next.memberId || next.id);
+  next.name = name;
+  next.memberName = name;
+  if (!Array.isArray(next.departments) || !next.departments.length) {
+    next.departments = await departmentsForMember(name);
+  }
+  if (!Array.isArray(next.roles) || !next.roles.length) {
+    const defaults = memberRoleRecord(name);
+    next.roles = defaults.roles;
+    if (!next.role) next.role = defaults.role;
+    if (next.globalLeaderManager === undefined) next.globalLeaderManager = defaults.globalLeaderManager;
+  }
+  if (next.mustChangePin === undefined) {
+    const defaults = memberRoleRecord(name);
+    next.mustChangePin = defaults.mustChangePin;
+  }
+  return next;
+}
+
+function createFirestoreMemberStore() {
+  const accounts = db.collection('accounts');
+  const appMembers = db.collection('app').doc('members');
+
+  async function accountById(id) {
+    const requested = canonicalMemberName(id);
+    if (!requested) return null;
+    const snapshot = await accounts.doc(requested).get();
+    if (snapshot.exists) return decorateMember(Object.assign({ id: snapshot.id }, snapshot.data()));
+    const query = await accounts.where('memberId', '==', requested).limit(1).get();
+    if (!query.empty) {
+      const document = query.docs[0];
+      return decorateMember(Object.assign({ id: document.id }, document.data()));
+    }
+    const membersSnapshot = await appMembers.get();
+    const names = listFromMemberDocument(membersSnapshot.exists ? membersSnapshot.data() : null)
+      .map(canonicalMemberName);
+    if (!names.includes(requested)) return null;
+    const defaults = memberRoleRecord(requested);
+    defaults.pinHash = await hashPin(defaults.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN);
+    defaults.active = true;
+    defaults.roleVersion = 1;
+    await accounts.doc(requested).set(defaults, { merge: true });
+    return defaults;
+  }
+
+  async function findByName(name) {
+    const requested = canonicalMemberName(name);
+    if (!requested) return null;
+    const direct = await accountById(requested);
+    if (direct) return direct;
+    const query = await accounts.where('name', '==', requested).limit(1).get();
+    if (!query.empty) {
+      const document = query.docs[0];
+      return decorateMember(Object.assign({ id: document.id }, document.data()));
+    }
+    return accountById(requested);
+  }
+
+  return {
+    getById: accountById,
+    findByName,
+    async update(id, patch) {
+      const memberId = canonicalMemberName(id);
+      if (!memberId) throw new Error('Member id is required.');
+      const current = await accountById(memberId) || memberRoleRecord(memberId);
+      const safePatch = Object.assign({}, patch);
+      await accounts.doc(memberId).set(Object.assign({}, current, safePatch, {
+        id: memberId,
+        memberId,
+        name: canonicalMemberName(current.name || memberId),
+        memberName: canonicalMemberName(current.memberName || current.name || memberId)
+      }), { merge: true });
+    },
+    async assertCanAttempt(id) {
+      const snapshot = await accounts.doc(canonicalMemberName(id)).get();
+      const data = snapshot.exists ? snapshot.data() : {};
+      if (Number(data.loginLockedUntil || 0) > Date.now()) {
+        const error = new Error('Too many attempts. Try again later.');
+        error.code = 'resource-exhausted';
+        throw error;
+      }
+    },
+    async recordFailedAttempt(id) {
+      const ref = accounts.doc(canonicalMemberName(id));
+      await db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(ref);
+        const data = snapshot.exists ? snapshot.data() : {};
+        const attempts = Number(data.failedLoginAttempts || 0) + 1;
+        transaction.set(ref, {
+          failedLoginAttempts: attempts,
+          loginLockedUntil: attempts >= 5 ? Date.now() + 15 * 60 * 1000 : 0
+        }, { merge: true });
+      });
+    },
+    async clearFailedAttempts(id) {
+      await accounts.doc(canonicalMemberName(id)).set({ failedLoginAttempts: 0, loginLockedUntil: 0 }, { merge: true });
+    }
+  };
+}
+
+function memberPermissionAdapter() {
+  return {
+    async assertActorCanAct({ actor, action, target }) {
+      const identity = Object.assign({}, actor && actor.token, { uid: actor && actor.uid });
+      if (action === 'member.pin.reset') {
+        const config = await runtimePermissionConfig();
+        if (permissions.isAdmin(identity, config) || permissions.isGlobalManager(identity, config)) return true;
+        const targetIdentity = { name: canonicalMemberName(target && (target.name || target.memberName || target.id)), roles: target && target.roles };
+        const privilegedTarget = permissions.isAdmin(targetIdentity, config) ||
+          permissions.isGlobalManager(targetIdentity, config) ||
+          permissions.departmentsForLeader(targetIdentity, config).length > 0 ||
+          permissions.canEditSongs(targetIdentity, {}, config);
+        const memberships = await departmentsForMember(targetIdentity.name);
+        const scopedTarget = Object.assign({}, targetIdentity, { departments: memberships });
+        if (privilegedTarget || !permissions.canResetPin(identity, scopedTarget, config)) {
+          const error = new Error('You are not allowed to perform this action.');
+          error.code = 'permission-denied';
+          throw error;
+        }
+        return true;
+      }
+      if (permissions.canManageLeaders(identity, PERMISSION_CONFIG)) return true;
+      const error = new Error('You are not allowed to perform this action.');
+      error.code = 'permission-denied';
+      throw error;
+    }
+  };
+}
+
+const memberAuthCallables = createMemberAuthCallables({
+  memberStore: createFirestoreMemberStore(),
+  auth: getAuth(),
+  permission: memberPermissionAdapter(),
+  logger
+});
+
+const AUTH_ERROR_CODES = new Set([
+  'cancelled', 'invalid-argument', 'deadline-exceeded', 'not-found',
+  'already-exists', 'permission-denied', 'resource-exhausted',
+  'failed-precondition', 'aborted', 'out-of-range', 'unauthenticated',
+  'unavailable', 'data-loss', 'internal'
+]);
+
+function exposeMemberAuthCallable(handler) {
+  return onCall({ region: REGION }, async request => {
+    try {
+      return await handler(request);
+    } catch (error) {
+      const code = error && AUTH_ERROR_CODES.has(error.code) ? error.code : 'internal';
+      const message = code === 'internal'
+        ? 'The member authentication service is unavailable.'
+        : String(error.message || 'The requested authentication action failed.');
+      throw new HttpsError(code, message);
+    }
+  });
+}
+
+exports.verifyMemberPin = exposeMemberAuthCallable(memberAuthCallables.verifyMemberPin);
+exports.changeMemberPin = exposeMemberAuthCallable(memberAuthCallables.changeMemberPin);
+exports.resetMemberPin = exposeMemberAuthCallable(memberAuthCallables.resetMemberPin);
+
+function callableActor(request) {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'A verified member session is required.');
+  if (request.auth.token && request.auth.token.mustChangePin === true) {
+    throw new HttpsError('failed-precondition', 'Change your PIN before using privileged actions.');
+  }
+  return Object.assign({}, request.auth.token || {}, { uid: request.auth.uid });
+}
+
+async function runtimePermissionConfig() {
+  const snapshot = await db.collection('app').doc('leaderConfig').get();
+  return snapshot.exists
+    ? Object.assign({}, snapshot.data(), {
+      admin: PERMISSION_CONFIG.admin,
+      globalLeaderManager: PERMISSION_CONFIG.globalLeaderManager
+    })
+    : PERMISSION_CONFIG;
+}
+
+exports.updateDepartmentMembership = onCall({ region: REGION }, async request => {
+  const actor = callableActor(request);
+  const data = request.data || {};
+  const department = String(data.department || '').trim();
+  const memberName = canonicalMemberName(data.memberName);
+  const status = data.status === 'archived' ? 'archived' : 'active';
+  if (!department || !memberName) {
+    throw new HttpsError('invalid-argument', 'Department and member name are required.');
+  }
+  const config = await runtimePermissionConfig();
+  if (!permissions.canManageDepartmentMember(actor, department, { name: memberName }, config)) {
+    throw new HttpsError('permission-denied', 'You cannot manage this department membership.');
+  }
+  const membershipId = encodeURIComponent(department) + '__' + encodeURIComponent(memberName);
+  const actorName = canonicalMemberName(actor.memberName || actor.name || actor.uid);
+  await db.runTransaction(async transaction => {
+    const departmentsRef = db.collection('app').doc('departments');
+    const membersRef = db.collection('app').doc('members');
+    const membershipRef = db.collection('memberships').doc(membershipId);
+    const [departmentsSnap, membersSnap] = await Promise.all([
+      transaction.get(departmentsRef), transaction.get(membersRef)
+    ]);
+    const map = Object.assign({}, departmentsSnap.exists ? departmentsSnap.data().map : {});
+    const roster = Array.isArray(map[department]) ? map[department].map(canonicalMemberName) : [];
+    map[department] = status === 'active'
+      ? Array.from(new Set(roster.concat(memberName))).sort()
+      : roster.filter(name => name !== memberName);
+    const members = listFromMemberDocument(membersSnap.exists ? membersSnap.data() : null)
+      .map(canonicalMemberName);
+    transaction.set(departmentsRef, { map }, { merge: true });
+    if (status === 'active' && !members.includes(memberName)) {
+      transaction.set(membersRef, { list: members.concat(memberName).sort() }, { merge: true });
+    }
+    transaction.set(membershipRef, {
+      department, memberName, memberId: memberName, status,
+      updatedAt: Date.now(), updatedByUid: request.auth.uid, updatedByName: actorName
+    }, { merge: true });
+    transaction.set(db.collection('audit').doc(), {
+      actor: actorName, actorUid: request.auth.uid,
+      action: status === 'active' ? 'department-member-activated' : 'department-member-archived',
+      target: memberName, department, timestamp: Date.now()
+    });
+  });
+  return { ok: true, department, memberName, status };
+});
+
+exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
+  const actor = callableActor(request);
+  const data = request.data || {};
+  const roleType = data.roleType === 'songEditor' ? 'songEditor' : 'departmentLeader';
+  const department = String(data.department || '').trim();
+  const memberName = canonicalMemberName(data.memberName);
+  const enabled = data.enabled === true;
+  const current = await runtimePermissionConfig();
+  if (!memberName || (roleType === 'departmentLeader' && !department)) {
+    throw new HttpsError('invalid-argument', 'A valid role target is required.');
+  }
+  if (!permissions.canManageLeaders(actor, current)) {
+    throw new HttpsError('permission-denied', 'Only global leader managers can change role assignments.');
+  }
+  const next = {
+    admin: Array.from(PERMISSION_CONFIG.admin),
+    globalLeaderManager: Array.from(PERMISSION_CONFIG.globalLeaderManager),
+    departmentLeaders: Object.assign({}, current.departmentLeaders || PERMISSION_CONFIG.departmentLeaders),
+    songEditors: Array.from(current.songEditors || PERMISSION_CONFIG.songEditors)
+  };
+  const list = roleType === 'songEditor'
+    ? next.songEditors
+    : Array.from(next.departmentLeaders[department] || []);
+  const updated = enabled
+    ? Array.from(new Set(list.concat(memberName))).sort()
+    : list.filter(name => canonicalMemberName(name) !== memberName);
+  if (roleType === 'songEditor') next.songEditors = updated;
+  else next.departmentLeaders[department] = updated;
+  const actorName = canonicalMemberName(actor.memberName || actor.name || actor.uid);
+  await db.collection('app').doc('leaderConfig').set(next, { merge: false });
+  const memberActor = { name: memberName };
+  const departments = permissions.departmentsForLeader(memberActor, next);
+  const roles = [];
+  if (permissions.isAdmin(memberActor, next)) roles.push('admin');
+  if (permissions.isGlobalManager(memberActor, next)) roles.push('globalLeaderManager');
+  if (departments.length) roles.push('departmentLeader');
+  if (permissions.canEditSongs(memberActor, {}, next)) roles.push('songEditor');
+  const accountRef = db.collection('accounts').doc(memberName);
+  const beforeAccount = await accountRef.get();
+  const beforeData = beforeAccount.exists ? beforeAccount.data() : {};
+  const wasPrivileged = Array.isArray(beforeData.roles) && beforeData.roles.some(role => role !== 'member');
+  const nowPrivileged = roles.length > 0;
+  const accountPatch = {
+    roles, departments,
+    role: roles[0] || 'member',
+    globalLeaderManager: roles.includes('globalLeaderManager'),
+    mustChangePin: !wasPrivileged && nowPrivileged ? true : Boolean(beforeData.mustChangePin),
+    active: true,
+    roleVersion: Number(beforeData.roleVersion || 1) + 1
+  };
+  if (!beforeData.pinHash) accountPatch.pinHash = await hashPin(nowPrivileged ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN);
+  await accountRef.set(accountPatch, { merge: true });
+  try { await getAuth().revokeRefreshTokens(String(beforeData.authUid || 'member:' + memberName)); } catch (_error) { /* next token still uses the new role version */ }
+  await db.collection('audit').add({
+    actor: actorName, actorUid: request.auth.uid,
+    action: 'role-configuration-changed', target: memberName,
+    roleType, department: roleType === 'departmentLeader' ? department : '',
+    enabled, timestamp: Date.now()
+  });
+  return { ok: true, config: next };
+});
 
 function dateInTimeZone(date) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -41,7 +419,7 @@ function fmtTime(t) {
   return h + ':' + m + ' ' + ap;
 }
 function bodyFor(duty, svc) {
-  return duty + ' — ' + (svc.worship || '') + ' ' + svc.service + ', ' +
+  return duty + ' - ' + (svc.worship || '') + ' ' + svc.service + ', ' +
     fmtDate(svc.date) + ' at ' + fmtTime(svc.time);
 }
 
@@ -107,10 +485,10 @@ exports.onScheduleWrite = onDocumentWritten(
   { document: 'schedule/{id}', region: REGION },
   async (event) => {
     const after = event.data && event.data.after;
-    if (!after || !after.exists) return; // deleted — nothing to alert
+    if (!after || !after.exists) return; // deleted - nothing to alert
     // Brand-new service doc (initial seed, bulk import, or a fresh sheet-created
     // service): every assignment would read as "new", fanning a mass push out to
-    // everyone at once. Skip — members still get the in-app badge and the
+    // everyone at once. Skip - members still get the in-app badge and the
     // day-before reminder. Only alert on edits to an existing service.
     if (!(event.data.before && event.data.before.exists)) return;
     const svc = after.data() || {};
@@ -210,7 +588,7 @@ exports.onRequestCreated = onDocumentCreated(
       return;
     }
 
-    const body = req.name + ' requests a change: ' + req.duty + ' — ' +
+    const body = req.name + ' requests a change: ' + req.duty + ' - ' +
       fmtDate(req.date) + ' ' + req.service +
       (req.note ? ' · "' + req.note + '"' : '');
 
@@ -233,7 +611,7 @@ exports.onRequestResolved = onDocumentUpdated(
     const afterData = after.data() || {};
     if (!(beforeData.status === 'pending' && afterData.status !== beforeData.status)) return;
 
-    const body = afterData.duty + ' — ' + fmtDate(afterData.date) + ' ' + afterData.service;
+    const body = afterData.duty + ' - ' + fmtDate(afterData.date) + ' ' + afterData.service;
     await sendToNames([afterData.name], 'Schedule change ' + afterData.status, () => body);
   });
 
@@ -306,7 +684,7 @@ exports.scheduledSheetSync = onSchedule(
     const parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(text), new Date());
     if (parsed.warnings.length) logger.warn('scheduledSheetSync: parse warnings', { warnings: parsed.warnings });
     if (!parsed.services.length) {
-      logger.warn('scheduledSheetSync: sheet parsed to zero services — leaving Firestore untouched');
+      logger.warn('scheduledSheetSync: sheet parsed to zero services - leaving Firestore untouched');
       return;
     }
 

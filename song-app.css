@@ -253,6 +253,17 @@
 #song-root .svc-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
 #song-root .svc-roles { margin-top: 8px; border-top: 1px solid var(--hairline); padding-top: 6px; }
 #song-root .svc-roles .duty-row { padding-left: 0; font-size: 14px; }
+#song-root .svc-card.other-presider {
+  background: rgba(245, 247, 249, 0.78); border-color: rgba(140, 154, 164, 0.34);
+}
+#song-root .svc-card.other-presider .svc-title,
+#song-root .svc-card.other-presider .presider-meta,
+#song-root .svc-card.other-presider .svc-roles,
+#song-root .svc-card.other-presider .svc-meta { color: var(--muted); }
+#song-root .svc-card.other-presider .duty-row .pill,
+#song-root .svc-card.other-presider .svc-song .s-title { color: var(--muted); }
+#song-root .readonly-note { color: var(--muted); font-size: 13px; font-weight: 600; }
+#song-root .readonly-builder { border-left: 4px solid var(--line); }
 
 /* ---- home ---- */
 #song-root .me-chip {
@@ -261,6 +272,15 @@
   border: 1px solid var(--glass-border); background: var(--glass-strong);
   padding: 4px 12px; border-radius: 999px; white-space: nowrap;
 }
+#song-root .home-scope {
+  display: flex; gap: 0; margin: 8px 4px 14px; border-bottom: 1px solid var(--line);
+}
+#song-root .scope-button {
+  flex: 1 1 0; min-height: 42px; padding: 9px 12px; border: 0; border-bottom: 3px solid transparent;
+  background: transparent; color: var(--muted); font-size: 14px; font-weight: 650; cursor: pointer; font-family: var(--sans);
+}
+#song-root .scope-button.active { color: var(--brand-blue-deep, var(--accent)); border-bottom-color: var(--brand-blue, var(--accent)); }
+#song-root .home-past-toggle { text-align: center; margin-top: 10px; }
 #song-root .order-list { margin: 12px 0 4px; border-top: 1px solid var(--hairline); padding-top: 8px; }
 #song-root .order-head { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
 #song-root .order-step { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; font-size: 14px; }

@@ -20,6 +20,11 @@ function replaceExactlyOnce(source, before, after, label) {
  * are not erased accidentally.
  */
 export function patchChoirDateSync(source) {
+  if (source.includes('_sheetChoirSongSeen: false') &&
+      source.includes('svc._sheetChoirSongSeen = true') &&
+      source.includes('const choirSongSeen = sheetSvc._sheetChoirSongSeen === true')) {
+    return source;
+  }
   source = replaceExactlyOnce(
     source,
     "svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {}, choirSong: '' };",

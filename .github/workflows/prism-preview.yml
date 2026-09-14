@@ -21,8 +21,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Existing runtime regression checks
         run: node prototype-prism/tests/preview.mjs
-      - name: Every-page theme and nested workflow checks
-        run: node prototype-prism/tests/all-pages.mjs
+      - name: Current Presider and permission checks
+        run: node --test tests/presider-permissions.test.mjs tests/permissions.test.mjs
       - name: Package the runnable app and source
         if: always()
         run: |

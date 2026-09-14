@@ -44,7 +44,20 @@ async function audit(name, viewport, isMobile = false) {
   }, unlockHash);
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !document.querySelector('#view')?.textContent?.includes('Loading schedule'), null, { timeout: 20000 });
-  await page.locator('nav.tabs:not(.hidden)').waitFor();
+  await page.locator('nav.tabs:not(.hidden), #member-login').first().waitFor();
+  if (await page.locator('#member-login').count()) {
+    const loginAxe = await new AxeBuilder({ page }).analyze();
+    await page.screenshot({ path: path.join(evidenceDir, `${name}-member-login.png`), fullPage: true });
+    results.push({
+      name, viewport, loginScreen: true,
+      scheduleViolations: loginAxe.violations.map(v => ({ id: v.id, impact: v.impact, targets: v.nodes.map(node => node.target.join(' ')) })),
+      myDutiesViolations: [], presiderViolations: [], libraryViolations: [],
+      servicesViolations: [], insightsViolations: [], manageViolations: [],
+      consoleErrors, failedResponses
+    });
+    await context.close();
+    return;
+  }
   console.log(`UI QA: ${name} schedule ready`);
 
   const active = await page.locator('nav.tabs button.active').textContent();

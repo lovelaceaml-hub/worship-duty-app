@@ -12,7 +12,12 @@
        nameMap,   // merged variant→canonical name map
        service,   // deep-link hint {date,worship,service,time} of the tapped
                   //   Presider duty, or null
-       onBack     // call to return to My Duties
+       onBack,    // call to return to My Duties
+       canEditSongService // optional host authorization callback. It receives
+                          // the service record and action name and returns a
+                          // boolean. Returning false is fail-closed.
+       canManagePresiders // optional host authorization callback for the
+                          // Worship-only presider list management surface.
      }
 
    Differences from the stand-alone app (per docs/MERGE-HANDOFF.md):
@@ -41,7 +46,7 @@ const SERVICE_LABELS = ['Morning', 'Afternoon', 'Evening', 'Early Morning', 'Com
 const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
 
 /* Left-to-right tab order — drives swipe-left/right navigation inside the picker. */
-const TAB_ORDER = ['home', 'library', 'services', 'insights'];
+const TAB_ORDER = ['home', 'library', 'insights'];
 
 /* Known presider-name variants → canonical spelling. Falls back under the
    shared app/nameMap doc (and the host-supplied ctx.nameMap) in canonName(). */
@@ -98,7 +103,7 @@ const state = {
   songs: [], songById: {}, stats: {}, setlists: {}, settings: {},
   presiders: [], nameMap: {}, schedule: [],
   ui: {
-    tab: 'home', search: '', category: 'All', sort: 'number', libPage: 0,
+    tab: 'home', homeScope: 'mine', search: '', category: 'All', sort: 'number', libPage: 0,
     currentSetlist: null, expandedSong: null, showPast: false,
     expandedService: null, runsheet: null, pickSlot: null, manualService: false,
     me: '', pendingEditorAction: null, editorGate: null, pinError: '',
@@ -179,12 +184,22 @@ function writeSongSettings(patch) {
     saveLocal();
   }
 }
-function requireEditor(action) {
-  if (editorUnlocked()) { action(); return; }
-  state.ui.pendingEditorAction = action;
-  state.ui.editorGate = editorPinHash() ? 'unlock' : 'create';
-  state.ui.pinError = '';
+function denySongEdit() {
+  state.ui.pinError = 'This account can view songs but cannot edit this service.';
   render();
+}
+function requireEditor(action, target, permissionAction, permissionCheck) {
+  const allowed = permissionCheck
+    ? permissionCheck()
+    : target
+      ? canEditSongsForService(target, permissionAction || 'edit')
+      : canManageSongCatalog(permissionAction || 'manage');
+  if (!allowed) { denySongEdit(); return false; }
+  // Member authentication and the service-scoped permission check above are
+  // the authorization boundary. The retired shared editor PIN must not block
+  // a verified presider, song editor, or administrator.
+  action();
+  return true;
 }
 function resolvePendingEditorAction() {
   const action = state.ui.pendingEditorAction;
@@ -348,7 +363,9 @@ function writeSetlistPatch(id, patch) {
   });
 }
 
-function updateSetlist(id, patch) {
+function updateSetlist(id, patch, options) {
+  const sl = state.setlists[id];
+  if (!(options && options.internal) && (!sl || !canEditSongsForService(sl, 'edit'))) return false;
   stampMeta(patch);
   if (fb) {
     applyLocalSetlistPatch(id, patch);
@@ -357,21 +374,24 @@ function updateSetlist(id, patch) {
     state.setlists[id] = Object.assign({}, state.setlists[id], patch);
     saveLocal(); render();
   }
+  return true;
 }
 function setlistAddSong(id, songId) {
   const sl = state.setlists[id];
+  if (!sl || !canEditSongsForService(sl, 'edit')) return false;
   const songs = ((sl && sl.songs) || []).concat(songId);
   if (fb) {
     const patch = stampMeta({ songs: songs });
     applyLocalSetlistPatch(id, patch);
     writeSetlistPatch(id, patch);
   } else if (sl) { sl.songs = songs; stampMeta(sl); saveLocal(); render(); }
+  return true;
 }
 function setlistRemoveSongAt(id, index) {
   const sl = state.setlists[id];
-  if (!sl) return;
+  if (!sl || !canEditSongsForService(sl, 'edit')) return false;
   const songs = (sl.songs || []).slice();
-  if (index < 0 || index >= songs.length) return;
+  if (index < 0 || index >= songs.length) return false;
   const removed = songs.splice(index, 1)[0];
   const clear = {};
   if (songs.indexOf(removed) === -1) {
@@ -387,14 +407,18 @@ function setlistRemoveSongAt(id, index) {
     sl.songs = songs; Object.assign(sl, clear);
     stampMeta(sl); saveLocal(); render();
   }
+  return true;
 }
 function setlistReorder(id, songs) {
+  const sl = state.setlists[id];
+  if (!sl || !canEditSongsForService(sl, 'edit')) return false;
   if (fb) {
     const patch = stampMeta({ songs: songs.slice() });
     applyLocalSetlistPatch(id, patch);
     writeSetlistPatch(id, patch);
     render();
   } else { state.setlists[id].songs = songs.slice(); stampMeta(state.setlists[id]); saveLocal(); render(); }
+  return true;
 }
 
 /* ================= confirmation state ================= */
@@ -411,11 +435,12 @@ function changedSinceConfirmed(sl) {
 }
 function confirmSetlist(id) {
   const sl = state.setlists[id];
-  if (!sl || !(sl.songs || []).length) return;
+  if (!sl || !canEditSongsForService(sl, 'confirm') || !(sl.songs || []).length) return false;
   const patch = stampMeta({ confirmedBy: whoAmI() });
   patch.confirmedAt = patch.updatedAt;
   updateSetlist(id, patch);
   render();
+  return true;
 }
 
 /* One chip that answers "have the songs been picked for this service?" It
@@ -462,7 +487,7 @@ function currentSetlist() {
 
 async function markSetlistSung(id) {
   const local = state.setlists[id];
-  if (!local) return;
+  if (!local || !canEditSongsForService(local, 'mark-sung')) return false;
   if (local.status === 'sung') { render(); return; }
   const by = whoAmI();
   const markedAt = now();
@@ -470,7 +495,7 @@ async function markSetlistSung(id) {
     const result = applySung(state.stats, local, { by, markedAt });
     Object.keys(result.changed).forEach(sid => { state.stats[sid] = result.changed[sid]; });
     state.setlists[id] = Object.assign({}, local, { status: 'sung', sungAt: markedAt, updatedAt: markedAt, updatedBy: by });
-    saveLocal(); render(); return;
+    saveLocal(); render(); return true;
   }
   try {
     await fb.runTransaction(fb.db, async tx => {
@@ -495,16 +520,17 @@ async function markSetlistSung(id) {
     console.warn('markSetlistSung failed:', err);
     alert('Could not mark as sung. Check your connection and try again.');
   }
+  return true;
 }
 async function undoSetlistSung(id) {
   const local = state.setlists[id];
-  if (!local) return;
+  if (!local || !canEditSongsForService(local, 'undo-sung')) return false;
   if (!fb) {
     const result = applyUndo(state.stats, local);
     Object.keys(result.changed).forEach(sid => { state.stats[sid] = result.changed[sid]; });
     result.removed.forEach(sid => { delete state.stats[sid]; });
     state.setlists[id] = Object.assign({}, local, { status: 'planned', sungAt: null, updatedAt: now(), updatedBy: whoAmI() });
-    saveLocal(); render(); return;
+    saveLocal(); render(); return true;
   }
   const undoneAt = now(); const by = whoAmI();
   try {
@@ -530,6 +556,7 @@ async function undoSetlistSung(id) {
     console.warn('undoSetlistSung failed:', err);
     alert('Could not undo. Check your connection and try again.');
   }
+  return true;
 }
 
 /* ================= presiders ================= */
@@ -562,6 +589,187 @@ function myUpcomingSchedule() {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 function nextDutyForMe() { return myUpcomingSchedule()[0] || null; }
+
+/* ================= song authorization ================= */
+
+/* The host owns identity and authorization. A Worship leader is not a song
+   editor unless the host explicitly grants song access. B. Anthony remains the
+   named application administrator fallback while the authenticated host loads
+   its permission data. */
+
+function authSources() {
+  const sources = [ctx, ctx && ctx.permissions, ctx && ctx.authorization,
+    ctx && ctx.authz, ctx && ctx.user, ctx && ctx.account];
+  return sources.filter(s => s && typeof s === 'object');
+}
+
+function roleTokens(source) {
+  if (!source || typeof source !== 'object') return [];
+  const values = [];
+  ['role', 'roles', 'permissions', 'permissionGroups', 'groups', 'department', 'departmentRole'].forEach(key => {
+    const value = source[key];
+    if (Array.isArray(value)) values.push.apply(values, value);
+    else if (typeof value === 'string') values.push(value);
+  });
+  return values.map(value => String(value).trim().toLowerCase().replace(/[ _]+/g, '-'));
+}
+
+function hasBooleanPermission(keys) {
+  return authSources().some(source => keys.some(key => source[key] === true));
+}
+
+function hasRolePermission(roles) {
+  const wanted = roles.map(role => String(role).toLowerCase().replace(/[ _]+/g, '-'));
+  return authSources().some(source => roleTokens(source).some(role => wanted.indexOf(role) !== -1));
+}
+
+function isHostAdmin() {
+  return hasBooleanPermission(['isAdmin', 'admin', 'allAccess', 'canAdminister', 'isWorshipAdmin',
+    'canManagePresiders', 'canManageWorship', 'canAdministerWorship']) ||
+    hasRolePermission(['admin', 'administrator', 'all-access', 'all', 'worship-admin', 'worship-administrator']);
+}
+
+function isHostSongEditor() {
+  return hasBooleanPermission([
+    'isSongEditor', 'songEditor', 'choirSongEditor', 'choirSongEditorAccess',
+    'canEditSongs', 'canEditSong', 'canEditSongService', 'canEditSongsForService'
+  ]) || hasRolePermission([
+    'song-editor', 'songeditor', 'choir-song-editor', 'choir-songeditor', 'choirsongeditor',
+    'choir-song-editor-access'
+  ]);
+}
+
+/* A host callback can enforce a richer permission matrix or a forced-PIN
+   boundary. A callback that returns false is authoritative and must not be
+   widened by the local fallback checks below. */
+function hostSongAuthorization(service, action) {
+  const candidates = [];
+  const add = (owner, key) => {
+    if (owner && typeof owner[key] === 'function') candidates.push({ owner, fn: owner[key] });
+  };
+  add(ctx, 'canEditSongService');
+  add(ctx, 'canEditSongsForService');
+  add(ctx, 'authorizeSongAction');
+  add(ctx && ctx.permissions, 'canEditSongService');
+  add(ctx && ctx.permissions, 'canEditSongsForService');
+  add(ctx && ctx.permissions, 'authorizeSongAction');
+  add(ctx && ctx.authz, 'canEditSongService');
+  add(ctx && ctx.authz, 'canEditSongsForService');
+  add(ctx && ctx.authz, 'authorizeSongAction');
+  if (!candidates.length) return null;
+  for (const candidate of candidates) {
+    try {
+      const result = candidate.fn.call(candidate.owner, service, action, state.ui.me);
+      if (typeof result === 'boolean') return result;
+      if (result && typeof result.allowed === 'boolean') return !!result.allowed;
+    } catch (err) {
+      console.warn('Song authorization callback failed:', err);
+      return false;
+    }
+  }
+  return false;
+}
+
+function songServiceRecord(target) {
+  const source = target || {};
+  const id = source.id || source.serviceId || '';
+  const schedule = source.schedule || (id ? scheduleFor(id) : null);
+  const record = Object.assign({}, schedule || {}, source);
+  const assignments = record.assignments || (schedule && schedule.assignments) || {};
+  record.assignments = assignments;
+  record.id = id || record.id || '';
+  record.date = record.date || (schedule && schedule.date) || '';
+  record.service = record.service || record.serviceLabel || (schedule && schedule.service) || '';
+  record.worship = record.worship || record.worshipType || (schedule && schedule.worship) || '';
+  record.presider = record.presider || assignments.Presider || '';
+  return record;
+}
+
+function presiderForService(target) {
+  const record = songServiceRecord(target);
+  const schedule = record.id ? scheduleFor(record.id) : null;
+  return (schedule && schedule.assignments && schedule.assignments.Presider) ||
+    record.presider || (record.assignments && record.assignments.Presider) || '';
+}
+
+function isMyPresiderService(target) {
+  const me = canonName(state.ui.me || (ctx && ctx.me) || '');
+  const presider = canonName(presiderForService(target));
+  return !!(me && presider && me === presider);
+}
+
+function canEditSongsForService(target, action) {
+  const record = songServiceRecord(target);
+  if (!record.date && !record.service && !record.id) return false;
+  const hostResult = hostSongAuthorization(record, action || 'edit');
+  if (hostResult !== null) return hostResult;
+
+  /* Assigned Presider access is service-scoped, not a general Worship role. */
+  if (isMyPresiderService(record)) return true;
+  if (isHostAdmin() || isHostSongEditor()) return true;
+
+  const me = canonName(state.ui.me || (ctx && ctx.me) || '');
+  if (me === 'B. Anthony') return true;
+  return false;
+}
+
+function canCreateSongSetlist() {
+  const hostResult = hostSongAuthorization({ scope: 'new-setlist', date: todayISO(), service: SERVICE_LABELS[0] }, 'create');
+  if (hostResult !== null) return hostResult;
+  if (isHostAdmin() || isHostSongEditor()) return true;
+  const me = canonName(state.ui.me || (ctx && ctx.me) || '');
+  if (me === 'B. Anthony') return true;
+  return false;
+}
+
+function canManageSongCatalog(action) {
+  const target = { scope: 'song-catalog', id: 'song-catalog' };
+  const hostResult = hostSongAuthorization(target, action || 'manage');
+  if (hostResult !== null) return hostResult;
+  if (isHostAdmin() || isHostSongEditor()) return true;
+  const me = canonName(state.ui.me || (ctx && ctx.me) || '');
+  return me === 'B. Anthony';
+}
+
+/* Presider-list management is a Worship administration action, not a song
+   editor action. Keep it on its own host hook so Choir Song Editors cannot
+   inherit the broader management surface. */
+function hostAdminAuthorization(action) {
+  const candidates = [];
+  const add = (owner, key) => {
+    if (owner && typeof owner[key] === 'function') candidates.push({ owner, fn: owner[key] });
+  };
+  const keys = ['canManagePresiders', 'canManageWorship', 'canAdministerWorship',
+    'authorizeWorshipAction', 'authorizeAdminAction'];
+  const owners = [ctx, ctx && ctx.permissions, ctx && ctx.authz];
+  owners.forEach(owner => keys.forEach(key => add(owner, key)));
+  if (!candidates.length) return null;
+  const target = { scope: 'presider-management', id: 'presider-management' };
+  for (const candidate of candidates) {
+    try {
+      const result = candidate.fn.call(candidate.owner, target, action || 'manage', state.ui.me);
+      if (typeof result === 'boolean') return result;
+      if (result && typeof result.allowed === 'boolean') return !!result.allowed;
+    } catch (err) {
+      console.warn('Worship authorization callback failed:', err);
+      return false;
+    }
+  }
+  return false;
+}
+
+function canManagePresiders(action) {
+  const hostResult = hostAdminAuthorization(action || 'manage');
+  if (hostResult !== null) return hostResult;
+  if (isHostAdmin()) return true;
+  const me = canonName(state.ui.me || (ctx && ctx.me) || '');
+  return me === 'B. Anthony';
+}
+
+function canEditCurrentSetlist() {
+  const sl = currentSetlist();
+  return !!sl && canEditSongsForService(sl, 'edit');
+}
 
 function findScheduleEntry(scheduleArr, serviceId) {
   return (scheduleArr || []).find(s => s.date && s.service && serviceIdFor(s.date, s.service) === serviceId) || null;
@@ -648,23 +856,28 @@ function syncPresiderSchedule() {
       const id = serviceIdFor(s.date, label);
       const existed = !!state.setlists[id];
       ensureSetlist(s.date, s.worship || WORSHIP_TYPES[0], label);
-      if (!existed) updateSetlist(id, { presider: me, source: 'schedule' });
-      else { const sl = state.setlists[id]; if (sl && sl.presider !== me) updateSetlist(id, { presider: me }); }
+      if (!existed) updateSetlist(id, { presider: me, source: 'schedule' }, { internal: true });
+      else { const sl = state.setlists[id]; if (sl && sl.presider !== me) updateSetlist(id, { presider: me }, { internal: true }); }
     });
 }
 function addPresider(name) {
+  if (!canManagePresiders('manage')) return false;
   name = String(name || '').trim();
-  if (!name) return;
-  if (state.presiders.indexOf(name) !== -1) return;
+  if (!name) return false;
+  if (state.presiders.indexOf(name) !== -1) return false;
   if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'presiders'), { names: fb.arrayUnion(name) }, { merge: true });
   else { state.presiders.push(name); state.presiders.sort(); saveLocal(); render(); }
+  return true;
 }
 function removePresider(name) {
+  if (!canManagePresiders('manage')) return false;
   if (fb) fb.setDoc(fb.doc(fb.db, 'app', 'presiders'), { names: fb.arrayRemove(name) }, { merge: true });
   else { state.presiders = state.presiders.filter(n => n !== name); saveLocal(); render(); }
+  return true;
 }
 
 async function deleteSetlistById(id) {
+  if (!state.setlists[id] || !canEditSongsForService(state.setlists[id], 'delete')) return false;
   if (fb) {
     try { await fb.deleteDoc(fb.doc(fb.db, 'setlists', id)); }
     catch (err) { console.warn('deleteSetlistById failed:', err); alert('Could not delete. Check your connection and try again.'); }
@@ -673,17 +886,19 @@ async function deleteSetlistById(id) {
     if (state.ui.currentSetlist === id) state.ui.currentSetlist = null;
     saveLocal(); render();
   }
+  return true;
 }
 
 /* ================= backfill (editor-gated) ================= */
 
 async function backfillSong(songId, date) {
+  if (!canManageSongCatalog('backfill')) return false;
   const by = whoAmI() || 'Backfill';
   const markedAt = now();
   if (!fb) {
     const doc = applyBackfill(state.stats, songId, date, { by, markedAt });
     if (doc) { state.stats[songId] = doc; saveLocal(); }
-    render(); return;
+    render(); return true;
   }
   try {
     let statsMap = {};
@@ -695,13 +910,15 @@ async function backfillSong(songId, date) {
     console.warn('backfillSong failed:', err);
     alert('Could not save the backfill entry. Check your connection and try again.');
   }
+  return true;
 }
 async function removeHistoryEntryById(songId, service) {
+  if (!canManageSongCatalog('remove-history')) return false;
   if (!fb) {
     const r = removeHistoryEntry(state.stats, songId, service);
     if (r.removed) delete state.stats[songId];
     else if (r.changed) state.stats[songId] = r.changed;
-    saveLocal(); render(); return;
+    saveLocal(); render(); return true;
   }
   try {
     let statsMap = {};
@@ -714,6 +931,7 @@ async function removeHistoryEntryById(songId, service) {
     console.warn('removeHistoryEntryById failed:', err);
     alert('Could not remove that entry. Check your connection and try again.');
   }
+  return true;
 }
 
 /* ================= derived stats ================= */
@@ -888,7 +1106,7 @@ function renderHeader() {
     '</div>';
 }
 function renderTabs() {
-  const labels = { home: 'Home', library: 'Library', services: 'Services', insights: 'Insights' };
+  const labels = { home: 'Home', library: 'Library', insights: 'Insights' };
   return '<nav class="ns-tabs" role="tablist" aria-label="Song picker sections">' +
     TAB_ORDER.map(t => {
       const on = state.ui.tab === t;
@@ -900,8 +1118,10 @@ function renderTabBody() {
   switch (state.ui.tab) {
     case 'home': return renderHome();
     case 'library': return renderLibrary();
-    case 'services': return renderServices();
     case 'insights': return renderInsights();
+    /* Old persisted state or a stale deep link may still name Services. Home
+       now owns that content, so keep the route usable without a fourth tab. */
+    case 'services': state.ui.tab = 'home'; return renderHome();
     default: return renderHome();
   }
 }
@@ -909,6 +1129,7 @@ function renderTabBody() {
 function render() {
   if (!root) return;
   if (rootHasFocusedInput()) return;
+  if (state.ui.tab === 'services') state.ui.tab = 'home';
   if (state.ui.editorGate) { root.innerHTML = renderHeader() + '<div class="ns-view">' + renderEditorGate() + '</div>'; return; }
   if (state.ui.runsheet) { root.innerHTML = '<div class="ns-view">' + renderRunsheet() + '</div>'; return; }
   root.innerHTML = renderHeader() + renderTabs() + '<div class="ns-view">' + renderTabBody() + '</div>';
@@ -955,7 +1176,7 @@ function renderSongRow(song) {
   const timesLabel = st.timesSung + '×';
   let qadd = '';
   const cur = currentSetlist();
-  if (cur) {
+  if (cur && canEditCurrentSetlist()) {
     const count = (cur.songs || []).filter(s => s === song.id).length;
     const seen = daysSince(st.lastSung) <= RECENT_WARN_DAYS;
     const badge = count ? '<span class="qadd-n">' + count + '</span>' : '';
@@ -996,7 +1217,13 @@ function renderSongDetail(song, st) {
   const cur = currentSetlist();
   const count = cur ? (cur.songs || []).filter(s => s === song.id).length : 0;
   let addBtn;
-  if (count) {
+  if (!cur) {
+    addBtn = canCreateSongSetlist()
+      ? '<button class="primary sm" data-song-act="add-to-setlist" data-id="' + esc(song.id) + '">Add to setlist</button>' + warn
+      : '<span class="hint">Choose an assigned Presider service from Home to edit songs.</span>';
+  } else if (!canEditCurrentSetlist()) {
+    addBtn = '<span class="hint">View only. The assigned Presider or a song editor can change this setlist.</span>';
+  } else if (count) {
     addBtn = '<button class="primary sm" data-song-act="add-to-setlist" data-id="' + esc(song.id) + '">Add again</button>' +
       '<span class="in-set">' + count + '× in current setlist</span>';
   } else {
@@ -1015,10 +1242,35 @@ function renderHelpCard() {
   if (state.ui.helpDismissed) return '';
   return '<div class="banner">' +
     '<span><b>New here?</b> Start a setlist up top &rarr; add songs from the <b>Library</b> below &rarr; watch the total time build up &rarr; ' +
-    'after the service, tap <b>Mark as sung</b> in <b>Services</b>.</span>' +
+    'after the service, tap <b>Mark as sung</b> on the service card in <b>Home</b>.</span>' +
     '<button class="x" data-song-act="dismiss-help" aria-label="Dismiss">&times;</button>' +
     '</div>';
 }
+
+function renderReadOnlyBuilder(sl) {
+  const sched = scheduleFor(sl.id);
+  const songs = sl.songs || [];
+  let html = '<div class="card readonly-builder">' +
+    '<div class="card-head"><span class="svc-title">' + esc(sl.worshipType || (sched && sched.worship) || '') +
+      ' <small>· ' + esc(sl.serviceLabel || (sched && sched.service) || '') + '</small></span>' +
+      statusPill(sl) + '</div>' +
+    '<div class="svc-meta"><span>' + esc(fmtDate(sl.date || (sched && sched.date))) + '</span>' +
+      (sl.presider || (sched && sched.assignments && sched.assignments.Presider)
+        ? '<span>Presider: ' + esc(sl.presider || sched.assignments.Presider) + '</span>' : '') + '</div>' +
+    '<p class="hint">View only. The assigned Presider, a Choir Song Editor, or B. Anthony can change songs for this service.</p>';
+  if (sched) html += renderOrderOfWorship(sl, sched);
+  else if (songs.length) {
+    html += '<div class="svc-songs">' + songs.map(sid => {
+      const song = state.songById[sid];
+      if (!song) return '';
+      return '<div class="svc-song"><span class="num">' + esc(dispNumber(song)) + '</span>' +
+        '<span class="s-title">' + esc(song.title) + '</span>' +
+        '<span class="s-dur tnum">' + fmtDur(song.durationSec) + '</span></div>';
+    }).join('') + '</div>';
+  } else html += '<div class="hist-none">No songs in this setlist.</div>';
+  return html + '<div class="detail-actions"><button class="linkish" data-song-act="go-home">Back to Home</button></div></div>';
+}
+
 function renderBuilder() {
   const sl = currentSetlist();
   const mine = myUpcomingSchedule();
@@ -1035,7 +1287,7 @@ function renderBuilder() {
     } else {
       html += '<p class="hint">You have no upcoming services on the schedule.</p>';
     }
-    if (state.ui.manualService) {
+    if (state.ui.manualService && canCreateSongSetlist()) {
       const worshipOpts = WORSHIP_TYPES.map(w => '<option>' + esc(w) + '</option>').join('');
       const labelOpts = SERVICE_LABELS.map(l => '<option>' + esc(l) + '</option>').join('');
       html += '<div class="svc-grid" style="margin-top:10px">' +
@@ -1043,12 +1295,13 @@ function renderBuilder() {
         '<select id="b-worship" aria-label="Worship type">' + worshipOpts + '</select>' +
         '<select id="b-label" aria-label="Service time label">' + labelOpts + '</select></div>' +
         '<button class="primary" data-song-act="start-setlist">Start this setlist</button>';
-    } else {
+    } else if (canCreateSongSetlist()) {
       html += '<button class="linkish" data-song-act="manual-service" style="margin-top:4px">Build for another date&hellip;</button>';
     }
     html += '</div>';
     return html;
   }
+  if (!canEditSongsForService(sl, 'edit')) return html + renderReadOnlyBuilder(sl);
   html += '<div class="card">' +
     '<div class="card-head"><span class="svc-title">' + esc(sl.worshipType) + ' <small>· ' + esc(sl.serviceLabel) + '</small></span>' +
       statusPill(sl) + '</div>' +
@@ -1148,37 +1401,83 @@ function renderRoles(entry) {
   if (choir) html += '<div class="duty-row"><span class="dname">Choir song</span><span class="pill">' + esc(choir) + '</span></div>';
   return html ? '<div class="svc-roles">' + html + '</div>' : '';
 }
+
+function homeScope() {
+  return state.ui.homeScope === 'all' ? 'all' : 'mine';
+}
+
+function renderHomeScopeToggle() {
+  const scope = homeScope();
+  return '<div class="home-scope" role="group" aria-label="Presider services">' +
+    '<button class="scope-button' + (scope === 'mine' ? ' active' : '') + '" data-song-act="home-scope" data-scope="mine" aria-pressed="' + (scope === 'mine' ? 'true' : 'false') + '">My Services</button>' +
+    '<button class="scope-button' + (scope === 'all' ? ' active' : '') + '" data-song-act="home-scope" data-scope="all" aria-pressed="' + (scope === 'all' ? 'true' : 'false') + '">All Services</button>' +
+    '</div>';
+}
+
+function pastServicesForHome(scope) {
+  return pastSetlists().filter(sl => scope === 'all' || isMyPresiderService(sl));
+}
+
 function renderHome() {
-  let html = '<div class="date-head"><span class="day" role="heading" aria-level="2">My Services</span>' +
+  const scope = homeScope();
+  let html = '<div class="date-head"><span class="day" role="heading" aria-level="2">' +
+    (scope === 'mine' ? 'My Services' : 'All Services') + '</span>' +
     '<button class="me-chip" data-song-act="back">← My Duties</button></div>';
   const mine = myUpcomingSchedule();
-  const t0 = new Date(todayISO() + 'T00:00:00');
-  const daysTo = d => Math.round((new Date(d + 'T00:00:00') - t0) / 864e5);
-  const soon = mine.find(e => daysTo(e.date) <= 3);
-  if (soon) {
-    const soonSl = state.setlists[serviceIdFor(soon.date, soon.service)];
-    if (!soonSl || !(soonSl.songs || []).length) {
-      const d = daysTo(soon.date);
-      const when = d === 0 ? '<b>today</b>' : d === 1 ? '<b>tomorrow</b>' : 'in ' + d + ' days';
-      html += '<div class="banner"><span><b>' + esc((soon.worship || '') + ' · ' + soon.service) + '</b> is ' + when + ' and has no songs yet.</span>' +
-        '<button class="linkish" data-song-act="build-for" data-date="' + esc(soon.date) + '" data-worship="' + esc(soon.worship || '') + '" data-label="' + esc(soon.service) + '">Pick songs</button></div>';
+  html += renderHomeScopeToggle();
+
+  if (scope === 'mine') {
+    const t0 = new Date(todayISO() + 'T00:00:00');
+    const daysTo = d => Math.round((new Date(d + 'T00:00:00') - t0) / 864e5);
+    const soon = mine.find(e => daysTo(e.date) <= 3);
+    if (soon) {
+      const soonSl = state.setlists[serviceIdFor(soon.date, soon.service)];
+      if (!soonSl || !(soonSl.songs || []).length) {
+        const d = daysTo(soon.date);
+        const when = d === 0 ? '<b>today</b>' : d === 1 ? '<b>tomorrow</b>' : 'in ' + d + ' days';
+        html += '<div class="banner"><span><b>' + esc((soon.worship || '') + ' · ' + soon.service) + '</b> is ' + when + ' and has no songs yet.</span>' +
+          '<button class="linkish" data-song-act="build-for" data-date="' + esc(soon.date) + '" data-worship="' + esc(soon.worship || '') + '" data-label="' + esc(soon.service) + '">Pick songs</button></div>';
+      }
+    }
+    if (mine.length) {
+      html += mine.map(entry => {
+        const id = serviceIdFor(entry.date, entry.service);
+        const sl = state.setlists[id];
+        if (sl) return renderServiceCard(sl, { home: true, mine: true });
+        return renderScheduleCard(entry, { home: true, mine: true });
+      }).join('');
+    } else if (fb && !state._scheduleLoaded) {
+      html += '<div class="empty">Loading your schedule&hellip;</div>';
+    } else if (!fb) {
+      html += '<div class="empty">Live sync is off, so the shared presider schedule isn’t available.<br>' +
+        '<button class="linkish" data-song-act="tab" data-tab="library">Build a setlist in the Library</button></div>';
+    } else {
+      html += '<div class="empty">No upcoming services are assigned to you.' +
+        '<p class="hint">Assignments come from the duty roster.</p></div>';
+    }
+  } else {
+    const all = allUpcomingServices();
+    if (all.length) {
+      html += all.map(item => {
+        const mineHere = isMyPresiderService(item.sl || item.sched);
+        if (item.sl) return renderServiceCard(item.sl, { home: true, mine: mineHere });
+        return renderScheduleCard(item.sched, { home: true, mine: mineHere });
+      }).join('');
+    } else if (fb && !state._scheduleLoaded) {
+      html += '<div class="empty">Loading the shared schedule&hellip;</div>';
+    } else {
+      html += '<div class="empty">No upcoming services on the schedule yet.</div>';
     }
   }
-  if (mine.length) {
-    html += mine.map(entry => {
-      const id = serviceIdFor(entry.date, entry.service);
-      const sl = state.setlists[id];
-      if (sl) return renderServiceCard(sl, { home: true });
-      return renderScheduleCard(entry);
-    }).join('');
-  } else if (fb && !state._scheduleLoaded) {
-    html += '<div class="empty">Loading your schedule&hellip;</div>';
-  } else if (!fb) {
-    html += '<div class="empty">Live sync is off, so the shared presider schedule isn’t available.<br>' +
-      '<button class="linkish" data-song-act="tab" data-tab="library">Build a setlist in the Library</button></div>';
-  } else {
-    html += '<div class="empty">No upcoming services are assigned to you.' +
-      '<p class="hint">Assignments come from the duty roster.</p></div>';
+
+  const past = pastServicesForHome(scope);
+  if (past.length) {
+    html += '<div class="home-past-toggle"><button class="linkish" data-song-act="toggle-past">' +
+      (state.ui.showPast ? 'Hide past' : 'Show ' + past.length + ' past') + '</button></div>';
+    if (state.ui.showPast) {
+      html += '<div class="date-head"><span class="day">Past</span></div>' +
+        past.map(sl => renderServiceCard(sl, { home: true, mine: isMyPresiderService(sl) })).join('');
+    }
   }
   return html;
 }
@@ -1214,23 +1513,27 @@ function renderRunsheet() {
   }
   return html + '</div>';
 }
-function renderScheduleCard(entry) {
+function renderScheduleCard(entry, opts) {
+  opts = opts || {};
   const id = serviceIdFor(entry.date, entry.service);
   const badge = dateBadge(entry.date);
   const pres = entry.assignments && entry.assignments.Presider;
   const today = entry.date === todayISO();
-  return '<div class="card svc-card">' +
+  const mine = opts.mine == null ? isMyPresiderService(entry) : !!opts.mine;
+  const editable = opts.editable == null ? canEditSongsForService(entry, 'edit') : !!opts.editable;
+  return '<div class="card svc-card' + (mine ? '' : ' other-presider') + '">' +
     '<div class="card-head">' +
       '<span class="svc-title">' + esc(entry.worship || WORSHIP_TYPES[0]) + ' <small>· ' + esc(entry.service) + '</small></span>' +
       statusPill(state.setlists[id]) +
     '</div>' +
     '<div class="svc-meta"><span>' + esc(fmtDate(entry.date)) + (badge ? ' · ' + badge : '') + '</span>' +
-      (pres ? '<span>' + esc(pres) + '</span>' : '') + '</div>' +
+      (pres ? '<span class="presider-meta">Presider: ' + esc(pres) + '</span>' : '') + '</div>' +
     renderRoles(entry) +
     '<div class="svc-actions">' +
     (today ? '<button class="primary sm" data-song-act="runsheet" data-id="' + esc(id) + '">Runsheet</button>' : '') +
-    '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="build-for" ' +
-      'data-date="' + esc(entry.date) + '" data-worship="' + esc(entry.worship || '') + '" data-label="' + esc(entry.service) + '">Add songs</button></div>' +
+    (editable ? '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="build-for" ' +
+      'data-date="' + esc(entry.date) + '" data-worship="' + esc(entry.worship || '') + '" data-label="' + esc(entry.service) + '">Add songs</button>' :
+      '<span class="readonly-note">View only</span>') + '</div>' +
     '</div>';
 }
 function allUpcomingServices() {
@@ -1250,24 +1553,13 @@ function allUpcomingServices() {
   return Object.keys(map).map(k => map[k]).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 }
 
-/* ---------- Services ---------- */
+/* ---------- Services compatibility route ---------- */
 
+/* Keep old in-memory routes and deep links usable after Services moved into
+   Home. The tab is never rendered by renderTabs(). */
 function renderServices() {
-  let html = '';
-  const up = allUpcomingServices();
-  html += '<div class="date-head"><span class="day" role="heading" aria-level="2">Upcoming</span></div>';
-  if (!up.length) html += '<div class="empty">No upcoming services on the schedule yet.</div>';
-  else html += up.map(u => u.sl ? renderServiceCard(u.sl) : renderScheduleCard(u.sched)).join('');
-  const past = pastSetlists();
-  if (past.length) {
-    html += '<div style="text-align:center;margin-top:10px"><button class="linkish" data-song-act="toggle-past">' +
-      (state.ui.showPast ? 'Hide past' : 'Show ' + past.length + ' past') + '</button></div>';
-    if (state.ui.showPast) {
-      html += '<div class="date-head"><span class="day">Past</span></div>';
-      html += past.map(sl => renderServiceCard(sl)).join('');
-    }
-  }
-  return html;
+  state.ui.tab = 'home';
+  return renderHome();
 }
 function renderServiceCard(sl, opts) {
   opts = opts || {};
@@ -1277,7 +1569,10 @@ function renderServiceCard(sl, opts) {
   const expanded = state.ui.expandedService === sl.id;
   const badge = dateBadge(sl.date);
   const sched = scheduleFor(sl.id);
-  let html = '<div class="card svc-card">' +
+  const mine = opts.mine == null ? isMyPresiderService(sl) : !!opts.mine;
+  const editable = opts.editable == null ? canEditSongsForService(sl, 'edit') : !!opts.editable;
+  const pres = (sched && sched.assignments && sched.assignments.Presider) || sl.presider || '';
+  let html = '<div class="card svc-card' + (mine ? '' : ' other-presider') + '">' +
     '<div class="card-head" style="cursor:pointer" data-song-act="toggle-service" data-id="' + esc(sl.id) + '">' +
       '<span class="svc-title">' + esc(sl.worshipType) + ' <small>· ' + esc(sl.serviceLabel) + '</small></span>' +
       '<span style="display:flex;align-items:center;gap:6px">' +
@@ -1287,7 +1582,7 @@ function renderServiceCard(sl, opts) {
     '</div>' +
     '<div class="svc-meta">' +
       '<span>' + esc(fmtDate(sl.date)) + (badge ? ' · ' + badge : '') + '</span>' +
-      (sl.presider ? '<span>' + esc(sl.presider) + '</span>' : '') +
+      (pres ? '<span class="presider-meta">Presider: ' + esc(pres) + '</span>' : '') +
       '<span class="tnum">' + songs.length + ' song' + (songs.length === 1 ? '' : 's') + '</span>' +
       '<span class="tnum">' + fmtDur(total) + '</span>' +
     '</div>';
@@ -1309,28 +1604,47 @@ function renderServiceCard(sl, opts) {
   }
   // Offered wherever a service is listed, so a presider who already picked
   // their songs can close the loop without reopening the builder.
-  const needsConfirm = !sung && songs.length && !isConfirmed(sl);
+  const needsConfirm = editable && !sung && songs.length && !isConfirmed(sl);
   html += '<div class="svc-actions">';
   if (opts.home) {
     const today = sl.date === todayISO();
     if (today) html += '<button class="primary sm" data-song-act="runsheet" data-id="' + esc(sl.id) + '">Runsheet</button>';
-    if (needsConfirm) html += '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' +
-      (changedSinceConfirmed(sl) ? 'Confirm again' : 'Confirm songs') + '</button>';
-    html += '<button class="' + (today || needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="build-for" data-id="' + esc(sl.id) + '">Add songs</button>';
+    if (editable) {
+      if (sung) {
+        html += '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="edit-setlist" data-id="' + esc(sl.id) + '">Open in Builder</button>';
+        html += '<button class="danger-link" data-song-act="undo-sung" data-id="' + esc(sl.id) + '">Undo sung</button>';
+      } else {
+        if (needsConfirm) html += '<button class="' + (today ? 'ghost' : 'primary') + ' sm" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' +
+          (changedSinceConfirmed(sl) ? 'Confirm again' : 'Confirm songs') + '</button>';
+        html += '<button class="' + (today || needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="build-for" data-id="' + esc(sl.id) + '">Add songs</button>';
+        html += '<button class="' + (today || needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="mark-sung" data-id="' + esc(sl.id) + '">Mark as sung</button>';
+      }
+      html += '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete</button>';
+    } else {
+      html += '<span class="readonly-note">View only</span>';
+    }
     html += '<button class="ghost sm" data-song-act="toggle-service" data-id="' + esc(sl.id) + '">' +
       (expanded ? 'Hide order' : 'Order of worship') + '</button>';
     if (songs.length) html += '<button class="ghost sm" data-song-act="copy-signal" data-id="' + esc(sl.id) + '">Copy for Signal</button>';
   } else if (!sung) {
-    if (needsConfirm) html += '<button class="primary sm" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' +
-      (changedSinceConfirmed(sl) ? 'Confirm again' : 'Confirm songs') + '</button>';
-    html += '<button class="ghost sm" data-song-act="edit-setlist" data-id="' + esc(sl.id) + '">Edit in Builder</button>';
-    html += '<button class="' + (needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="mark-sung" data-id="' + esc(sl.id) + '">Mark as sung</button>';
+    if (editable) {
+      if (needsConfirm) html += '<button class="primary sm" data-song-act="confirm-songs" data-id="' + esc(sl.id) + '">' +
+        (changedSinceConfirmed(sl) ? 'Confirm again' : 'Confirm songs') + '</button>';
+      html += '<button class="ghost sm" data-song-act="edit-setlist" data-id="' + esc(sl.id) + '">Edit in Builder</button>';
+      html += '<button class="' + (needsConfirm ? 'ghost' : 'primary') + ' sm" data-song-act="mark-sung" data-id="' + esc(sl.id) + '">Mark as sung</button>';
+    } else {
+      html += '<span class="readonly-note">View only</span>';
+    }
     if (songs.length) html += '<button class="ghost sm" data-song-act="copy-signal" data-id="' + esc(sl.id) + '">Copy for Signal</button>';
-    html += '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete</button>';
+    if (editable) html += '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete</button>';
   } else {
-    html += '<button class="ghost sm" data-song-act="edit-setlist" data-id="' + esc(sl.id) + '">Open in Builder</button>';
-    html += '<button class="danger-link" data-song-act="undo-sung" data-id="' + esc(sl.id) + '">Undo sung</button>';
-    html += '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete</button>';
+    if (editable) {
+      html += '<button class="ghost sm" data-song-act="edit-setlist" data-id="' + esc(sl.id) + '">Open in Builder</button>';
+      html += '<button class="danger-link" data-song-act="undo-sung" data-id="' + esc(sl.id) + '">Undo sung</button>';
+      html += '<button class="danger-link" data-song-act="delete-setlist" data-id="' + esc(sl.id) + '">Delete</button>';
+    } else {
+      html += '<span class="readonly-note">View only</span>';
+    }
   }
   html += '</div></div>';
   return html;
@@ -1416,6 +1730,7 @@ function renderBackfillCard() {
     '</div></div>';
 }
 function renderPresiderCard() {
+  if (!canManagePresiders('manage')) return '';
   if (!state.ui.showPresiderMgr) {
     return '<div class="card"><div class="card-head"><span class="svc-title">Presiders</span></div>' +
       '<p class="hint">Manage the list of presider names used in the Builder.</p>' +
@@ -1567,7 +1882,11 @@ function handleAct(act, el) {
   switch (act) {
     case 'back': if (ctx && ctx.onBack) ctx.onBack(); break;
     case 'tab':
-      state.ui.tab = el.dataset.tab; state.ui.runsheet = null; state.ui.pickSlot = null; render(); break;
+      state.ui.tab = el.dataset.tab === 'services' ? 'home' : el.dataset.tab;
+      state.ui.runsheet = null; state.ui.pickSlot = null; render(); break;
+    case 'home-scope':
+      state.ui.homeScope = el.dataset.scope === 'all' ? 'all' : 'mine';
+      state.ui.showPast = false; state.ui.runsheet = null; state.ui.pickSlot = null; render(); break;
     case 'go-home':
       state.ui.tab = 'home'; state.ui.runsheet = null; state.ui.pickSlot = null; render(); break;
     case 'pick-slot': state.ui.pickSlot = el.dataset.slot; render(); break;
@@ -1594,6 +1913,8 @@ function handleAct(act, el) {
     case 'exit-runsheet': state.ui.runsheet = null; render(); break;
     case 'build-for': {
       let id = el.dataset.id || (el.dataset.date && serviceIdFor(el.dataset.date, el.dataset.label || SERVICE_LABELS[0]));
+      const target = state.setlists[id] || (id && scheduleFor(id));
+      if (!target || !canEditSongsForService(target, 'edit')) { denySongEdit(); break; }
       if (!state.setlists[id]) id = ensureSetlist(el.dataset.date, el.dataset.worship || WORSHIP_TYPES[0], el.dataset.label || SERVICE_LABELS[0], 'schedule');
       state.ui.currentSetlist = id; state.ui.tab = 'library'; state.ui.search = ''; state.ui.pickSlot = null; render(); break;
     }
@@ -1615,6 +1936,7 @@ function handleAct(act, el) {
       const date = root.querySelector('#b-date').value || todayISO();
       const worship = root.querySelector('#b-worship').value;
       const label = root.querySelector('#b-label').value;
+      if (!canCreateSongSetlist()) { denySongEdit(); break; }
       state.ui.currentSetlist = ensureSetlist(date, worship, label, 'manual');
       state.ui.manualService = false; render(); break;
     }
@@ -1622,22 +1944,29 @@ function handleAct(act, el) {
     case 'remove-song': { const sl = currentSetlist(); if (sl) setlistRemoveSongAt(sl.id, Number(el.dataset.idx)); break; }
     case 'toggle-past': state.ui.showPast = !state.ui.showPast; render(); break;
     case 'toggle-service': state.ui.expandedService = (state.ui.expandedService === el.dataset.id) ? null : el.dataset.id; render(); break;
-    case 'edit-setlist': state.ui.currentSetlist = el.dataset.id; state.ui.tab = 'library'; state.ui.pickSlot = null; render(); break;
+    case 'edit-setlist':
+      if (!state.setlists[el.dataset.id] || !canEditSongsForService(state.setlists[el.dataset.id], 'edit')) { denySongEdit(); break; }
+      state.ui.currentSetlist = el.dataset.id; state.ui.tab = 'library'; state.ui.pickSlot = null; render(); break;
     case 'change-service': state.ui.currentSetlist = null; state.ui.pickSlot = null; state.ui.manualService = false; render(); break;
-    case 'manual-service': state.ui.manualService = true; render(); break;
+    case 'manual-service':
+      if (!canCreateSongSetlist()) { denySongEdit(); break; }
+      state.ui.manualService = true; render(); break;
     case 'mark-sung': {
       const id = el.dataset.id;
-      requireEditor(() => { if (confirm('This updates every song’s sung count — do this after the service.')) markSetlistSung(id); else render(); });
+      const sl = state.setlists[id];
+      requireEditor(() => { if (confirm('This updates every song’s sung count - do this after the service.')) markSetlistSung(id); else render(); }, sl, 'mark-sung');
       break;
     }
     case 'undo-sung': {
       const id = el.dataset.id;
-      requireEditor(() => { if (confirm('Undo marking this setlist as sung? Every song’s count will be recomputed.')) undoSetlistSung(id); else render(); });
+      const sl = state.setlists[id];
+      requireEditor(() => { if (confirm('Undo marking this setlist as sung? Every song’s count will be recomputed.')) undoSetlistSung(id); else render(); }, sl, 'undo-sung');
       break;
     }
     case 'delete-setlist': {
       const id = el.dataset.id;
-      requireEditor(() => { if (confirm('Delete this setlist? This cannot be undone (sung history for its songs is untouched).')) deleteSetlistById(id); else render(); });
+      const sl = state.setlists[id];
+      requireEditor(() => { if (confirm('Delete this setlist? This cannot be undone (sung history for its songs is untouched).')) deleteSetlistById(id); else render(); }, sl, 'delete');
       break;
     }
     case 'unlock-editor': {
@@ -1684,7 +2013,9 @@ function handleAct(act, el) {
       requireEditor(() => { if (confirm('Remove this history entry? The song’s sung count will be recomputed.')) removeHistoryEntryById(songId, service); else render(); });
       break;
     }
-    case 'open-presider-mgr': requireEditor(() => { state.ui.showPresiderMgr = true; render(); }); break;
+    case 'open-presider-mgr':
+      requireEditor(() => { state.ui.showPresiderMgr = true; render(); }, null, 'manage-presiders', () => canManagePresiders('manage'));
+      break;
     case 'close-presider-mgr': state.ui.showPresiderMgr = false; render(); break;
     case 'add-presider-form': {
       requireEditor(() => {
@@ -1692,12 +2023,12 @@ function handleAct(act, el) {
         const name = input ? input.value.trim() : '';
         if (name) addPresider(name);
         state.ui.showPresiderMgr = true; render();
-      });
+      }, null, 'manage-presiders', () => canManagePresiders('manage'));
       break;
     }
     case 'remove-presider': {
       const name = el.dataset.name;
-      requireEditor(() => { if (confirm('Remove "' + name + '" from the presider list?')) removePresider(name); state.ui.showPresiderMgr = true; render(); });
+      requireEditor(() => { if (confirm('Remove "' + name + '" from the presider list?')) removePresider(name); state.ui.showPresiderMgr = true; render(); }, null, 'manage-presiders', () => canManagePresiders('manage'));
       break;
     }
     case 'export-csv': exportHistoryCSV(); break;
@@ -1710,11 +2041,13 @@ function handleAct(act, el) {
 function addSongToCurrent(songId) {
   let sl = currentSetlist();
   if (!sl) {
+    if (!canCreateSongSetlist()) { denySongEdit(); return; }
     if (!confirm('No setlist is open. Start one for today and add this song?')) { state.ui.tab = 'library'; render(); return; }
     const id = ensureSetlist(todayISO(), WORSHIP_TYPES[0], SERVICE_LABELS[0]);
     state.ui.currentSetlist = id; sl = state.setlists[id];
     if (!sl) { render(); return; }
   }
+  if (!canEditSongsForService(sl, 'edit')) { denySongEdit(); return; }
   setlistAddSong(sl.id, songId);
   render();
 }
@@ -1722,7 +2055,7 @@ function assignSlotSong(songId) {
   const sl = currentSetlist();
   const slot = state.ui.pickSlot;
   state.ui.pickSlot = null;
-  if (!sl || !slot) { render(); return; }
+  if (!sl || !slot || !canEditSongsForService(sl, 'edit')) { denySongEdit(); return; }
   const patch = {};
   patch[slot === 'glory' ? 'glorySong' : 'thanksSong'] = songId;
   updateSetlist(sl.id, patch);
@@ -1731,7 +2064,7 @@ function assignSlotSong(songId) {
 }
 function moveSong(index, dir) {
   const sl = currentSetlist();
-  if (!sl) return;
+  if (!sl || !canEditSongsForService(sl, 'edit')) return;
   const songs = (sl.songs || []).slice();
   const i = index; const j = i + dir;
   if (i < 0 || i >= songs.length || j < 0 || j >= songs.length) return;
@@ -1750,7 +2083,11 @@ function handleChg(chg, el) {
       const id = el.value;
       if (!id) { render(); break; }
       const e = findScheduleEntry(state.schedule, id);
-      if (e) state.ui.currentSetlist = ensureSetlist(e.date, e.worship || WORSHIP_TYPES[0], e.service, 'schedule');
+      if (e && canEditSongsForService(e, 'edit')) {
+        state.ui.currentSetlist = ensureSetlist(e.date, e.worship || WORSHIP_TYPES[0], e.service, 'schedule');
+      } else if (e) {
+        denySongEdit();
+      }
       render(); break;
     }
     case 'b-notes': {
@@ -1966,6 +2303,11 @@ export function mount(rootEl, context) {
   }
   if (_wiredRoot !== root) { wireRoot(); _wiredRoot = root; }
 
+  /* A stale host route can still ask for the retired Services destination.
+     Treat it as Home before rendering, including after a module remount. */
+  const requestedTab = ctx.tab || ctx.initialTab || ctx.route;
+  if (requestedTab === 'services') state.ui.tab = 'home';
+
   // Explicit navigation from the host (ctx.nav is a one-shot flag): a tapped
   // "Pick songs" button opens that service's setlist; the Presider tab (no
   // service) opens Home. Background re-mounts from live sync arrive with
@@ -1976,9 +2318,16 @@ export function mount(rootEl, context) {
     if (ctx.service && ctx.service.date && ctx.service.service) {
       const svc = ctx.service;
       const id = serviceIdFor(svc.date, svc.service);
-      if (!state.setlists[id]) ensureSetlist(svc.date, svc.worship || WORSHIP_TYPES[0], svc.service, 'schedule');
-      state.ui.currentSetlist = id;
-      state.ui.tab = 'library';
+      const target = state.setlists[id] || scheduleFor(id) ||
+        Object.assign({}, svc, { presider: svc.presider || (ctx.nav ? ctx.me : '') });
+      if (!canEditSongsForService(target, 'edit')) {
+        state.ui.currentSetlist = null;
+        state.ui.tab = 'home';
+      } else {
+        if (!state.setlists[id]) ensureSetlist(svc.date, svc.worship || WORSHIP_TYPES[0], svc.service, 'schedule');
+        state.ui.currentSetlist = id;
+        state.ui.tab = 'library';
+      }
     } else {
       state.ui.tab = 'home';
     }
