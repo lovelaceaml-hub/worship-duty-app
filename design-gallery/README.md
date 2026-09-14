@@ -1,4 +1,4 @@
-# LV Zion appearance gallery — Original + 3 optional designs
+# LV Zion appearance gallery: Original + 3 optional designs
 
 This integration places **Original, Prism, Navy & Cream, and Aurora** behind one member-facing **Appearance** chooser while keeping one live application, one Firebase project, one schedule, one set of permissions and one Presider song planner.
 
@@ -12,10 +12,10 @@ All four modes preserve the original app's actual actions and data model. In par
 
 ## Designs
 
-- **Original** — existing production interface.
-- **Prism** — the reviewed calendar-first workspace from `feature/prism-opt-in-live`.
-- **Navy & Cream** — warm cream surfaces, navy shell, burgundy selections, gold details and restrained motion across Schedule, My Duties, Presider and Manage.
-- **Aurora** — the latest `prototype/aurora-workspace` design, adapted to the live runtime instead of its offline reference-data sandbox: desktop navigation rail, dynamic schedule workspace, dedicated My Duties/Manage layouts and the actual Presider song-planning workspaces.
+- **Original**: existing production interface.
+- **Prism**: the reviewed calendar-first workspace from `feature/prism-opt-in-live`.
+- **Navy & Cream**: warm cream surfaces, navy shell, burgundy selections, gold details and restrained motion across Schedule, My Duties, Presider and Manage.
+- **Aurora**: the latest `prototype/aurora-workspace` design, adapted to the live runtime instead of its offline reference-data sandbox: desktop navigation rail, dynamic schedule workspace, dedicated My Duties/Manage layouts and the actual Presider song-planning workspaces.
 
 Prism and Aurora keep their existing light/dark and motion controls. Navy uses its warm-light palette and respects the operating system's reduced-motion preference. The shared chooser itself has no domain actions.
 
@@ -26,6 +26,16 @@ Prism and Aurora keep their existing light/dark and motion controls. Navy uses i
 The integration never creates a second schedule or copies production records. Switching appearances keeps the same document alive and preserves in-progress text/select values. The Presider module is not remounted just to change appearance.
 
 GitHub Actions is QA-only and never deploys. Tests use mocked/isolated Firebase responses and block external traffic.
+
+## Verification
+
+The QA suite builds an isolated `.hosting-gallery`, mocks Firebase Auth and Firestore, blocks other network requests, and drives the real domain handlers at phone and desktop widths. It covers the site passcode and member login gates, forced PIN changes, exact four-design names, leader-only Manage visibility and department scope, alert badges, Presider Home with My Services and All Services without a Services tab, Prism month and day navigation, canonical choir-song rendering, and no-write appearance switches.
+
+Run the focused browser suite with:
+
+```sh
+node design-gallery/test.mjs
+```
 
 ## Build
 
