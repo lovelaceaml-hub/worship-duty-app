@@ -5,3 +5,6 @@ node_modules/
 *.log
 .DS_Store
 docs/evidence/
+.hosting-gallery/
+.hosting-live/
+design-gallery-results/

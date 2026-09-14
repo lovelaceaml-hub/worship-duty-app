@@ -46,7 +46,9 @@ const NAME_UNIFY_MAP = {
   'B. Anthony L': 'B. Anthony', 'D. Chris K': 'D. Chris', 'D. Chris Kane': 'D. Chris',
   'B. James D': 'B. James', 'B. Jason S': 'B. Jason', 'S. Martha B': 'S. Martha',
   'S. Monica Salazar': 'S. Monica S', 'M.Chad': 'M. Chad', 'B. Gio': 'B. Giomar',
-  'D. Chloe': 'M. Chloe'
+  'D. Chloe': 'M. Chloe', 'B,James': 'B. James', 'BJason': 'B. Jason',
+  'S. Melisaa': 'S. Melissa', 'S. Monica C.': 'S. Monica C',
+  'S. Monica S.': 'S. Monica S'
 };
 
 /* Live copy of app/nameMap; null until the snapshot arrives (or in local mode). */

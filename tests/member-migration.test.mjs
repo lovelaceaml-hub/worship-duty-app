@@ -71,6 +71,44 @@ test('canonical transformation covers every identity reference and D. Chloe beco
   assert.equal(db.app.nameMap.map['D. Chloe'], 'M. Chloe');
 });
 
+test('known ghost roster entries merge into their exact canonical identities', () => {
+  const result = migration.transformDatabase({
+    app: {
+      members: {
+        list: [
+          'B,James', 'B. James', 'BJason', 'B. Jason', 'S. Melisaa', 'S. Melissa',
+          'S. Monica C.', 'S. Monica C', 'S. Monica S.', 'S. Monica S', 'D. Chloe', 'M. Chloe'
+        ]
+      },
+      departments: {
+        map: {
+          Worship: ['B,James', 'B. James', 'BJason', 'B. Jason'],
+          Lobby: ['S. Melisaa', 'S. Melissa', 'S. Monica C.', 'S. Monica C', 'S. Monica S.', 'S. Monica S'],
+          'Usher Sisters': ['D. Chloe', 'M. Chloe']
+        }
+      }
+    },
+    schedule: {
+      service1: {
+        assignments: { Presider: 'B,James', Sermon: 'BJason', Lobby: 'S. Melisaa' },
+        conflictOk: { 'S. Monica C.': ['Lobby'], 'S. Monica S.': ['Translation'] }
+      }
+    }
+  }, { privilegedPinHash: PRIVILEGED_HASH });
+  const db = result.database;
+
+  assert.deepEqual(db.app.members.list, ['B. James', 'B. Jason', 'M. Chloe', 'S. Melissa', 'S. Monica C', 'S. Monica S']);
+  assert.deepEqual(db.app.departments.map.Worship, ['B. James', 'B. Jason']);
+  assert.deepEqual(db.app.departments.map.Lobby, ['S. Melissa', 'S. Monica C', 'S. Monica S']);
+  assert.deepEqual(db.app.departments.map['Usher Sisters'], ['M. Chloe']);
+  assert.deepEqual(db.schedule.service1.assignments, {
+    Presider: 'B. James', Sermon: 'B. Jason', Lobby: 'S. Melissa'
+  });
+  assert.deepEqual(db.schedule.service1.conflictOk, {
+    'S. Monica C': ['Lobby'], 'S. Monica S': ['Translation']
+  });
+});
+
 test('migration is idempotent and preserves exact leader and song editor configuration', () => {
   const options = {
     leaderNames: ['D. Chloe', 'B. Anthony L'],

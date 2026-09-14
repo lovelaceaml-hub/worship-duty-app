@@ -12,7 +12,7 @@
  */
 
 const FIREBASE_VERSION = '10.12.2';
-const CLEANUP_MARKER = 'wds-member-cleanup-v4';
+const CLEANUP_MARKER = 'wds-member-cleanup-v5';
 
 const STATIC_ALIASES = {
   'B. Anthony L': 'B. Anthony',
@@ -24,7 +24,12 @@ const STATIC_ALIASES = {
   'S. Monica Salazar': 'S. Monica S',
   'M.Chad': 'M. Chad',
   'B. Gio': 'B. Giomar',
-  'D. Chloe': 'M. Chloe'
+  'D. Chloe': 'M. Chloe',
+  'B,James': 'B. James',
+  'BJason': 'B. Jason',
+  'S. Melisaa': 'S. Melissa',
+  'S. Monica C.': 'S. Monica C',
+  'S. Monica S.': 'S. Monica S'
 };
 
 const LONG_PREFIXES = {

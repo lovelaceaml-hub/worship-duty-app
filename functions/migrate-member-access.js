@@ -21,7 +21,12 @@ const STATIC_ALIASES = Object.freeze({
   'S. Monica Salazar': 'S. Monica S',
   'M.Chad': 'M. Chad',
   'B. Gio': 'B. Giomar',
-  'D. Chloe': 'M. Chloe'
+  'D. Chloe': 'M. Chloe',
+  'B,James': 'B. James',
+  'BJason': 'B. Jason',
+  'S. Melisaa': 'S. Melissa',
+  'S. Monica C.': 'S. Monica C',
+  'S. Monica S.': 'S. Monica S'
 });
 
 const MIGRATION_ID = 'wds-member-access-migration-v1';

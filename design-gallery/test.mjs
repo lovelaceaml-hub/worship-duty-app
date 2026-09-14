@@ -36,7 +36,8 @@ const CHANGED_PIN = '3579';
 const pinHash = hash(Buffer.from(TEST_PIN));
 const members = [
   'B. Anthony', 'E. Simon', 'D. Caleb', 'S. Lisa', 'M. Chloe',
-  'B,James', 'B. James S', 'D,Armani', 'H.Elena', 'S. Melisaa'
+  'B,James', 'B. James', 'BJason', 'B. Jason', 'B. James S', 'D,Armani', 'H.Elena',
+  'S. Melisaa', 'S. Melissa', 'S. Monica C.', 'S. Monica C', 'S. Monica S.', 'S. Monica S'
 ];
 const services = [
   {
@@ -377,13 +378,21 @@ try {
   check('Navigation is hidden before member authentication', await page.locator('nav.tabs').evaluate(node => node.classList.contains('hidden')));
   const loginOptions = await page.locator('#member-login option').evaluateAll(options =>
     options.map(option => ({value: option.value, label: option.textContent})));
-  check('Malformed stored names receive clean display-only labels', loginOptions.filter(option =>
-    ['B,James', 'B. James S', 'D,Armani', 'H.Elena', 'S. Melisaa'].includes(option.value)), [
-    {value: 'B,James', label: 'B. James'},
+  check('Known ghost identities are removed from member choices', loginOptions.some(option =>
+    ['B,James', 'BJason', 'S. Melisaa', 'S. Monica C.', 'S. Monica S.'].includes(option.value)), false);
+  check('Canonical member choices remain unique', loginOptions.filter(option =>
+    ['B. James', 'B. Jason', 'S. Melissa', 'S. Monica C', 'S. Monica S'].includes(option.value)), [
+    {value: 'B. James', label: 'B. James'},
+    {value: 'B. Jason', label: 'B. Jason'},
+    {value: 'S. Melissa', label: 'S. Melissa'},
+    {value: 'S. Monica C', label: 'S. Monica C.'},
+    {value: 'S. Monica S', label: 'S. Monica S.'}
+  ]);
+  check('Other malformed stored names receive clean display-only labels', loginOptions.filter(option =>
+    ['B. James S', 'D,Armani', 'H.Elena'].includes(option.value)), [
     {value: 'B. James S', label: 'B. James S.'},
     {value: 'D,Armani', label: 'D. Armani'},
-    {value: 'H.Elena', label: 'H. Elena'},
-    {value: 'S. Melisaa', label: 'S. Melissa'}
+    {value: 'H.Elena', label: 'H. Elena'}
   ]);
   await login(page, 'B. Anthony');
   await page.waitForSelector('.wd-design-dialog[open]');

@@ -25,7 +25,14 @@ const REGION = 'us-central1';
 const TZ = 'America/Los_Angeles';
 const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
 
-const MEMBER_ALIASES = Object.freeze({ 'D. Chloe': 'M. Chloe' });
+const MEMBER_ALIASES = Object.freeze({
+  'D. Chloe': 'M. Chloe',
+  'B,James': 'B. James',
+  'BJason': 'B. Jason',
+  'S. Melisaa': 'S. Melissa',
+  'S. Monica C.': 'S. Monica C',
+  'S. Monica S.': 'S. Monica S'
+});
 
 function canonicalMemberName(name) {
   const value = String(name == null ? '' : name).trim();
