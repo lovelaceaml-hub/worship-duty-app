@@ -30,8 +30,7 @@ test('department profiles are UID keyed and department scoped', () => {
   assert.match(rules, /function profileIdentityAtPath\(data, departmentId, memberUid\)/);
   assert.match(rules, /function departmentProfileIdentityStable\(before, after\)/);
   assert.match(profile, /canReadDepartmentProfile\(departmentId, memberUid, resource\.data\)/);
-  assert.match(profile, /canCreateDepartmentProfile\(departmentId, memberUid\)/);
-  assert.match(profile, /canUpdateDepartmentProfile\(departmentId, memberUid\)/);
+  assert.match(profile, /allow create, update: if false;/);
   assert.match(profile, /allow delete: if isAdmin\(\);/);
   assert.match(rules, /function departmentProfileMemberPatch\(\)/);
   assert.match(rules, /function departmentProfileLeaderPatch\(\)/);
@@ -63,7 +62,8 @@ test('normal assignments require profile eligibility and explicit admin override
   assert.match(rules, /function assignmentProfileHasAvailableSlot\(data\)/);
   assert.match(rules, /function assignmentProfileDateExceptionOverridesTime\(data\)/);
   assert.match(assignments, /departmentAssignmentNormalAllowed\(request\.resource\.data\)/);
-  assert.match(assignments, /departmentAssignmentOverrideAllowed\(request\.resource\.data\)/);
+  assert.doesNotMatch(assignments, /allow create:[^;]*departmentAssignmentOverrideAllowed/s);
+  assert.doesNotMatch(assignments, /allow update:[^;]*departmentAssignmentOverrideAllowed/s);
   assert.match(rules, /data\.authorization == 'administrator-override'/);
   assert.match(rules, /data\.overrideReason is string/);
   assert.match(rules, /data\.overriddenByUid == request\.auth\.uid/);
@@ -110,6 +110,11 @@ test('rules use canonical exceptions and validate attribution metadata', () => {
   assert.match(handlersSource, /source: 'manual'/);
   assert.match(handlersSource, /authority/);
   assert.match(handlersSource, /authz\.normalizeAvailability/);
+  const profiles = matchBody('/departments/{departmentId}/members/{memberUid}');
+  assert.match(profiles, /allow create, update: if false;/);
+  const audit = matchBody('/audit/{auditId}');
+  assert.match(audit, /allow create: if false;/);
+  assert.match(handlersSource, /db\.runTransaction/);
 });
 
 test('owned authorization sources contain no forbidden dash characters', () => {

@@ -1449,12 +1449,11 @@ service cloud.firestore {
         && secretFieldsAbsent(resource.data)
         && assignmentDepartment(resource.data) is string
         && (isAdmin() || managesDepartment(assignmentDepartment(resource.data)));
-      allow create: if departmentAssignmentNormalAllowed(request.resource.data)
-        || departmentAssignmentOverrideAllowed(request.resource.data);
-      allow update: if (
-          departmentAssignmentNormalAllowed(request.resource.data)
-          || departmentAssignmentOverrideAllowed(request.resource.data)
-        )
+      // Administrator overrides are server-only so assignment and audit are
+      // committed atomically by the callable. Clients may write only the
+      // ordinary eligible-assignment path.
+      allow create: if departmentAssignmentNormalAllowed(request.resource.data);
+      allow update: if departmentAssignmentNormalAllowed(request.resource.data)
         && assignmentKeysSafe(resource.data)
         && assignmentIdentityAtPath(resource.data)
         && assignmentDepartment(resource.data) == assignmentDepartment(request.resource.data)
@@ -1663,8 +1662,10 @@ service cloud.firestore {
 
     match /departments/{departmentId}/members/{memberUid} {
       allow read: if canReadDepartmentProfile(departmentId, memberUid, resource.data);
-      allow create: if canCreateDepartmentProfile(departmentId, memberUid);
-      allow update: if canUpdateDepartmentProfile(departmentId, memberUid);
+      // All profile and availability mutations use the named callables. This
+      // keeps nested availability validation, current-account checks, and
+      // server-owned attribution in one enforceable boundary.
+      allow create, update: if false;
       allow delete: if isAdmin();
     }
 

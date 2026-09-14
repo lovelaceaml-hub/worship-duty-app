@@ -111,6 +111,20 @@ class FakeDb {
   read(path) {
     return clone(this.values.get(path));
   }
+
+  async runTransaction(callback) {
+    const writes = [];
+    const transaction = {
+      set(reference, value) {
+        writes.push([reference, clone(value)]);
+      }
+    };
+    const result = await callback(transaction);
+    writes.forEach(([reference, value]) => {
+      reference.store.set(reference.path.join('/'), value);
+    });
+    return result;
+  }
 }
 
 function assignment(overrides = {}) {
@@ -294,6 +308,11 @@ test('administrator override is explicit, audited by the handler, and profile-ne
   assert.deepEqual(db.read(`departments/Translation/members/${memberUid}`), before);
   assert.equal(db.read(`audit/${result.auditId}`).profileMutated, false);
   assert.equal(db.read(`audit/${result.auditId}`).action, 'administrator-assignment-override');
+  assert.equal(db.read('departmentAssignments/fictional-assignment-1'), undefined);
+  assert.equal(
+    db.read(`departmentAssignments/${result.assignment.id}`).auditId,
+    result.auditId
+  );
 
   await assert.rejects(
     handlers.overrideDepartmentAssignment({
@@ -350,6 +369,35 @@ test('callable handlers share the same boundary for availability and normal assi
   const assigned = await handlers.assignDepartmentDuty({ auth: leader, data: assignment() });
   assert.equal(assigned.override, false);
   assert.equal(assigned.assignment.authorization, 'normal-eligible-assignment');
+
+  const attackerChosen = await handlers.assignDepartmentDuty({
+    auth: leader,
+    data: { assignmentId: 'existing-record-owned-by-someone-else', ...assignment() }
+  });
+  assert.equal(db.read('departmentAssignments/existing-record-owned-by-someone-else'), undefined);
+  assert.equal(db.read(`departmentAssignments/${attackerChosen.assignment.id}`).memberUid, memberUid);
+});
+
+test('inactive current accounts cannot use availability handlers', async () => {
+  const db = new FakeDb();
+  const handlers = createDepartmentHandlers({ db, now: () => 705 });
+  await db.collection('departments').doc('Translation').collection('members').doc(memberUid).set(profile());
+  const inactiveMember = {
+    uid: memberUid,
+    token: { ...member.token, roleVersion: 2 },
+    currentAccount: { roleVersion: 2, active: false }
+  };
+  await assert.rejects(
+    handlers.updateMemberAvailability({
+      auth: inactiveMember,
+      data: {
+        departmentId: 'Translation',
+        memberUid,
+        availability: { recurring: { morning: 'unavailable' }, exceptions: {} }
+      }
+    }),
+    error => error.code === 'permission-denied' && /inactive/.test(error.message)
+  );
 });
 
 test('profile handlers generate manual field attribution and reject forged metadata', async () => {

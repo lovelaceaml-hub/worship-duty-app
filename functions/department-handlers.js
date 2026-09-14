@@ -477,7 +477,7 @@ function createDepartmentHandlers(options = {}) {
       override: false,
       authorization: 'normal-eligible-assignment'
     });
-    const id = data.assignmentId || assignmentIdFor(result.assignment);
+    const id = assignmentIdFor(result.assignment);
     await db.collection('departmentAssignments').doc(id).set(record, { merge: false });
     return { ok: true, assignment: record, override: false };
   }
@@ -499,16 +499,17 @@ function createDepartmentHandlers(options = {}) {
     const result = authz.authorizeAssignmentOverride(actor, assignment, current.data);
     rejectDecision(result);
     const at = now();
-    const id = data.assignmentId || assignmentIdFor(result.assignment);
+    const id = assignmentIdFor(result.assignment);
+    const auditId = `administrator-assignment-override__${id}__${at}`;
     const record = assignmentRecord(result.assignment, current.data, actor, at, {
       override: true,
       authorization: 'administrator-override',
       overrideReason: result.assignment.overrideReason,
       overriddenAt: at,
-      overriddenByUid: actor.uid
+      overriddenByUid: actor.uid,
+      auditId
     });
-    await db.collection('departmentAssignments').doc(id).set(record, { merge: false });
-    const auditId = await writeAudit(db, {
+    const auditRecord = {
       action: 'administrator-assignment-override',
       authorization: 'administrator-override',
       override: true,
@@ -523,6 +524,15 @@ function createDepartmentHandlers(options = {}) {
       profilePath: authz.profilePath(result.assignment.departmentId, result.assignment.memberUid),
       profileMutated: false,
       timestamp: at
+    };
+    if (typeof db.runTransaction !== 'function') {
+      throw errorWithCode('internal', 'Atomic override storage is unavailable.');
+    }
+    const assignmentReference = db.collection('departmentAssignments').doc(id);
+    const auditReference = db.collection('audit').doc(auditId);
+    await db.runTransaction(async transaction => {
+      transaction.set(assignmentReference, record, { merge: false });
+      transaction.set(auditReference, auditRecord, { merge: false });
     });
     return {
       ok: true,
