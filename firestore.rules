@@ -190,6 +190,7 @@ service cloud.firestore {
           || request.auth.token.keys().hasAny([
             'memberId',
             'memberName',
+            'memberUid',
             'departments',
             'departmentIds'
           ])
@@ -321,6 +322,362 @@ service cloud.firestore {
       return isMember()
         && documentDepartment(data) is string
         && managesDepartment(documentDepartment(data));
+    }
+
+    // Department profile identity is keyed by the verified member UID. Names
+    // are display values and may not become an authorization key.
+    function profileMemberUid(data) {
+      return data.keys().hasAny(['memberUid'])
+        ? data.memberUid
+        : (data.keys().hasAny(['uid']) ? data.uid : '');
+    }
+
+    function profileDepartmentId(data) {
+      return data.keys().hasAny(['departmentId'])
+        ? data.departmentId
+        : (data.keys().hasAny(['department']) ? data.department : '');
+    }
+
+    function profileRoleValue(data) {
+      return data.keys().hasAny(['role']) ? data.role : '';
+    }
+
+    function profileIdentityAtPath(data, departmentId, memberUid) {
+      return data.keys().hasAny(['memberUid'])
+        && data.memberUid is string
+        && data.memberUid == memberUid
+        && (!data.keys().hasAny(['uid']) || data.uid == data.memberUid)
+        && data.keys().hasAny(['departmentId'])
+        && data.departmentId is string
+        && data.departmentId == departmentId
+        && (!data.keys().hasAny(['department']) || data.department == data.departmentId)
+        && data.keys().hasAny(['role'])
+        && data.role is string
+        && data.role in ['member', 'leader'];
+    }
+
+    function departmentProfileKeysSafe(data) {
+      return data.keys().hasOnly([
+        'uid',
+        'memberUid',
+        'department',
+        'departmentId',
+        'role',
+        'member',
+        'memberName',
+        'id',
+        'profileId',
+        'status',
+        'active',
+        'eligibleDuties',
+        'duties',
+        'schedulable',
+        'isSchedulable',
+        'availability',
+        'updatedAt',
+        'updatedByUid',
+        'updatedBy',
+        'createdAt',
+        'createdBy',
+        'attribution',
+        'historySeed',
+        'provenance',
+        'fieldAttribution',
+        'fieldDecisions',
+        'decisions'
+      ]) && secretFieldsAbsent(data);
+    }
+
+    function departmentProfileValuesSafe(data) {
+      return (!data.keys().hasAny(['status'])
+        || (data.status is string && data.status in ['active', 'inactive']))
+        && (!data.keys().hasAny(['active']) || data.active is bool)
+        && (!data.keys().hasAny(['eligibleDuties']) || data.eligibleDuties is list)
+        && (!data.keys().hasAny(['duties']) || data.duties is list)
+        && (!data.keys().hasAny(['schedulable']) || data.schedulable is bool)
+        && (!data.keys().hasAny(['isSchedulable']) || data.isSchedulable is bool)
+        && (!data.keys().hasAny(['availability']) || availabilityShapeSafe(data.availability));
+    }
+
+    function availabilityShapeSafe(data) {
+      return data is map
+        && data.keys().hasOnly(['recurring', 'exceptions', 'dateExceptions'])
+        && (!data.keys().hasAny(['recurring']) || data.recurring is map)
+        && (!data.keys().hasAny(['exceptions']) || data.exceptions is map)
+        && (!data.keys().hasAny(['dateExceptions']) || data.dateExceptions is map)
+        && !(data.keys().hasAny(['exceptions']) && data.keys().hasAny(['dateExceptions']));
+    }
+
+    function departmentProfileIdentityStable(before, after) {
+      return profileMemberUid(before) is string
+        && profileMemberUid(after) is string
+        && profileMemberUid(before) == profileMemberUid(after)
+        && profileDepartmentId(before) is string
+        && profileDepartmentId(after) is string
+        && profileDepartmentId(before) == profileDepartmentId(after)
+        && profileRoleValue(before) is string
+        && profileRoleValue(after) is string
+        && profileRoleValue(before) == profileRoleValue(after);
+    }
+
+    function departmentProfileMetadataOwned(data) {
+      return (!data.keys().hasAny(['updatedByUid'])
+        || data.updatedByUid == request.auth.uid)
+        && (!data.keys().hasAny(['updatedBy']) || data.updatedBy is string)
+        && (!data.keys().hasAny(['updatedAt'])
+          || data.updatedAt is int
+          || data.updatedAt is timestamp);
+    }
+
+    function departmentProfileMemberPatch() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'availability',
+        'updatedAt',
+        'updatedByUid',
+        'updatedBy'
+      ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['availability'])
+        && departmentProfileMetadataOwned(request.resource.data);
+    }
+
+    function departmentProfileLeaderPatch() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status',
+        'eligibleDuties',
+        'schedulable',
+        'availability',
+        'updatedAt',
+        'updatedByUid',
+        'updatedBy'
+      ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'status',
+          'eligibleDuties',
+          'schedulable',
+          'availability'
+        ])
+        && departmentProfileMetadataOwned(request.resource.data);
+    }
+
+    function canReadDepartmentProfile(departmentId, memberUid, data) {
+      return signedIn()
+        && departmentProfileKeysSafe(data)
+        && departmentProfileValuesSafe(data)
+        && profileIdentityAtPath(data, departmentId, memberUid)
+        && (isAdmin() || request.auth.uid == memberUid || managesDepartment(departmentId));
+    }
+
+    function canCreateDepartmentProfile(departmentId, memberUid) {
+      return signedIn()
+        && departmentProfileKeysSafe(request.resource.data)
+        && departmentProfileValuesSafe(request.resource.data)
+        && profileIdentityAtPath(request.resource.data, departmentId, memberUid)
+        && (request.resource.data.role == 'member' || isAdmin())
+        && (isAdmin() || managesDepartment(departmentId));
+    }
+
+    function canUpdateDepartmentProfile(departmentId, memberUid) {
+      return signedIn()
+        && departmentProfileKeysSafe(resource.data)
+        && departmentProfileKeysSafe(request.resource.data)
+        && departmentProfileValuesSafe(resource.data)
+        && departmentProfileValuesSafe(request.resource.data)
+        && profileIdentityAtPath(resource.data, departmentId, memberUid)
+        && profileIdentityAtPath(request.resource.data, departmentId, memberUid)
+        && departmentProfileIdentityStable(resource.data, request.resource.data)
+        && (
+          ((isAdmin() || managesDepartment(departmentId))
+            && departmentProfileLeaderPatch())
+          || (
+            isMember()
+            && request.auth.uid == memberUid
+            && departmentProfileMemberPatch()
+          )
+        );
+    }
+
+    function assignmentDepartment(data) {
+      return data.keys().hasAny(['departmentId'])
+        ? data.departmentId
+        : (data.keys().hasAny(['department']) ? data.department : '');
+    }
+
+    function assignmentMemberUid(data) {
+      return data.keys().hasAny(['memberUid'])
+        ? data.memberUid
+        : (data.keys().hasAny(['uid']) ? data.uid : '');
+    }
+
+    function assignmentDate(data) {
+      return data.keys().hasAny(['serviceDate'])
+        ? data.serviceDate
+        : (data.keys().hasAny(['date']) ? data.date : '');
+    }
+
+    function assignmentTime(data) {
+      return data.keys().hasAny(['serviceTime'])
+        ? data.serviceTime
+        : (data.keys().hasAny(['time']) ? data.time : '');
+    }
+
+    function assignmentKeysSafe(data) {
+      return data.keys().hasOnly([
+        'id',
+        'department',
+        'departmentId',
+        'memberUid',
+        'uid',
+        'memberName',
+        'duty',
+        'serviceId',
+        'serviceDate',
+        'date',
+        'serviceTime',
+        'time',
+        'override',
+        'authorization',
+        'overrideReason',
+        'assignedAt',
+        'assignedByUid',
+        'assignedBy',
+        'profileId',
+        'overriddenAt',
+        'overriddenByUid'
+      ]) && secretFieldsAbsent(data);
+    }
+
+    function assignmentIdentityAtPath(data) {
+      return data.keys().hasAny(['departmentId'])
+        && data.departmentId is string
+        && data.keys().hasAny(['memberUid'])
+        && data.memberUid is string
+        && (!data.keys().hasAny(['department']) || data.department == data.departmentId)
+        && (!data.keys().hasAny(['uid']) || data.uid == data.memberUid)
+        && data.keys().hasAny(['duty'])
+        && data.duty is string
+        && data.keys().hasAny(['serviceDate'])
+        && data.serviceDate is string
+        && data.keys().hasAny(['serviceTime'])
+        && data.serviceTime is string;
+    }
+
+    function assignmentProfileExists(data) {
+      return assignmentIdentityAtPath(data)
+        && exists(/databases/$(database)/documents/departments/$(assignmentDepartment(data))/members/$(assignmentMemberUid(data)));
+    }
+
+    function assignmentProfile(data) {
+      return get(/databases/$(database)/documents/departments/$(assignmentDepartment(data))/members/$(assignmentMemberUid(data))).data;
+    }
+
+    function assignmentDutyInDepartment(data) {
+      return (assignmentDepartment(data) == 'Worship'
+          && data.duty in ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer'])
+        || (assignmentDepartment(data) == 'Usher Sisters'
+          && data.duty in ['Usher Door', 'Usher Front', 'Usher Back'])
+        || (assignmentDepartment(data) == 'Usher Brothers'
+          && data.duty in ['Usher #1', 'Usher #2', 'Lobby Security'])
+        || (assignmentDepartment(data) == 'Lobby'
+          && data.duty in ['Lobby Desk #1', 'Lobby Desk #2'])
+        || (assignmentDepartment(data) == 'Translation'
+          && data.duty in ['Translation #1', 'Translation #2'])
+        || (assignmentDepartment(data) == 'Media'
+          && data.duty in ['Media Booth #1', 'Media Booth #2'])
+        || (assignmentDepartment(data) == 'Parking Lot'
+          && data.duty in ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'])
+        || (assignmentDepartment(data) == 'Offering'
+          && data.duty in ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6']);
+    }
+
+    function assignmentProfileHasDateException(data) {
+      return assignmentProfile(data).keys().hasAny(['availability'])
+        && assignmentProfile(data).availability is map
+        && assignmentProfile(data).availability.keys().hasAny(['exceptions'])
+        && assignmentProfile(data).availability.exceptions is map
+        && assignmentProfile(data).availability.exceptions.keys().hasAny([assignmentDate(data)])
+        && assignmentProfile(data).availability.exceptions[assignmentDate(data)] is map;
+    }
+
+    function assignmentProfileDateExceptionOverridesTime(data) {
+      return assignmentProfileHasDateException(data)
+        && (
+          assignmentProfile(data).availability.exceptions[assignmentDate(data)].keys().hasAny([assignmentTime(data)])
+          || assignmentProfile(data).availability.exceptions[assignmentDate(data)].keys().hasAny(['*'])
+        );
+    }
+
+    function assignmentProfileDateExceptionAvailable(data) {
+      return assignmentProfileHasDateException(data)
+        && (
+          (
+            assignmentProfile(data).availability.exceptions[assignmentDate(data)].keys().hasAny([assignmentTime(data)])
+            && assignmentProfile(data).availability.exceptions[assignmentDate(data)][assignmentTime(data)] == 'available'
+          )
+          || (
+            !assignmentProfile(data).availability.exceptions[assignmentDate(data)].keys().hasAny([assignmentTime(data)])
+            && assignmentProfile(data).availability.exceptions[assignmentDate(data)].keys().hasAny(['*'])
+            && assignmentProfile(data).availability.exceptions[assignmentDate(data)]['*'] == 'available'
+          )
+        );
+    }
+
+    function assignmentProfileRecurringAvailable(data) {
+      return assignmentProfile(data).keys().hasAny(['availability'])
+        && assignmentProfile(data).availability is map
+        && assignmentProfile(data).availability.keys().hasAny(['recurring'])
+        && assignmentProfile(data).availability.recurring is map
+        && assignmentProfile(data).availability.recurring.keys().hasAny([assignmentTime(data)])
+        && assignmentProfile(data).availability.recurring[assignmentTime(data)] == 'available';
+    }
+
+    function assignmentProfileHasAvailableSlot(data) {
+      return assignmentProfileDateExceptionOverridesTime(data)
+        ? assignmentProfileDateExceptionAvailable(data)
+        : assignmentProfileRecurringAvailable(data);
+    }
+
+    function departmentAssignmentNormalAllowed(data) {
+      return signedIn()
+        && assignmentKeysSafe(data)
+        && assignmentIdentityAtPath(data)
+        && (!data.keys().hasAny(['override']) || data.override == false)
+        && (!data.keys().hasAny(['authorization'])
+          || data.authorization == 'normal-eligible-assignment')
+        && !data.keys().hasAny(['overrideReason', 'overriddenAt', 'overriddenByUid'])
+        && data.keys().hasAny(['assignedByUid'])
+        && data.assignedByUid == request.auth.uid
+        && assignmentDutyInDepartment(data)
+        && managesDepartment(assignmentDepartment(data))
+        && assignmentProfileExists(data)
+        && assignmentProfile(data).departmentId == assignmentDepartment(data)
+        && assignmentProfile(data).memberUid == assignmentMemberUid(data)
+        && assignmentProfile(data).status == 'active'
+        && assignmentProfile(data).schedulable == true
+        && assignmentProfile(data).eligibleDuties is list
+        && data.duty in assignmentProfile(data).eligibleDuties
+        && assignmentProfileHasAvailableSlot(data);
+    }
+
+    function departmentAssignmentOverrideAllowed(data) {
+      return isAdmin()
+        && assignmentKeysSafe(data)
+        && assignmentIdentityAtPath(data)
+        && data.keys().hasAny(['override'])
+        && data.override == true
+        && data.keys().hasAny(['authorization'])
+        && data.authorization == 'administrator-override'
+        && data.keys().hasAny(['overrideReason'])
+        && data.overrideReason is string
+        && data.overrideReason != ''
+        && data.keys().hasAny(['overriddenAt'])
+        && (data.overriddenAt is int || data.overriddenAt is timestamp)
+        && data.keys().hasAny(['overriddenByUid'])
+        && data.overriddenByUid == request.auth.uid
+        && data.keys().hasAny(['assignedByUid'])
+        && data.assignedByUid == request.auth.uid
+        && assignmentProfileExists(data)
+        && assignmentProfile(data).departmentId == assignmentDepartment(data)
+        && assignmentProfile(data).memberUid == assignmentMemberUid(data);
     }
 
     // Compatibility predicates for the older department-scoped collections.
@@ -1005,20 +1362,20 @@ service cloud.firestore {
     }
 
     match /departmentAssignments/{assignmentId} {
-      allow read: if signedIn() && secretFieldsAbsent(resource.data);
-      allow create: if isAdmin() || canEditDepartmentDocument(request.resource.data);
-      allow update: if isAdmin()
-        || (
-          canEditDepartmentDocument(resource.data)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'assignment',
-            'member',
-            'memberUid',
-            'status',
-            'updatedAt',
-            'updatedBy'
-          ])
-        );
+      allow read: if signedIn()
+        && secretFieldsAbsent(resource.data)
+        && assignmentDepartment(resource.data) is string
+        && (isAdmin() || managesDepartment(assignmentDepartment(resource.data)));
+      allow create: if departmentAssignmentNormalAllowed(request.resource.data)
+        || departmentAssignmentOverrideAllowed(request.resource.data);
+      allow update: if (
+          departmentAssignmentNormalAllowed(request.resource.data)
+          || departmentAssignmentOverrideAllowed(request.resource.data)
+        )
+        && assignmentKeysSafe(resource.data)
+        && assignmentIdentityAtPath(resource.data)
+        && assignmentDepartment(resource.data) == assignmentDepartment(request.resource.data)
+        && assignmentMemberUid(resource.data) == assignmentMemberUid(request.resource.data);
       allow delete: if isAdmin();
     }
 
@@ -1216,22 +1573,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /departments/{department}/members/{memberId} {
-      allow read: if secretFieldsAbsent(resource.data)
-        && (isAdmin() || managesDepartment(department));
-      allow create: if secretFieldsAbsent(request.resource.data)
-        && (isAdmin() || managesDepartment(department));
-      allow update: if isAdmin()
-        || (
-          managesDepartment(department)
-          && secretFieldsAbsent(request.resource.data)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'status',
-            'archivedAt',
-            'updatedAt',
-            'updatedByUid'
-          ])
-        );
+    match /departments/{departmentId} {
+      allow read: if signedIn() && (isAdmin() || managesDepartment(departmentId));
+      allow write: if false;
+    }
+
+    match /departments/{departmentId}/members/{memberUid} {
+      allow read: if canReadDepartmentProfile(departmentId, memberUid, resource.data);
+      allow create: if canCreateDepartmentProfile(departmentId, memberUid);
+      allow update: if canUpdateDepartmentProfile(departmentId, memberUid);
       allow delete: if isAdmin();
     }
 

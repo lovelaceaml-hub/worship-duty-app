@@ -18,12 +18,18 @@ const {
   createMemberAuthCallables
 } = require('./member-auth');
 const permissions = require('./permissions');
+const { createDepartmentHandlers } = require('./department-handlers');
 
 initializeApp();
 const db = getFirestore();
 const REGION = 'us-central1';
 const TZ = 'America/Los_Angeles';
 const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
+const departmentHandlers = createDepartmentHandlers({
+  db,
+  now: () => Date.now(),
+  logger
+});
 
 const MEMBER_ALIASES = Object.freeze({
   'D. Chloe': 'M. Chloe',
@@ -274,6 +280,36 @@ function exposeMemberAuthCallable(handler) {
 exports.verifyMemberPin = exposeMemberAuthCallable(memberAuthCallables.verifyMemberPin);
 exports.changeMemberPin = exposeMemberAuthCallable(memberAuthCallables.changeMemberPin);
 exports.resetMemberPin = exposeMemberAuthCallable(memberAuthCallables.resetMemberPin);
+
+function exposeDepartmentCallable(handler) {
+  return onCall({ region: REGION }, async request => {
+    try {
+      return await handler(request);
+    } catch (error) {
+      const code = error && AUTH_ERROR_CODES.has(error.code) ? error.code : 'internal';
+      const message = code === 'internal'
+        ? 'The department authorization service is unavailable.'
+        : String(error.message || 'The requested department action failed.');
+      throw new HttpsError(code, message);
+    }
+  });
+}
+
+exports.updateDepartmentProfile = exposeDepartmentCallable(
+  departmentHandlers.updateDepartmentProfile
+);
+exports.updateMemberAvailability = exposeDepartmentCallable(
+  departmentHandlers.updateMemberAvailability
+);
+exports.createDepartmentProfile = exposeDepartmentCallable(
+  departmentHandlers.createDepartmentProfile
+);
+exports.assignDepartmentDuty = exposeDepartmentCallable(
+  departmentHandlers.assignDepartmentDuty
+);
+exports.overrideDepartmentAssignment = exposeDepartmentCallable(
+  departmentHandlers.overrideDepartmentAssignment
+);
 
 function callableActor(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'A verified member session is required.');
