@@ -1,6 +1,8 @@
 # LV Zion Worship Service — Handoff Document
 
-Last updated: 2026-09-03. Owner: Anthony (alovelace144@gmail.com).
+Last updated: 2026-09-13. Owner: Anthony (alovelace144@gmail.com).
+
+Current release: The authentication and department upgrade is live. Production Hosting release `20260914032034` includes secure member login, department-scoped permissions, notification routing, Prism date fixes, Presider Home consolidation, and canonical choir-song synchronization. See [AUTH-DEPARTMENT-UPGRADE-RELEASE.md](AUTH-DEPARTMENT-UPGRADE-RELEASE.md) for release evidence and remaining risks.
 
 For day-to-day operation (schedule edits, passcodes, notifications,
 deploying, troubleshooting) and the AI-delegation briefs, see

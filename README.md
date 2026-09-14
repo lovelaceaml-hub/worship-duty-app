@@ -7,7 +7,7 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 ## Quick links
 
 - **Website:** https://lv-zion-duties.web.app — share this link with members
-- **Status:** Live. **7 September 2026: the app now opens fast and the tabs sit at the top.**
+- **Status:** Live. **13 September 2026: secure member login, department-scoped management, Prism navigation, Presider Home, and canonical choir-song sync are released.**
   Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
   deploy with that script), the presider song files load only for presiders, sign-in no longer
   blocks startup, and the calendar button subscribes to the live feed instead of downloading a

@@ -1,6 +1,6 @@
 # Authentication and Department Upgrade Release Notes
 
-Status: Reviewed implementation on a feature branch. Production is unchanged.
+Status: Released to production on 13 September 2026.
 
 Pull request: https://github.com/lovelaceaml-hub/worship-duty-app/pull/10
 
@@ -50,9 +50,19 @@ The idempotent migration:
 
 ## Remaining risks
 
-- The Firestore emulator authorization matrix should be run immediately before production deployment. Static rules contract tests are green, but the emulator matrix is the final live-rules confidence check.
-- Production migration and authentication need Google application-default credentials on the authorized release machine.
+- The optional Firestore emulator authorization matrix was unavailable because this Mac does not have Java or the emulator-only package installed. Static contract tests passed, the reviewed rules compiled and deployed, anonymous account reads return 403, and live administrator and ordinary-member login paths passed.
+- Cloud Functions still use Node.js 20, which Google has deprecated and plans to decommission on 30 October 2026. Upgrade the runtime in a separate reviewed change.
 - Existing song catalog and song statistics collections retain their pre-existing direct-write boundary. The new service choir-song field is protected, but broader catalog hardening remains separate work.
+
+## Production release evidence
+
+- Pull request 10 merged to `main` at `30b5fa641182cdd16b8cc676702437d76c5ce48d`.
+- A 319,936-byte owner-only production data backup was captured before migration.
+- The migration applied 82 planned changes without wiping or reseeding schedules. A follow-up semantic comparison found no remaining data differences. The migration planner still reports one `app/settings` write because Firestore returns map keys in a different order.
+- Twelve explicitly named Worship Duty functions were deployed. Two unrelated existing production functions were preserved.
+- Firestore rules compiled and released. Anonymous `accounts/B. Anthony` access returns 403, while public schedule reading returns 200.
+- Hosting release `20260914032034` is live at https://lv-zion-duties.web.app.
+- B. Anthony with the initial privileged PIN reached forced PIN change, and B. Alex with the ordinary-member PIN opened the live schedule.
 
 ## Exact production deployment steps
 
