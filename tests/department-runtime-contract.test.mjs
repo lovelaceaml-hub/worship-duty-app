@@ -65,6 +65,15 @@ test('assignment callables are the only normal and override write boundary', () 
   assert.match(app, /authCall\('unassignDepartmentDuty', payload\)/);
   assert.doesNotMatch(app, /if \(!el\.value\)[\s\S]{0,180}persistService\(svc\)/);
   assert.match(app, /data-act="plan-assign"[\s\S]{0,180}data-uid=/);
+  assert.match(assignment, /already serving in this service/);
+});
+
+test('roster load failures wait for an explicit retry', () => {
+  const start = app.indexOf('function loadDepartmentRoster(');
+  const end = app.indexOf('function loadOwnDepartmentProfiles(', start);
+  const loader = app.slice(start, end);
+  assert.match(loader, /!options\.force && departmentRuntime\.errors\[selected\]/);
+  assert.match(app, /loadDepartmentRoster\(department, \{ force: true \}\)/);
 });
 
 test('history seed evidence is rendered as readable duty suggestions', () => {

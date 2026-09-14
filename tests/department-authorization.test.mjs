@@ -115,6 +115,9 @@ class FakeDb {
   async runTransaction(callback) {
     const writes = [];
     const transaction = {
+      get(reference) {
+        return reference.get();
+      },
       set(reference, value, options = {}) {
         writes.push(['set', reference, clone(value), options]);
       },
@@ -303,6 +306,9 @@ test('administrator override is explicit, audited by the handler, and profile-ne
   const handlers = createDepartmentHandlers({ db, now: () => 500 });
   const stored = profile({ status: 'inactive', schedulable: false });
   await db.collection('departments').doc('Translation').collection('members').doc(memberUid).set(stored);
+  await db.collection('schedule').doc('2026-09-20-morning').set({
+    date: '2026-09-20', service: 'Morning', assignments: {}
+  });
   const before = db.read(`departments/Translation/members/${memberUid}`);
 
   assert.equal(authz.authorizeAssignmentOverride(admin, assignment({ override: true, overrideReason: 'Emergency coverage' }), stored).allowed, true);
@@ -350,6 +356,9 @@ test('callable handlers share the same boundary for availability and normal assi
   const db = new FakeDb();
   const handlers = createDepartmentHandlers({ db, now: () => 700 });
   await db.collection('departments').doc('Translation').collection('members').doc(memberUid).set(profile());
+  await db.collection('schedule').doc('2026-09-20-morning').set({
+    date: '2026-09-20', service: 'Morning', assignments: {}
+  });
 
   const updated = await handlers.updateMemberAvailability({
     auth: member,
@@ -444,6 +453,40 @@ test('inactive current accounts cannot use availability handlers', async () => {
       }
     }),
     error => error.code === 'permission-denied' && /inactive/.test(error.message)
+  );
+});
+
+test('assignment handlers bind profile and availability checks to an existing schedule', async () => {
+  const db = new FakeDb();
+  const handlers = createDepartmentHandlers({ db, now: () => 706 });
+  await db.collection('departments').doc('Translation').collection('members').doc(memberUid).set(profile());
+  await db.collection('schedule').doc('service-existing').set({
+    date: '2026-09-20',
+    service: 'Morning',
+    assignments: { 'Translation #2': 'Riley Example' }
+  });
+
+  await assert.rejects(
+    handlers.assignDepartmentDuty({ auth: leader, data: assignment({ serviceId: 'service-missing' }) }),
+    error => error.code === 'not-found'
+  );
+  await assert.rejects(
+    handlers.assignDepartmentDuty({
+      auth: leader,
+      data: assignment({ serviceId: 'service-existing', serviceDate: '2026-09-21' })
+    }),
+    error => error.code === 'failed-precondition' && /does not match/.test(error.message)
+  );
+  await assert.rejects(
+    handlers.assignDepartmentDuty({
+      auth: leader,
+      data: assignment({ serviceId: 'service-existing', memberName: 'Spoofed Example' })
+    }),
+    error => error.code === 'invalid-argument' && /verified profile/.test(error.message)
+  );
+  await assert.rejects(
+    handlers.assignDepartmentDuty({ auth: leader, data: assignment({ serviceId: 'service-existing' }) }),
+    error => error.code === 'failed-precondition' && /already serving/.test(error.message)
   );
 });
 
@@ -544,6 +587,10 @@ test('assigned leaders can add department members without granting a role', asyn
   const db = new FakeDb();
   const handlers = createDepartmentHandlers({ db, now: () => 900 });
   const addedUid = 'member-uid-fictional-2';
+  await db.collection('accounts').doc(addedUid).set({ authUid: addedUid, memberName: 'Morgan Example', active: true });
+  await db.collection('accounts').doc('member-uid-fictional-3').set({
+    authUid: 'member-uid-fictional-3', memberName: 'Taylor Example', active: true
+  });
   const result = await handlers.createDepartmentProfile({
     auth: leader,
     data: {
@@ -567,6 +614,18 @@ test('assigned leaders can add department members without granting a role', asyn
   assert.equal(result.profile.fieldAttribution.status.source, 'manual');
   assert.equal(result.profile.fieldAttribution.status.authority, 'leader');
   assert.deepEqual(db.read(`departments/Translation/members/${addedUid}`), result.profile);
+
+  await assert.rejects(
+    handlers.createDepartmentProfile({
+      auth: leader,
+      data: {
+        departmentId: 'Translation',
+        memberUid: 'member-uid-not-an-account',
+        memberName: 'Missing Example'
+      }
+    }),
+    error => error.code === 'not-found'
+  );
 
   await assert.rejects(
     handlers.createDepartmentProfile({

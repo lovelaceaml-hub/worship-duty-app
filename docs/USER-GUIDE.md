@@ -152,26 +152,32 @@ manages the app if you don't have it. Tap **Manage** to get started.
 ### Editing assignments
 
 1. In Manage, go to **Services** and tap a service to expand it.
-2. Each role has a dropdown — pick a name and it saves instantly for
+2. Each role has a dropdown. Pick a name and it saves instantly for
    everyone.
-3. These dropdowns are scoped to that duty's department, so assigning
-   someone to Translation only shows people already marked as Translation
-   department members (see "Managing people" below). If someone is
-   currently assigned but not in that department's list, they'll still show
-   up so nothing gets silently hidden.
+3. The dropdown shows only active department members who are eligible for the
+   duty, schedulable, and available for that service time and date.
+4. A date exception takes priority over recurring availability. Administrators
+   can use the clearly labeled override with a required reason when necessary.
 
-### Managing people and their departments
+### Managing department rosters
 
-In **Manage → People**:
+In **Manage**, choose a department from Leader Configuration, then open its
+department page:
 
-- Add a new person with the form at the top.
-- Click directly on a name to fix a typo — it updates everywhere that
-  person is assigned, automatically.
-- Each person has a row of checkboxes, one per department (Worship, Usher
-  Sisters, Usher Brothers, Lobby, Translation, Media, Parking Lot,
-  Offering). Checking one adds
-  them to that department's roster, which controls which duty dropdowns
-  they appear in (see above).
+- The roster contains active and inactive members for that department only.
+- A department leader can change active status, eligible duties,
+  schedulability, recurring availability, and date exceptions only for a
+  department they lead.
+- Each saved field shows who last changed it and when.
+- Adding a profile requires an existing signed-in member account and its exact
+  member UID. Adding a profile never grants a leader or administrator role.
+
+### Updating your availability
+
+Open **My Duties** after signing in. Your shared department profile includes
+recurring service-time availability and date exceptions. You can edit only your
+own availability. Your department leader edits the same record, and the latest
+saved editor and time remain visible.
 
 ### Reviewing and approving requests
 

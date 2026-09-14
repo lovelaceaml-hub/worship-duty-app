@@ -15,6 +15,9 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   **14 September 2026: confirmed duplicate member identities were removed from
   the live roster and schedule history. Hosting release `gallery1789369159506`
   and all 12 named Functions now prevent those variants from returning.**
+  **Local candidate, not released: department rosters now use UID-keyed profiles
+  with duty eligibility, schedulability, recurring availability, date exceptions,
+  leader scope, and audited administrator overrides. Production is unchanged.**
   Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
   deploy with that script), the presider song files load only for presiders, sign-in no longer
   blocks startup, and the calendar button subscribes to the live feed instead of downloading a

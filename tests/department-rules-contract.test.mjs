@@ -61,7 +61,8 @@ test('normal assignments require profile eligibility and explicit admin override
   assert.match(rules, /function departmentAssignmentOverrideAllowed\(data\)/);
   assert.match(rules, /function assignmentProfileHasAvailableSlot\(data\)/);
   assert.match(rules, /function assignmentProfileDateExceptionOverridesTime\(data\)/);
-  assert.match(assignments, /departmentAssignmentNormalAllowed\(request\.resource\.data\)/);
+  assert.match(assignments, /allow create: if false;/);
+  assert.match(assignments, /allow update, delete: if false;/);
   assert.doesNotMatch(assignments, /allow create:[^;]*departmentAssignmentOverrideAllowed/s);
   assert.doesNotMatch(assignments, /allow update:[^;]*departmentAssignmentOverrideAllowed/s);
   assert.match(rules, /data\.authorization == 'administrator-override'/);
@@ -94,6 +95,7 @@ test('callable names are wired without replacing existing routes', () => {
   assert.match(functionsIndex, /exports\.verifyMemberPin\s*=/);
   assert.match(functionsIndex, /exports\.onScheduleWrite\s*=|exports\.onScheduleWrite/);
   assert.match(rules, /match \/schedule\/\{scheduleId\}/);
+  assert.match(rules, /function adminScheduleUpdate\(\)/);
   assert.doesNotMatch(rules, /allow update: if isAdmin\(\)\s*\|\| changesWorshipAssignments/);
   assert.match(rules, /match \/setlists\/\{setlistId\}/);
   assert.match(rules, /match \/requests\/\{requestId\}/);

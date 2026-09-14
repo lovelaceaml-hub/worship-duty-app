@@ -748,6 +748,7 @@ function loadDepartmentRoster(department, options = {}) {
   const selected = String(department || '').trim();
   if (!selected || selected === 'All' || !isVerifiedSession()) return Promise.resolve([]);
   if (!options.force && Array.isArray(departmentRuntime.rosters[selected])) return Promise.resolve(departmentRuntime.rosters[selected]);
+  if (!options.force && departmentRuntime.errors[selected]) return Promise.resolve([]);
   if (departmentRuntime.loading[selected]) return departmentRuntime.loading[selected];
   departmentRuntime.errors[selected] = '';
   departmentRuntime.loading[selected] = true;
@@ -912,6 +913,9 @@ function applyScheduleAssignment(svc, duty, profile) {
 
 function assignDepartmentDutyForService(svc, duty, profile, options = {}) {
   if (!svc || !profile) return Promise.reject(new Error('Choose a department member before assigning this duty.'));
+  if (options.override !== true && Object.keys(svc.assignments || {}).some(item => item !== duty && svc.assignments[item] === profile.memberName)) {
+    return Promise.reject(new Error(profile.memberName + ' is already serving in this service, pick a different person.'));
+  }
   const busyKey = svcId(svc) + '::' + duty;
   if (departmentRuntime.assignmentBusy[busyKey]) return Promise.reject(new Error('That assignment is already being saved.'));
   departmentRuntime.assignmentBusy[busyKey] = true;

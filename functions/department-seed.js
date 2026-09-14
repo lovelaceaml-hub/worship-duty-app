@@ -479,9 +479,14 @@ function addAliasMapping(state, rawAlias, rawTarget, source = 'alias') {
     ? targetText
     : state.byAlias.get(identityKey(targetText));
   if (!targetUid) {
-    // An alias map commonly arrives as alias -> UID before the directory is
-    // loaded. Treat an unambiguous target as a UID, while still rejecting
-    // duplicate aliases.
+    if (state.hasDirectory) {
+      throw new IdentityResolutionError(
+        `Identity alias target "${targetText}" is not present in the identity directory.`,
+        { reason: 'unresolved-alias-target', alias, target: targetText, source }
+      );
+    }
+    // Without a directory, an alias map may be the only identity source and
+    // therefore may use an explicit UID as its target.
     addIdentityRecord(state, targetText, '', [] , source);
   }
   const resolvedUid = state.byUid.has(targetText)
@@ -955,6 +960,24 @@ function mergeEvidence(existing, incoming) {
   return Array.from(byKey.values()).sort((left, right) => compareText(stableStringify(left), stableStringify(right)));
 }
 
+function serviceTimeKey(value) {
+  return String(value == null ? '' : value).toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function seededRecurringAvailability(historySeed) {
+  const recurring = {};
+  const evidence = isPlainObject(historySeed) && Array.isArray(historySeed.evidence)
+    ? historySeed.evidence
+    : [];
+  evidence.forEach(item => {
+    const key = serviceTimeKey(item && (item.service || item.serviceTime));
+    if (key) recurring[key] = 'available';
+  });
+  return recurring;
+}
+
 function mergeSeedProfile(profile, suggestion, options = {}) {
   const normalizedSuggestion = normalizeSuggestion(suggestion);
   const source = options.source === 'import' ? 'import' : 'history-seed';
@@ -988,7 +1011,7 @@ function mergeSeedProfile(profile, suggestion, options = {}) {
       duties: clone(eligibleDuties),
       schedulable,
       isSchedulable: schedulable,
-      availability: { recurring: {}, exceptions: {} },
+      availability: { recurring: seededRecurringAvailability(historySeed), exceptions: {} },
       createdAt: at,
       createdBy: by,
       updatedAt: at,

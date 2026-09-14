@@ -798,6 +798,28 @@ service cloud.firestore {
       ]);
     }
 
+    function adminScheduleUpdate() {
+      return isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'date',
+          'time',
+          'service',
+          'worship',
+          'choirSong',
+          'status',
+          'source',
+          'scheduleType',
+          'kind',
+          'scope',
+          'departmentId',
+          'department',
+          'assignments',
+          'conflictOk',
+          'updatedAt',
+          'updatedBy'
+        ]);
+    }
+
     function canEditAssignments(before, after) {
       return isMember()
         && (
@@ -1413,7 +1435,7 @@ service cloud.firestore {
     match /schedule/{scheduleId} {
       allow read: if true;
       allow create, delete: if isAdmin();
-      allow update: if (isAdmin() && scheduleStructuralChange())
+      allow update: if adminScheduleUpdate()
         || canAcknowledgeScheduleConflict()
         || changesOnlyServiceSongs();
     }

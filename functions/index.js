@@ -18,7 +18,7 @@ const {
   createMemberAuthCallables
 } = require('./member-auth');
 const permissions = require('./permissions');
-const { createDepartmentHandlers } = require('./department-handlers');
+const { createDepartmentHandlers, assignmentIdFor } = require('./department-handlers');
 
 initializeApp();
 const db = getFirestore();
@@ -43,6 +43,71 @@ const MEMBER_ALIASES = Object.freeze({
 function canonicalMemberName(name) {
   const value = String(name == null ? '' : name).trim();
   return MEMBER_ALIASES[value] || value;
+}
+
+function scheduleServiceTimeKey(service) {
+  return String(service && (service.serviceTime || service.service || service.time) || '')
+    .toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+async function reconcileScheduleAssignmentProjection(serviceId, before, after) {
+  const beforeAssignments = before && before.assignments || {};
+  const afterAssignments = after && after.assignments || {};
+  const changedDuties = Array.from(new Set([
+    ...Object.keys(beforeAssignments),
+    ...Object.keys(afterAssignments)
+  ])).filter(duty => beforeAssignments[duty] !== afterAssignments[duty]);
+  if (!changedDuties.length) return;
+  const batch = db.batch();
+  let writes = 0;
+  for (const duty of changedDuties) {
+    const departmentId = permissions.departmentForDuty(duty);
+    if (!departmentId) continue;
+    const assignment = {
+      departmentId,
+      serviceId,
+      serviceDate: after.date,
+      serviceTime: scheduleServiceTimeKey(after),
+      duty
+    };
+    const reference = db.collection('departmentAssignments').doc(assignmentIdFor(assignment));
+    const name = String(afterAssignments[duty] || '').trim();
+    if (!name) {
+      batch.delete(reference);
+      writes += 1;
+      continue;
+    }
+    const existing = await reference.get();
+    if (existing.exists && String((existing.data() || {}).memberName || '') === name) continue;
+    const profiles = await db.collection('departments').doc(departmentId)
+      .collection('members').where('memberName', '==', name).limit(2).get();
+    if (profiles.size !== 1) {
+      batch.delete(reference);
+      writes += 1;
+      logger.warn('schedule projection profile was not unique', { serviceId, duty, departmentId });
+      continue;
+    }
+    const profileDocument = profiles.docs[0];
+    const profile = profileDocument.data() || {};
+    batch.set(reference, {
+      id: reference.id,
+      departmentId,
+      memberUid: profileDocument.id,
+      memberName: profile.memberName || name,
+      duty,
+      serviceId,
+      serviceDate: after.date,
+      serviceTime: assignment.serviceTime,
+      profileId: profile.profileId || profile.id || '',
+      assignedAt: Date.now(),
+      assignedByUid: 'schedule-projection',
+      assignedBy: 'schedule-projection',
+      override: true,
+      authorization: 'administrator-schedule-reconciliation'
+    }, { merge: false });
+    writes += 1;
+  }
+  if (writes) await batch.commit();
 }
 
 function memberRoleRecord(name) {
@@ -601,14 +666,20 @@ exports.onScheduleWrite = onDocumentWritten(
   { document: 'schedule/{id}', region: REGION },
   async (event) => {
     const after = event.data && event.data.after;
-    if (!after || !after.exists) return; // deleted - nothing to alert
+    const before = event.data.before && event.data.before.exists
+      ? event.data.before.data() || {}
+      : {};
+    if (!after || !after.exists) {
+      await reconcileScheduleAssignmentProjection(event.params.id, before, { ...before, assignments: {} });
+      return;
+    }
+    const svc = after.data() || {};
+    await reconcileScheduleAssignmentProjection(event.params.id, before, svc);
     // Brand-new service doc (initial seed, bulk import, or a fresh sheet-created
     // service): every assignment would read as "new", fanning a mass push out to
     // everyone at once. Skip - members still get the in-app badge and the
     // day-before reminder. Only alert on edits to an existing service.
     if (!(event.data.before && event.data.before.exists)) return;
-    const svc = after.data() || {};
-    const before = event.data.before.data() || {};
     const beforeA = (before && before.assignments) || {};
     const afterA = svc.assignments || {};
     // for each duty whose member CHANGED to a new non-empty name

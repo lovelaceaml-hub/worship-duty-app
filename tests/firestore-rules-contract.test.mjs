@@ -88,9 +88,8 @@ test('schedule keeps public reads but separates structural and scoped writes', (
   const schedule = matchBody('/schedule/{scheduleId}');
   assert.match(schedule, /allow read: if true;/);
   assert.match(schedule, /allow create, delete: if isAdmin\(\);/);
-  assert.match(schedule, /changesWorshipAssignments\(\)/);
-  assert.match(schedule, /changesTranslationAssignments\(\)/);
-  assert.match(schedule, /changesMediaAssignments\(\)/);
+  assert.match(schedule, /adminScheduleUpdate\(\)/);
+  assert.match(rules, /function adminScheduleUpdate\(\)/);
   assert.match(schedule, /changesOnlyServiceSongs\(\)/);
   assert.match(schedule, /canAcknowledgeScheduleConflict\(\)/);
   assert.doesNotMatch(schedule, /allow\s+read,\s*write:\s*if\s+true/);

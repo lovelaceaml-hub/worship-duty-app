@@ -70,6 +70,18 @@ test('history seed is deterministic, UID keyed, and idempotent', () => {
   assert.deepEqual(repeated, created);
   assert.equal(repeated.memberUid, 'uid-avery');
   assert.equal(repeated.departmentId, 'Translation');
+  assert.deepEqual(repeated.availability.recurring, { morning: 'available' });
+  assert.equal(repeated.fieldAttribution.availability.source, 'history-seed');
+});
+
+test('identity aliases cannot invent a UID when a directory is present', () => {
+  assert.throws(
+    () => seed.createIdentityResolver({
+      identities,
+      aliases: { 'Unknown Example': 'Missing Example' }
+    }),
+    error => error.code === 'identity-conflict' && error.reason === 'unresolved-alias-target'
+  );
 });
 
 test('later assignments accumulate duty suggestions and provenance without duplicate evidence', () => {

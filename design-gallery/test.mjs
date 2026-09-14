@@ -110,6 +110,13 @@ const departmentRoster = {
       attribution: {updatedBy: 'E. Simon', updatedAt: Date.parse('2026-06-22T10:00:00Z')}
     },
     {
+      memberUid: 'member:M. Chloe', uid: 'member:M. Chloe', departmentId: 'Media', department: 'Media',
+      role: 'member', memberName: 'M. Chloe', status: 'active', eligibleDuties: ['Media Booth #1'], schedulable: true,
+      availability: {recurring: {evening: 'available'}, exceptions: {}},
+      updatedBy: 'E. Simon', updatedByUid: 'member:E. Simon', updatedAt: Date.parse('2026-06-22T11:00:00Z'),
+      attribution: {updatedBy: 'E. Simon', updatedAt: Date.parse('2026-06-22T11:00:00Z')}
+    },
+    {
       memberUid: 'member:D. Caleb', uid: 'member:D. Caleb', departmentId: 'Media', department: 'Media',
       role: 'member', memberName: 'D. Caleb', status: 'inactive', eligibleDuties: ['Media Booth #1'], schedulable: false,
       availability: {recurring: {evening: 'available'}, exceptions: {}},
@@ -157,6 +164,7 @@ const fixture = {
   }
 };
 fixture.docs['departments/Media/members/member:S. Lisa'] = departmentRoster.Media.find(profile => profile.memberUid === 'member:S. Lisa');
+fixture.docs['departments/Media/members/member:M. Chloe'] = departmentRoster.Media.find(profile => profile.memberUid === 'member:M. Chloe');
 
 function authRecords(forcedMember = '') {
   const records = {
@@ -542,10 +550,10 @@ try {
   await page.locator('[data-act="expand"][data-id="m:2026-07-02_evening"]').click();
   const mediaDuty = page.locator('[data-chg="assign"][data-duty="Media Booth #1"]').first();
   const scheduleWritesBeforeDepartmentAssignment = await domainWrites(page);
-  await mediaDuty.selectOption('member:S. Lisa');
+  await mediaDuty.selectOption('member:M. Chloe');
   await page.waitForFunction(() => (window.__departmentWrites || []).some(write => write.name === 'assignDepartmentDuty'));
   check('Normal assignment records the UID keyed callable write', await page.evaluate(() =>
-    window.__departmentWrites.some(write => write.name === 'assignDepartmentDuty' && write.assignment.memberUid === 'member:S. Lisa')));
+    window.__departmentWrites.some(write => write.name === 'assignDepartmentDuty' && write.assignment.memberUid === 'member:M. Chloe')));
   check('Normal assignment does not write schedule directly after the callable', await domainWrites(page), scheduleWritesBeforeDepartmentAssignment);
   await page.locator('.department-override summary').first().click();
   const overrideTarget = page.locator('.department-override select').first();
@@ -645,9 +653,9 @@ try {
   await current.page.waitForSelector('.department-hero');
   check('Leader department page shows returned leader records', await current.page.locator('.department-leader-strip').innerText().then(text => /E\. Simon/.test(text)));
   check('Leader department page shows active and inactive profile groups', await current.page.locator('.department-group-heading').allTextContents().then(texts =>
-    texts.some(text => text.includes('Active profiles') && text.includes('2')) && texts.some(text => text.includes('Inactive profiles') && text.includes('1'))));
+    texts.some(text => text.includes('Active profiles') && text.includes('3')) && texts.some(text => text.includes('Inactive profiles') && text.includes('1'))));
   check('Leader department page does not use the congregation-wide roster', await current.page.locator('.department-member-row').allTextContents().then(texts =>
-    texts.length === 3 && texts.some(text => text.includes('E. Simon')) && texts.some(text => text.includes('S. Lisa')) && texts.some(text => text.includes('D. Caleb'))));
+    texts.length === 4 && texts.some(text => text.includes('E. Simon')) && texts.some(text => text.includes('S. Lisa')) && texts.some(text => text.includes('M. Chloe')) && texts.some(text => text.includes('D. Caleb'))));
   await current.page.locator('[data-act="department-member-open"][data-uid="member:S. Lisa"]').click();
   await current.page.waitForSelector('.department-profile-hero');
   check('Leader member profile exposes UID keyed identity', await current.page.locator('.department-uid').innerText(), 'UID: member:S. Lisa');
