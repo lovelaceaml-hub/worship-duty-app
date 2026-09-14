@@ -156,10 +156,16 @@ const fixture = {
       presider: 'E. Simon', songs: ['002'], status: 'planned', updatedAt: 1
     },
     'requests/req-worship': {
-      id: 'req-worship', svcId: '2026-07-01_morning', name: 'D. Caleb',
+      id: 'req-worship', svcId: '2026-07-01_morning', name: 'B. Anthony',
       date: '2026-07-01', service: 'Morning', worship: 'Sabbath Day',
       duty: 'Presider', department: 'Worship', status: 'pending',
-      requesterUid: 'member:D. Caleb', createdAt: Date.parse('2026-06-30T12:00:00Z')
+      requesterUid: 'member:B. Anthony', createdAt: Date.parse('2026-06-30T12:00:00Z')
+    },
+    'requests/req-stale': {
+      id: 'req-stale', svcId: '2026-07-01_morning', name: 'D. Caleb',
+      date: '2026-07-01', service: 'Morning', worship: 'Sabbath Day',
+      duty: 'Translation #1', department: 'Translation', status: 'pending',
+      requesterUid: 'member:D. Caleb', createdAt: Date.parse('2026-06-30T11:00:00Z')
     }
   }
 };
@@ -571,6 +577,11 @@ try {
   check('Administrator override does not write schedule directly after the callable', await domainWrites(page), scheduleWritesBeforeDepartmentOverride);
   check('Manage alert banner shows request and conflict attention', await page.locator('#banners .banner.alert').allInnerTexts()
     .then(texts => texts.some(text => text.includes('request') && text.includes('conflict'))));
+  check('Requests tab counts requests without adding conflicts', await page.locator('[data-act="sub"][data-sub="requests"]').innerText(), 'Requests (1)');
+  await page.locator('[data-act="sub"][data-sub="requests"]').click();
+  check('Stale request is removed from the pending queue', await page.locator('.aw-requests-content .card').allInnerTexts()
+    .then(cards => cards.every(text => !text.includes('D. Caleb'))));
+  check('Stale request remains available as completed history', await page.locator('[data-act="expand"][data-id="req-resolved"]').innerText(), 'Show 1 resolved request');
 
   await navigate(page, 'my');
   const requestOpen = page.locator('[data-act="req-open"]').first();

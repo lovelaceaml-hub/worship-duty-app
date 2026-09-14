@@ -48,7 +48,7 @@ renderMy = function () {
   const pickHTML = awHTML(picker); picker?.remove();
   const duties = dutiesFor(ui.me), next = duties[0];
   const days = new Set(duties.map(d => d.svc.date)).size;
-  const pending = state.requests.filter(r => r.name === ui.me && r.status === 'pending').length;
+  const pending = state.requests.filter(r => r.name === ui.me && requestIsActionable(r)).length;
   let reminders = '', songs = '', updates = '', timeline = '', extra = '';
   const children = Array.from(dom.children);
   const consumed = new Set();
@@ -195,8 +195,9 @@ renderManage = function () {
     body = dom.innerHTML;
   } else body = '<div class="aw-' + ui.sub + '-content">' + dom.innerHTML + '</div>';
   const up = upcomingServices().filter(manageServiceVisible);
-  const conflicts = up.reduce((n,s) => n + activeConflicts(s).length,0);
-  const pending = state.requests.filter(request => request.status === 'pending' && manageRequestVisible(request)).length;
+  const counts = actionableCountsForViewer();
+  const conflicts = counts.conflicts;
+  const pending = counts.requests;
   const copy = awManageCopy[ui.sub] || awManageCopy.services;
   return '<div class="aw-manage" data-aw-workspace="manage" data-manage-section="' + esc(ui.sub) + '"><div class="aw-stats aw-manage-stats">' + awStat(up.length,'Upcoming services','schedule') + awStat(conflicts,'Unresolved doubles','people') + awStat(pending,'Pending requests','my') + '</div>' + navHTML + awLabel('COORDINATOR TOOLS',copy[0],copy[1]) + body + '</div>';
 };

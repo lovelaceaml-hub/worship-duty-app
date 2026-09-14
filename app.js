@@ -2177,7 +2177,26 @@ function renderSongs(view) {
 
 /* Pending request (if any) by `name` for this exact svc + duty */
 function findPendingRequest(svcIdVal, duty, name) {
-  return state.requests.find(r => r.svcId === svcIdVal && r.duty === duty && r.name === name && r.status === 'pending');
+  return state.requests.find(r => r.svcId === svcIdVal && r.duty === duty && r.name === name && requestIsActionable(r));
+}
+
+/* A schedule edit completes the practical work behind a change request. Keep
+   the stored request for history, but stop presenting it as pending once the
+   requester no longer holds that exact duty. */
+function requestTargetService(request) {
+  if (!request) return null;
+  return (state.services || []).find(service => svcId(service) === request.svcId) || null;
+}
+
+function requestIsActionable(request) {
+  if (!request || request.status !== 'pending') return false;
+  const service = requestTargetService(request);
+  if (!service) return true;
+  return canonicalMemberName((service.assignments || {})[request.duty]) === canonicalMemberName(request.name);
+}
+
+function effectiveRequestStatus(request) {
+  return request && request.status === 'pending' && !requestIsActionable(request) ? 'completed' : request.status;
 }
 
 /* Compact "Request change" affordance that sits at the end of the duty's role
@@ -2220,7 +2239,7 @@ function renderYourRequests() {
     mine.slice(0, 6).map(r =>
       '<div class="req-item">' +
       '<div class="req-head"><span class="req-when">' + esc(r.duty) + ' | ' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) + '</span>' +
-      statusChip(r.status) + '</div>' +
+      statusChip(effectiveRequestStatus(r)) + '</div>' +
       (r.note ? '<div class="req-note">' + esc(r.note) + '</div>' : '') +
       '</div>').join('') +
     '</div>';
@@ -2279,7 +2298,7 @@ function actionableCountsForViewer() {
   };
   const seenRequests = {};
   (state.requests || []).forEach(request => {
-    if (!request || request.status !== 'pending') return;
+    if (!requestIsActionable(request)) return;
     const id = request.id || [request.name, request.date, request.service, request.duty].join('|');
     if (seenRequests[id]) return;
     seenRequests[id] = true;
@@ -2287,6 +2306,7 @@ function actionableCountsForViewer() {
   });
   const seenConflicts = {};
   (state.services || []).forEach(service => {
+    if (!service || service.date < todayISO() || !manageServiceVisible(service)) return;
     activeConflicts(service).forEach(conflict => {
       const id = [svcId(service), conflict.name, conflict.duties.join('|')].join('|');
       if (seenConflicts[id]) return;
@@ -2308,7 +2328,7 @@ function renderManage() {
   if (!isVerifiedSession() || isForcedSession() || !canManageAnyDepartment()) {
     return '<div class="empty">You do not have access to Manage.</div>';
   }
-  const pendingCount = actionableCountsForViewer().total;
+  const pendingCount = actionableCountsForViewer().requests;
   const departments = authorizedDepartments();
   const selectedDepartment = selectedManageDepartment();
   if (selectedDepartment && selectedDepartment !== 'All' && ['departments', 'services', 'planning'].indexOf(ui.sub) !== -1) {
@@ -2608,8 +2628,8 @@ function reqSubmittedAt(r) {
 
 function renderManageRequests() {
   const all = state.requests.filter(manageRequestVisible).slice().sort((a, b) => b.createdAt - a.createdAt);
-  const pending = all.filter(r => r.status === 'pending');
-  const resolved = all.filter(r => r.status !== 'pending');
+  const pending = all.filter(requestIsActionable);
+  const resolved = all.filter(r => !requestIsActionable(r));
 
   let html = '<p class="hint">Members can request a schedule change from My Duties. Approving here does not edit the schedule, ' +
     'open the service in <b>Services</b> to make the actual change.</p>';
@@ -2640,7 +2660,7 @@ function renderManageRequests() {
       resolved.slice(0, 10).forEach(r => {
         const when = r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
         html += '<div class="req-item">' +
-          '<div class="req-head"><span class="req-when">' + esc(memberLabel(r.name)) + ' | ' + esc(r.duty) + '</span>' + statusChip(r.status) + '</div>' +
+          '<div class="req-head"><span class="req-when">' + esc(memberLabel(r.name)) + ' | ' + esc(r.duty) + '</span>' + statusChip(effectiveRequestStatus(r)) + '</div>' +
           '<div class="req-meta">' + esc(r.worship) + ' ' + esc(r.service) + ', ' + esc(fmtDate(r.date)) +
           (when ? ' · resolved ' + esc(when) + ((r.resolvedByName || r.resolvedBy) ? ' by ' + esc(r.resolvedByName || r.resolvedBy) : '') : '') + '</div>' +
           '</div>';

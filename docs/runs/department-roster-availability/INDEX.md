@@ -43,4 +43,4 @@ Coordinator: Terra coordinator, non-editing; Sol owns integration and user commu
 <!-- lane: S3 state: reviewed model: gpt-5.6-luna-max worktree: /Users/anthony/Projects/worship-duty-app-worktrees/department-auth review: High-failed-Max-failed-Sol-corrected updated: 2026-09-14T11:36Z -->
 <!-- lane: S4 state: reviewed model: gpt-5.6-luna-max worktree: /Users/anthony/Projects/worship-duty-app-worktrees/department-runtime review: Luna-High-failed-Luna-Max-failed-Sol-corrected updated: 2026-09-14T15:04Z -->
 <!-- lane: S5 state: reviewed model: gpt-5.6-luna-max worktree: /Users/anthony/Projects/worship-duty-app-worktrees/department-seed review: Luna-High-failed-Luna-Max-passed updated: 2026-09-14T13:52Z -->
-<!-- lane: S6 state: running model: gpt-5.6-sol-high worktree: /Users/anthony/Projects/worship-duty-app review: one-Opus-complete-Sol-corrected-all-findings updated: 2026-09-14T15:42Z -->
+<!-- lane: S6 state: complete model: gpt-5.6-sol-high worktree: /Users/anthony/Projects/worship-duty-app review: one-Opus-complete-Sol-corrected-all-findings updated: 2026-09-14T16:49Z -->

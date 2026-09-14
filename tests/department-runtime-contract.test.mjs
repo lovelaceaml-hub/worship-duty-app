@@ -10,6 +10,7 @@ const app = read('app.js');
 const index = read('index.html');
 const bridge = read('design-gallery/host-bridge.js');
 const build = read('design-gallery/build.mjs');
+const auroraWorkspaces = read('prototype/workspaces.js');
 
 test('department runtime exposes only secure UID keyed profile and assignment callables', () => {
   for (const name of [
@@ -107,4 +108,15 @@ test('all appearance adapters keep the shared Manage runtime and release stampin
   assert.match(build, /design-choice\.css/);
   assert.match(build, /data-design-open/);
   for (const mode of ['classic', 'prism', 'navy', 'aurora']) assert.match(build, new RegExp(mode));
+});
+
+test('request and conflict badges use the same actionable queue rules', () => {
+  assert.match(app, /function requestIsActionable\(request\)/);
+  assert.match(app, /service\.assignments \|\| \{\}\)\[request\.duty\]/);
+  assert.match(app, /const pendingCount = actionableCountsForViewer\(\)\.requests/);
+  assert.match(app, /const pending = all\.filter\(requestIsActionable\)/);
+  assert.match(app, /service\.date < todayISO\(\)/);
+  assert.match(auroraWorkspaces, /const counts = actionableCountsForViewer\(\)/);
+  assert.match(auroraWorkspaces, /const conflicts = counts\.conflicts/);
+  assert.match(auroraWorkspaces, /const pending = counts\.requests/);
 });
