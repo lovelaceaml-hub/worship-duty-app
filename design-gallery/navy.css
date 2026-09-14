@@ -21,3 +21,7 @@ html #song-root{color:var(--ink)}html #song-root .ns-head{background:var(--surfa
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 html[data-nc-motion=off] *,html[data-nc-motion=off] *:before,html[data-nc-motion=off] *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 @media print{.nc-appearance,nav.tabs,.nc-dialog,.nc-arrows,.nc-view-switch{display:none!important}.wrap{box-shadow:none;border:0;margin:0}.nc-hero:before,.nc-hero:after{display:none}#view{display:block!important}.nc-hero{print-color-adjust:exact}}
+
+/* The main page selector belongs below the header, never at the bottom edge. */
+nav.tabs{position:sticky;top:0;bottom:auto;left:auto;transform:none;width:100%;border-radius:0}
+@media(max-width:800px){.wrap{padding-bottom:30px}nav.tabs{top:0;bottom:auto;width:100%;border-radius:0}}

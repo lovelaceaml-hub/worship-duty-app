@@ -119,6 +119,9 @@ Tap **Schedule** to see every upcoming service for everyone, grouped by day.
   service still ahead of the current local time. For example, after Morning
   and Afternoon have passed, they open on Evening for that day. Original shows
   the full upcoming list instead of one selected service.
+- The main page tabs stay at the top of the screen in every appearance,
+  including on phones. Use the Appearance button in the top controls at any
+  time to choose Original, Prism, Navy & Cream, or Aurora.
 - Tap **"Show past services"** near the bottom if you want to look back at
   services that already happened.
 

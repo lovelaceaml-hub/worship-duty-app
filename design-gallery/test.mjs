@@ -148,6 +148,10 @@ try{
     for(const width of [320,390,768,1024,1440]){
       await p.setViewportSize({width,height:1000});await p.waitForTimeout(60);
       check(`${mode} no page overflow at ${width}px`,await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+      if(width===390){
+        check(`${mode} mobile selector is at the top`,await p.locator('nav.tabs').evaluate(el=>{const r=el.getBoundingClientRect();return r.top<220&&r.bottom<innerHeight/2;}),true);
+        check(`${mode} has a visible top Appearance button`,await p.locator('[data-design-open]:visible').count(),1);
+      }
     }
   }
   check('No uncaught JavaScript errors',report.errors,[]);

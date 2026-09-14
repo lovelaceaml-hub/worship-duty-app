@@ -9,8 +9,9 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 - **Website:** https://lv-zion-duties.web.app — share this link with members
 - **Status:** Live. **13 September 2026: the Appearance gallery is live, with
   Original, Prism, Navy & Cream and Aurora, and selected-service designs open
-  on the next service by local time.** **7 September 2026: the app now opens
-  fast and the tabs sit at the top.**
+  on the next service by local time. A prepared update keeps the page-selection
+  tabs at the top on phones in every appearance and gives every appearance a
+  top Appearance button.** **7 September 2026: the app now opens fast.**
   Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
   deploy with that script), the presider song files load only for presiders, sign-in no longer
   blocks startup, and the calendar button subscribes to the live feed instead of downloading a

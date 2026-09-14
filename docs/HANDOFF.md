@@ -38,6 +38,12 @@ The source change was verified in the design previews and the deployable
 live-build integration, then published to the live Hosting site on
 2026-09-13. The live release includes the four-choice Appearance gallery.
 
+The next narrow Hosting update keeps Schedule, My Duties, Presider, and Manage
+at the top of the phone screen in all four appearances. Each appearance also
+has one visible Appearance button in its top controls. The gallery browser
+suite verifies both conditions at 390 pixels and checks for horizontal overflow
+from 320 through 1440 pixels. This update is prepared but not yet published.
+
 ## Architecture
 
 - **No framework, no build step.** `index.html` (all styles inline) +
