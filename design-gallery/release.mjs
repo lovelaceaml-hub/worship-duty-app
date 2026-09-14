@@ -49,6 +49,33 @@ async function matchesUnmarkedLegacyPrism(liveApp){
   }catch{return false;}
 }
 
+async function matchesUnmarkedGallery(liveApp){
+  // Gallery releases before the manifest was included in Hosting are safe to
+  // replace only when their normalized compiled app exactly matches the
+  // current reviewed source and adapters.
+  const build=spawnSync(process.execPath,[path.join(root,'design-gallery/build.mjs')],{
+    cwd:root,
+    encoding:'utf8',
+    env:{...process.env,RELEASE_STAMP:'GALLERYCHECK'}
+  });
+  if(build.status!==0)return false;
+  let matches=false;
+  try{
+    await applyStagedAppFixes(path.join(root,'.hosting-gallery'));
+    const gallery=await fs.readFile(path.join(root,'.hosting-gallery','app.js'),'utf8');
+    matches=hash(normalizeApp(gallery))===hash(normalizeApp(liveApp));
+  }catch{return false;}
+  finally{
+    const restore=spawnSync(process.execPath,[path.join(root,'design-gallery/build.mjs')],{
+      cwd:root,
+      encoding:'utf8',
+      env:{...process.env,RELEASE_STAMP:manifest.release}
+    });
+    if(restore.status===0)await applyStagedAppFixes(path.join(root,'.hosting-gallery'));
+  }
+  return matches;
+}
+
 async function compatibleLive(){
   const live=await (await fetch(origin+'/?gallery-check='+Date.now(),{signal:AbortSignal.timeout(20000)})).text();
   const src=live.match(/<script[^>]+src=["']([^"']*app\.js[^"']*)["']/)?.[1];
@@ -71,6 +98,8 @@ async function compatibleLive(){
   // Exact reconstruction of the earlier Prism Hosting candidate, for releases
   // that were deployed before the marker was included in Hosting.
   if(await matchesUnmarkedLegacyPrism(current))return {kind:'prism-unmarked-exact'};
+
+  if(await matchesUnmarkedGallery(current))return {kind:'gallery-unmarked-exact'};
 
   // Older Original production releases can also predate release markers.
   const ancestor=findAncestorAppMatch(current);
