@@ -22,6 +22,7 @@ const {
   isSchedulable,
   mergeHistorySeed,
   normalizeDepartmentProfile,
+  profileIdFor,
   updateDepartmentProfile
 } = profile;
 
@@ -47,7 +48,7 @@ test('constructs and normalizes a safe department profile', () => {
     at: 100
   });
 
-  assert.equal(member.id, 'translation::m-avery');
+  assert.equal(member.id, 'translation::m-avery--00006d00002e000020000061000076000065000072000079');
   assert.equal(member.department, 'Translation');
   assert.equal(member.member, 'M. Avery');
   assert.deepEqual(member.eligibleDuties, ['Translation #1', 'Translation #2']);
@@ -171,11 +172,32 @@ test('recurring availability is overridden by date-specific exceptions', () => {
   }, { at: 20 });
 
   assert.equal(effectiveAvailability(member, '2026-09-19', 'morning'), AVAILABILITY_AVAILABLE);
+  assert.equal(effectiveAvailability(member, '2026-09-19', 'MORNING'), AVAILABILITY_AVAILABLE);
   assert.equal(effectiveAvailability(member, { date: '2026-09-20', serviceTime: 'morning' }), AVAILABILITY_UNAVAILABLE);
   assert.equal(effectiveAvailability(member, '2026-09-20', 'evening'), AVAILABILITY_AVAILABLE);
+  assert.equal(effectiveAvailability(member, { date: '2026-09-20', serviceTime: 'EVENING' }), AVAILABILITY_AVAILABLE);
   assert.equal(effectiveAvailability(member, '2026-09-21', 'morning'), AVAILABILITY_UNAVAILABLE);
   assert.equal(effectiveAvailability(member, '2026-09-19', 'overnight'), AVAILABILITY_UNKNOWN);
   assert.equal(isAvailable(member, '2026-09-20', 'evening'), true);
+});
+
+test('profile identities retain punctuation and whitespace distinctions', () => {
+  const hyphenated = profileIdFor('Usher Sisters', 'A-B');
+  const spaced = profileIdFor(' usher sisters ', 'A B');
+
+  assert.notEqual(hyphenated, spaced);
+  assert.equal(hyphenated, profileIdFor('usher sisters', 'a-b'));
+
+  const plan = migration.planHistorySeed([
+    { date: '2026-09-06', assignments: { 'Usher Door': 'A-B' } },
+    { date: '2026-09-13', assignments: { 'Usher Door': 'A B' } }
+  ], { seededAt: 150, seededBy: 'history-import' });
+
+  assert.equal(plan.suggestions.length, 2);
+  assert.deepEqual(
+    plan.suggestions.map(suggestion => suggestion.member).sort(),
+    ['A B', 'A-B']
+  );
 });
 
 test('manual edits preserve editor and timestamp attribution', () => {
@@ -250,6 +272,26 @@ test('history seed suggestions are idempotent and do not overwrite protected dec
     migration.applyHistorySeedPlan(imported, laterPlan),
     imported
   );
+});
+
+test('incremental history seeds extend unprotected fields without mutating frozen attribution', () => {
+  const firstPlan = migration.planHistorySeed([
+    { date: '2026-09-06', assignments: { 'Translation #1': 'M. Avery' } }
+  ], { seededAt: 100, seededBy: 'history-import' });
+  const [seeded] = migration.applyHistorySeedPlan([], firstPlan);
+
+  const laterPlan = migration.planHistorySeed([
+    { date: '2026-09-13', assignments: {
+      'Translation #1': 'M. Avery',
+      'Translation #2': 'M. Avery'
+    } }
+  ], { seededAt: 200, seededBy: 'history-import' });
+  const [updated] = migration.applyHistorySeedPlan([seeded], laterPlan);
+
+  assert.deepEqual(seeded.eligibleDuties, ['Translation #1']);
+  assert.deepEqual(updated.eligibleDuties, ['Translation #1', 'Translation #2']);
+  assert.notEqual(updated.fieldAttribution, seeded.fieldAttribution);
+  assert.equal(updated.fieldAttribution.eligibleDuties.source, 'history-seed');
 });
 
 test('history planner groups evidence, deduplicates it, and reports unsafe rows', () => {

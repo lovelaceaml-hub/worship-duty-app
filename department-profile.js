@@ -448,10 +448,12 @@ function identitySegment(value) {
   const readable = normalized
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  if (readable) return readable;
-  return Array.from(normalized)
-    .map(character => character.codePointAt(0).toString(16))
-    .join('') || 'item';
+  const encoded = Array.from(normalized)
+    .map(character => character.codePointAt(0).toString(16).padStart(6, '0'))
+    .join('');
+  if (!readable) return encoded || 'item';
+  if (/^[a-z0-9]+$/.test(normalized)) return readable;
+  return `${readable}--${encoded}`;
 }
 
 function profileIdFor(department, member) {
@@ -735,7 +737,10 @@ function mergeHistorySeed(profile, suggestion, options = {}) {
   if (current.id !== id || current.department !== department || current.member !== member) {
     fail('profile identity does not match suggestion', 'suggestion');
   }
-  const next = { ...current };
+  const next = {
+    ...current,
+    fieldAttribution: { ...current.fieldAttribution }
+  };
   let changed = false;
   const seedableFields = ['status', 'eligibleDuties', 'schedulable'];
   const candidate = normalizedProfileInput({
@@ -748,7 +753,6 @@ function mergeHistorySeed(profile, suggestion, options = {}) {
     if (isAuthoritativeDecision(current.fieldAttribution[field])) continue;
     if (valuesEqual(current[field], candidate[field])) continue;
     next[field] = candidate[field];
-    next.fieldAttribution = next.fieldAttribution || { ...current.fieldAttribution };
     next.fieldAttribution[field] = {
       source: 'history-seed',
       authority: 'history-seed',
@@ -805,7 +809,9 @@ function effectiveAvailability(profile, dateOrOptions, serviceTimeInput) {
     serviceTime = dateOrOptions.serviceTime ?? dateOrOptions.time;
   }
   const normalizedDate = normalizeDate(date, 'availability.date');
-  const normalizedServiceTime = normalizeKey(serviceTime, 'availability.serviceTime', { max: 80 });
+  const normalizedServiceTime = keyFor(
+    normalizeKey(serviceTime, 'availability.serviceTime', { max: 80 })
+  );
   const day = current.availability.exceptions[normalizedDate];
   if (day && Object.prototype.hasOwnProperty.call(day, normalizedServiceTime)) {
     return day[normalizedServiceTime];
