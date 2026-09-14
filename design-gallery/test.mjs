@@ -73,8 +73,44 @@ const departmentMap = {
   Lobby: [], Translation: [], Media: ['E. Simon'],
   'Parking Lot': [], Offering: []
 };
+const departmentRoster = {
+  Worship: [
+    {
+      memberUid: 'member:E. Simon', uid: 'member:E. Simon', departmentId: 'Worship', department: 'Worship',
+      role: 'leader', memberName: 'E. Simon', status: 'active', eligibleDuties: ['Presider'], schedulable: true,
+      availability: {recurring: {morning: 'available', evening: 'available'}, exceptions: {}},
+      updatedBy: 'Roster setup', updatedByUid: 'member:E. Simon', updatedAt: Date.parse('2026-06-20T10:00:00Z'),
+      attribution: {updatedBy: 'Roster setup', updatedAt: Date.parse('2026-06-20T10:00:00Z')},
+      fieldAttribution: {status: {source: 'initial', authority: 'system', by: 'system', at: 0}}
+    }
+  ],
+  Media: [
+    {
+      memberUid: 'member:E. Simon', uid: 'member:E. Simon', departmentId: 'Media', department: 'Media',
+      role: 'leader', memberName: 'E. Simon', status: 'active', eligibleDuties: ['Media Booth #1'], schedulable: true,
+      availability: {recurring: {morning: 'available', evening: 'available'}, exceptions: {}},
+      updatedBy: 'E. Simon', updatedByUid: 'member:E. Simon', updatedAt: Date.parse('2026-06-21T10:00:00Z'),
+      attribution: {updatedBy: 'E. Simon', updatedAt: Date.parse('2026-06-21T10:00:00Z')},
+      fieldAttribution: {status: {source: 'manual', authority: 'leader', by: 'member:E. Simon', at: Date.parse('2026-06-21T10:00:00Z')}}
+    },
+    {
+      memberUid: 'member:S. Lisa', uid: 'member:S. Lisa', departmentId: 'Media', department: 'Media',
+      role: 'member', memberName: 'S. Lisa', status: 'active', eligibleDuties: ['Media Booth #1'], schedulable: true,
+      availability: {recurring: {morning: 'available', evening: 'unavailable'}, exceptions: {'2026-07-02': {'evening': 'available'}}},
+      updatedBy: 'E. Simon', updatedByUid: 'member:E. Simon', updatedAt: Date.parse('2026-06-22T10:00:00Z'),
+      attribution: {updatedBy: 'E. Simon', updatedAt: Date.parse('2026-06-22T10:00:00Z')}
+    },
+    {
+      memberUid: 'member:D. Caleb', uid: 'member:D. Caleb', departmentId: 'Media', department: 'Media',
+      role: 'member', memberName: 'D. Caleb', status: 'inactive', eligibleDuties: ['Media Booth #1'], schedulable: false,
+      availability: {recurring: {evening: 'available'}, exceptions: {}},
+      updatedBy: 'E. Simon', updatedByUid: 'member:E. Simon', updatedAt: Date.parse('2026-06-23T10:00:00Z')
+    }
+  ]
+};
 const fixture = {
   services,
+  departmentRoster,
   holdSettings: true,
   docs: {
     'app/settings': {
@@ -190,6 +226,7 @@ function authModule() {
     export const signInWithCustomToken = async (_auth, token) => {
       const name = tokenName(token);
       auth.currentUser = userFor(name);
+      window.__fixtureCurrentUserUid = auth.currentUser.uid;
       window.__fixtureAuthCount = (window.__fixtureAuthCount || 0) + 1;
       authListener(auth.currentUser);
       return {user: auth.currentUser};
@@ -204,6 +241,10 @@ function authModule() {
 function functionsModule() {
   return `
     const fail = code => { const error = new Error(code); error.code = 'functions/' + code; throw error; };
+    const clone = value => JSON.parse(JSON.stringify(value));
+    const rosterFor = department => (window.__fixtureDepartmentRoster || {})[department] || [];
+    const profileFor = (department, memberUid) => rosterFor(department).find(profile => profile.memberUid === memberUid);
+    const actorUid = () => window.__fixtureCurrentUserUid || 'member:B. Anthony';
     export const getFunctions = () => ({});
     export const httpsCallable = (_functions, name) => async data => {
       const id = String((data && (data.selectedMemberId || data.memberId)) || '');
@@ -221,6 +262,44 @@ function functionsModule() {
         record.claims.mustChangePin = false;
         return {data: {ok: true}};
       }
+      if (name === 'listDepartmentRoster') {
+        return {data: {ok: true, departmentId: data.departmentId, members: clone(rosterFor(data.departmentId))}};
+      }
+      if (name === 'updateDepartmentProfile' || name === 'updateMemberAvailability') {
+        const profile = profileFor(data.departmentId, data.memberUid);
+        if (!profile) fail('not-found');
+        Object.assign(profile, clone(data.patch || {}));
+        profile.updatedByUid = actorUid();
+        profile.updatedBy = (window.__fixtureAuthRecords || {})[actorUid().replace(/^member:/, '')]?.claims?.memberName || actorUid();
+        profile.updatedAt = Date.now();
+        return {data: {ok: true, departmentId: data.departmentId, memberUid: data.memberUid, profile: clone(profile)}};
+      }
+      if (name === 'createDepartmentProfile') {
+        const department = data.departmentId;
+        const profile = {
+          memberUid: data.memberUid, uid: data.memberUid, departmentId: department, department,
+          role: 'member', memberName: data.memberName, status: data.status || 'active',
+          eligibleDuties: data.eligibleDuties || [], schedulable: data.schedulable === true,
+          availability: clone(data.availability || {recurring: {}, exceptions: {}}),
+          updatedByUid: actorUid(), updatedAt: Date.now()
+        };
+        rosterFor(department).push(profile);
+        return {data: {ok: true, departmentId: department, memberUid: data.memberUid, profile: clone(profile)}};
+      }
+      if (name === 'assignDepartmentDuty') {
+        const profile = profileFor(data.departmentId, data.memberUid);
+        if (!profile) fail('not-found');
+        const assignment = {...data, override: false, authorization: 'normal-eligible-assignment', assignedByUid: actorUid()};
+        (window.__departmentWrites || (window.__departmentWrites = [])).push({name, assignment: clone(assignment)});
+        return {data: {ok: true, assignment, override: false}};
+      }
+      if (name === 'overrideDepartmentAssignment') {
+        const profile = profileFor(data.departmentId, data.memberUid);
+        if (!profile) fail('not-found');
+        const assignment = {...data, override: true, authorization: 'administrator-override', profileMutated: false, auditId: 'fixture-audit-1'};
+        (window.__departmentWrites || (window.__departmentWrites = [])).push({name, assignment: clone(assignment)});
+        return {data: {ok: true, assignment, override: true, auditId: assignment.auditId, profileMutated: false}};
+      }
       return {data: {ok: true}};
     };
   `;
@@ -236,6 +315,7 @@ async function make({member = '', forcedMember = ''} = {}) {
   await context.addInitScript(({fixtureValue, records, memberValue}) => {
     window.__designFixture = fixtureValue;
     window.__fixtureAuthRecords = records;
+    window.__fixtureDepartmentRoster = fixtureValue.departmentRoster;
     localStorage.setItem('UNRELATED', 'keep');
     if (memberValue) localStorage.setItem('wds-me', memberValue);
   }, {fixtureValue: fixture, records: authRecords(forcedMember), memberValue: member});
@@ -442,6 +522,26 @@ try {
   check('Admin sees multi-department Manage selector', await page.locator('#manage-dept').evaluate(select =>
     [...select.options].map(option => option.textContent)),
   ['All Departments', 'Worship', 'Usher Sisters', 'Usher Brothers', 'Lobby', 'Translation', 'Media', 'Parking Lot', 'Offering']);
+  await page.locator('#manage-dept').selectOption('Media');
+  await page.locator('[data-act="sub"][data-sub="services"]').click();
+  await page.locator('[data-act="expand"][data-id="m:2026-07-02_evening"]').click();
+  const mediaDuty = page.locator('[data-chg="assign"][data-duty="Media Booth #1"]').first();
+  await mediaDuty.selectOption('member:S. Lisa');
+  await page.waitForFunction(() => (window.__departmentWrites || []).some(write => write.name === 'assignDepartmentDuty'));
+  check('Normal assignment records the UID keyed callable write', await page.evaluate(() =>
+    window.__departmentWrites.some(write => write.name === 'assignDepartmentDuty' && write.assignment.memberUid === 'member:S. Lisa')));
+  await page.locator('.department-override summary').first().click();
+  const overrideTarget = page.locator('.department-override select').first();
+  const overrideReason = page.locator('.department-override input').first();
+  await overrideTarget.selectOption('member:D. Caleb');
+  await overrideReason.fill('Emergency coverage approved by administrator');
+  await page.locator('[data-act="department-override-submit"]').first().click();
+  await page.waitForFunction(() => (window.__departmentWrites || []).some(write => write.name === 'overrideDepartmentAssignment'));
+  check('Administrator override is explicit and profile neutral', await page.evaluate(() => {
+    const write = (window.__departmentWrites || []).find(item => item.name === 'overrideDepartmentAssignment');
+    const profile = (window.__fixtureDepartmentRoster.Media || []).find(item => item.memberUid === 'member:D. Caleb');
+    return !!write && write.assignment.override === true && write.assignment.overrideReason && profile.status === 'inactive';
+  }));
   check('Manage alert banner shows request and conflict attention', await page.locator('#banners .banner.alert').allInnerTexts()
     .then(texts => texts.some(text => text.includes('request') && text.includes('conflict'))));
 
@@ -517,14 +617,29 @@ try {
   await login(current.page, 'E. Simon');
   check('Leader sees Manage', await current.page.locator('#tab-manage').isVisible());
   await navigate(current.page, 'manage');
+  await current.page.keyboard.press('Escape');
   const leaderOptions = await current.page.locator('#manage-dept option').allTextContents();
   check('Leader Manage selector is scoped to configured departments', leaderOptions, ['Worship', 'Media']);
   check('Leader cannot see the global Manage option', leaderOptions.includes('All Departments'), false);
+  await current.page.locator('[data-act="department-open"][data-department="Media"]').click();
+  await current.page.waitForSelector('.department-hero');
+  check('Leader department page shows returned leader records', await current.page.locator('.department-leader-strip').innerText().then(text => /E\. Simon/.test(text)));
+  check('Leader department page shows active and inactive profile groups', await current.page.locator('.department-group-heading').allTextContents().then(texts =>
+    texts.some(text => text.includes('Active profiles') && text.includes('2')) && texts.some(text => text.includes('Inactive profiles') && text.includes('1'))));
+  check('Leader department page does not use the congregation-wide roster', await current.page.locator('.department-member-row').allTextContents().then(texts =>
+    texts.length === 3 && texts.some(text => text.includes('E. Simon')) && texts.some(text => text.includes('S. Lisa')) && texts.some(text => text.includes('D. Caleb'))));
+  await current.page.locator('[data-act="department-member-open"][data-uid="member:S. Lisa"]').click();
+  await current.page.waitForSelector('.department-profile-hero');
+  check('Leader member profile exposes UID keyed identity', await current.page.locator('.department-uid').innerText(), 'UID: member:S. Lisa');
+  check('Leader member profile exposes eligibility and availability editors', await current.page.locator('.department-editor').allTextContents().then(texts => texts.join(' ')).then(text =>
+    text.includes('Eligible duties') && text.includes('Recurring availability') && text.includes('Date exceptions')));
+  check('Date exception wins in the rendered profile model', await current.page.locator('.department-exception-row').innerText().then(text => /2026-07-02/.test(text)));
   for (const mode of ['prism', 'navy', 'aurora', 'classic']) {
     await choose(current.page, mode);
     await navigate(current.page, 'manage');
     check('Leader-only Manage remains visible in ' + mode, await current.page.locator('#tab-manage').isVisible());
     check('Leader scope remains limited in ' + mode, await current.page.locator('#manage-dept option').allTextContents(), ['Worship', 'Media']);
+    check('Department profile journey remains available in ' + mode, await current.page.locator('.department-profile-hero').count(), 1);
   }
   check('No uncaught JavaScript errors in leader flow', report.errors, []);
   await closeSession(current);

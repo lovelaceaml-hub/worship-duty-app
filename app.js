@@ -265,13 +265,12 @@ function workloadStats() {
    since last served. */
 function suggestSubs(svc, duty, excludeName, stats) {
   const cat = dutyCategory(duty);
-  let roster = (state.departments || {})[cat.name] || [];
-  if (!roster.length) roster = state.members;
+  const roster = departmentProfiles(cat.name).filter(profile => departmentProfileAssignable(profile, svc, duty));
   const busy = {};
   Object.keys(svc.assignments || {}).forEach(d => { if (svc.assignments[d]) busy[svc.assignments[d]] = true; });
   return roster
-    .filter(m => m !== excludeName && !busy[m])
-    .map(m => ({ m, s: stats[m] || { past4: 0, upcoming: 0, last: '' } }))
+    .filter(profile => profile.memberName !== excludeName && !busy[profile.memberName])
+    .map(profile => ({ m: profile.memberName, s: stats[profile.memberName] || { past4: 0, upcoming: 0, last: '' } }))
     .sort((a, b) =>
       (a.s.upcoming + a.s.past4) - (b.s.upcoming + b.s.past4) ||
       (a.s.last === b.s.last ? 0 : (a.s.last < b.s.last ? -1 : 1)))
@@ -507,6 +506,8 @@ const ui = {
   me: '',
   loginMember: '',
   manageDept: 'All',
+  departmentView: 'list',
+  departmentMember: '',
   deptFilter: (function () {
     const v = localStorage.getItem('wds-dept') || 'All';
     return v === 'All' || CATEGORIES.some(c => c.name === v) ? v : 'All';
@@ -524,6 +525,319 @@ const ui = {
   songSvc: null, // svcId deep-link target for the song picker (ui.tab === 'songs')
   songNav: false // one-shot: this render is an explicit navigation into the song picker (tab or button), not a background re-mount
 };
+
+/* Department runtime data is deliberately kept out of the local schedule
+   cache. The secure callable roster is the only source for profile identity,
+   status, eligibility, schedulability, availability, and attribution. */
+const departmentRuntime = {
+  rosters: Object.create(null),
+  loading: Object.create(null),
+  errors: Object.create(null),
+  drafts: Object.create(null),
+  assignmentBusy: Object.create(null)
+};
+
+function clearDepartmentRuntime() {
+  departmentRuntime.rosters = Object.create(null);
+  departmentRuntime.loading = Object.create(null);
+  departmentRuntime.errors = Object.create(null);
+  departmentRuntime.drafts = Object.create(null);
+  departmentRuntime.assignmentBusy = Object.create(null);
+  ui.departmentView = 'list';
+  ui.departmentMember = '';
+}
+
+function departmentRuntimeKey(department, memberUid) {
+  return String(department || '') + '::' + String(memberUid || '');
+}
+
+function departmentErrorMessage(error, fallback) {
+  const code = String(error && error.code || '').replace(/^functions\//, '');
+  if (code === 'permission-denied') return 'This account is not authorized for that department action.';
+  if (code === 'unauthenticated') return 'Sign in again before changing department data.';
+  if (code === 'unavailable' || code === 'internal') return 'The department service is unavailable. Try again.';
+  return String(error && error.message || fallback || 'The department action could not be completed.');
+}
+
+function departmentServiceTimeKey(serviceOrLabel) {
+  const value = typeof serviceOrLabel === 'object'
+    ? (serviceOrLabel && (serviceOrLabel.serviceTime || serviceOrLabel.service || serviceOrLabel.time))
+    : serviceOrLabel;
+  return slugify(value || '');
+}
+
+function departmentServiceTimeLabel(key) {
+  const normalized = String(key || '').trim().toLocaleLowerCase();
+  const known = SERVICE_LABELS.find(label => departmentServiceTimeKey(label) === normalized);
+  if (known) return known;
+  if (normalized === '*') return 'Any service time';
+  return String(key || '').replace(/[-_]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function normalizeDepartmentAvailability(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  const recurring = source.recurring && typeof source.recurring === 'object' ? source.recurring : {};
+  const rawExceptions = source.exceptions || source.dateExceptions;
+  const exceptions = rawExceptions && typeof rawExceptions === 'object' ? rawExceptions : {};
+  const cleanMap = map => Object.keys(map).reduce((out, key) => {
+    const status = String(map[key] || '').trim().toLocaleLowerCase();
+    if (status === 'available' || status === 'unavailable') out[String(key).trim().toLocaleLowerCase()] = status;
+    return out;
+  }, {});
+  const cleanExceptions = Object.keys(exceptions).reduce((out, date) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !exceptions[date] || typeof exceptions[date] !== 'object') return out;
+    out[date] = cleanMap(exceptions[date]);
+    return out;
+  }, {});
+  return { recurring: cleanMap(recurring), exceptions: cleanExceptions };
+}
+
+function normalizeDepartmentProfile(value, department) {
+  if (!value || typeof value !== 'object') return null;
+  const memberUid = String(value.memberUid || value.uid || '').trim();
+  const departmentId = String(value.departmentId || value.department || '').trim();
+  if (!memberUid || !departmentId || departmentId !== String(department || '').trim()) return null;
+  if (value.memberUid != null && value.uid != null && String(value.memberUid) !== String(value.uid)) return null;
+  if (value.departmentId != null && value.department != null && String(value.departmentId) !== String(value.department)) return null;
+  const eligibleDuties = Array.isArray(value.eligibleDuties)
+    ? value.eligibleDuties
+    : (Array.isArray(value.duties) ? value.duties : []);
+  const schedulable = value.schedulable == null ? value.isSchedulable : value.schedulable;
+  if (typeof schedulable !== 'boolean') return null;
+  const status = String(value.status || (value.active === false ? 'inactive' : 'active')).trim().toLocaleLowerCase();
+  if (status !== 'active' && status !== 'inactive') return null;
+  return Object.assign({}, value, {
+    departmentId,
+    memberUid,
+    memberName: String(value.memberName || value.member || memberUid).trim() || memberUid,
+    role: String(value.role || 'member').trim(),
+    status,
+    eligibleDuties: eligibleDuties.map(duty => String(duty).trim()).filter(Boolean),
+    schedulable,
+    availability: normalizeDepartmentAvailability(value.availability)
+  });
+}
+
+function departmentProfiles(department) {
+  return Array.isArray(departmentRuntime.rosters[department]) ? departmentRuntime.rosters[department] : [];
+}
+
+function departmentProfile(department, memberUid) {
+  return departmentProfiles(department).find(profile => profile.memberUid === String(memberUid || '')) || null;
+}
+
+function departmentProfileByName(department, name) {
+  const wanted = String(name || '').trim();
+  return departmentProfiles(department).find(profile => profile.memberName === wanted || memberLabel(profile.memberName) === memberLabel(wanted)) || null;
+}
+
+function departmentProfileIsLeader(profile) {
+  return /leader|manager/i.test(String(profile && profile.role || ''));
+}
+
+function departmentAvailability(profile, serviceDate, serviceTime) {
+  if (!profile || !/^\d{4}-\d{2}-\d{2}$/.test(String(serviceDate || ''))) return 'unknown';
+  const key = departmentServiceTimeKey(serviceTime);
+  if (!key) return 'unknown';
+  const exceptions = profile.availability && profile.availability.exceptions || {};
+  const recurring = profile.availability && profile.availability.recurring || {};
+  const exception = exceptions[serviceDate];
+  if (exception && Object.prototype.hasOwnProperty.call(exception, key)) return exception[key];
+  if (exception && Object.prototype.hasOwnProperty.call(exception, '*')) return exception['*'];
+  return recurring[key] || 'unknown';
+}
+
+function departmentProfileAssignable(profile, svc, duty) {
+  if (!profile || profile.status !== 'active' || profile.schedulable !== true) return false;
+  if (!Array.isArray(profile.eligibleDuties) || !profile.eligibleDuties.some(item =>
+    String(item).trim().toLocaleLowerCase() === String(duty || '').trim().toLocaleLowerCase())) return false;
+  return departmentAvailability(profile, svc && svc.date, svc && departmentServiceTimeKey(svc)) === 'available';
+}
+
+function departmentDraftProfile(department, memberUid) {
+  const profile = departmentProfile(department, memberUid);
+  if (!profile) return null;
+  const key = departmentRuntimeKey(department, memberUid);
+  const draft = departmentRuntime.drafts[key];
+  if (!draft) return profile;
+  return Object.assign({}, profile, draft, {
+    availability: normalizeDepartmentAvailability(draft.availability || profile.availability)
+  });
+}
+
+function replaceDepartmentProfile(profile) {
+  if (!profile || !profile.departmentId || !profile.memberUid) return false;
+  const normalized = normalizeDepartmentProfile(profile, profile.departmentId);
+  if (!normalized) return false;
+  const current = departmentProfiles(normalized.departmentId);
+  const index = current.findIndex(item => item.memberUid === normalized.memberUid);
+  if (index === -1) current.push(normalized);
+  else current[index] = normalized;
+  current.sort((left, right) => String(left.memberName).localeCompare(String(right.memberName)));
+  departmentRuntime.rosters[normalized.departmentId] = current;
+  delete departmentRuntime.drafts[departmentRuntimeKey(normalized.departmentId, normalized.memberUid)];
+  return true;
+}
+
+function departmentRosterError(department, message) {
+  departmentRuntime.errors[department] = message || 'The department roster could not be loaded.';
+  departmentRuntime.loading[department] = false;
+}
+
+function localDepartmentRoster(department) {
+  const names = state.departments && Array.isArray(state.departments[department])
+    ? state.departments[department]
+    : [];
+  const category = CATEGORIES.find(item => item.name === department);
+  return names.map(name => normalizeDepartmentProfile({
+    memberUid: 'local:' + slugify(department) + ':' + slugify(name),
+    departmentId: department,
+    memberName: name,
+    role: 'member',
+    status: 'active',
+    eligibleDuties: category ? category.duties : [],
+    schedulable: true,
+    availability: { recurring: SERVICE_LABELS.reduce((out, label) => {
+      out[departmentServiceTimeKey(label)] = 'available';
+      return out;
+    }, {}), exceptions: {} }
+  }, department)).filter(Boolean);
+}
+
+function loadDepartmentRoster(department, options = {}) {
+  const selected = String(department || '').trim();
+  if (!selected || selected === 'All' || !isVerifiedSession()) return Promise.resolve([]);
+  if (!options.force && Array.isArray(departmentRuntime.rosters[selected])) return Promise.resolve(departmentRuntime.rosters[selected]);
+  if (departmentRuntime.loading[selected]) return departmentRuntime.loading[selected];
+  departmentRuntime.errors[selected] = '';
+  departmentRuntime.loading[selected] = true;
+  renderSoon();
+  if (!fb) {
+    departmentRuntime.rosters[selected] = localDepartmentRoster(selected);
+    departmentRuntime.loading[selected] = false;
+    renderSoon();
+    return Promise.resolve(departmentRuntime.rosters[selected]);
+  }
+  const request = authCall('listDepartmentRoster', { departmentId: selected }).then(result => {
+    if (!result || result.departmentId !== selected || !Array.isArray(result.members)) {
+      throw new Error('The department roster response was not valid.');
+    }
+    const profiles = result.members.map(profile => normalizeDepartmentProfile(profile, selected)).filter(Boolean);
+    departmentRuntime.rosters[selected] = profiles;
+    departmentRuntime.loading[selected] = false;
+    departmentRuntime.errors[selected] = '';
+    renderSoon();
+    return profiles;
+  }).catch(error => {
+    departmentRosterError(selected, departmentErrorMessage(error, 'The department roster could not be loaded.'));
+    renderSoon();
+    throw error;
+  });
+  departmentRuntime.loading[selected] = request;
+  return request;
+}
+
+function departmentPatch(department, memberUid, patch) {
+  const profile = departmentProfile(department, memberUid);
+  if (!profile || !patch || typeof patch !== 'object') return Promise.reject(new Error('The department member is not loaded.'));
+  const key = departmentRuntimeKey(department, memberUid);
+  departmentRuntime.drafts[key] = Object.assign({}, departmentRuntime.drafts[key] || {}, patch);
+  if (patch.availability) departmentRuntime.drafts[key].availability = normalizeDepartmentAvailability(patch.availability);
+  renderSoon();
+  return Promise.resolve(departmentRuntime.drafts[key]);
+}
+
+function saveDepartmentProfile(department, memberUid) {
+  const profile = departmentProfile(department, memberUid);
+  const draft = departmentRuntime.drafts[departmentRuntimeKey(department, memberUid)];
+  if (!profile || !draft) return Promise.resolve(profile);
+  const patch = {};
+  ['status', 'eligibleDuties', 'schedulable', 'availability'].forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(draft, field)) patch[field] = draft[field];
+  });
+  if (!Object.keys(patch).length) return Promise.resolve(profile);
+  if (!fb) {
+    const next = normalizeDepartmentProfile(Object.assign({}, profile, patch), department);
+    replaceDepartmentProfile(next);
+    renderSoon();
+    return Promise.resolve(next);
+  }
+  const availabilityOnly = Object.keys(patch).length === 1 && Object.prototype.hasOwnProperty.call(patch, 'availability') &&
+    authUser && authUser.uid === memberUid;
+  const callable = availabilityOnly ? 'updateMemberAvailability' : 'updateDepartmentProfile';
+  return authCall(callable, {
+    departmentId: department,
+    memberUid,
+    patch
+  }).then(result => {
+    if (!result || result.departmentId !== department || result.memberUid !== memberUid || !result.profile) {
+      throw new Error('The department profile response was not valid.');
+    }
+    if (!replaceDepartmentProfile(result.profile)) throw new Error('The department profile identity was not valid.');
+    addBanner('Department member profile saved.');
+    renderSoon();
+    return result.profile;
+  }).catch(error => {
+    addBanner('The department member profile was not saved: ' + departmentErrorMessage(error), true);
+    renderSoon();
+    throw error;
+  });
+}
+
+function departmentAssignmentPayload(svc, duty, profile, extra = {}) {
+  const category = dutyCategory(duty);
+  return Object.assign({
+    departmentId: category.name,
+    memberUid: profile.memberUid,
+    memberName: profile.memberName,
+    duty,
+    serviceId: svcId(svc),
+    serviceDate: svc.date,
+    serviceTime: departmentServiceTimeKey(svc)
+  }, extra);
+}
+
+function applyScheduleAssignment(svc, duty, profile) {
+  const name = profile.memberName;
+  if (Object.keys(svc.assignments || {}).some(item => item !== duty && svc.assignments[item] === name)) {
+    throw new Error(name + ' is already serving in this service, pick a different person.');
+  }
+  if (!svc.assignments) svc.assignments = {};
+  svc.assignments[duty] = name;
+  persistService(svc);
+  afterDataChange();
+}
+
+function assignDepartmentDutyForService(svc, duty, profile, options = {}) {
+  if (!svc || !profile) return Promise.reject(new Error('Choose a department member before assigning this duty.'));
+  const busyKey = svcId(svc) + '::' + duty;
+  if (departmentRuntime.assignmentBusy[busyKey]) return Promise.reject(new Error('That assignment is already being saved.'));
+  departmentRuntime.assignmentBusy[busyKey] = true;
+  const isOverride = options.override === true;
+  if (!isOverride && !departmentProfileAssignable(profile, svc, duty)) {
+    delete departmentRuntime.assignmentBusy[busyKey];
+    return Promise.reject(new Error('Normal assignment requires an active, eligible, schedulable, available member.'));
+  }
+  const callable = isOverride ? 'overrideDepartmentAssignment' : 'assignDepartmentDuty';
+  const payload = departmentAssignmentPayload(svc, duty, profile, isOverride
+    ? { override: true, overrideReason: String(options.reason || '').trim() }
+    : {});
+  if (isOverride && !payload.overrideReason) {
+    delete departmentRuntime.assignmentBusy[busyKey];
+    return Promise.reject(new Error('An administrator override reason is required.'));
+  }
+  const save = fb ? authCall(callable, payload) : Promise.resolve({ ok: true, override: isOverride, profileMutated: false });
+  return save.then(result => {
+    if (isOverride && result && result.profileMutated !== false) throw new Error('The override response did not preserve the member profile.');
+    applyScheduleAssignment(svc, duty, profile);
+    if (isOverride) addBanner('Administrator override recorded for ' + memberLabel(profile.memberName) + '.');
+    return result;
+  }).catch(error => {
+    addBanner(error.message || safeAuthMessage(error), true);
+    renderSoon();
+    throw error;
+  }).finally(() => { delete departmentRuntime.assignmentBusy[busyKey]; });
+}
 
 function seedState() {
   return JSON.parse(JSON.stringify({
@@ -1103,12 +1417,17 @@ function sessionFromClaims(claims, user) {
 }
 
 function setVerifiedSession(session, user) {
+  const previousUid = verifiedSession && verifiedSession.uid;
+  const previousMemberId = verifiedSession && verifiedSession.memberId;
+  if (session && ((previousUid && previousUid !== session.uid) ||
+      (previousMemberId && previousMemberId !== session.memberId))) clearDepartmentRuntime();
   verifiedSession = session;
   authUser = user || authUser;
   if (!session) {
     authStatus = fb ? 'signedOut' : 'local';
     ui.me = '';
     ui.loginMember = '';
+    clearDepartmentRuntime();
     authReady = Promise.resolve(null);
     return;
   }
@@ -1123,6 +1442,12 @@ function setVerifiedSession(session, user) {
   authReady = Promise.resolve(user || null);
   canonicalizeStateNames();
   selectedManageDepartment();
+  if (!canPermission('isAdmin', authActor()) && canManageAnyDepartment() &&
+      ['services', 'planning', 'requests', 'people'].indexOf(ui.sub) !== -1) {
+    ui.sub = 'departments';
+    ui.departmentView = 'list';
+    ui.departmentMember = '';
+  }
 }
 
 function startRequestListener() {
@@ -1296,6 +1621,8 @@ async function memberLogout() {
   setVerifiedSession(null, null);
   ui.tab = 'schedule';
   ui.sub = 'services';
+  ui.departmentView = 'list';
+  ui.departmentMember = '';
   ui.songSvc = null;
   ui.songNav = false;
   ui.authError = '';
@@ -1852,23 +2179,31 @@ function renderManage() {
   }
   const pendingCount = actionableCountsForViewer().total;
   const departments = authorizedDepartments();
+  const selectedDepartment = selectedManageDepartment();
+  if (selectedDepartment && selectedDepartment !== 'All' && ['departments', 'services', 'planning'].indexOf(ui.sub) !== -1) {
+    loadDepartmentRoster(selectedDepartment).catch(() => {});
+  } else if (selectedDepartment === 'All' && ['services', 'planning'].indexOf(ui.sub) !== -1 && canPermission('isAdmin', authActor())) {
+    CATEGORIES.forEach(category => loadDepartmentRoster(category.name).catch(() => {}));
+  }
   const departmentOptions = departments.map(department =>
-    '<option value="' + esc(department) + '"' + (selectedManageDepartment() === department ? ' selected' : '') + '>' +
+    '<option value="' + esc(department) + '"' + (selectedDepartment === department ? ' selected' : '') + '>' +
     esc(department === 'All' ? 'All Departments' : department) + '</option>'
   ).join('');
-  const subs = [['services', 'Services'], ['planning', 'Planning'], ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')], ['people', 'People']];
+  const isAdministrator = canPermission('isAdmin', authActor());
+  const subs = [['departments', 'Departments'], ['services', 'Services'], ['planning', 'Planning'], ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')]];
   if (canPermission('canManageLeaders', authActor())) subs.push(['leaders', 'Leader config']);
-  if (canPermission('isAdmin', authActor())) subs.push(['features', 'Features'], ['data', 'Data & Sync']);
+  if (isAdministrator) subs.push(['features', 'Features'], ['data', 'Data & Sync']);
   let html = '<div class="me-picker"><label for="manage-dept">Manage department</label>' +
     '<select id="manage-dept" data-chg="manage-dept">' + departmentOptions + '</select></div>' +
     '<div class="subnav">' + subs.map(s =>
     '<button data-act="sub" data-sub="' + s[0] + '"' + (ui.sub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>').join('') +
     '<button class="lock-btn" data-act="member-logout">Sign out</button>' +
     '</div>';
-  if (ui.sub === 'services') html += renderManageServices();
+  if (ui.sub === 'departments') html += renderDepartmentWorkspace();
+  else if (ui.sub === 'services') html += renderManageServices();
   else if (ui.sub === 'planning') html += renderManagePlanning();
   else if (ui.sub === 'requests') html += renderManageRequests();
-  else if (ui.sub === 'people') html += renderManagePeople();
+  else if (ui.sub === 'people') html += renderDepartmentWorkspace();
   else if (ui.sub === 'leaders' && canPermission('canManageLeaders', authActor())) html += renderLeaderConfig();
   else if (ui.sub === 'features' && canPermission('isAdmin', authActor())) html += renderFeatures();
   else if (ui.sub === 'data' && canPermission('isAdmin', authActor())) html += renderManageData();
@@ -2084,14 +2419,31 @@ function memberSelect(svc, duty) {
   const cur = (svc.assignments || {})[duty] || '';
   const conflicted = feat('conflictWarnings') && cur && activeConflicts(svc).some(c => c.name === cur);
   const cat = dutyCategory(duty);
-  const roster = (state.departments || {})[cat.name] || [];
-  let options = roster.length ? roster : state.members;
-  if (cur && options.indexOf(cur) === -1) options = [cur].concat(options);
-  return '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '"' +
+  const roster = departmentProfiles(cat.name);
+  const candidates = roster.filter(profile => departmentProfileAssignable(profile, svc, duty));
+  const currentProfile = departmentProfileByName(cat.name, cur);
+  const currentIsCandidate = !!(currentProfile && candidates.some(profile => profile.memberUid === currentProfile.memberUid));
+  let options = candidates.map(profile => '<option value="' + esc(profile.memberUid) + '"' +
+    (currentIsCandidate && currentProfile.memberUid === profile.memberUid ? ' selected' : '') + '>' + esc(memberLabel(profile.memberName)) + '</option>');
+  if (cur && !currentIsCandidate) {
+    options.unshift('<option value="" selected disabled>Current assignment: ' + esc(memberLabel(cur)) + ' (review required)</option>');
+  }
+  if (!roster.length) options = ['<option value="" selected disabled>' + (departmentRuntime.loading[cat.name] ? 'Loading secure roster...' : 'Open this department to load the secure roster') + '</option>'];
+  const select = '<select data-chg="assign" data-svc="' + svcId(svc) + '" data-duty="' + esc(duty) + '"' +
     (conflicted ? ' class="conflict"' : '') + '>' +
     '<option value="">-</option>' +
-    options.map(m => '<option value="' + esc(m) + '"' + (m === cur ? ' selected' : '') + '>' + esc(memberLabel(m)) + '</option>').join('') +
-    '</select>';
+    options.join('') + '</select>';
+  const canOverride = canPermission('isAdmin', authActor()) && roster.length && roster.some(profile => !candidates.some(candidate => candidate.memberUid === profile.memberUid));
+  if (!canOverride) return select;
+  const targetId = 'department-override-target-' + slugify(svcId(svc) + '-' + duty);
+  const reasonId = 'department-override-reason-' + slugify(svcId(svc) + '-' + duty);
+  const overrideOptions = roster.map(profile => '<option value="' + esc(profile.memberUid) + '">' + esc(memberLabel(profile.memberName)) +
+    (departmentProfileAssignable(profile, svc, duty) ? ' (normal choice)' : ' (override required)') + '</option>').join('');
+  return select + '<details class="department-override"><summary>Administrator override</summary>' +
+    '<p class="department-override-warning">Use only when the normal eligibility, schedulability, or availability rules must be overridden. This records an audit event and never changes the member profile.</p>' +
+    '<label for="' + targetId + '">Member</label><select id="' + targetId + '">' + overrideOptions + '</select>' +
+    '<label for="' + reasonId + '">Reason</label><input id="' + reasonId + '" type="text" maxlength="240" placeholder="Required audit reason">' +
+    '<button class="ghost mini" data-act="department-override-submit" data-svc="' + esc(svcId(svc)) + '" data-duty="' + esc(duty) + '" data-target="' + targetId + '" data-reason="' + reasonId + '">Record override and assign</button></details>';
 }
 
 /* Conflict notes for Manage cards. `expanded` controls whether OK/undo actions & muted "marked OK" lines show. */
@@ -2216,39 +2568,187 @@ function renderManageServices() {
 }
 
 function renderManagePeople() {
-  const department = manageDepartment();
-  const people = department
-    ? ((state.departments || {})[department] || []).slice().sort()
-    : state.members.slice().sort();
-  const canRename = !department && canPermission('isAdmin', authActor());
-  let html = '<form class="add-row" data-act="add-member" data-dept="' + esc(department || 'All') + '">' +
-    '<input type="text" id="member-name" required placeholder="New person\'s name (e.g. B. David)">' +
-    '<button class="primary" type="submit">Add to ' + esc(department || 'member list') + '</button></form>' +
-    '<p class="hint">This view is scoped to ' + esc(department || 'all departments') + '. ' +
-    (canRename ? 'Type on a name to fix it across duties. ' : 'Member changes stay within the selected department. ') +
-    'Assignment history is preserved.</p>';
-  if (!people.length) html += '<div class="empty">No members are listed in this scope yet.</div>';
-  people.forEach(m => {
-    const n = dutiesFor(m).length;
-    const targetDepartments = department ? [department] : authorizedDepartments();
-    const canReset = canPermission('canResetPin', authActor(), { name: m, departments: targetDepartments });
-    html += '<div class="list-row" style="flex-wrap:wrap">' +
-      (canRename ? '<input type="text" value="' + esc(m) + '" data-chg="member-name" data-old="' + esc(m) + '" style="flex:1" aria-label="Stored member ID for ' + esc(memberLabel(m)) + '">' : '<span style="flex:1;font-weight:650">' + esc(memberLabel(m)) + '</span>') +
-      '<span class="count">' + n + ' upcoming</span>' +
-      '<button class="danger-link" data-act="del-member" data-name="' + esc(m) + '" data-dept="' + esc(department || 'All') + '">' +
-      (department ? 'Archive here' : 'Remove') + '</button>' +
-      (canReset ? '<button class="ghost mini" data-act="reset-member-pin" data-name="' + esc(m) + '" data-dept="' + esc(department || 'All') + '">Reset PIN</button>' : '') +
-      (department ? '<span class="count">Active in ' + esc(department) + '</span>' : '<div style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;margin-top:2px">' +
-      CATEGORIES.map(cat => {
-        const checked = ((state.departments || {})[cat.name] || []).indexOf(m) !== -1;
-        return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)">' +
-          '<input type="checkbox" data-chg="member-cat" data-name="' + esc(m) + '" data-cat="' + esc(cat.name) + '"' +
-          (checked ? ' checked' : '') + '>' +
-          '<span class="dot-c" style="background:' + cat.color + '"></span>' + esc(cat.name) + '</label>';
-      }).join('') + '</div>') +
-      '</div>';
-  });
+  return renderDepartmentWorkspace();
+}
+
+function departmentAttribution(profile) {
+  const attribution = profile && profile.attribution || {};
+  const by = profile && (profile.updatedBy || attribution.updatedBy || profile.updatedByUid);
+  const at = profile && (profile.updatedAt || attribution.updatedAt);
+  if (!by && !at) return 'No change attribution returned yet.';
+  const when = Number.isFinite(Number(at)) ? new Date(Number(at)).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+  }) : 'time unavailable';
+  return 'Last changed by ' + (by ? esc(by) : 'account unavailable') + ' on ' + esc(when) + '.';
+}
+
+function departmentStatusBadge(profile) {
+  const active = profile && profile.status === 'active';
+  return '<span class="department-status ' + (active ? 'active' : 'inactive') + '">' + (active ? 'Active' : 'Inactive') + '</span>';
+}
+
+function departmentProfileSummary(profile) {
+  const duties = Array.isArray(profile && profile.eligibleDuties) ? profile.eligibleDuties : [];
+  const availability = profile && profile.availability || { recurring: {}, exceptions: {} };
+  const recurring = Object.keys(availability.recurring || {}).filter(key => availability.recurring[key] === 'available');
+  const exceptionCount = Object.keys(availability.exceptions || {}).length;
+  return (profile && profile.schedulable ? 'Schedulable' : 'Not schedulable') +
+    ' · ' + duties.length + ' eligible dut' + (duties.length === 1 ? 'y' : 'ies') +
+    ' · ' + recurring.length + ' recurring time' + (recurring.length === 1 ? '' : 's') +
+    (exceptionCount ? ' · ' + exceptionCount + ' date exception' + (exceptionCount === 1 ? '' : 's') : '');
+}
+
+function renderDepartmentProfileRow(profile, options = {}) {
+  const memberUid = profile.memberUid;
+  const isLeader = departmentProfileIsLeader(profile);
+  const canEdit = options.canEdit === true;
+  return '<div class="department-member-row ' + (profile.status === 'inactive' ? 'is-inactive' : '') + '">' +
+    '<button class="department-member-open" data-act="department-member-open" data-uid="' + esc(memberUid) + '" aria-label="Open ' + esc(memberLabel(profile.memberName)) + ' profile">' +
+    '<span class="department-member-name">' + esc(memberLabel(profile.memberName)) + '</span>' +
+    (isLeader ? '<span class="department-role">Leader</span>' : '') +
+    '</button>' +
+    '<span class="department-member-meta">' + departmentStatusBadge(profile) + '<span>' + esc(departmentProfileSummary(profile)) + '</span></span>' +
+    (canEdit ? '<button class="ghost mini" data-act="department-status" data-uid="' + esc(memberUid) + '" data-status="' + (profile.status === 'active' ? 'inactive' : 'active') + '">' + (profile.status === 'active' ? 'Archive' : 'Restore') + '</button>' : '') +
+    '</div>';
+}
+
+function renderManageDepartments() {
+  const departments = authorizedDepartments().filter(department => department !== 'All');
+  if (!departments.length) return '<div class="empty">No department leadership scope is attached to this account.</div>';
+  let html = '<div class="department-scope card"><div class="department-eyebrow">Leader-scoped workspace</div>' +
+    '<h2>Departments</h2><p class="hint">Only departments returned by your verified account are shown. Each card opens a department-scoped roster.</p>' +
+    '<p class="department-security-note">Roster profiles are loaded by department and UID. No congregation-wide member list is used here.</p></div>';
+  html += '<div class="department-card-grid">' + departments.map(department => {
+    const profiles = departmentProfiles(department);
+    const leaders = profiles.filter(departmentProfileIsLeader);
+    const loaded = Array.isArray(departmentRuntime.rosters[department]);
+    const count = loaded ? profiles.length + ' profile' + (profiles.length === 1 ? '' : 's') : 'Roster not loaded';
+    const leaderText = loaded
+      ? (leaders.length ? leaders.map(profile => memberLabel(profile.memberName)).join(', ') : 'No leader record returned')
+      : 'Secure roster loads when opened';
+    return '<article class="department-card card" data-department="' + esc(department) + '">' +
+      '<div class="department-card-top"><span class="department-dot" aria-hidden="true"></span><span class="department-eyebrow">Department</span></div>' +
+      '<h3>' + esc(department) + '</h3><p class="department-card-copy">' + esc(count) + '</p>' +
+      '<p class="department-card-leader"><strong>Leaders</strong> ' + esc(leaderText) + '</p>' +
+      '<button class="primary" data-act="department-open" data-department="' + esc(department) + '">Open department</button>' +
+      '</article>';
+  }).join('') + '</div>';
   return html;
+}
+
+function renderDepartmentLoading(department) {
+  if (departmentRuntime.loading[department]) {
+    return '<div class="card department-loading" role="status"><div class="department-eyebrow">' + esc(department) + '</div><h2>Loading department roster</h2><p class="hint">The secure roster is being requested for this department only.</p><span class="department-spinner" aria-hidden="true"></span></div>';
+  }
+  const error = departmentRuntime.errors[department];
+  if (error) {
+    return '<div class="card department-error" role="alert"><h2>Roster unavailable</h2><p class="hint">' + esc(error) + '</p><button class="primary" data-act="department-retry" data-department="' + esc(department) + '">Try again</button></div>';
+  }
+  return '';
+}
+
+function renderDepartmentRosterGroup(label, profiles, canEdit) {
+  if (!profiles.length) return '<section class="department-group"><h3>' + esc(label) + '</h3><p class="department-empty-note">No profiles in this group.</p></section>';
+  return '<section class="department-group"><div class="department-group-heading"><h3>' + esc(label) + '</h3><span>' + profiles.length + '</span></div>' +
+    profiles.map(profile => renderDepartmentProfileRow(profile, { canEdit })).join('') + '</section>';
+}
+
+function renderManageDepartment() {
+  const department = selectedManageDepartment();
+  if (!department || department === 'All') return renderManageDepartments();
+  const loading = renderDepartmentLoading(department);
+  if (loading) return '<button class="linkish department-back" data-act="department-back">Back to departments</button>' + loading;
+  const profiles = departmentProfiles(department).slice().sort((left, right) => {
+    if (left.status !== right.status) return left.status === 'active' ? -1 : 1;
+    return String(left.memberName).localeCompare(String(right.memberName));
+  });
+  const leaders = profiles.filter(departmentProfileIsLeader);
+  const canEdit = canManageSelectedDepartment(department);
+  let html = '<button class="linkish department-back" data-act="department-back">Back to departments</button>' +
+    '<section class="department-hero card"><div class="department-eyebrow">Department roster</div><h2>' + esc(department) + '</h2>' +
+    '<p class="hint">This page shows the leaders and active or inactive profiles returned for ' + esc(department) + '.</p>' +
+    '<div class="department-leader-strip"><strong>Leaders</strong><span>' + (leaders.length ? leaders.map(profile => esc(memberLabel(profile.memberName))).join(', ') : 'No leader record returned by the secure roster') + '</span></div>' +
+    '<p class="department-attribution">Roster read is scoped to <code>' + esc(department) + '</code>. Profile changes carry UID and timestamp attribution.</p></section>';
+  if (canEdit) {
+    html += '<form class="card department-add-form" data-act="department-member-add"><div class="department-eyebrow">Add a department member</div><h3>Add by verified member UID</h3>' +
+      '<p class="hint">A UID is the member identity used by the secure callable. Adding a profile does not grant a leadership role.</p>' +
+      '<div class="department-form-grid"><label>Member UID<input id="department-member-uid" type="text" required maxlength="128" autocomplete="off" placeholder="Firebase member UID"></label>' +
+      '<label>Display name<input id="department-member-name" type="text" required maxlength="160" autocomplete="off" placeholder="Name shown to leaders"></label></div>' +
+      '<button class="primary" type="submit">Add member profile</button></form>';
+  }
+  html += '<div class="department-roster-groups">' +
+    renderDepartmentRosterGroup('Active profiles', profiles.filter(profile => profile.status === 'active'), canEdit) +
+    renderDepartmentRosterGroup('Inactive profiles', profiles.filter(profile => profile.status !== 'active'), canEdit) +
+    '</div>';
+  return html;
+}
+
+function departmentTimeOptions(profile, includeAny) {
+  const keys = new Set(SERVICE_LABELS.map(departmentServiceTimeKey));
+  Object.keys(profile && profile.availability && profile.availability.recurring || {}).forEach(key => keys.add(key));
+  Object.keys(profile && profile.availability && profile.availability.exceptions || {}).forEach(date =>
+    Object.keys(profile.availability.exceptions[date] || {}).forEach(key => keys.add(key)));
+  const ordered = Array.from(keys).filter(Boolean).sort((left, right) => left.localeCompare(right));
+  if (includeAny) ordered.unshift('*');
+  return ordered.map(key => '<option value="' + esc(key) + '">' + esc(departmentServiceTimeLabel(key)) + '</option>').join('');
+}
+
+function renderDepartmentMember() {
+  const department = selectedManageDepartment();
+  const memberUid = ui.departmentMember;
+  const profile = departmentDraftProfile(department, memberUid);
+  if (!department || department === 'All' || !profile) return renderManageDepartment();
+  const canEdit = canManageSelectedDepartment(department);
+  const category = CATEGORIES.find(item => item.name === department);
+  const duties = category ? category.duties : [];
+  const recurring = profile.availability && profile.availability.recurring || {};
+  const exceptions = profile.availability && profile.availability.exceptions || {};
+  const fieldAttribution = profile.fieldAttribution && typeof profile.fieldAttribution === 'object' ? profile.fieldAttribution : {};
+  const draftExists = !!departmentRuntime.drafts[departmentRuntimeKey(department, memberUid)];
+  let html = '<button class="linkish department-back" data-act="department-back-member">Back to ' + esc(department) + '</button>' +
+    '<section class="department-profile-hero card"><div class="department-eyebrow">Member profile</div><div class="department-profile-title"><div><h2>' + esc(memberLabel(profile.memberName)) + '</h2><p class="department-uid">UID: ' + esc(profile.memberUid) + '</p></div>' + departmentStatusBadge(profile) + '</div>' +
+    '<p class="department-attribution">' + departmentAttribution(profile) + '</p>' +
+    '<p class="department-profile-note">Identity and role are immutable here. This editor changes only status, eligible duties, schedulability, and availability.</p>' +
+    (canEdit ? '<div class="department-profile-actions"><button class="ghost" data-act="department-status" data-uid="' + esc(memberUid) + '" data-status="' + (profile.status === 'active' ? 'inactive' : 'active') + '">' + (profile.status === 'active' ? 'Move to inactive' : 'Restore to active') + '</button></div>' : '') +
+    '</section>';
+  html += '<section class="card department-editor"><div class="department-section-heading"><div><div class="department-eyebrow">Scheduling profile</div><h3>Eligible duties</h3></div><span class="department-editor-state">' + (draftExists ? 'Unsaved changes' : 'Saved profile') + '</span></div>' +
+    '<p class="hint">Normal assignment requires an active profile, one of these duties, schedulable enabled, and available service time.</p>' +
+    '<div class="department-duty-grid">' + duties.map(duty => '<label class="department-check"><input type="checkbox" data-chg="department-eligible" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '" data-duty="' + esc(duty) + '"' + (profile.eligibleDuties.some(item => item.toLocaleLowerCase() === duty.toLocaleLowerCase()) ? ' checked' : '') + (canEdit ? '' : ' disabled') + '><span>' + esc(duty) + '</span></label>').join('') + '</div>' +
+    '<label class="department-schedulable"><span><strong>Schedulable</strong><small>Allow this profile to appear in normal assignment choices.</small></span><span class="switch"><input type="checkbox" data-chg="department-schedulable" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '"' + (profile.schedulable ? ' checked' : '') + (canEdit ? '' : ' disabled') + '><span class="track"></span></span></label>' +
+    '</section>';
+  html += '<section class="card department-editor"><div class="department-section-heading"><div><div class="department-eyebrow">Recurring availability</div><h3>Service-time pattern</h3></div></div>' +
+    '<p class="hint">Availability is evaluated in the configured service timezone. A date exception wins over the recurring pattern.</p>' +
+    '<div class="department-availability-grid">' + SERVICE_LABELS.map(label => {
+      const key = departmentServiceTimeKey(label);
+      const status = recurring[key] || 'unavailable';
+      return '<label class="department-availability-row"><span>' + esc(label) + '</span><select data-chg="department-recurring" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '" data-key="' + esc(key) + '"' + (canEdit ? '' : ' disabled') + '><option value="available"' + (status === 'available' ? ' selected' : '') + '>Available</option><option value="unavailable"' + (status !== 'available' ? ' selected' : '') + '>Unavailable</option></select></label>';
+    }).join('') + '</div></section>';
+  html += '<section class="card department-editor"><div class="department-section-heading"><div><div class="department-eyebrow">Date exceptions</div><h3>One-day changes</h3></div></div>' +
+    '<p class="hint">Use a service time or Any service time. These entries override the recurring pattern only for the chosen date.</p>' +
+    '<div class="department-exceptions">' + Object.keys(exceptions).sort().map(date => Object.keys(exceptions[date] || {}).sort().map(key =>
+      '<div class="department-exception-row"><span><strong>' + esc(date) + '</strong><small>' + esc(departmentServiceTimeLabel(key)) + '</small></span><span class="department-exception-status ' + (exceptions[date][key] === 'available' ? 'available' : 'unavailable') + '">' + esc(exceptions[date][key]) + '</span>' +
+      (canEdit ? '<button class="danger-link" data-act="department-exception-remove" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '" data-date="' + esc(date) + '" data-key="' + esc(key) + '">Remove</button>' : '') + '</div>'
+    ).join('')).join('') + (!Object.keys(exceptions).length ? '<p class="department-empty-note">No date exceptions.</p>' : '') + '</div>' +
+    (canEdit ? '<form class="department-exception-form" data-act="department-exception-add"><input id="department-exception-date" type="date" required aria-label="Exception date"><select id="department-exception-time" aria-label="Exception service time">' + departmentTimeOptions(profile, true) + '</select><select id="department-exception-status" aria-label="Exception availability"><option value="unavailable">Unavailable</option><option value="available">Available</option></select><button class="ghost" type="submit">Add exception</button></form>' : '') +
+    '</section>';
+  if (profile.historySeed || profile.provenance) {
+    html += '<section class="card department-history"><div class="department-eyebrow">History and provenance</div><h3>Existing evidence</h3><p class="hint">Imported history remains evidence. Manual decisions shown above are authoritative for scheduling.</p><pre>' + esc(JSON.stringify(profile.historySeed || profile.provenance, null, 2)) + '</pre></section>';
+  }
+  const fieldRows = ['status', 'eligibleDuties', 'schedulable', 'availability'].filter(field => fieldAttribution[field]).map(field => {
+    const decision = fieldAttribution[field];
+    return '<li><strong>' + esc(field) + '</strong>: ' + esc(decision.authority || decision.source || 'recorded') + ' by ' + esc(decision.by || 'account') + '</li>';
+  }).join('');
+  html += '<section class="card department-attribution-card"><div class="department-eyebrow">Change attribution</div><h3>Who changed the profile</h3><p class="department-attribution">' + departmentAttribution(profile) + '</p>' + (fieldRows ? '<ul>' + fieldRows + '</ul>' : '<p class="department-empty-note">Field-level attribution was not included in this roster response.</p>') + '</section>';
+  if (canEdit) {
+    html += '<div class="department-save-bar"><button class="primary" data-act="department-profile-save" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '"' + (draftExists ? '' : ' disabled') + '>Save profile changes</button>' + (draftExists ? '<button class="ghost" data-act="department-profile-reset" data-dept="' + esc(department) + '" data-uid="' + esc(memberUid) + '">Discard changes</button>' : '') + '</div>';
+  }
+  return html;
+}
+
+function renderDepartmentWorkspace() {
+  if (ui.departmentView === 'member') return renderDepartmentMember();
+  if (ui.departmentView === 'department') return renderManageDepartment();
+  return renderManageDepartments();
 }
 
 function renderSheetCard() {
@@ -2445,6 +2945,21 @@ function canRunAction(act, el) {
     if (el.dataset.sub === 'features' || el.dataset.sub === 'data') return canPermission('isAdmin', actor);
     return canManageAnyDepartment();
   }
+  if (['department-open', 'department-back', 'department-back-member', 'department-retry', 'department-member-open'].indexOf(act) !== -1) {
+    return canManageAnyDepartment();
+  }
+  if (act === 'department-override-submit') {
+    const department = dutyCategory(el.dataset.duty).name;
+    return canPermission('isAdmin', actor) && canPermission('canManageDepartment', actor, department);
+  }
+  if (['department-member-add', 'department-status', 'department-profile-save', 'department-profile-reset',
+    'department-exception-add', 'department-exception-remove'].indexOf(act) !== -1) {
+    const department = el.dataset.dept || selectedManageDepartment();
+    return canManageSelectedDepartment(department);
+  }
+  if (['department-eligible', 'department-schedulable', 'department-recurring'].indexOf(act) !== -1) {
+    return canManageSelectedDepartment(el.dataset.dept || selectedManageDepartment());
+  }
   if (act === 'lock-now') return canManageAnyDepartment();
   if (act === 'open-songs') return canEditSongService(findService(el.dataset.svc)) || canPermission('canEditSongs', actor, {});
   if (['close-songs', 'dept-filter', 'dismiss-banner', 'toggle-past', 'clear-alerts',
@@ -2535,7 +3050,124 @@ function handleAct(act, el) {
     if (ui.tab === 'songs') { ui.songSvc = null; ui.songNav = true; }
     render();
   }
-  else if (act === 'sub') { ui.sub = el.dataset.sub; render(); }
+  else if (act === 'sub') {
+    ui.sub = el.dataset.sub;
+    if (ui.sub === 'departments' && !ui.departmentView) ui.departmentView = 'list';
+    render();
+  }
+  else if (act === 'department-open') {
+    const department = el.dataset.department;
+    if (!department || authorizedDepartments().indexOf(department) === -1) return;
+    ui.manageDept = department;
+    ui.sub = 'departments';
+    ui.departmentView = 'department';
+    ui.departmentMember = '';
+    loadDepartmentRoster(department).catch(() => {});
+    render();
+  }
+  else if (act === 'department-member-open') {
+    const department = selectedManageDepartment();
+    if (!department || department === 'All' || !departmentProfile(department, el.dataset.uid)) return;
+    ui.departmentView = 'member';
+    ui.departmentMember = el.dataset.uid;
+    render();
+  }
+  else if (act === 'department-back') {
+    ui.departmentView = 'list';
+    ui.departmentMember = '';
+    render();
+  }
+  else if (act === 'department-back-member') {
+    ui.departmentView = 'department';
+    ui.departmentMember = '';
+    render();
+  }
+  else if (act === 'department-retry') {
+    const department = el.dataset.department || selectedManageDepartment();
+    if (department) loadDepartmentRoster(department, { force: true }).catch(() => {});
+    render();
+  }
+  else if (act === 'department-member-add') {
+    const department = selectedManageDepartment();
+    const uidInput = document.getElementById('department-member-uid');
+    const nameInput = document.getElementById('department-member-name');
+    const memberUid = String(uidInput && uidInput.value || '').trim();
+    const memberName = String(nameInput && nameInput.value || '').trim();
+    if (!department || department === 'All' || !memberUid || !memberName) return;
+    const data = {
+      departmentId: department,
+      memberUid,
+      memberName,
+      status: 'active',
+      eligibleDuties: [],
+      schedulable: false,
+      availability: { recurring: {}, exceptions: {} }
+    };
+    const save = fb ? authCall('createDepartmentProfile', data) : Promise.resolve({ ok: true, profile: Object.assign({}, data, {
+      uid: memberUid, role: 'member', updatedAt: Date.now(), updatedByUid: authActor() && authActor().uid
+    }) });
+    save.then(result => {
+      if (!result || !result.profile || !replaceDepartmentProfile(result.profile)) throw new Error('The new department profile response was not valid.');
+      addBanner(memberLabel(memberName) + ' was added to ' + department + '.');
+      render();
+    }).catch(error => {
+      addBanner('The department member was not added: ' + departmentErrorMessage(error), true);
+      render();
+    });
+  }
+  else if (act === 'department-status') {
+    const department = selectedManageDepartment();
+    const memberUid = el.dataset.uid;
+    const status = el.dataset.status === 'inactive' ? 'inactive' : 'active';
+    if (!department || department === 'All' || !departmentProfile(department, memberUid)) return;
+    departmentPatch(department, memberUid, { status }).then(() => saveDepartmentProfile(department, memberUid)).catch(() => {});
+  }
+  else if (act === 'department-profile-save') {
+    saveDepartmentProfile(el.dataset.dept || selectedManageDepartment(), el.dataset.uid).catch(() => {});
+  }
+  else if (act === 'department-profile-reset') {
+    delete departmentRuntime.drafts[departmentRuntimeKey(el.dataset.dept || selectedManageDepartment(), el.dataset.uid)];
+    render();
+  }
+  else if (act === 'department-exception-add') {
+    const department = selectedManageDepartment();
+    const memberUid = ui.departmentMember;
+    const date = String(document.getElementById('department-exception-date')?.value || '').trim();
+    const key = String(document.getElementById('department-exception-time')?.value || '').trim().toLocaleLowerCase();
+    const status = String(document.getElementById('department-exception-status')?.value || '').trim().toLocaleLowerCase();
+    const profile = departmentDraftProfile(department, memberUid);
+    if (!profile || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !key || !['available', 'unavailable'].includes(status)) return;
+    const availability = normalizeDepartmentAvailability(profile.availability);
+    if (!availability.exceptions[date]) availability.exceptions[date] = {};
+    availability.exceptions[date][key] = status;
+    departmentPatch(department, memberUid, { availability });
+  }
+  else if (act === 'department-exception-remove') {
+    const department = el.dataset.dept || selectedManageDepartment();
+    const memberUid = el.dataset.uid || ui.departmentMember;
+    const profile = departmentDraftProfile(department, memberUid);
+    if (!profile) return;
+    const availability = normalizeDepartmentAvailability(profile.availability);
+    if (availability.exceptions[el.dataset.date]) {
+      delete availability.exceptions[el.dataset.date][el.dataset.key];
+      if (!Object.keys(availability.exceptions[el.dataset.date]).length) delete availability.exceptions[el.dataset.date];
+    }
+    departmentPatch(department, memberUid, { availability });
+  }
+  else if (act === 'department-override-submit') {
+    const svc = findService(el.dataset.svc);
+    const duty = el.dataset.duty;
+    const target = document.getElementById(el.dataset.target);
+    const reason = document.getElementById(el.dataset.reason);
+    const profile = svc && departmentProfile(dutyCategory(duty).name, target && target.value);
+    const textReason = String(reason && reason.value || '').trim();
+    if (!svc || !profile || !textReason) {
+      addBanner('Choose a member and enter the required administrator override reason.', true);
+      render();
+      return;
+    }
+    assignDepartmentDutyForService(svc, duty, profile, { override: true, reason: textReason }).catch(() => {});
+  }
   else if (act === 'open-songs') { ui.songSvc = el.dataset.svc || null; ui.songNav = true; ui.tab = 'songs'; render(); }
   else if (act === 'close-songs') { ui.tab = 'my'; ui.songSvc = null; render(); }
   else if (act === 'dept-filter') { ui.deptFilter = el.dataset.val; localStorage.setItem('wds-dept', ui.deptFilter); render(); }
@@ -2749,17 +3381,14 @@ function handleAct(act, el) {
   else if (act === 'plan-assign') {
     const svc = findService(el.dataset.svc);
     if (!svc) return;
-    if (!svc.assignments) svc.assignments = {};
-    const name = el.dataset.name, duty = el.dataset.duty;
-    // Guard against a fast double-tap creating a fresh double-booking: refuse
-    // if this person already holds another duty in the same service.
-    if (Object.keys(svc.assignments).some(d => d !== duty && svc.assignments[d] === name)) {
-      alert(name + ' is already serving in this service, pick a different person.');
+    const duty = el.dataset.duty;
+    const profile = departmentProfileByName(dutyCategory(duty).name, el.dataset.name);
+    if (!profile) {
+      addBanner('The secure department roster is not loaded for this suggestion.', true);
+      render();
       return;
     }
-    svc.assignments[duty] = name;
-    persistService(svc);
-    afterDataChange();
+    assignDepartmentDutyForService(svc, duty, profile).catch(() => {});
   }
   else if (act === 'export') {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -2867,16 +3496,52 @@ function handleChg(chg, el) {
     if (ui.manageDept !== 'All' && authorizedDepartments().indexOf(ui.manageDept) === -1) {
       ui.manageDept = authorizedDepartments()[0] || '';
     }
+    ui.departmentView = 'list';
+    ui.departmentMember = '';
     render();
   }
   else if (chg === 'assign') {
     const svc = findService(el.dataset.svc);
     if (!svc) return;
-    if (!svc.assignments) svc.assignments = {};
-    if (el.value) svc.assignments[el.dataset.duty] = el.value;
-    else delete svc.assignments[el.dataset.duty];
-    persistService(svc);
-    afterDataChange();
+    if (!el.value) {
+      if (!svc.assignments) svc.assignments = {};
+      delete svc.assignments[el.dataset.duty];
+      persistService(svc);
+      afterDataChange();
+      return;
+    }
+    const profile = departmentProfile(dutyCategory(el.dataset.duty).name, el.value);
+    if (!profile) {
+      addBanner('That department member is not in the secure roster. Reload the department and try again.', true);
+      render();
+      return;
+    }
+    assignDepartmentDutyForService(svc, el.dataset.duty, profile).catch(() => {});
+  }
+  else if (chg === 'department-eligible') {
+    const department = el.dataset.dept || selectedManageDepartment();
+    const memberUid = el.dataset.uid;
+    const profile = departmentDraftProfile(department, memberUid);
+    if (!profile) return;
+    const eligible = profile.eligibleDuties.slice();
+    const index = eligible.findIndex(duty => duty.toLocaleLowerCase() === String(el.dataset.duty || '').toLocaleLowerCase());
+    if (el.checked && index === -1) eligible.push(el.dataset.duty);
+    if (!el.checked && index !== -1) eligible.splice(index, 1);
+    departmentPatch(department, memberUid, { eligibleDuties: eligible });
+  }
+  else if (chg === 'department-schedulable') {
+    const department = el.dataset.dept || selectedManageDepartment();
+    const memberUid = el.dataset.uid;
+    if (departmentProfile(department, memberUid)) departmentPatch(department, memberUid, { schedulable: el.checked });
+  }
+  else if (chg === 'department-recurring') {
+    const department = el.dataset.dept || selectedManageDepartment();
+    const memberUid = el.dataset.uid;
+    const profile = departmentDraftProfile(department, memberUid);
+    if (!profile) return;
+    const availability = normalizeDepartmentAvailability(profile.availability);
+    availability.recurring[el.dataset.key] = el.value === 'available' ? 'available' : 'unavailable';
+    departmentPatch(department, memberUid, { availability });
   }
   else if (chg === 'svc-field') {
     const svc = findService(el.dataset.svc);
