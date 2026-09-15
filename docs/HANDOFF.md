@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-14. Owner: Anthony (alovelace144@gmail.com).
 
+September 14 song tracking repair: production retained 171 setlists and 379
+song-history records, but the Presider redesign had removed the visible
+Services destination. The dedicated Services tab is restored with upcoming
+setlists and the complete expandable past tracking list. The four-appearance
+browser suite covers the route and preserved tracking interface. Hosting
+release `gallery1789436396335` is live; no Functions, rules, or Firestore
+records were changed by this release.
+
 September 14 identity cleanup: live Hosting release `gallery1789369159506`
 and all 12 named Cloud Functions use the same canonical identity map. The
 production migration applied 17 targeted identity writes with no account,

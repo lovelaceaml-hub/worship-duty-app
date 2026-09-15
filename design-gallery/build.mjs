@@ -47,11 +47,11 @@ for(const [needle,label] of [
   ['data-field="choirSong"','canonical choir song editor']
 ])requireOne(baseline,needle,label);
 for(const [needle,label] of [
-  ["const TAB_ORDER = ['home', 'library', 'insights'];",'Presider Home tab order'],
+  ["const TAB_ORDER = ['home', 'library', 'services', 'insights'];",'Presider tracking tab order'],
   ['function renderHomeScopeToggle()','Presider My Services and All Services toggle'],
   ['function homeScope()','Presider Home scope'],
   ['function allUpcomingServices()','Presider all-services Home data'],
-  ["case 'services': state.ui.tab = 'home'; return renderHome();",'retired Services route fallback'],
+  ["case 'services': return renderServices();",'Services tracking route'],
   ['function mount(rootEl, context)','Presider module mount interface'],
   ["choirSong: data.choirSong || ''",'Presider canonical choir song feed']
 ])requireOne(baseSongs,needle,label);

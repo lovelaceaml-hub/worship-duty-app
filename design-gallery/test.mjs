@@ -15,6 +15,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const stage = path.join(root, '.hosting-gallery');
 const out = path.join(root, 'design-gallery-results');
 await fs.mkdir(path.join(out, 'screenshots'), {recursive: true});
+async function exists(file) {
+  try { await fs.access(file); return true; }
+  catch { return false; }
+}
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const protectedNames = [
@@ -224,7 +228,9 @@ function check(name, result, expected = true) {
 }
 
 const assets = new Map(await Promise.all(
-  (await fs.readdir(stage)).map(async name => [name, await fs.readFile(path.join(stage, name))])
+  (await fs.readdir(stage, {withFileTypes: true}))
+    .filter(entry => entry.isFile())
+    .map(async entry => [entry.name, await fs.readFile(path.join(stage, entry.name))])
 ));
 const firestoreMock = await fs.readFile(path.join(root, 'live-design/fixture-firestore.js'), 'utf8');
 const browser = await chromium.launch();
@@ -467,7 +473,7 @@ try {
   check('Four-choice release manifest staged', JSON.parse(assets.get('design-gallery-release.json')).choices,
     ['classic', 'prism', 'navy', 'aurora']);
   check('Permissions runtime asset staged', assets.has('permissions.js'));
-  check('Hosting release guard staged', fs.existsSync(path.join(out, 'scripts', 'guard-gallery-deploy.mjs')));
+  check('Hosting release guard staged', await exists(path.join(stage, 'scripts', 'guard-gallery-deploy.mjs')));
   check('No rules or functions staged', assets.has('firestore.rules') || assets.has('functions'), false);
   const stagedApp = String(assets.get('app.js'));
   check('Alternative Manage summaries use department-scoped services',
@@ -607,9 +613,13 @@ try {
   await page.waitForSelector('#song-root .ns-tabs');
   check('Presider starts on Home', await page.locator('#song-root .ns-tabs button.active').innerText(), 'Home');
   check('Presider Home shows My Services', await page.locator('#song-root').innerText().then(text => text.includes('My Services')));
-  check('Presider has no Services destination', await page.locator('#song-root .ns-tabs [data-tab="services"]').count(), 0);
-  check('Presider has exactly Home, Library, Insights tabs', await page.locator('#song-root .ns-tabs button').allTextContents(),
-    ['Home', 'Library', 'Insights']);
+  check('Presider has a Services tracking destination', await page.locator('#song-root .ns-tabs [data-tab="services"]').count(), 1);
+  check('Presider has Home, Library, Services, and Insights tabs', await page.locator('#song-root .ns-tabs button').allTextContents(),
+    ['Home', 'Library', 'Services', 'Insights']);
+  await page.locator('#song-root .ns-tabs [data-tab="services"]').click();
+  check('Services tracking route opens', await page.locator('#song-root .ns-tabs button.active').innerText(), 'Services');
+  check('Services tracking renders its service history view', await page.locator('#song-root').innerText().then(text => text.includes('Upcoming')));
+  await page.locator('#song-root .ns-tabs [data-tab="home"]').click();
   await page.locator('#song-root [data-song-act="home-scope"][data-scope="all"]').click();
   await page.waitForTimeout(100);
   check('Presider Home switches to All Services', await page.locator('#song-root').innerText().then(text => text.includes('All Services')));

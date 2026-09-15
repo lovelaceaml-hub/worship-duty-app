@@ -46,7 +46,7 @@ const SERVICE_LABELS = ['Morning', 'Afternoon', 'Evening', 'Early Morning', 'Com
 const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
 
 /* Left-to-right tab order — drives swipe-left/right navigation inside the picker. */
-const TAB_ORDER = ['home', 'library', 'insights'];
+const TAB_ORDER = ['home', 'library', 'services', 'insights'];
 
 /* Known presider-name variants → canonical spelling. Falls back under the
    shared app/nameMap doc (and the host-supplied ctx.nameMap) in canonName(). */
@@ -1106,7 +1106,7 @@ function renderHeader() {
     '</div>';
 }
 function renderTabs() {
-  const labels = { home: 'Home', library: 'Library', insights: 'Insights' };
+  const labels = { home: 'Home', library: 'Library', services: 'Services', insights: 'Insights' };
   return '<nav class="ns-tabs" role="tablist" aria-label="Song picker sections">' +
     TAB_ORDER.map(t => {
       const on = state.ui.tab === t;
@@ -1118,10 +1118,8 @@ function renderTabBody() {
   switch (state.ui.tab) {
     case 'home': return renderHome();
     case 'library': return renderLibrary();
+    case 'services': return renderServices();
     case 'insights': return renderInsights();
-    /* Old persisted state or a stale deep link may still name Services. Home
-       now owns that content, so keep the route usable without a fourth tab. */
-    case 'services': state.ui.tab = 'home'; return renderHome();
     default: return renderHome();
   }
 }
@@ -1129,7 +1127,6 @@ function renderTabBody() {
 function render() {
   if (!root) return;
   if (rootHasFocusedInput()) return;
-  if (state.ui.tab === 'services') state.ui.tab = 'home';
   if (state.ui.editorGate) { root.innerHTML = renderHeader() + '<div class="ns-view">' + renderEditorGate() + '</div>'; return; }
   if (state.ui.runsheet) { root.innerHTML = '<div class="ns-view">' + renderRunsheet() + '</div>'; return; }
   root.innerHTML = renderHeader() + renderTabs() + '<div class="ns-view">' + renderTabBody() + '</div>';
@@ -1553,13 +1550,28 @@ function allUpcomingServices() {
   return Object.keys(map).map(k => map[k]).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 }
 
-/* ---------- Services compatibility route ---------- */
+/* ---------- Services tracking ---------- */
 
-/* Keep old in-memory routes and deep links usable after Services moved into
-   Home. The tab is never rendered by renderTabs(). */
 function renderServices() {
-  state.ui.tab = 'home';
-  return renderHome();
+  let html = '<div class="date-head"><span class="day" role="heading" aria-level="2">Upcoming</span></div>';
+  const upcoming = allUpcomingServices();
+  if (!upcoming.length) html += '<div class="empty">No upcoming services on the schedule yet.</div>';
+  else html += upcoming.map(item => {
+    const mine = isMyPresiderService(item.sl || item.sched);
+    if (item.sl) return renderServiceCard(item.sl, { mine });
+    return renderScheduleCard(item.sched, { mine });
+  }).join('');
+
+  const past = pastSetlists();
+  if (past.length) {
+    html += '<div class="home-past-toggle"><button class="linkish" data-song-act="toggle-past">' +
+      (state.ui.showPast ? 'Hide past' : 'Show ' + past.length + ' past') + '</button></div>';
+    if (state.ui.showPast) {
+      html += '<div class="date-head"><span class="day">Past tracking</span></div>' +
+        past.map(sl => renderServiceCard(sl, { mine: isMyPresiderService(sl) })).join('');
+    }
+  }
+  return html;
 }
 function renderServiceCard(sl, opts) {
   opts = opts || {};
@@ -1882,7 +1894,7 @@ function handleAct(act, el) {
   switch (act) {
     case 'back': if (ctx && ctx.onBack) ctx.onBack(); break;
     case 'tab':
-      state.ui.tab = el.dataset.tab === 'services' ? 'home' : el.dataset.tab;
+      state.ui.tab = TAB_ORDER.indexOf(el.dataset.tab) !== -1 ? el.dataset.tab : 'home';
       state.ui.runsheet = null; state.ui.pickSlot = null; render(); break;
     case 'home-scope':
       state.ui.homeScope = el.dataset.scope === 'all' ? 'all' : 'mine';
@@ -2303,10 +2315,8 @@ export function mount(rootEl, context) {
   }
   if (_wiredRoot !== root) { wireRoot(); _wiredRoot = root; }
 
-  /* A stale host route can still ask for the retired Services destination.
-     Treat it as Home before rendering, including after a module remount. */
   const requestedTab = ctx.tab || ctx.initialTab || ctx.route;
-  if (requestedTab === 'services') state.ui.tab = 'home';
+  if (TAB_ORDER.indexOf(requestedTab) !== -1) state.ui.tab = requestedTab;
 
   // Explicit navigation from the host (ctx.nav is a one-shot flag): a tapped
   // "Pick songs" button opens that service's setlist; the Presider tab (no

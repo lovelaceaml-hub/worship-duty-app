@@ -31,7 +31,7 @@ GitHub Actions is QA-only and never deploys. Tests use mocked/isolated Firebase 
 
 ## Verification
 
-The QA suite builds an isolated `.hosting-gallery`, mocks Firebase Auth and Firestore, blocks other network requests, and drives the real domain handlers at phone and desktop widths. It covers the site passcode and member login gates, forced PIN changes, exact four-design names, leader-only Manage visibility and department scope, alert badges, Presider Home with My Services and All Services without a Services tab, Prism month and day navigation, canonical choir-song rendering, and no-write appearance switches.
+The QA suite builds an isolated `.hosting-gallery`, mocks Firebase Auth and Firestore, blocks other network requests, and drives the real domain handlers at phone and desktop widths. It covers the site passcode and member login gates, forced PIN changes, exact four-design names, leader-only Manage visibility and department scope, alert badges, Presider Home with My Services and All Services, the restored Services tracking tab, Prism month and day navigation, canonical choir-song rendering, and no-write appearance switches.
 
 Run the focused browser suite with:
 
