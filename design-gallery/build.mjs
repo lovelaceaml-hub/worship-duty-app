@@ -21,7 +21,7 @@ const between=(s,a,b,label=a+' -> '+b)=>{const na=count(s,a),nb=count(s,b),i=s.i
 const regexOnce=(s,re,repl,label)=>{let n=0;const out=s.replace(re,(...args)=>{n++;return typeof repl==='function'?repl(...args):repl;});if(n!==1)throw Error('Design gallery source drift: '+label+' ('+n+')');return out;};
 const optionalRegexOnce=(s,re,repl,label)=>{let n=0;const out=s.replace(re,(...args)=>{n++;return typeof repl==='function'?repl(...args):repl;});if(n>1)throw Error('Design gallery source-interface drift: '+label+' ('+n+')');return out;};
 const optionalOnce=(s,a,b,label)=>{const n=count(s,a);if(n>1)throw Error('Design gallery source-interface drift: '+label+' ('+n+')');return n?s.replace(a,()=>b):s;};
-const assertSyntax=(source,name,module=false)=>{const script=module?source.replace(/^export\s+function\s+mount\b/m,'function mount'):source;try{new Script(script,{filename:name});}catch(error){throw Error('Design gallery generated syntax drift in '+name+': '+error.message);}};
+const assertSyntax=(source,name,module=false)=>{const script=module?source.replace(/^export\s+function\s+mount\b/m,'function mount').replace(/^export\s*\{[^}]+\};?\s*$/gm,''):source;try{new Script(script,{filename:name});}catch(error){throw Error('Design gallery generated syntax drift in '+name+': '+error.message);}};
 const stamp=process.env.RELEASE_STAMP||('gallery'+Date.now());
 if(!/^[a-zA-Z0-9]+$/.test(stamp))throw Error('Invalid release stamp');
 await fs.rm(dest,{recursive:true,force:true});await fs.mkdir(dest,{recursive:true});

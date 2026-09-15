@@ -102,7 +102,17 @@ globalThis.alert = () => {};
 globalThis.confirm = () => true;
 
 const moduleURL = new URL('../song-app.js', import.meta.url).href + '?permissions-test=1';
-const { mount } = await import(moduleURL);
+const { mount, serviceStartMs, serviceIsCurrentOrUpcoming } = await import(moduleURL);
+
+const sameDayEarly = { date: '2026-09-14', time: '05:00', service: 'Early Morning' };
+const sameDayEvening = { date: '2026-09-14', time: '19:30', service: 'Evening' };
+const beforeEvening = new Date('2026-09-14T19:20:00');
+assert.equal(serviceIsCurrentOrUpcoming(sameDayEarly, beforeEvening), false,
+  'completed early morning service is no longer next in the evening');
+assert.equal(serviceIsCurrentOrUpcoming(sameDayEvening, beforeEvening), true,
+  'evening service remains next before it starts');
+assert.ok(serviceStartMs(sameDayEarly) < serviceStartMs(sameDayEvening),
+  'same-day services sort by their actual time');
 
 function click(root, action, dataset = {}) {
   const control = {

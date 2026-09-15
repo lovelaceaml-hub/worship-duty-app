@@ -570,6 +570,24 @@ function titleRank(name) {
 function nameAfterTitle(name) { return String(name || '').replace(/^[A-Z]\.\s*/, ''); }
 function canonName(n) { return (state.nameMap && state.nameMap[n]) || NAME_UNIFY_MAP[n] || n; }
 
+const SERVICE_DEFAULT_TIMES = {
+  'Early Morning': '05:00', Morning: '09:00', Afternoon: '15:00', Evening: '20:00'
+};
+const SERVICE_ACTIVE_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+function serviceStartMs(entry) {
+  if (!entry || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date || '')) return NaN;
+  const time = /^\d{2}:\d{2}$/.test(entry.time || '')
+    ? entry.time
+    : (SERVICE_DEFAULT_TIMES[entry.service] || '12:00');
+  return new Date(entry.date + 'T' + time + ':00').getTime();
+}
+
+function serviceIsCurrentOrUpcoming(entry, now) {
+  const start = serviceStartMs(entry);
+  return Number.isFinite(start) && start + SERVICE_ACTIVE_WINDOW_MS > (now || new Date()).getTime();
+}
+
 function presiderNames() {
   const set = {};
   state.schedule.forEach(s => { const p = s.assignments && s.assignments.Presider; if (p) set[canonName(p)] = true; });
@@ -580,13 +598,12 @@ function presiderNames() {
     return nameAfterTitle(a).localeCompare(nameAfterTitle(b));
   });
 }
-function myUpcomingSchedule() {
+function myUpcomingSchedule(now) {
   const me = state.ui.me;
   if (!me) return [];
-  const t = todayISO();
   return state.schedule
-    .filter(s => s.assignments && canonName(s.assignments.Presider) === canonName(me) && s.date >= t)
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .filter(s => s.assignments && canonName(s.assignments.Presider) === canonName(me) && serviceIsCurrentOrUpcoming(s, now))
+    .sort((a, b) => serviceStartMs(a) - serviceStartMs(b));
 }
 function nextDutyForMe() { return myUpcomingSchedule()[0] || null; }
 
@@ -1534,20 +1551,27 @@ function renderScheduleCard(entry, opts) {
     '</div>';
 }
 function allUpcomingServices() {
-  const t = todayISO();
   const map = {};
   (state.schedule || []).forEach(s => {
-    if (!s.date || s.date < t || !s.service) return;
+    if (!s.service || !serviceIsCurrentOrUpcoming(s)) return;
     const id = serviceIdFor(s.date, s.service);
     if (!map[id]) map[id] = { id, date: s.date, sched: s };
   });
   Object.keys(state.setlists).forEach(id => {
     const sl = state.setlists[id];
-    if (!sl.date || sl.date < t || sl.status === 'sung') return;
+    if (sl.status === 'sung' || !serviceIsCurrentOrUpcoming({
+      date: sl.date,
+      time: (scheduleFor(id) || {}).time,
+      service: sl.serviceLabel
+    })) return;
     if (!map[id]) map[id] = { id, date: sl.date };
     map[id].sl = sl;
   });
-  return Object.keys(map).map(k => map[k]).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  return Object.keys(map).map(k => map[k]).sort((a, b) => {
+    const aEntry = a.sched || { date: a.sl.date, service: a.sl.serviceLabel };
+    const bEntry = b.sched || { date: b.sl.date, service: b.sl.serviceLabel };
+    return serviceStartMs(aEntry) - serviceStartMs(bEntry) || a.id.localeCompare(b.id);
+  });
 }
 
 /* ---------- Services tracking ---------- */
@@ -2281,7 +2305,7 @@ function subscribe() {
   unsubs.push(fb.onSnapshot(fb.collection(fb.db, 'schedule'), snap => {
     state.schedule = snap.docs.map(d => {
       const data = d.data();
-      return { id: d.id, date: data.date, service: data.service, worship: data.worship, assignments: data.assignments || {}, choirSong: data.choirSong || '' };
+      return { id: d.id, date: data.date, time: data.time || '', service: data.service, worship: data.worship, assignments: data.assignments || {}, choirSong: data.choirSong || '' };
     });
     state._scheduleLoaded = true;
     maybeSyncPresiderSchedule();
@@ -2297,6 +2321,8 @@ function loadCatalog() {
   state.songById = {};
   state.songs.forEach(s => { state.songById[s.id] = s; });
 }
+
+export { serviceStartMs, serviceIsCurrentOrUpcoming };
 
 /* ================= mount (the module's only export) ================= */
 

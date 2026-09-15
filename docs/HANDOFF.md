@@ -2,6 +2,13 @@
 
 Last updated: 2026-09-14. Owner: Anthony (alovelace144@gmail.com).
 
+September 14 next-service correction: the Presider schedule previously sorted
+same-day entries by date only. It now sorts by the Firestore `time` field and
+removes a service from the next-service position after its three-hour active
+window. A focused regression proves that at 7:20 PM a completed 5:00 AM
+service is excluded and the 7:30 PM service remains next. Hosting release
+`gallery1789436708355` is live with all four appearances.
+
 September 14 song tracking repair: production retained 171 setlists and 379
 song-history records, but the Presider redesign had removed the visible
 Services destination. The dedicated Services tab is restored with upcoming
