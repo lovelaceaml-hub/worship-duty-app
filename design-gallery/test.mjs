@@ -357,7 +357,7 @@ function functionsModule() {
   `;
 }
 
-async function make({member = '', forcedMember = ''} = {}) {
+async function make({member = '', forcedMember = '', retainMaintenance = false} = {}) {
   const context = await browser.newContext({
     viewport: {width: 390, height: 850},
     serviceWorkers: 'block',
@@ -417,18 +417,18 @@ async function make({member = '', forcedMember = ''} = {}) {
   await page.goto(origin);
   await page.waitForFunction(() => !!window.__mockLive);
   await page.evaluate(() => {
-    document.body.classList.add('maintenance-active');
+    document.documentElement.dataset.maintenance = 'active';
     window.__mockLive.emit('app/settings', window.__designFixture.docs['app/settings']);
   });
   await page.waitForFunction(() => document.querySelector('#maintenance-schedule')?.textContent.includes('Presider'));
   check('Maintenance release hides the working app from members', await page.locator('.maintenance-screen').isVisible());
   check('Maintenance screen shows upcoming services and duties', await page.locator('#maintenance-schedule').innerText()
-    .then(text => text.includes('Morning') && text.includes('Presider') && text.includes('B. Anthony')));
-  await page.evaluate(() => {
-    document.body.classList.remove('maintenance-active');
-    document.querySelector('.maintenance-screen')?.remove();
+    .then(text => text.includes('Evening') && text.includes('Presider') && text.includes('E. Simon')));
+  await page.evaluate(retain => {
+    delete document.documentElement.dataset.maintenance;
+    if (!retain) document.querySelector('.maintenance-screen')?.remove();
     window.__mockLive.emit('app/settings', window.__designFixture.docs['app/settings']);
-  });
+  }, retainMaintenance);
   await page.waitForFunction(() => !!document.querySelector('#site-pin-input'));
   return {context, page};
 }
@@ -476,18 +476,18 @@ async function changeForcedPin(page) {
 }
 
 async function choose(page, mode) {
-  await page.evaluate(() => document.body.classList.remove('maintenance-active'));
+  await page.evaluate(() => delete document.documentElement.dataset.maintenance);
   if (!await page.locator('.wd-design-dialog[open]').count()) {
     await page.locator('[data-design-open]:visible').first().click();
   }
   await page.locator(`.wd-design-dialog[open] [data-design-select="${mode}"]`).click();
   await page.waitForFunction(expected => window.WorshipDesign?.getMode() === expected, mode);
-  await page.evaluate(() => document.body.classList.remove('maintenance-active'));
+  await page.evaluate(() => delete document.documentElement.dataset.maintenance);
   await page.waitForTimeout(180);
 }
 
 async function navigate(page, tab) {
-  await page.evaluate(() => document.body.classList.remove('maintenance-active'));
+  await page.evaluate(() => delete document.documentElement.dataset.maintenance);
   await page.locator(`nav.tabs [data-tab="${tab}"]`).click();
   await page.waitForTimeout(180);
   await page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
@@ -695,6 +695,8 @@ try {
   check('Prism schedule has a month control', await prismMonth.count(), 1);
   for (const mode of ['aurora', 'navy', 'classic']) {
     await choose(page, mode);
+    if (mode === 'aurora') await page.locator('[data-aurora="day"][data-date="2026-07-01"]').click();
+    if (mode === 'navy') await page.locator('[data-nc-act="date"][data-date="2026-07-01"]').click();
     check(mode + ' renders the same canonical choir song', await page.locator('body').innerText()
       .then(text => text.includes('#311 I Repent of My Sin')));
   }
@@ -808,6 +810,41 @@ try {
   check('Forced PIN form is gone after completion', await current.page.locator('#member-new-pin').count(), 0);
   check('Forced PIN member identity is restored', await current.page.evaluate(() => localStorage.getItem('wds-me')), 'E. Simon');
   check('No uncaught JavaScript errors in forced PIN flow', report.errors, []);
+  await closeSession(current);
+  current = undefined;
+
+  current = await make({member: 'B. Anthony', retainMaintenance: true});
+  sessions.add(current.context);
+  await releaseSettings(current.page);
+  await unlockSite(current.page);
+  await login(current.page, 'B. Anthony');
+  await current.page.clock.setSystemTime(new Date('2026-07-01T19:20:00-07:00'));
+  await current.page.evaluate(() => {
+    const base = window.__designFixture.services[0];
+    window.__mockLive.emit('schedule/2026-07-01_early-morning', {
+      ...base, date: '2026-07-01', service: 'Early Morning', time: '05:00'
+    });
+    window.__mockLive.emit('schedule/2026-07-01_evening', {
+      ...base, date: '2026-07-01', service: 'Evening', time: '19:30'
+    });
+  });
+  await navigate(current.page, 'schedule');
+  for (const mode of ['classic', 'prism', 'navy', 'aurora']) {
+    await choose(current.page, mode);
+    const selector = {classic:'.schedule-focus', prism:'.prism-service-times [aria-pressed="true"]',
+      navy:'.nc-hero', aurora:'.service-switch .selected'}[mode];
+    check(mode + ' defaults to the approaching 7:30 PM service, not 5 AM',
+      await current.page.locator(selector).first().innerText().then(text => text.includes('7:30 PM')));
+  }
+  await current.page.evaluate(() => {
+    document.documentElement.dataset.maintenance = 'active';
+    window.__mockLive.emit('app/settings', window.__designFixture.docs['app/settings']);
+  });
+  await current.page.waitForFunction(() => document.querySelector('.maintenance-service-title')?.textContent.includes('Evening'));
+  check('Maintenance schedule starts with the approaching evening service',
+    await current.page.locator('.maintenance-service-title').first().innerText().then(text => text.includes('Evening')));
+  check('Maintenance schedule omits the completed 5 AM service',
+    await current.page.locator('#maintenance-schedule').innerText().then(text => !text.includes('5:00 AM')));
   await closeSession(current);
   current = undefined;
 

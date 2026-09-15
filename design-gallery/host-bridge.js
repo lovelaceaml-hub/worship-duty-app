@@ -7,7 +7,7 @@ if (window.WorshipDesign) {
 
   let prismPaint;
   {
-    const aui={month:todayISO().slice(0,7),day:'',service:'',mode:'day',query:''};
+    const aui={month:todayISO().slice(0,7),day:'',service:'',mode:'day',query:'',manual:false};
     /* PRISM_HELPERS */
     function decorate(){
       document.body.dataset.screen=ui.tab;
@@ -24,18 +24,18 @@ if (window.WorshipDesign) {
     prismPaint=decorate;
     function prismJump(id){
       const s=state.services.find(s=>svcId(s)===id);if(!s)return;
-      aui.month=s.date.slice(0,7);aui.day=s.date;aui.service=id;aui.mode='day';aui.query='';ui.deptFilter='All';
+      aui.month=s.date.slice(0,7);aui.day=s.date;aui.service=id;aui.manual=true;aui.mode='day';aui.query='';ui.deptFilter='All';
       if(s.date<todayISO())ui.showPast=true;ui.tab='schedule';render();
     }
     document.addEventListener('click',e=>{
       if(!design.isPrism())return;
       const b=e.target.closest('[data-aurora],[data-prism]');if(!b)return;
       const act=b.dataset.aurora||b.dataset.prism;
-      if(act==='month'){const d=new Date(aui.month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(b.dataset.step));aui.month=toISO(d).slice(0,7);aui.day=aui.month+'-01';aui.service='';aui.query='';render();}
-      if(act==='day'||act==='date'){aui.day=b.dataset.date;aui.service='';aui.mode='day';aui.query='';render();}
-      if(act==='service'){aui.service=b.dataset.id;render();}
+      if(act==='month'){const d=new Date(aui.month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(b.dataset.step));aui.month=toISO(d).slice(0,7);aui.day='';aui.service='';aui.manual=true;aui.query='';render();}
+      if(act==='day'||act==='date'){aui.day=b.dataset.date;aui.service='';aui.manual=true;aui.mode='day';aui.query='';render();}
+      if(act==='service'){aui.service=b.dataset.id;aui.manual=true;render();}
       if(act==='mode'){aui.mode=b.dataset.mode;aui.query='';render();}
-      if(act==='reference-month'){aui.month=todayISO().slice(0,7);aui.day='';aui.service='';aui.query='';render();}
+      if(act==='reference-month'){aui.month=todayISO().slice(0,7);aui.day='';aui.service='';aui.manual=false;aui.query='';render();}
       if(act==='clear-filters'){aui.query='';ui.deptFilter='All';render();}
       if(act==='jump-service')prismJump(b.dataset.id);
       if(act==='edit'&&isVerifiedSession()&&!isForcedSession()&&canManageAnyDepartment()){ui.tab='manage';ui.sub='services';ui.expanded['m:'+b.dataset.id]=true;render();}
@@ -62,7 +62,7 @@ if (window.WorshipDesign) {
   let auroraPaint, auroraVariants;
   {
     const A={storageAvailable:true};
-    const aui={month:todayISO().slice(0,7),day:'',service:'',mode:'day',query:''};
+    const aui={month:todayISO().slice(0,7),day:'',service:'',mode:'day',query:'',manual:false};
     let renderSchedule=originals.renderSchedule,renderMy=originals.renderMy,renderManage=originals.renderManage;
     /* AURORA_CORE */
     /* AURORA_DECORATE */
@@ -71,18 +71,18 @@ if (window.WorshipDesign) {
     auroraVariants={renderSchedule,renderMy,renderManage};
     function auroraJump(id){
       const s=state.services.find(s=>svcId(s)===id);if(!s)return;
-      aui.month=s.date.slice(0,7);aui.day=s.date;aui.service=id;aui.mode='day';aui.query='';ui.deptFilter='All';
+      aui.month=s.date.slice(0,7);aui.day=s.date;aui.service=id;aui.manual=true;aui.mode='day';aui.query='';ui.deptFilter='All';
       if(s.date<todayISO())ui.showPast=true;ui.tab='schedule';render();
     }
     document.addEventListener('click',e=>{
       if(!design.isAurora())return;
       const b=e.target.closest('[data-aurora]');if(!b)return;
       const act=b.dataset.aurora;
-      if(act==='month'){const d=new Date(aui.month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(b.dataset.step));aui.month=toISO(d).slice(0,7);aui.day='';aui.query='';render();}
-      if(act==='day'){aui.day=b.dataset.date;aui.mode='day';aui.query='';render();}
-      if(act==='service'){aui.service=b.dataset.id;render();}
+      if(act==='month'){const d=new Date(aui.month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(b.dataset.step));aui.month=toISO(d).slice(0,7);aui.day='';aui.service='';aui.manual=true;aui.query='';render();}
+      if(act==='day'){aui.day=b.dataset.date;aui.service='';aui.manual=true;aui.mode='day';aui.query='';render();}
+      if(act==='service'){aui.service=b.dataset.id;aui.manual=true;render();}
       if(act==='mode'){aui.mode=b.dataset.mode;aui.query='';render();}
-      if(act==='reference-month'){aui.month=todayISO().slice(0,7);aui.day='';aui.service='';aui.query='';render();}
+      if(act==='reference-month'){aui.month=todayISO().slice(0,7);aui.day='';aui.service='';aui.manual=false;aui.query='';render();}
       if(act==='clear-filters'){aui.query='';ui.deptFilter='All';render();}
       if(act==='jump-service')auroraJump(b.dataset.id);
       if(act==='edit'&&isVerifiedSession()&&!isForcedSession()&&canManageAnyDepartment()){ui.tab='manage';ui.sub='services';ui.expanded['m:'+b.dataset.id]=true;render();requestAnimationFrame(()=>document.querySelector('[data-id="m:'+b.dataset.id+'"]')?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}));}

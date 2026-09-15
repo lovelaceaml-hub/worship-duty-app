@@ -1115,6 +1115,31 @@ function sortedServices() {
 function upcomingServices() { const t = todayISO(); return sortedServices().filter(s => s.date >= t); }
 function pastServices() { const t = todayISO(); return sortedServices().filter(s => s.date < t); }
 
+/* One Pacific-time default for every Schedule appearance. A service remains
+   current for three hours; otherwise the next future service is preferred.
+   Explicitly chosen dates and services are handled by each presentation. */
+function preferredScheduleService(services, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const today = values.year + '-' + values.month + '-' + values.day;
+  const wallNow = Date.parse(today + 'T' + values.hour + ':' + values.minute + ':00Z');
+  const start = service => {
+    if (!service || !/^\d{4}-\d{2}-\d{2}$/.test(service.date || '')) return NaN;
+    const fallback = { 'Early Morning': '05:00', Morning: '09:00', Afternoon: '15:00', Evening: '20:00' };
+    const time = /^\d{2}:\d{2}$/.test(service.time || '') ? service.time : (fallback[service.service] || '12:00');
+    return Date.parse(service.date + 'T' + time + ':00Z');
+  };
+  const ordered = (services || []).filter(service => Number.isFinite(start(service)))
+    .sort((left, right) => start(left) - start(right));
+  const active = ordered.filter(service => start(service) <= wallNow && start(service) + 3 * 60 * 60 * 1000 > wallNow);
+  if (active.length) return active[active.length - 1];
+  return ordered.find(service => start(service) > wallNow) ||
+    ordered.filter(service => service.date === today).at(-1) || null;
+}
+
 function dutiesFor(member, list) {
   const out = [];
   (list || upcomingServices()).forEach(svc => {
@@ -1792,7 +1817,9 @@ function renderForcedPinChange() {
 function renderMaintenanceSchedule() {
   const root = document.getElementById('maintenance-schedule');
   if (!root) return;
-  const services = (state.services || []).filter(service => service && service.date >= todayISO())
+  const focus = preferredScheduleService(state.services);
+  const services = (state.services || []).filter(service => service && focus &&
+    (service.date + (service.time || '') >= focus.date + (focus.time || '')))
     .sort((left, right) => left.date.localeCompare(right.date) || String(left.time || '').localeCompare(String(right.time || '')))
     .slice(0, 8);
   if (!services.length) {
@@ -1813,7 +1840,7 @@ function renderMaintenanceSchedule() {
 
 function render() {
   const nav = document.querySelector('nav.tabs');
-  if (document.body.classList.contains('maintenance-active')) {
+  if (document.documentElement.dataset.maintenance === 'active') {
     nav.classList.toggle('hidden', true);
     document.getElementById('banners').innerHTML = '';
     document.getElementById('view').innerHTML = '';
@@ -1989,6 +2016,11 @@ function renderSchedule() {
   let html = renderDeptChips();
   const filter = ui.deptFilter;
   const up = upcomingServices();
+  const focus = preferredScheduleService(up);
+  if (focus && (filter === 'All' || categoryHasAssignments(focus, filter))) {
+    html += '<section class="schedule-focus"><div class="date-head"><span class="day">Current or next service</span></div>' +
+      renderServiceCard(focus, filter) + '</section><div class="date-head"><span class="day">Full schedule</span></div>';
+  }
   if (!up.length) html += '<div class="empty">No upcoming services yet.<br>Add them in the <b>Manage</b> tab.</div>';
   else html += renderServiceList(up, filter);
   const past = feat('pastServices') ? pastServices() : [];

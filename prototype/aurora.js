@@ -41,11 +41,21 @@ function matches(s){
 }
 function allInMonth(){return state.services.filter(s=>s.date.startsWith(aui.month)&&(s.date>=todayISO()||(feat('pastServices')&&ui.showPast))).sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));}
 function ensureSelection(){
- const all=allInMonth();
- if(!all.some(s=>s.date===aui.day))aui.day=all[0]?.date||'';
+ let all=allInMonth();
+ if(!aui.manual){
+  const preferred=preferredScheduleService(state.services);
+  if(preferred){aui.month=preferred.date.slice(0,7);aui.day=preferred.date;aui.service=svcId(preferred);all=allInMonth();}
+ }
+ if(!all.some(s=>s.date===aui.day))aui.day=(preferredScheduleService(all)||all[0])?.date||'';
  const day=all.filter(s=>s.date===aui.day);
- if(day.some(matches)&&!day.some(s=>svcId(s)===aui.service&&matches(s)))aui.service=svcId(day.find(matches));
- if(!day.some(s=>svcId(s)===aui.service))aui.service=day[0]?svcId(day[0]):'';
+ if(!day.some(s=>svcId(s)===aui.service)){
+  const preferred=preferredScheduleService(day)||day[0];
+  aui.service=preferred?svcId(preferred):'';
+ }
+ if(day.some(matches)&&!day.some(s=>svcId(s)===aui.service&&matches(s))){
+  const preferred=preferredScheduleService(day.filter(matches))||day.find(matches);
+  aui.service=svcId(preferred);
+ }
  return {all,day,selected:day.find(s=>svcId(s)===aui.service)};
 }
 function personBadge(name,large=false){return '<span class="a-avatar'+(large?' large':'')+'">'+esc(selectedInitials(name))+'</span>';}

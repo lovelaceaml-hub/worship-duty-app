@@ -14,10 +14,7 @@ function prismServiceStartMs(svc){
  return d.getTime();
 }
 function prismNextUpcomingService(){
- const now=Date.now(),today=prismTodayISO();
- return state.services.slice().filter(s=>s&&typeof s.date==='string'&&s.date>=today)
-  .sort((a,b)=>a.date.localeCompare(b.date)||prismServiceStartMs(a)-prismServiceStartMs(b))
-  .find(s=>prismServiceStartMs(s)>=now)||null;
+ return preferredScheduleService(state.services);
 }
 function prismServiceOnOrAfter(date){
  return state.services.slice().filter(s=>s&&typeof s.date==='string'&&s.date>=date&&matches(s))
@@ -25,15 +22,15 @@ function prismServiceOnOrAfter(date){
 }
 ensureSelection=function(){
  let all=allInMonth();
- if(!aui.day){
+ if(!aui.manual){
   const next=prismNextUpcomingService();
   if(next){aui.month=next.date.slice(0,7);aui.day=next.date;aui.service=svcId(next);all=allInMonth();}
  }
- if(!aui.day.startsWith(aui.month))aui.day=all[0]?.date||aui.month+'-01';
+ if(!aui.day||!aui.day.startsWith(aui.month))aui.day=(preferredScheduleService(all)||all[0])?.date||aui.month+'-01';
  const day=all.filter(s=>s.date===aui.day);
  if(!day.some(s=>svcId(s)===aui.service)){
-  const next=day.find(s=>prismServiceStartMs(s)>=Date.now());
-  aui.service=next?svcId(next):(day[0]?svcId(day[0]):'');
+  const preferred=preferredScheduleService(day);
+  aui.service=preferred?svcId(preferred):(day[0]?svcId(day[0]):'');
  }
  if(!day.some(s=>svcId(s)===aui.service&&matches(s))){
   const visible=day.find(matches);
@@ -87,7 +84,7 @@ decorate=function(){
 };
 function resetPrismToToday(){
  const today=prismTodayISO();
- aui.month=today.slice(0,7);aui.day=today;aui.service='';aui.query='';aui.mode='day';
+ aui.month=today.slice(0,7);aui.day='';aui.service='';aui.manual=false;aui.query='';aui.mode='day';
 }
 document.addEventListener('click',e=>{
  const nav=e.target.closest?.('[data-act="tab"],[data-act="home"]');

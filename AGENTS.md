@@ -25,4 +25,5 @@ The active plan is `docs/PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md`. Its `## Build 
 - `song-lib.js` behavior is consumed by the local Signal ingest service. Preserve its public behavior.
 - Preserve the site-wide lock unless an explicitly reviewed migration replaces it.
 - Preserve the four appearance choices and their top navigation and Appearance controls.
+- Keep Original, Prism, Navy & Cream, Aurora, and maintenance on one Pacific-time current-or-next Schedule selector. Test a same-day 5:00 AM and 7:30 PM pair at 7:20 PM and 9:06 PM Pacific before any Hosting release. Preserve an explicitly selected past service while advancing the automatic default.
 - Do not wipe or reseed the production schedule. Production migrations or record deletion require a dry run and Anthony's explicit approval.

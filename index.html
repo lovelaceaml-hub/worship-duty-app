@@ -59,8 +59,8 @@
   .maintenance-panel h1 { margin: 0 0 12px; color: var(--brand-blue-dark); font-size: clamp(27px, 7vw, 38px); line-height: 1.12; }
   .maintenance-panel p { margin: 0 auto; max-width: 400px; color: var(--muted); font-size: 16px; }
   .maintenance-panel .maintenance-note { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--hairline); font-size: 14px; }
-  body.maintenance-active > .wrap { display: none; }
-  body.maintenance-active > .maintenance-screen { display: grid; }
+  html[data-maintenance="active"] body > .wrap { display: none; }
+  html[data-maintenance="active"] body > .maintenance-screen { display: grid; }
   .maintenance-schedule { margin-top: 24px; text-align: left; }
   .maintenance-service { padding: 16px 0; border-top: 1px solid var(--hairline); }
   .maintenance-service:first-child { border-top: 0; }

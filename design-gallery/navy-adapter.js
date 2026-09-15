@@ -1,7 +1,7 @@
 /* Navy & Cream presentation adapter. It annotates/moves no live input nodes and
  * never handles domain actions; native app handlers remain authoritative. */
 const NavyDesign = (() => {
-  let context = null, month = '', selected = '', full = false, lastRoute = '';
+  let context = null, month = '', selected = '', full = false, manualSelection = false, lastRoute = '';
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   const escape = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const paths = {
@@ -29,9 +29,9 @@ const NavyDesign = (() => {
   }
   function schedule(view,s){
     const cards=[...view.children].filter(n=>n.classList.contains('card')),entries=s.entries||[],dates=[...new Set(entries.map(x=>x.date))].sort();
-    if(!month)month=(dates.find(d=>d>=s.today)||dates[0]||s.today).slice(0,7);
+    if(!manualSelection||!month)month=(preferredScheduleService(entries)?.date||dates.find(d=>d>=s.today)||dates[0]||s.today).slice(0,7);
     const inMonth=entries.filter(x=>x.date.startsWith(month));
-    if(!inMonth.some(x=>x.id===selected))selected=(inMonth.find(x=>x.date>=s.today)||inMonth[0])?.id||'';
+    if(!manualSelection||!inMonth.some(x=>x.id===selected))selected=(preferredScheduleService(inMonth)||inMonth[0])?.id||'';
     const svc=entries.find(x=>x.id===selected),chosenDate=svc?.date,monthDates=dates.filter(d=>d.startsWith(month));
     const rail=`<div class="nc-date-rail" role="group" aria-label="Service dates">${monthDates.map(d=>btn('date',`<small>${date(d,{weekday:'short'})}</small><strong>${date(d,{day:'numeric'})}</strong><span class="nc-date-dots">${'•'.repeat(Math.min(3,entries.filter(x=>x.date===d).length))}</span>`,`data-date="${d}" aria-pressed="${d===chosenDate}" aria-label="${date(d,{weekday:'long',month:'long',day:'numeric'})}"`)).join('')}</div>`;
     const times=`<div class="nc-times" role="group" aria-label="Service times">${inMonth.filter(x=>x.date===chosenDate).map(x=>btn('service',`${icon(x.time<'18:00'?'sun':'moon')}${escape(time(x.time))}`,`data-id="${escape(x.id)}" aria-pressed="${x.id===selected}"`)).join('')}</div>`;
@@ -64,9 +64,10 @@ const NavyDesign = (() => {
   function leave(){const view=document.getElementById('view');clear(view);delete document.documentElement.dataset.ncScreen;document.querySelectorAll('header.app .eyebrow,header.app .app-title').forEach(el=>{if(el.dataset.ncOriginal)el.textContent=el.dataset.ncOriginal;});}
   document.addEventListener('click',e=>{
     if(!window.WorshipDesign?.isNavy())return;const b=e.target.closest('[data-nc-act]');if(!b||!context)return;const act=b.dataset.ncAct;
-    if(act==='month'){const d=new Date(month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(b.dataset.delta));month=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
-    if(act==='date')selected=context.entries.find(x=>x.date===b.dataset.date)?.id||'';
-    if(act==='service'){selected=b.dataset.id;month=(context.entries.find(x=>x.id===selected)?.date||context.today).slice(0,7);}
+    if(act==='month'){const d=new Date(month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(b.dataset.delta));month=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');selected='';manualSelection=true;}
+    if(act==='date'){selected=(preferredScheduleService(context.entries.filter(x=>x.date===b.dataset.date))||
+      context.entries.find(x=>x.date===b.dataset.date))?.id||'';manualSelection=true;}
+    if(act==='service'){selected=b.dataset.id;month=(context.entries.find(x=>x.id===selected)?.date||context.today).slice(0,7);manualSelection=true;}
     if(act==='day-mode')full=false;if(act==='full-mode')full=true;paint(context);
   });
   return {paint,leave};

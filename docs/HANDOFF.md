@@ -1,6 +1,16 @@
 # LV Zion Worship Service — Handoff Document
 
-Last updated: 2026-09-14. Owner: Anthony (alovelace144@gmail.com).
+Last updated: 2026-09-15. Owner: Anthony (alovelace144@gmail.com).
+
+September 15 shared Schedule default correction: the earlier time-aware fix
+covered Presider but not all four Schedule appearances. Original still put the
+first same-day service first, and alternative appearances kept their own
+selection rules. `preferredScheduleService` in `app.js` now supplies one
+Pacific-time current-or-next default to Original, Prism, Navy & Cream, Aurora,
+and the read-only maintenance schedule. Automatic defaults advance as time
+passes, while an explicitly selected date or service stays selected. A pure
+clock regression uses Monday September 14 at 5:00 AM and 7:30 PM; the gallery
+browser test also covers all four appearances and maintenance at 7:20 PM.
 
 September 14 next-service correction: the Presider schedule previously sorted
 same-day entries by date only. It now sorts by the Firestore `time` field and
