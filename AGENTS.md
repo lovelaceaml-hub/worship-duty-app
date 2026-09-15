@@ -6,9 +6,11 @@ This is the live LV Zion Worship Duty Firebase PWA at https://lv-zion-duties.web
 
 ## Active plan and Build log
 
-The active plan is `docs/PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md`. Its `## Build log` is the durable record for the department roster, duty eligibility, and availability work.
+The active plan is `docs/PLAN-COMPACT-PHONE-REFACTOR.md`. Its `## Build log` is the durable record. The department roster plan is historical. Prototype and integrated-preview approval checkpoints remain pending.
 
 ## Verification
+
+For the active compact-phone plan, Anthony explicitly selected no new test cases or automated suites. Use build/syntax checks and brief privacy-safe browser walkthroughs; the older commands below are historical guidance, not extra gates for this plan. Preserve essential functional and department-access checks.
 
 - Run `node --test tests/member-migration.test.mjs` for identity migration changes.
 - Run `node design-gallery/test.mjs` outside the macOS sandbox for shared UI and all four appearance modes.
@@ -24,6 +26,6 @@ The active plan is `docs/PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md`. Its `## Build 
 - The Google Sheet is an import source. Runtime schedule data lives in Firestore, and no Firestore-to-Sheet write path is allowed. Canonical identity and department eligibility rules must apply to browser and scheduled imports.
 - `song-lib.js` behavior is consumed by the local Signal ingest service. Preserve its public behavior.
 - Preserve the site-wide lock unless an explicitly reviewed migration replaces it.
-- Preserve the four appearance choices and their top navigation and Appearance controls.
+- Preserve the four distinct appearance layouts and Appearance controls. The approved compact-phone plan replaces top main navigation with an always-visible floating bottom bar and compact secondary tabs.
 - Keep Original, Prism, Navy & Cream, Aurora, and maintenance on one Pacific-time current-or-next Schedule selector. Test a same-day 5:00 AM and 7:30 PM pair at 7:20 PM and 9:06 PM Pacific before any Hosting release. Preserve an explicitly selected past service while advancing the automatic default.
 - Do not wipe or reseed the production schedule. Production migrations or record deletion require a dry run and Anthony's explicit approval.

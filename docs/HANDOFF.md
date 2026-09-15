@@ -1,5 +1,9 @@
 # LV Zion Worship Service — Handoff Document
 
+## Active compact-phone refactor
+
+The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progress on `codex/compact-phone-refactor`, based on clean commit `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`. Plan/baseline setup is underway; Astra prototypes and Anthony approval precede runtime UI changes. Four distinct layouts share behavior. Production is unchanged. Historical notes below describe prior releases.
+
 Last updated: 2026-09-15. Owner: Anthony (alovelace144@gmail.com).
 
 September 15 shared Schedule default correction: the earlier time-aware fix

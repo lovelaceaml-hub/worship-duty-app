@@ -6,6 +6,8 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 
 ## Quick links
 
+- **Active refactor:** [Complete phone plan](docs/PLAN-COMPACT-PHONE-REFACTOR.md), implementation started; prototype approval pending, production unchanged.
+
 - **Website:** https://lv-zion-duties.web.app — share this link with members
 - **Status:** Live. **13 September 2026: secure member login, department-scoped
   management, Prism navigation, Presider Home, canonical choir-song sync, and
