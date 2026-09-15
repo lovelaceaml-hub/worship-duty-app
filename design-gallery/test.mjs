@@ -146,6 +146,11 @@ const fixture = {
     },
     'app/members': {list: members},
     'app/departments': {map: departmentMap},
+    'app/leaderConfig': {
+      admin: ['B. Anthony'], globalLeaderManager: ['B. Anthony'],
+      departmentLeaders: {Worship: ['E. Simon'], Media: ['E. Simon']},
+      songEditors: ['E. Simon']
+    },
     'app/nameMap': {map: {'B. Anthony L': 'B. Anthony', 'D. Chloe': 'M. Chloe'}},
     'app/presiders': {names: ['B. Anthony', 'E. Simon']},
     'app/songSettings': {pinHash},
@@ -319,6 +324,20 @@ function functionsModule() {
         rosterFor(department).push(profile);
         return {data: {ok: true, departmentId: department, memberUid: data.memberUid, profile: clone(profile)}};
       }
+      if (name === 'updateRoleConfiguration') {
+        const config = clone(window.__designFixture.docs['app/leaderConfig']);
+        const list = data.roleType === 'songEditor'
+          ? config.songEditors
+          : (config.departmentLeaders[data.department] || (config.departmentLeaders[data.department] = []));
+        const next = data.enabled
+          ? [...new Set(list.concat(data.memberName))].sort()
+          : list.filter(member => member !== data.memberName);
+        if (data.roleType === 'songEditor') config.songEditors = next;
+        else config.departmentLeaders[data.department] = next;
+        window.__designFixture.docs['app/leaderConfig'] = config;
+        (window.__roleWrites || (window.__roleWrites = [])).push({name, payload: clone(data)});
+        return {data: {ok: true, config: clone(config)}};
+      }
       if (name === 'assignDepartmentDuty') {
         const profile = profileFor(data.departmentId, data.memberUid);
         if (!profile) fail('not-found');
@@ -397,6 +416,12 @@ async function make({member = '', forcedMember = ''} = {}) {
   await page.clock.setSystemTime(new Date('2026-07-01T12:00:00-07:00'));
   await page.goto(origin);
   await page.waitForFunction(() => !!window.__mockLive);
+  await page.evaluate(() => document.body.classList.add('maintenance-active'));
+  check('Maintenance release hides the working app from members', await page.locator('.maintenance-screen').isVisible());
+  await page.evaluate(() => {
+    document.body.classList.remove('maintenance-active');
+    document.querySelector('.maintenance-screen')?.remove();
+  });
   return {context, page};
 }
 
@@ -443,15 +468,18 @@ async function changeForcedPin(page) {
 }
 
 async function choose(page, mode) {
+  await page.evaluate(() => document.body.classList.remove('maintenance-active'));
   if (!await page.locator('.wd-design-dialog[open]').count()) {
     await page.locator('[data-design-open]:visible').first().click();
   }
   await page.locator(`.wd-design-dialog[open] [data-design-select="${mode}"]`).click();
   await page.waitForFunction(expected => window.WorshipDesign?.getMode() === expected, mode);
+  await page.evaluate(() => document.body.classList.remove('maintenance-active'));
   await page.waitForTimeout(180);
 }
 
 async function navigate(page, tab) {
+  await page.evaluate(() => document.body.classList.remove('maintenance-active'));
   await page.locator(`nav.tabs [data-tab="${tab}"]`).click();
   await page.waitForTimeout(180);
 }
@@ -558,6 +586,18 @@ try {
   check('Admin sees multi-department Manage selector', await page.locator('#manage-dept').evaluate(select =>
     [...select.options].map(option => option.textContent)),
   ['All Departments', 'Worship', 'Usher Sisters', 'Usher Brothers', 'Lobby', 'Translation', 'Media', 'Parking Lot', 'Offering']);
+  await page.locator('[data-act="sub"][data-sub="leaders"]').click();
+  check('Leader Configuration does not render a congregation checkbox matrix', await page.locator('[data-chg="role-config"]').count(), 0);
+  check('Leader Configuration lists only assigned department leaders', await page.locator('.role-assignment').allInnerTexts()
+    .then(rows => rows.some(row => row.includes('E. Simon')) && rows.every(row => !row.includes('D. Caleb'))));
+  const mediaLeaderForm = page.locator('form[data-act="role-config-add"][data-dept="Media"]');
+  await mediaLeaderForm.locator('select').selectOption('D. Caleb');
+  await mediaLeaderForm.locator('button').click();
+  await page.waitForFunction(() => (window.__roleWrites || []).some(write =>
+    write.payload.roleType === 'departmentLeader' && write.payload.department === 'Media' &&
+    write.payload.memberName === 'D. Caleb' && write.payload.enabled === true));
+  check('Adding a department leader uses the secured role callable', await page.locator('.role-assignment').allInnerTexts()
+    .then(rows => rows.some(row => row.includes('D. Caleb'))));
   await page.locator('#manage-dept').selectOption('Media');
   check('Planning tab shows its unresolved conflict count', await page.locator('[data-act="sub"][data-sub="planning"]').innerText(), 'Planning (2)');
   await page.locator('[data-act="sub"][data-sub="planning"]').click();

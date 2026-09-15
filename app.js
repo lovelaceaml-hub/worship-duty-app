@@ -2461,20 +2461,27 @@ function renderLeaderConfig() {
   const config = permissionConfig();
   const leaders = config.departmentLeaders || {};
   let html = '<div class="card"><div class="f-label">Department leaders</div>' +
-    '<p class="hint">Leader configuration is visible to authorized global managers. Operational tools remain scoped to the selected department.</p>';
+    '<p class="hint">Only assigned leaders are listed. Add or remove access without searching through the whole congregation.</p>';
   CATEGORIES.forEach(category => {
     const names = Array.isArray(leaders[category.name]) ? leaders[category.name] : [];
-    html += '<div class="list-row" style="display:block"><div style="font-weight:650;margin-bottom:6px">' + esc(category.name) + '</div>' +
-      state.members.map(member => '<label style="display:inline-flex;gap:4px;margin:3px 10px 3px 0;font-size:12px">' +
-        '<input type="checkbox" data-chg="role-config" data-role="departmentLeader" data-dept="' + esc(category.name) + '" data-name="' + esc(member) + '"' +
-        (names.indexOf(member) !== -1 ? ' checked' : '') + '>' + esc(memberLabel(member)) + '</label>').join('') + '</div>';
+    const available = state.members.filter(member => names.indexOf(member) === -1);
+    html += '<section class="list-row" style="display:block"><div style="font-weight:650;margin-bottom:8px">' + esc(category.name) + '</div>' +
+      (names.length ? names.map(member => '<div class="role-assignment"><span>' + esc(memberLabel(member)) + '</span>' +
+        '<button class="danger-link" data-act="role-config-remove" data-role="departmentLeader" data-dept="' + esc(category.name) + '" data-name="' + esc(member) + '">Remove</button></div>').join('') : '<p class="hint">No leader assigned.</p>') +
+      (available.length ? '<form class="add-row role-add" data-act="role-config-add" data-role="departmentLeader" data-dept="' + esc(category.name) + '">' +
+        '<select aria-label="Add ' + esc(category.name) + ' leader" required><option value="">Choose a member</option>' +
+        available.map(member => '<option value="' + esc(member) + '">' + esc(memberLabel(member)) + '</option>').join('') + '</select>' +
+        '<button class="ghost" type="submit">Add leader</button></form>' : '') + '</section>';
   });
   const songEditors = Array.isArray(config.songEditors) ? config.songEditors : [];
   html += '</div><div class="card"><div class="f-label">Choir song editors</div>' +
     '<p class="hint">Song editors can change songs only. They do not receive Worship management access.</p>' +
-    state.members.map(member => '<label style="display:inline-flex;gap:4px;margin:3px 10px 3px 0;font-size:12px">' +
-      '<input type="checkbox" data-chg="role-config" data-role="songEditor" data-name="' + esc(member) + '"' +
-      (songEditors.indexOf(member) !== -1 ? ' checked' : '') + '>' + esc(memberLabel(member)) + '</label>').join('') + '</div>';
+    (songEditors.length ? songEditors.map(member => '<div class="role-assignment"><span>' + esc(memberLabel(member)) + '</span>' +
+      '<button class="danger-link" data-act="role-config-remove" data-role="songEditor" data-name="' + esc(member) + '">Remove</button></div>').join('') : '<p class="hint">No song editor assigned.</p>') +
+    '<form class="add-row role-add" data-act="role-config-add" data-role="songEditor">' +
+      '<select aria-label="Add choir song editor" required><option value="">Choose a member</option>' +
+      state.members.filter(member => songEditors.indexOf(member) === -1).map(member => '<option value="' + esc(member) + '">' + esc(memberLabel(member)) + '</option>').join('') + '</select>' +
+      '<button class="ghost" type="submit">Add editor</button></form></div>';
   return html;
 }
 
@@ -3210,7 +3217,9 @@ function canRunAction(act, el) {
   }
   if (act === 'member-name') return canPermission('isAdmin', actor);
   if (act === 'member-cat') return canPermission('canManageDepartmentMember', actor, el.dataset.cat, { name: el.dataset.name });
-  if (act === 'role-config') return canPermission('canManageLeaders', actor);
+  if (['role-config', 'role-config-add', 'role-config-remove'].indexOf(act) !== -1) {
+    return canPermission('canManageLeaders', actor);
+  }
   if (act === 'manage-dept') return authorizedDepartments().indexOf(el.value) !== -1;
   if (['change-site-pin', 'set-pin', 'unlock', 'change-pin', 'feature', 'scheduler-name',
     'sheet-url', 'import-file', 'export', 'reset', 'unify-names'].indexOf(act) !== -1) {
@@ -3240,6 +3249,26 @@ function canRunAction(act, el) {
     }));
   }
   return canManageAnyDepartment();
+}
+
+function saveRoleConfiguration(roleType, department, memberName, enabled) {
+  const target = canonicalMemberName(memberName);
+  if (!target) return Promise.reject(new Error('Choose a member first.'));
+  return authCall('updateRoleConfiguration', {
+    roleType,
+    department: department || '',
+    memberName: target,
+    enabled: enabled === true
+  }).then(result => {
+    if (result && result.config) state.permissionConfig = result.config;
+    addBanner(enabled ? 'Role access added.' : 'Role access removed.');
+    render();
+    return result;
+  }).catch(error => {
+    addBanner(safeAuthMessage(error), true);
+    render();
+    throw error;
+  });
 }
 
 function handleAct(act, el) {
@@ -3279,6 +3308,13 @@ function handleAct(act, el) {
     ui.sub = el.dataset.sub;
     if (ui.sub === 'departments' && !ui.departmentView) ui.departmentView = 'list';
     render();
+  }
+  else if (act === 'role-config-add') {
+    const select = el.querySelector('select');
+    saveRoleConfiguration(el.dataset.role, el.dataset.dept || '', select && select.value, true).catch(() => {});
+  }
+  else if (act === 'role-config-remove') {
+    saveRoleConfiguration(el.dataset.role, el.dataset.dept || '', el.dataset.name, false).catch(() => {});
   }
   else if (act === 'department-open') {
     const department = el.dataset.department;
