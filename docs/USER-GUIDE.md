@@ -106,6 +106,15 @@ If you're the scheduler and ever want to hide this feature, turn off
 ## The Schedule tab
 
 Tap **Schedule** to see every upcoming service for everyone, grouped by day.
+The app opens on the current service if it is still in progress, otherwise
+the next service. A completed morning service will not remain the default
+when an evening service is approaching. You can still choose an earlier date
+or service yourself. Original shows the focused service above the full list;
+Prism, Navy & Cream, and Aurora select it in their date and time controls.
+
+When the app is temporarily in maintenance, the normal controls are hidden.
+The maintenance page still shows the next eight services with dates, times,
+and posted duties as a read-only schedule.
 
 - Each card shows the service (e.g. "Sabbath Day · Morning"), the time,
   and who's assigned to each role, grouped by department (Worship, Usher
