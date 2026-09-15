@@ -1,25 +1,15 @@
----
-lane: S5B
-title: Indexing
-state: planned
-model: pending
-runner: pending
-worktree: pending
-review: pending
-depends_on: pending
-updated: 2026-09-15T19:23Z
----
-
 # S5B: Indexing
 
-## Work order
+State: in progress
 
-(helper appends the work order it received)
+## Model and ownership
+
+gpt-5.6-luna High /root/compact_index. Worktree: compact-index. Root integrates shared files.
 
 ## Result
 
-(helper appends its result summary, changed files, verification evidence, limitations)
+FEATURE-MAP.json and CODE-INDEX.md created. Runtime baseline and future compact interfaces distinguished.
 
-## Review
+## Verification and review
 
-(coordinator appends)
+JSON, source references and links checked by worker. Gemini Low peer review complete, final NO_MATERIAL_FINDINGS; see reviews/first-units.md.

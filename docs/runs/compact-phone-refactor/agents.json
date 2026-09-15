@@ -1,0 +1,63 @@
+{
+  "launches": [
+    {
+      "id": "/root/compact_design",
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "role": "design",
+      "worktree": "/Users/anthony/Projects/worship-duty-app-worktrees/compact-design",
+      "state": "bounded unit reviewed; next package or prototype approval pending"
+    },
+    {
+      "id": "/root/compact_docs",
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "role": "documentation",
+      "worktree": "/Users/anthony/Projects/worship-duty-app-worktrees/compact-docs",
+      "state": "bounded unit reviewed; next package or prototype approval pending"
+    },
+    {
+      "id": "/root/compact_index",
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "role": "indexing",
+      "worktree": "/Users/anthony/Projects/worship-duty-app-worktrees/compact-index",
+      "state": "bounded unit reviewed; next package or prototype approval pending"
+    },
+    {
+      "id": "/root/compact_server",
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "role": "server membership unit",
+      "worktree": "/Users/anthony/Projects/worship-duty-app-worktrees/compact-server",
+      "state": "bounded unit reviewed; next package or prototype approval pending"
+    }
+  ],
+  "review_route": {
+    "model": "gemini-3.8-flash-low",
+    "effort": "low",
+    "catalog_verified": true,
+    "execution": "Completed self-contained native user-event stream review after file-reading permission denial; non-empty result received.",
+    "conversation_id": "9dac6925-5fc7-4744-966c-70e63c3fcd47",
+    "usage": {
+      "input_tokens": 31207,
+      "output_tokens": 783,
+      "thinking_tokens": 0,
+      "cache_read_tokens": 0,
+      "total_tokens": 31990
+    }
+  },
+  "unit_review": {
+    "model": "gemini-3.8-flash-low",
+    "effort": "low",
+    "conversation_id": "4ed3048e-1b4f-47f1-85c4-1a04e18a8409",
+    "final_verdict": "NO_MATERIAL_FINDINGS for all four bounded units",
+    "usage": {
+      "input_tokens": 67427,
+      "output_tokens": 18963,
+      "thinking_tokens": 0,
+      "cache_read_tokens": 0,
+      "total_tokens": 86390
+    }
+  }
+}

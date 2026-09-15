@@ -1,25 +1,15 @@
----
-lane: S5A
-title: Documentation
-state: planned
-model: pending
-runner: pending
-worktree: pending
-review: pending
-depends_on: pending
-updated: 2026-09-15T19:23Z
----
-
 # S5A: Documentation
 
-## Work order
+State: in progress
 
-(helper appends the work order it received)
+## Model and ownership
+
+gpt-5.6-luna High /root/compact_docs. Worktree: compact-docs. Root integrates shared files.
 
 ## Result
 
-(helper appends its result summary, changed files, verification evidence, limitations)
+PLAYBOOK and USER-MANUAL updated from current source; new compact functionality marked pending. USER-GUIDE preserved.
 
-## Review
+## Verification and review
 
-(coordinator appends)
+Diff whitespace checked; Gemini Low peer review complete, final NO_MATERIAL_FINDINGS; see reviews/first-units.md.

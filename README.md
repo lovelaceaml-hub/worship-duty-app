@@ -60,37 +60,16 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   - [All documents →](docs/)
 
 **Start here if you manage this app:** [docs/PLAYBOOK.md](docs/PLAYBOOK.md) —
-step-by-step instructions for entering the schedule, passcodes, notifications,
+step-by-step instructions for entering the schedule, account sign-in, notifications,
 deploying, and troubleshooting, plus how to delegate further development to AI.
 
-## The three screens
+## Current member workspaces
 
-- **Schedule** — every upcoming service with all assigned duties, grouped by day.
-- **My Duties** — a member picks their name once and sees only their duties,
-  can expand "Who else is serving?", turn on notifications (real push, see
-  below), and download their duties to their phone calendar (with built-in
-  reminders).
-- **Manage** — for editors (protected by a separate passcode): add/edit
-  services, assign people with dropdowns, manage the member list, toggle
-  features on/off for everyone, sync from the Google Sheet, back up or reset
-  the data.
+Members sign in with their own accounts. Schedule shows upcoming services; My Duties shows the signed-in member's duties, reminders and calendar actions. Authorized department leaders and administrators use Manage for their permitted departments. Presiders can plan songs in the embedded song workspace.
 
-**Presiders** also see a fourth tab, **Presider**, between My Duties and
-Manage. It opens the song-selection screen (Home / Library / Services /
-Insights) right inside this app; the **"Plan songs for your service"** button
-and per-duty **"Pick songs"** links on My Duties jump straight to a specific
-service's setlist. This was the separate "New Song Selection" app, merged in
-on 2026-07-10 — see [docs/HANDOFF.md](docs/HANDOFF.md) → "Presider song
-picker" and [docs/MERGE-HANDOFF.md](docs/MERGE-HANDOFF.md).
+The separate site lock remains in place. Account sign-in and department permissions control editing. See the [current user manual](docs/USER-MANUAL.md) for operation and the [playbook](docs/PLAYBOOK.md) for maintenance.
 
-The whole app is also gated by a site-wide passcode before any of the three
-screens are shown (see docs/PLAYBOOK.md for both passcodes and how to change
-them).
-
-Full documentation lives in `docs/`: [PLAYBOOK.md](docs/PLAYBOOK.md)
-(day-to-day operation + AI delegation briefs), [HANDOFF.md](docs/HANDOFF.md)
-(architecture + runbook), [DESIGN.md](docs/DESIGN.md) (design system),
-[FEATURES.md](docs/FEATURES.md) (feature toggles + passcodes).
+The [compact phone refactor](docs/PLAN-COMPACT-PHONE-REFACTOR.md) is in progress. Its floating navigation and new role flows are not released. [Compare the two local prototype directions](docs/design/prototype/compact-phone/index.html).
 
 ## Live sync — DONE (2026-07-03)
 

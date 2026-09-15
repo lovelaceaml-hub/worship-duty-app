@@ -2,7 +2,7 @@
 
 ## Active compact-phone refactor
 
-The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progress on `codex/compact-phone-refactor`, based on clean commit `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`. Plan/baseline setup is underway; Astra prototypes and Anthony approval precede runtime UI changes. Four distinct layouts share behavior. Production is unchanged. Historical notes below describe prior releases.
+The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progress on `codex/compact-phone-refactor`, based on clean commit `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`. Baseline and plan are saved. Two Astra High direction prototypes are ready for selection. Separate Luna High documentation, indexing, and standalone membership work is written; Gemini Low reviewed all four bounded units with final no-material-findings verdicts. Prototype approval still precedes runtime UI changes. Four distinct layouts share behavior. Production is unchanged. Historical notes below describe prior releases.
 
 Last updated: 2026-09-15. Owner: Anthony (alovelace144@gmail.com).
 
@@ -44,8 +44,8 @@ and all 12 named Cloud Functions use the same canonical identity map. The
 production migration applied 17 targeted identity writes with no account,
 request, notification, song, or document-deletion changes. A follow-up audit
 found zero legacy identity occurrences outside `app/nameMap`, where aliases
-remain intentionally to prevent reintroduction. The active next plan is
-[PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md](PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md).
+remain intentionally to prevent reintroduction. The department plan is complete; see its historical
+[plan record](PLAN-DEPARTMENT-ROSTER-AVAILABILITY.md).
 
 Department roster release: production Hosting release `gallery1789403828659`
 is live with Original, Prism, Navy & Cream, and Aurora.
@@ -74,7 +74,11 @@ members' devices.
 
 **Live URL: https://lv-zion-duties.web.app**
 
-## The three screens
+## Historical architecture notes
+
+The remaining July-era descriptions include superseded editor-passcode, identity, and build behavior. They are retained as history, not current operating instructions. Use [PLAYBOOK.md](PLAYBOOK.md), [USER-MANUAL.md](USER-MANUAL.md), and [CODE-INDEX.md](CODE-INDEX.md) for current verified behavior.
+
+### Original three-screen design
 
 | Screen | Who it's for | What it does |
 |---|---|---|
