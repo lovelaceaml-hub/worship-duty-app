@@ -11,6 +11,14 @@ and the read-only maintenance schedule. Automatic defaults advance as time
 passes, while an explicitly selected date or service stays selected. A pure
 clock regression uses Monday September 14 at 5:00 AM and 7:30 PM; the gallery
 browser test also covers all four appearances and maintenance at 7:20 PM.
+Hosting-only maintenance release `gallery1789445946868` was verified in a live
+headless browser: the working app was hidden, eight read-only services and
+duties rendered, and the first service was Monday Evening at 7:30 PM. The
+final Hosting-only release `gallery1789446013699` is live with maintenance
+off. Its page and app bundle carry the matching stamp; the guest sign-in gate
+rendered with zero page errors. The authenticated production journey was
+covered by the mocked four-appearance suite, not a live member login. No
+Functions, rules, or Firestore schedule records changed in either release.
 
 September 14 next-service correction: the Presider schedule previously sorted
 same-day entries by date only. It now sorts by the Firestore `time` field and

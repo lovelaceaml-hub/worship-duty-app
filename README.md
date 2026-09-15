@@ -29,7 +29,7 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
   **15 September 2026: the Schedule default now uses the same Pacific-time
   current-or-next rule in Original, Prism, Navy & Cream, Aurora, and the
   read-only maintenance schedule. The 5:00 AM versus 7:30 PM same-day case is
-  tested across every appearance.**
+  tested across every appearance. Hosting release `gallery1789446013699` is live.**
   Files are cached for a year behind a release stamp written by `scripts/deploy.sh` (always
   deploy with that script), the presider song files load only for presiders, sign-in no longer
   blocks startup, and the calendar button subscribes to the live feed instead of downloading a
