@@ -1789,8 +1789,37 @@ function renderForcedPinChange() {
 
 /* ================= rendering ================= */
 
+function renderMaintenanceSchedule() {
+  const root = document.getElementById('maintenance-schedule');
+  if (!root) return;
+  const services = (state.services || []).filter(service => service && service.date >= todayISO())
+    .sort((left, right) => left.date.localeCompare(right.date) || String(left.time || '').localeCompare(String(right.time || '')))
+    .slice(0, 8);
+  if (!services.length) {
+    root.innerHTML = '<p class="hint">No upcoming services are available yet.</p>';
+    return;
+  }
+  root.innerHTML = services.map(service => {
+    const duties = Object.entries(service.assignments || {}).filter(([, member]) => member);
+    return '<section class="maintenance-service"><div class="maintenance-service-title">' +
+      esc(fmtDate(service.date)) + ', ' + esc(service.service || 'Service') + '</div>' +
+      '<div class="maintenance-service-time">' + esc(service.worship || '') +
+      (service.time ? ' at ' + esc(fmtTime(service.time)) : '') + '</div>' +
+      (duties.length ? duties.map(([duty, member]) => '<div class="maintenance-duty"><span>' + esc(duty) +
+        '</span><strong>' + esc(memberLabel(member)) + '</strong></div>').join('') : '<p class="hint">Duties have not been posted.</p>') +
+      '</section>';
+  }).join('');
+}
+
 function render() {
   const nav = document.querySelector('nav.tabs');
+  if (document.body.classList.contains('maintenance-active')) {
+    nav.classList.toggle('hidden', true);
+    document.getElementById('banners').innerHTML = '';
+    document.getElementById('view').innerHTML = '';
+    renderMaintenanceSchedule();
+    return;
+  }
   if (feat('siteLock') && !siteUnlocked()) {
     nav.classList.toggle('hidden', true);
     document.getElementById('banners').innerHTML = '';

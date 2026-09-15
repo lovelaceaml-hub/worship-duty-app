@@ -522,7 +522,9 @@ longer wired to any button. Note the feed is unauthenticated, consistent with
 The September 14 regression repair restored the accepted Leader Configuration
 behavior: assigned leaders and song editors are shown directly, with explicit
 Add and Remove controls. The public shell also contains a tested maintenance
-screen that can be activated before future live repair work. A guarded roster
+screen that can be activated before future live repair work. Maintenance mode
+keeps the next eight services, times, and posted duties visible as a read-only
+schedule while all app controls remain unavailable. A guarded roster
 repair added three missing profiles and corrected one stale profile; the
 post-check found 31 unchanged profiles and no remaining applicable writes.
 

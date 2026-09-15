@@ -416,12 +416,20 @@ async function make({member = '', forcedMember = ''} = {}) {
   await page.clock.setSystemTime(new Date('2026-07-01T12:00:00-07:00'));
   await page.goto(origin);
   await page.waitForFunction(() => !!window.__mockLive);
-  await page.evaluate(() => document.body.classList.add('maintenance-active'));
+  await page.evaluate(() => {
+    document.body.classList.add('maintenance-active');
+    window.__mockLive.emit('app/settings', window.__designFixture.docs['app/settings']);
+  });
+  await page.waitForFunction(() => document.querySelector('#maintenance-schedule')?.textContent.includes('Presider'));
   check('Maintenance release hides the working app from members', await page.locator('.maintenance-screen').isVisible());
+  check('Maintenance screen shows upcoming services and duties', await page.locator('#maintenance-schedule').innerText()
+    .then(text => text.includes('Morning') && text.includes('Presider') && text.includes('B. Anthony')));
   await page.evaluate(() => {
     document.body.classList.remove('maintenance-active');
     document.querySelector('.maintenance-screen')?.remove();
+    window.__mockLive.emit('app/settings', window.__designFixture.docs['app/settings']);
   });
+  await page.waitForFunction(() => !!document.querySelector('#site-pin-input'));
   return {context, page};
 }
 
@@ -482,6 +490,7 @@ async function navigate(page, tab) {
   await page.evaluate(() => document.body.classList.remove('maintenance-active'));
   await page.locator(`nav.tabs [data-tab="${tab}"]`).click();
   await page.waitForTimeout(180);
+  await page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
 }
 
 const domainWrites = page => page.evaluate(() => __mockLive.writes.filter(write =>
@@ -711,6 +720,7 @@ try {
   check('Leader sees Manage', await current.page.locator('#tab-manage').isVisible());
   await navigate(current.page, 'manage');
   await current.page.keyboard.press('Escape');
+  await current.page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
   const leaderOptions = await current.page.locator('#manage-dept option').allTextContents();
   check('Leader Manage selector is scoped to configured departments', leaderOptions, ['Worship', 'Media']);
   check('Leader cannot see the global Manage option', leaderOptions.includes('All Departments'), false);
@@ -761,6 +771,7 @@ try {
   await login(current.page, 'S. Lisa');
   await current.page.waitForTimeout(260);
   await current.page.keyboard.press('Escape');
+  await current.page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
   await navigate(current.page, 'my');
   await current.page.waitForSelector('.own-availability-card');
   check('Member sees shared availability outside Manage', await current.page.locator('.own-availability-card').count(), 1);
