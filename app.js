@@ -1115,17 +1115,23 @@ function sortedServices() {
 function upcomingServices() { const t = todayISO(); return sortedServices().filter(s => s.date >= t); }
 function pastServices() { const t = todayISO(); return sortedServices().filter(s => s.date < t); }
 
-/* One Pacific-time default for every Schedule appearance. A service remains
-   current for three hours; otherwise the next future service is preferred.
-   Explicitly chosen dates and services are handled by each presentation. */
-function preferredScheduleService(services, now = new Date()) {
+/* One Pacific-time default for every Schedule appearance. As soon as a
+   service's start minute arrives, the default advances to the next upcoming
+   service (which may fall on a later day). Explicitly chosen dates and
+   services are handled by each presentation, not by this function. Anthony
+   changed this rule on 2026-09-17, replacing the old three-hour "stays
+   current" window; see AGENTS.md. */
+function pacificWallNow(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   }).formatToParts(now);
   const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
   const today = values.year + '-' + values.month + '-' + values.day;
-  const wallNow = Date.parse(today + 'T' + values.hour + ':' + values.minute + ':00Z');
+  return { today, wallNow: Date.parse(today + 'T' + values.hour + ':' + values.minute + ':00Z') };
+}
+function preferredScheduleService(services, now = new Date()) {
+  const { wallNow } = pacificWallNow(now);
   const start = service => {
     if (!service || !/^\d{4}-\d{2}-\d{2}$/.test(service.date || '')) return NaN;
     const fallback = { 'Early Morning': '05:00', Morning: '09:00', Afternoon: '15:00', Evening: '20:00' };
@@ -1134,10 +1140,7 @@ function preferredScheduleService(services, now = new Date()) {
   };
   const ordered = (services || []).filter(service => Number.isFinite(start(service)))
     .sort((left, right) => start(left) - start(right));
-  const active = ordered.filter(service => start(service) <= wallNow && start(service) + 3 * 60 * 60 * 1000 > wallNow);
-  if (active.length) return active[active.length - 1];
-  return ordered.find(service => start(service) > wallNow) ||
-    ordered.filter(service => service.date === today).at(-1) || null;
+  return ordered.find(service => start(service) > wallNow) || ordered.at(-1) || null;
 }
 
 function dutiesFor(member, list) {
@@ -2016,9 +2019,9 @@ function renderSchedule() {
   let html = renderDeptChips();
   const filter = ui.deptFilter;
   const up = upcomingServices();
-  const focus = preferredScheduleService(up);
+  const focus = preferredScheduleService(state.services);
   if (focus && (filter === 'All' || categoryHasAssignments(focus, filter))) {
-    html += '<section class="schedule-focus"><div class="date-head"><span class="day">Current or next service</span></div>' +
+    html += '<section class="schedule-focus"><div class="date-head"><span class="day">Next service</span></div>' +
       renderServiceCard(focus, filter) + '</section><div class="date-head"><span class="day">Full schedule</span></div>';
   }
   if (!up.length) html += '<div class="empty">No upcoming services yet.<br>Add them in the <b>Manage</b> tab.</div>';

@@ -19,8 +19,9 @@ method.
 ## Find duties
 
 Use **Schedule** for the congregation's services and **My Duties** for your
-assigned duties. Schedule starts at the current or next service in Pacific
-time. You can still select an earlier service or date. Use department filters
+assigned duties. Schedule starts at the next upcoming service in Pacific
+time; as soon as a service's start time arrives, the default advances to the
+next one. You can still select an earlier service or date. Use department filters
 to narrow the list, and expand a service to see its assignments and any choir
 song.
 

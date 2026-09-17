@@ -106,10 +106,10 @@ If you're the scheduler and ever want to hide this feature, turn off
 ## The Schedule tab
 
 Tap **Schedule** to see every upcoming service for everyone, grouped by day.
-The app opens on the current service if it is still in progress, otherwise
-the next service. A completed morning service will not remain the default
-when an evening service is approaching. You can still choose an earlier date
-or service yourself. Original shows the focused service above the full list;
+The app opens on the next upcoming service in Pacific time. As soon as a
+service's start time arrives, the default advances to the next one, even if
+that is later the same day or the next day. You can still choose an earlier
+date or service yourself. Original shows the focused service above the full list;
 Prism, Navy & Cream, and Aurora select it in their date and time controls.
 
 When the app is temporarily in maintenance, the normal controls are hidden.
