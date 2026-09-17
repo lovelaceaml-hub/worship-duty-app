@@ -33,6 +33,19 @@ function isAuthorized(route, account) {
   return true;
 }
 
+/* An unknown route (a typo, a stale link, anything not in shared/state.js's
+   ROUTES) resolves to #unavailable rather than falling through to whichever
+   legacy screen `legacyKindFor` would otherwise guess at (ruling section 4).
+   An empty hash (a fresh load with nothing after '#') is not "unknown": it
+   means the member has not picked a screen yet, so it resolves to their role
+   start route instead. */
+function resolveRoute(requested, account) {
+  if (!requested) return state.startRouteFor(account);
+  if (!state.isKnownRoute(requested)) return '#unavailable';
+  if (!isAuthorized(requested, account)) return '#unavailable';
+  return requested;
+}
+
 function stylesheetLink() {
   return document.getElementById('wd-appearance-sheet');
 }
@@ -119,7 +132,7 @@ function restoreSearchFocus(saved) {
 function pickRoute(account) {
   const pending = state.consumePendingDestination();
   const requested = pending || state.route();
-  const route = isAuthorized(requested, account) ? requested : '#unavailable';
+  const route = resolveRoute(requested, account);
   if (route !== state.route()) state.go(route, { replace: true });
   return route;
 }

@@ -39,20 +39,33 @@ try {
   // gstatic unreachable / offline — SW still serves cached content below
 }
 
+// A push payload's data.route is untrusted (it travels through the FCM data
+// message, not through this app's own navigation), so it is validated
+// against a conservative shape before it ever becomes part of a URL: a
+// leading '#' is optional, then one lowercase-and-hyphen segment, then up to
+// two path segments of URL-safe characters. shared/state.js's
+// setPendingDestination() applies the same shape check on the other end.
+const SAFE_ROUTE_SHAPE = /^#?[a-z-]+(\/[A-Za-z0-9%._~-]+){0,2}$/;
+function safeRoute(route) {
+  return typeof route === 'string' && SAFE_ROUTE_SHAPE.test(route) ? route : '';
+}
+
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const data = (e.notification && e.notification.data) || {};
-  // A route on the payload becomes the shell's pendingDestination once the
-  // page (re)opens and calls shared/state.js's setPendingDestination(), see
+  const route = safeRoute(data.route);
+  // A valid route becomes the shell's pendingDestination once the page
+  // (re)opens and calls shared/state.js's setPendingDestination(), see
   // app.js's registerPush()/message handling. Opening or focusing the tab at
-  // ./#<route> is enough for that to pick it up on load.
-  const target = data.route ? './#' + String(data.route).replace(/^#/, '') : './';
+  // ./#<route> is enough for that to pick it up on load. An invalid or
+  // missing route falls back to plain './'.
+  const target = route ? './#' + route.replace(/^#/, '') : './';
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
       const existing = cs[0];
       if (existing) {
         existing.focus();
-        if (data.route && 'navigate' in existing) existing.navigate(target).catch(() => {});
+        if (route && 'navigate' in existing) existing.navigate(target).catch(() => {});
         return undefined;
       }
       return self.clients.openWindow(target);
