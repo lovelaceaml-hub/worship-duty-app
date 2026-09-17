@@ -1,0 +1,141 @@
+{
+  "title": "Worship Duty compact-phone feature map",
+  "scope": {
+    "status": "Approved compact-phone refactor in progress. Section 2 (shared runtime) and Section 3 (server workflows) are built and committed on their own lane branches, not yet merged to the integration branch. Section 4 (role screens) has not shipped. Production is unchanged.",
+    "plan": "docs/PLAN-COMPACT-PHONE-REFACTOR.md",
+    "index_owner": "Section 5B code and document indexing",
+    "as_of": "2026-09-17",
+    "boundary": "Built entries below are verified against the lane worktree's git history and file contents, not against this worktree's checked-out files (this worktree only has the S5B branch checked out). Planned entries describe the binding interface rulings for what Section 4 still has to add."
+  },
+  "lane_branches": {
+    "integration_branch": "codex/compact-phone-refactor (baseline 86a476f, not yet updated with S2/S3)",
+    "S2_shared_runtime": {
+      "branch": "claude/compact-runtime",
+      "worktree": "/Users/anthony/Projects/worship-duty-app-worktrees/compact-runtime",
+      "state": "built, reviewed, not merged",
+      "commits": ["a1246a6 Section 2: shared runtime foundation for the compact phone refactor", "db8f610 Section 2 correction: unknown routes resolve to #unavailable, validate notification routes"],
+      "lane_record": "docs/runs/compact-phone-refactor/lanes/S2.md (populated only in this branch's worktree; the S2.md checked out in the compact-index worktree is the original unfilled template)"
+    },
+    "S3_server_workflows": {
+      "branch": "claude/compact-server",
+      "worktree": "/Users/anthony/Projects/worship-duty-app-worktrees/compact-server-claude",
+      "state": "built, reviewed, not merged",
+      "commits": ["1083e4b Section 3: server workflows for the compact phone refactor", "fdd8dd8 Record Section 3 completion in the Build log"],
+      "lane_record": "docs/runs/compact-phone-refactor/lanes/S3.md (populated only in this branch's worktree)",
+      "note": "A separate, earlier, superseded server-side attempt (membership module only, gpt-5.6-luna) lives on branch codex/compact-server / worktree compact-server; the controller switched Section 3 authorship to Claude on claude/compact-server, which is the complete, reviewed build described here."
+    },
+    "S4_role_screens": {
+      "branch": "not yet started",
+      "state": "not shipped; running in parallel elsewhere per the task brief",
+      "note": "shared/screens.js in claude/compact-runtime already contains buildScheduleInfo/buildAppearanceInfo for the three Section 2 screens; Section 4 adds one information builder plus four layout placements per screen, per the S2-LAYOUT-INTERFACE.md contract."
+    }
+  },
+  "entrypoints": {
+    "browser_shell_legacy": ["index.html", "app.js", "permissions.js", "firebase-config.js", "seed-data.js"],
+    "browser_shell_compact_built_on_S2": ["appearance-boot.js", "shared/state.js", "shared/nav.js", "shared/save-state.js", "shared/components.js", "shared/screens.js", "shared/shell.js", "layouts/_common.js", "layouts/original.js", "layouts/prism.js", "layouts/navy.js", "layouts/aurora.js", "layouts/index.js", "styles/shared.css", "styles/legacy.css", "styles/original.css", "styles/prism.css", "styles/navy.css", "styles/aurora.css"],
+    "lazy_presider": ["song-app.js", "song-app.css", "song-lib.js", "song-seed.js"],
+    "service_worker": "sw.js",
+    "backend_legacy": ["functions/index.js", "functions/member-auth.js", "functions/department-auth.js", "functions/department-handlers.js", "firestore.rules"],
+    "backend_compact_built_on_S3": ["functions/revision.js", "functions/song-history.js", "functions/compact-workflows.js"]
+  },
+  "shared_runtime_structure": {
+    "status": "built on claude/compact-runtime, per S2-LAYOUT-INTERFACE.md",
+    "flow": "app.js domain state and permissions (host object) -> shared information builders in shared/screens.js -> one of four explicit layout renderers in layouts/*.js -> shared components in shared/components.js",
+    "modules": [
+      {"path": "appearance-boot.js", "purpose": "Classic script, first in <head>. Pre-paint appearance selection; reads the saved preference, sets html[data-appearance], writes the chosen stylesheet render-blocking.", "status": "built"},
+      {"path": "shared/state.js", "purpose": "Route store (route(), go(), back()), per-route memory(), draft()/setDraft()/clearDraft(), isDirty(), pendingDestination.", "status": "built"},
+      {"path": "shared/nav.js", "purpose": "buildNavigation(account): main destinations and secondary tabs from capabilities.", "status": "built"},
+      {"path": "shared/save-state.js", "purpose": "createSave({ key, run }): Unsaved, Saving, Saved, Failed, Stale save controller. Saved only after server acknowledgement; a rejection with code aborted/failed-precondition, or a newer revision, shows Stale.", "status": "built"},
+      {"path": "shared/components.js", "purpose": "Pure HTML-string components: mainNav, secondaryTabs, appearanceButton, searchField, monthNav, pager, saveBar, warning, emptyState, unknownState, skeleton, assignmentRow, memberPicker, dialog.", "status": "built"},
+      {"path": "shared/screens.js", "purpose": "Screen registry (id, route pattern, information builder, required sections). Built: buildScheduleInfo, buildAppearanceInfo, and the unavailable screen. Planned (S4): one builder per remaining role screen.", "status": "partially built; schedule/appearance/unavailable done, role screens planned"},
+      {"path": "shared/shell.js", "purpose": "startShell(host): render loop, delegated event handling, history, layout dispatch.", "status": "built"},
+      {"path": "layouts/original.js, layouts/prism.js, layouts/navy.js, layouts/aurora.js", "purpose": "One explicit renderer per appearance, implementing the layout renderer contract (shell, phase.*, weekGroup, serviceSummary, screens.*).", "status": "built for the Section 2 screens; screens map grows in Section 4"},
+      {"path": "layouts/index.js", "purpose": "Registry plus verifyLayouts(), which checks all four layouts define every required key and every screen id in shared/screens.js. The gallery build runs it and fails on a gap.", "status": "built"},
+      {"path": "styles/shared.css, styles/legacy.css, styles/original.css, styles/prism.css, styles/navy.css, styles/aurora.css", "purpose": "Shared controls stylesheet, a legacy-bridge stylesheet, then one arrangement sheet per appearance.", "status": "built"}
+    ],
+    "clean_startup": "Storage key wds-design-gallery-v1 preserved; migrations wds-design-choice-v1 and wds-appearance-navy-v1 preserved; ?design=classic session-only recovery preserved. appearance-boot.js removes the delayed Original-to-selected repaint. Stylesheet/module load failure shows a recovery panel with Retry and Use Original for now, session-only, saved preference untouched. Built on claude/compact-runtime.",
+    "legacy_bridge": "Until Section 4 replaces them, My duties, Manage, and the Presider planner run through one `legacy` screen: the shell body hosts the existing renderMy/renderManage/renderSongs output inside a .wd-legacy container, with the existing Original content rules scoped under that class. This is the one compatibility wrapper the plan allows; Section 4 removes it screen by screen.",
+    "build_and_release": "design-gallery/build.mjs becomes a packager (copies appearance-boot.js, shared/, layouts/, styles/; stamps ?v=DEV and the service worker RELEASE; runs verifyLayouts() and syntax checks). No longer reads prototype/, prototype-prism/, or docs/design/. design-gallery/test.mjs and live-design/ target the retired compiler and are superseded, not repaired (per S2-LAYOUT-INTERFACE.md section 8).",
+    "open_item_for_anthony": "Prism and Aurora live light/dark and motion toggles are not in the approved Weekbook prototype. Section 2 did not invent them and left the stored wds-prism-palette keys untouched; Anthony needs to rule on this before Section 6."
+  },
+  "server_workflows": {
+    "status": "built on claude/compact-server, per S3-SERVER-INTERFACE.md and S3-MEMBERSHIP-INTERFACE.md",
+    "modules": [
+      {"path": "functions/revision.js", "purpose": "Pure. currentRevision(doc), nextRevision(doc), assertFresh({ expectedRevision, expectedWitness, currentRevision, currentWitness, details }). Shared version-aware-save primitive; no database, no imports beyond Node.", "status": "built"},
+      {"path": "functions/song-history.js", "purpose": "Pure server copies of song-lib.js's serviceIdFor/recompute/applySung/removeHistoryEntry semantics, plus applyCorrection for authorized corrections. Does not require the root song-lib.js (deploy package boundary).", "status": "built"},
+      {"path": "functions/compact-workflows.js", "purpose": "Factory createCompactWorkflowHandlers({ db, now, permissionConfig, logger }): saveMemberAvailability, resolveDutyAttention, saveSongService, correctSongHistory, recordSongHistory.", "status": "built"},
+      {"path": "functions/department-auth.js", "purpose": "Extended: revision added to PROFILE_METADATA_FIELDS (spread into PROFILE_ALLOWED_FIELDS); exported effectiveAvailability.", "status": "extended"},
+      {"path": "functions/department-handlers.js", "purpose": "Extended: updateProfile moved into a transaction with assertFresh/revision; assignDepartmentDuty/overrideDepartmentAssignment/unassignDepartmentDuty accept optional expectedRevision/expectedMemberName, bump schedule/{id}.assignmentRevisions[duty], return revision; errorWithCode carries optional details; exported inputData/profileRef/assignmentForSchedule/assignmentRecord/errorWithCode/rejectDecision for compact-workflows.js reuse.", "status": "extended"},
+      {"path": "functions/index.js", "purpose": "exposeDepartmentCallable forwards error.details into HttpsError; wires the four new callables (saveMemberAvailability, resolveDutyAttention, saveSongService, correctSongHistory); adds songHistoryRecorder (onSchedule, every 30 minutes); reconcileScheduleAssignmentProjection gains self-healing Needs-replacement marker removal and writes revision.", "status": "extended, callables confirmed present (grep-verified lines 417-434)"},
+      {"path": "firestore.rules", "purpose": "revision added to departmentProfileKeysSafe and assignmentKeysSafe read/write-shape allowlists.", "status": "extended, confirmed present (lines 381, 629)"}
+    ],
+    "membership_interface_status": "The membership interface (searchDepartmentCandidates, createDepartmentInvitation, revokeDepartmentInvitation, acceptDepartmentInvitation) was ruled and built earlier as functions/compact-membership.js on the first bounded server unit, per S3-MEMBERSHIP-INTERFACE.md. It is out of scope for the later S3-SERVER-INTERFACE.md ruling, which covers the four remaining areas below.",
+    "callables_added": [
+      {"name": "saveMemberAvailability", "input": "{ memberUid, departments: [{ departmentId, availability, expectedRevision?, expectedUpdatedAt? }] }", "output": "{ ok, revision, departments: [{ departmentId, revision, profile }], replacements: { marked, cleared } }"},
+      {"name": "resolveDutyAttention", "input": "{ departmentId, serviceId, duty, requestId?, decision?, replacementMemberUid?, acknowledgeConflict?, expectedRevision?, expectedMemberName? }", "output": "{ ok, revision, serviceId, duty, memberName, assignment, requestId, requestStatus }"},
+      {"name": "saveSongService", "input": "{ serviceId, songs, glorySong, thanksSong, notes, confirm, expectedRevision?, expectedUpdatedAt? }", "output": "{ ok, revision, serviceId, setlist }"},
+      {"name": "correctSongHistory", "input": "{ serviceId, songs, glorySong?, thanksSong?, notes?, expectedRevision?, expectedUpdatedAt? }", "output": "{ ok, revision, serviceId, setlist, changedSongs }"},
+      {"name": "songHistoryRecorder", "input": "none (scheduled)", "output": "onSchedule, every 30 minutes; idempotent automatic history recording after the three-hour service window"}
+    ],
+    "callables_extended": ["assignDepartmentDuty", "overrideDepartmentAssignment", "unassignDepartmentDuty", "updateDepartmentProfile", "updateMemberAvailability"],
+    "firestore_fields_added": {
+      "departments/{d}/members/{uid}": ["revision"],
+      "departmentAssignments/{id}": ["revision"],
+      "schedule/{id}": ["needsReplacement (map by duty)", "assignmentRevisions (integer map by duty)"],
+      "setlists/{id}": ["revision", "historySource", "recordedAt", "recordedBy", "correctedAt", "correctedByUid", "correctedBy"],
+      "songStats/{songId}.history[]": ["source"],
+      "audit": ["action song-history-corrected"],
+      "requests/{id}": ["assignmentId (on approved resolutions with a replacement)"]
+    },
+    "no_new_collections": true,
+    "no_composite_indexes": true,
+    "verification": "56/56 existing functions/test/*.test.js passing unchanged; node --check on every changed file; hand-written in-memory Firestore/transaction smoke script covering revision bumps, stale-write rejection, conflict acknowledgement, availability fan-out, automatic recorder idempotency, and corrections. No Firestore emulator run (no Java on this Mac), no live/authenticated walkthrough (this section ships no client-observable behavior). Not deployed, no production writes.",
+    "section4_handoff": "Needs-attention derivation (requests/replacements/unfilled/conflicts) is a client-side computation over existing data per the predicate table in S3-SERVER-INTERFACE.md section 2.1, for the information builder behind #manage/attention. None of Section 4's client wiring to these callables exists yet."
+  },
+  "four_layout_placement": {
+    "legend": "built = shipped in claude/compact-runtime across all four layouts; legacy-bridge = reachable today only through the .wd-legacy compatibility wrapper, not yet a dedicated layout screen; planned = target route defined in S2-LAYOUT-INTERFACE.md section 4, no builder or renderer yet (Section 4 scope)",
+    "screens": [
+      {"route": "#schedule", "status": "built", "layouts": {"classic": "built", "prism": "built", "navy": "built", "aurora": "built"}, "builder": "shared/screens.js buildScheduleInfo"},
+      {"route": "#appearance", "status": "built", "layouts": {"classic": "built", "prism": "built", "navy": "built", "aurora": "built"}, "builder": "shared/screens.js buildAppearanceInfo"},
+      {"route": "#unavailable", "status": "built", "layouts": {"classic": "built", "prism": "built", "navy": "built", "aurora": "built"}, "builder": "shared/screens.js (unknown/unauthorized destination fallback)"},
+      {"route": "#duties", "status": "legacy-bridge", "layouts": {"classic": "legacy-bridge", "prism": "legacy-bridge", "navy": "legacy-bridge", "aurora": "legacy-bridge"}, "builder": "planned (Section 4); currently app.js renderMy inside .wd-legacy"},
+      {"route": "#service/{id}", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"},
+      {"route": "#edit/{id}", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"},
+      {"route": "#availability", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4); server callable saveMemberAvailability already built"},
+      {"route": "#reminders", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"},
+      {"route": "#manage/schedule", "status": "legacy-bridge", "layouts": {"classic": "legacy-bridge", "prism": "legacy-bridge", "navy": "legacy-bridge", "aurora": "legacy-bridge"}, "builder": "planned (Section 4); currently app.js renderManage inside .wd-legacy"},
+      {"route": "#manage/attention", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4); server callable resolveDutyAttention already built; predicate table in S3-SERVER-INTERFACE.md section 2.1"},
+      {"route": "#manage/members", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"},
+      {"route": "#manage/add-member", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4); server callables in functions/compact-membership.js already built"},
+      {"route": "#manage/profile/{id}", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"},
+      {"route": "#manage/invite", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4); server callables in functions/compact-membership.js already built"},
+      {"route": "#manage/exceptions", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"},
+      {"route": "#manage/settings", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"},
+      {"route": "#songs/my-service", "status": "legacy-bridge", "layouts": {"classic": "legacy-bridge", "prism": "legacy-bridge", "navy": "legacy-bridge", "aurora": "legacy-bridge"}, "builder": "planned (Section 4); currently app.js renderSongs/song-app.js inside .wd-legacy; server callable saveSongService already built"},
+      {"route": "#songs/library", "status": "legacy-bridge", "layouts": {"classic": "legacy-bridge", "prism": "legacy-bridge", "navy": "legacy-bridge", "aurora": "legacy-bridge"}, "builder": "planned (Section 4)"},
+      {"route": "#songs/song-detail", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"},
+      {"route": "#songs/history", "status": "legacy-bridge", "layouts": {"classic": "legacy-bridge", "prism": "legacy-bridge", "navy": "legacy-bridge", "aurora": "legacy-bridge"}, "builder": "planned (Section 4); server callable correctSongHistory already built"},
+      {"route": "#songs/history-detail", "status": "planned", "layouts": {"classic": "planned", "prism": "planned", "navy": "planned", "aurora": "planned"}, "builder": "planned (Section 4)"}
+    ],
+    "phases_not_routes": ["maintenance", "locked", "signin", "forcedPin", "loading", "ready phase gate itself"],
+    "phases_status": "All six phases (site lock, sign-in, forced PIN change, loading, recovery, maintenance) render from the active layout from the first frame, built in claude/compact-runtime. Lock/sign-in/PIN screens currently reuse the Original card inside each appearance frame rather than four bespoke cards (noted limitation in S2.md)."
+  },
+  "owners_and_documentation": {
+    "S2_shared_runtime": {"owner": "Section 2 runtime worker (Claude, claude/compact-runtime)", "docs": ["docs/runs/compact-phone-refactor/decisions/S2-LAYOUT-INTERFACE.md", "docs/runs/compact-phone-refactor/lanes/S2.md (in the compact-runtime worktree)"]},
+    "S3_server_workflows": {"owner": "Section 3 server worker (Claude, claude/compact-server)", "docs": ["docs/runs/compact-phone-refactor/decisions/S3-SERVER-INTERFACE.md", "docs/runs/compact-phone-refactor/decisions/S3-MEMBERSHIP-INTERFACE.md", "docs/runs/compact-phone-refactor/lanes/S3.md (in the compact-server-claude worktree)"]},
+    "S4_role_screens": {"owner": "pending, not yet started", "docs": ["docs/runs/compact-phone-refactor/decisions/S2-LAYOUT-INTERFACE.md section 5 (layout renderer contract)", "docs/runs/compact-phone-refactor/decisions/S3-SERVER-INTERFACE.md section 5 (what Section 3 delivers for Section 4 to consume)"]},
+    "human_guides": {"owner": "Section 5A documentation worker (separate worktree, not this one)", "docs": ["docs/PLAYBOOK.md", "docs/USER-MANUAL.md", "docs/COMPACT-DESIGN-HANDOFF.md"]},
+    "plan_and_records": {"owner": "controller", "docs": ["docs/PLAN-COMPACT-PHONE-REFACTOR.md", "docs/HANDOFF.md", "README.md", "AGENTS.md"]}
+  },
+  "known_drift_points_carried_from_pre_refactor": [
+    {"id": "attention-counts", "note": "Pre-refactor drift (multiple count implementations in app.js and department-workflows.js) is the reason S3-SERVER-INTERFACE.md section 2.1 defines one predicate table for Needs attention; Section 4 must consume that table rather than reintroducing separate count logic."},
+    {"id": "schedule-selection", "note": "Resolved for #schedule by shared/screens.js buildScheduleInfo (built), which is now the single Pacific-time current-or-next default and explicit-selection preservation for all four layouts."},
+    {"id": "song-state-boundary", "note": "song-lib.js at the repository root stays untouched and is not required from functions/ (deploy package boundary); functions/song-history.js is a separate pure server copy with identical semantics, confirmed by the writer."}
+  ],
+  "excluded_from_this_map": [
+    "In-app search infrastructure (not owned by Section 5B)",
+    "Runtime code changes (this is a read-only index)",
+    "5A-owned guides: docs/PLAYBOOK.md, docs/USER-MANUAL.md, docs/COMPACT-DESIGN-HANDOFF.md",
+    "docs/PLAN-COMPACT-PHONE-REFACTOR.md, README.md, docs/HANDOFF.md, AGENTS.md (controller-owned)"
+  ]
+}
