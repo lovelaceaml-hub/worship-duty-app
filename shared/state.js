@@ -5,10 +5,14 @@
    through the functions below so a layout switch or appearance change never
    loses the member's place. */
 
+/* '#manage/exceptions' is deliberately not a known route (2026-09-17):
+   the screen it named is hidden pending a defined exception data model, see
+   docs/runs/compact-phone-refactor/lanes/S6.md. An unknown route resolves
+   to #unavailable, below, so this alone removes every way to reach it. */
 const ROUTES = [
   '#duties', '#schedule', '#service/', '#edit/', '#availability', '#reminders',
   '#manage/schedule', '#manage/attention', '#manage/members', '#manage/add-member',
-  '#manage/add-member/', '#manage/profile/', '#manage/invite', '#manage/exceptions',
+  '#manage/add-member/', '#manage/profile/', '#manage/invite',
   '#manage/settings',
   '#songs/my-service', '#songs/library', '#songs/song-detail', '#songs/history',
   '#songs/history-detail', '#appearance', '#unavailable'

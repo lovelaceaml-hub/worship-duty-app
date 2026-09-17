@@ -9,7 +9,7 @@ export const LAYOUT_IDS = ['classic', 'prism', 'navy', 'aurora'];
 const REQUIRED_PHASES = ['locked', 'signin', 'forcedPin', 'loading', 'recovery', 'maintenance'];
 const REQUIRED_SCREENS = [
   'schedule', 'duties', 'availability', 'reminders',
-  'manageSchedule', 'attention', 'manageMembers', 'manageExceptions', 'manageSettings',
+  'manageSchedule', 'attention', 'manageMembers', 'manageSettings',
   'songsMyService', 'songsHistory',
   'appearance', 'unavailable', 'legacy'
 ];

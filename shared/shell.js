@@ -11,7 +11,7 @@ import { buildNavigation } from './nav.js';
 import {
   buildScheduleInfo, buildAppearanceInfo, buildUnavailableInfo, buildDutiesInfo,
   buildAvailabilityInfo, buildRemindersInfo, buildManageScheduleInfo, buildAttentionInfo,
-  buildManageMembersInfo, buildManageExceptionsInfo, buildManageSettingsInfo,
+  buildManageMembersInfo, buildManageSettingsInfo,
   buildSongsMyServiceInfo, buildSongsHistoryInfo, screenForRoute
 } from './screens.js';
 
@@ -207,7 +207,6 @@ function renderReady() {
   else if (screenId === 'manageSchedule') info = buildManageScheduleInfo(hostRef, state.memory('#manage/schedule'));
   else if (screenId === 'attention') info = buildAttentionInfo(hostRef, state.memory('#manage/attention'));
   else if (screenId === 'manageMembers') info = buildManageMembersInfo(hostRef, state.memory('#manage/members'));
-  else if (screenId === 'manageExceptions') info = buildManageExceptionsInfo(hostRef);
   else if (screenId === 'manageSettings') info = buildManageSettingsInfo(hostRef);
   else if (screenId === 'songsMyService') info = buildSongsMyServiceInfo(hostRef, state.memory('#songs/my-service'));
   else if (screenId === 'songsHistory') info = buildSongsHistoryInfo(hostRef, state.memory('#songs/history'));

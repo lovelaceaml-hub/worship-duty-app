@@ -260,14 +260,6 @@ function screenManageMembers(info, c) {
   return '<div class="wd-manage-members-screen">' + html + '</div>';
 }
 
-/* -------- Administrator: exceptions -------- */
-
-function screenManageExceptions(info, c) {
-  return '<div class="wd-manage-exceptions-screen">' +
-    c.emptyState('No unresolved membership exceptions right now. A name search that does not match a registered member appears here in a future update.') +
-    '</div>';
-}
-
 /* -------- Administrator: authorized settings -------- */
 
 function screenManageSettings(info, c) {
@@ -412,7 +404,7 @@ export function createLayout(config) {
       schedule: screenSchedule, duties: screenDuties, availability: screenAvailability,
       reminders: screenReminders,
       manageSchedule: screenManageSchedule, attention: screenAttention, manageMembers: screenManageMembers,
-      manageExceptions: screenManageExceptions, manageSettings: screenManageSettings,
+      manageSettings: screenManageSettings,
       songsMyService: screenSongsMyService, songsHistory: screenSongsHistory,
       appearance: screenAppearance, unavailable: screenUnavailable, legacy: screenLegacy
     }

@@ -846,8 +846,19 @@ function departmentPatch(department, memberUid, patch) {
   const profile = departmentProfile(department, memberUid);
   if (!profile || !patch || typeof patch !== 'object') return Promise.reject(new Error('The department member is not loaded.'));
   const key = departmentRuntimeKey(department, memberUid);
+  const isNewDraft = !departmentRuntime.drafts[key];
   departmentRuntime.drafts[key] = Object.assign({}, departmentRuntime.drafts[key] || {}, patch);
   if (patch.availability) departmentRuntime.drafts[key].availability = normalizeDepartmentAvailability(patch.availability);
+  if (isNewDraft) {
+    // Section 3 stale-save witness, captured once when the draft opens (the
+    // first edit), not re-read fresh at save time -- the profile as the
+    // editor loaded it, per docs/runs/compact-phone-refactor/decisions/
+    // S3-SERVER-INTERFACE.md section 3.
+    departmentRuntime.drafts[key].expectedRevision = Number.isSafeInteger(profile.revision) ? profile.revision : 0;
+    if (profile.updatedAt !== undefined && profile.updatedAt !== null) {
+      departmentRuntime.drafts[key].expectedUpdatedAt = profile.updatedAt;
+    }
+  }
   renderSoon();
   return Promise.resolve(departmentRuntime.drafts[key]);
 }
@@ -870,6 +881,10 @@ function saveDepartmentProfile(department, memberUid) {
   const availabilityOnly = Object.keys(patch).length === 1 && Object.prototype.hasOwnProperty.call(patch, 'availability') &&
     isOwnDepartmentProfile(department, memberUid);
   const callable = availabilityOnly ? 'updateMemberAvailability' : 'updateDepartmentProfile';
+  // Section 3 stale-save witness, captured when the draft opened (see
+  // departmentPatch above), not re-read fresh here at save time.
+  patch.expectedRevision = Number.isSafeInteger(draft.expectedRevision) ? draft.expectedRevision : 0;
+  if (draft.expectedUpdatedAt !== undefined) patch.expectedUpdatedAt = draft.expectedUpdatedAt;
   return authCall(callable, {
     departmentId: department,
     memberUid,
@@ -900,6 +915,28 @@ function saveOwnDepartmentAvailability(department, memberUid) {
   return saveDepartmentProfile(department, memberUid);
 }
 
+/* Section 3's stale-save witness for the assignment slot: the revision the
+   client last saw on schedule.assignmentRevisions[duty] (missing reads as 0)
+   and the member name it last saw in assignments[duty] ('' when empty), both
+   read from the svc object the caller already has in hand -- the same data
+   the leader/administrator screens render, so this is "as displayed", not a
+   fresh re-fetch at save time. */
+function departmentAssignmentWitness(svc, duty) {
+  const assignmentRevisions = svc && svc.assignmentRevisions && typeof svc.assignmentRevisions === 'object'
+    ? svc.assignmentRevisions : {};
+  const raw = assignmentRevisions[duty];
+  return {
+    expectedRevision: Number.isSafeInteger(raw) ? raw : 0,
+    expectedMemberName: (svc && svc.assignments && svc.assignments[duty]) || ''
+  };
+}
+
+function applyAssignmentRevision(svc, duty, result) {
+  if (!svc || !result || !Number.isSafeInteger(result.revision)) return;
+  if (!svc.assignmentRevisions || typeof svc.assignmentRevisions !== 'object') svc.assignmentRevisions = {};
+  svc.assignmentRevisions[duty] = result.revision;
+}
+
 function departmentAssignmentPayload(svc, duty, profile, extra = {}) {
   const category = dutyCategory(duty);
   return Object.assign({
@@ -910,7 +947,7 @@ function departmentAssignmentPayload(svc, duty, profile, extra = {}) {
     serviceId: svcId(svc),
     serviceDate: svc.date,
     serviceTime: departmentServiceTimeKey(svc)
-  }, extra);
+  }, departmentAssignmentWitness(svc, duty), extra);
 }
 
 function applyScheduleAssignment(svc, duty, profile) {
@@ -951,6 +988,7 @@ function assignDepartmentDutyForService(svc, duty, profile, options = {}) {
   return save.then(result => {
     if (isOverride && result && result.profileMutated !== false) throw new Error('The override response did not preserve the member profile.');
     applyScheduleAssignment(svc, duty, profile);
+    applyAssignmentRevision(svc, duty, result);
     if (isOverride) addBanner('Administrator override recorded for ' + memberLabel(profile.memberName) + '.');
     return result;
   }).catch(error => {
@@ -963,17 +1001,18 @@ function assignDepartmentDutyForService(svc, duty, profile, options = {}) {
 function unassignDepartmentDutyForService(svc, duty) {
   if (!svc) return Promise.reject(new Error('Choose a service before clearing this duty.'));
   const category = dutyCategory(duty);
-  const payload = {
+  const payload = Object.assign({
     departmentId: category.name,
     duty,
     serviceId: svcId(svc),
     serviceDate: svc.date,
     serviceTime: departmentServiceTimeKey(svc)
-  };
+  }, departmentAssignmentWitness(svc, duty));
   const save = fb ? authCall('unassignDepartmentDuty', payload) : Promise.resolve({ ok: true });
   return save.then(result => {
     if (!svc.assignments) svc.assignments = {};
     delete svc.assignments[duty];
+    applyAssignmentRevision(svc, duty, result);
     afterDataChange();
     return result;
   }).catch(error => {
@@ -2242,14 +2281,20 @@ function hostResolveAttention(id, payload) {
   attentionRuntime.busy[id] = true;
   attentionRuntime.error[id] = '';
   renderSoon();
+  // Section 3 stale-save witness for the slot: the revision and member name
+  // as displayed in this same Needs-attention computation (hostAttentionItems),
+  // not a separate fresh read taken right before sending.
+  const svc = findService(item.serviceId);
   const body = Object.assign(
     { departmentId: item.department, serviceId: item.serviceId, duty: item.duty },
     item.kind === 'request' ? { requestId: item.requestId } : {},
+    departmentAssignmentWitness(svc, item.duty),
     payload
   );
   return authCall('resolveDutyAttention', body).then(result => {
     attentionRuntime.busy[id] = false;
     attentionRuntime.conflict[id] = null;
+    applyAssignmentRevision(svc, item.duty, result);
     addBanner('Needs attention item resolved.');
     afterDataChange();
     return result;
@@ -2257,9 +2302,19 @@ function hostResolveAttention(id, payload) {
     attentionRuntime.busy[id] = false;
     const details = error && error.details;
     if (details && details.reason === 'conflict') {
+      // The advisory conflict (failed-precondition, details.reason ===
+      // 'conflict') is not a stale save -- it means another duty in this
+      // service is already held by the same member. Show the advisory and
+      // let the caller retry with acknowledgeConflict: true.
       attentionRuntime.conflict[id] = details;
     } else {
-      attentionRuntime.error[id] = safeAuthMessage(error);
+      // aborted (or failed-precondition without a conflict reason) is the
+      // stale-save case: someone else changed this slot since it was
+      // displayed. Use the server's own message (and who changed it, when
+      // known) rather than the unrelated PIN-login message.
+      const who = details && (details.memberName || details.assignedBy);
+      const base = departmentErrorMessage(error, 'That item could not be resolved.');
+      attentionRuntime.error[id] = who && /changed since/i.test(base) ? base + ' (' + who + ')' : base;
     }
     renderSoon();
     throw error;
@@ -2353,6 +2408,24 @@ function hostPendingInvite(department) { return inviteRuntime[department] || nul
    screen) stays on the legacy song-app.js bridge for now -- see
    docs/runs/compact-phone-refactor/lanes/S4.md limitations. ================= */
 
+/* Section 3 stale-save witness for saveSongService: setlist.revision
+   (missing reads as 0) and updatedAt "from the setlist as loaded", captured
+   the first time the My-service list shows this service, not re-read fresh
+   at confirm time. A service with no setlist doc yet gets no witness (a
+   brand-new setlist that does not exist yet, per the ruling). Updated after
+   a successful confirm so a second confirm in the same session uses the
+   revision the server just returned. */
+const presiderSongWitness = Object.create(null);
+function ensurePresiderSongWitness(serviceId) {
+  if (!(serviceId in presiderSongWitness)) {
+    const sl = setlistIndex[serviceId];
+    presiderSongWitness[serviceId] = sl
+      ? { expectedRevision: Number.isSafeInteger(sl.revision) ? sl.revision : 0, expectedUpdatedAt: sl.updatedAt }
+      : null;
+  }
+  return presiderSongWitness[serviceId];
+}
+
 function hostPresiderServices() {
   const t = todayISO();
   return (state.services || [])
@@ -2361,6 +2434,7 @@ function hostPresiderServices() {
     .sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')))
     .map(svc => {
       const serviceId = svcId(svc);
+      ensurePresiderSongWitness(serviceId);
       return {
         serviceId, date: svc.date, time: svc.time, worship: svc.worship, service: svc.service,
         songState: songStateFor(serviceId)
@@ -2372,9 +2446,16 @@ function hostConfirmSongsRun(serviceId) {
   const list = setlistIndex[serviceId] || {};
   const songs = (list.songs || []).map(s => (s && typeof s === 'object') ? (s.id || s.songId || '') : s).filter(Boolean);
   if (!songs.length) return Promise.reject(new Error('Pick at least one song before confirming.'));
-  return authCall('saveSongService', {
+  const witness = ensurePresiderSongWitness(serviceId);
+  return authCall('saveSongService', Object.assign({
     serviceId, songs, glorySong: list.glorySong || null, thanksSong: list.thanksSong || null,
     notes: list.notes || '', confirm: true
+  }, witness || {})).then(result => {
+    presiderSongWitness[serviceId] = {
+      expectedRevision: result && Number.isSafeInteger(result.revision) ? result.revision : 0,
+      expectedUpdatedAt: result && result.setlist && result.setlist.updatedAt
+    };
+    return result;
   });
 }
 
@@ -2417,7 +2498,11 @@ function loadSongHistory() {
       songHistoryRuntime.entries = snap.docs.map(d => d.data()).filter(sl => sl.status === 'sung').map(sl => ({
         serviceId: sl.id, date: sl.date, worship: sl.worshipType || sl.worship || '', service: sl.serviceLabel || sl.service || '',
         historySource: sl.historySource || 'manual',
-        songs: (sl.songs || []).map(s => (s && typeof s === 'object') ? s : { id: s, title: s })
+        songs: (sl.songs || []).map(s => (s && typeof s === 'object') ? s : { id: s, title: s }),
+        // Section 3 stale-save witness, captured here when the history list
+        // loads (the editor opening this record), not re-read at save time.
+        expectedRevision: Number.isSafeInteger(sl.revision) ? sl.revision : 0,
+        expectedUpdatedAt: sl.updatedAt
       }));
       songHistoryRuntime.loaded = true;
       songHistoryRuntime.loading = false;
@@ -2446,13 +2531,21 @@ function hostRemoveHistorySong(serviceId, songId) {
   const entry = songHistoryRuntime.entries.find(e => e.serviceId === serviceId);
   if (!entry) return Promise.reject(new Error('That recorded service is not loaded.'));
   const songs = entry.songs.filter(s => s.id !== songId).map(s => s.id);
-  return authCall('correctSongHistory', { serviceId, songs }).then(result => {
+  return authCall('correctSongHistory', {
+    serviceId, songs,
+    expectedRevision: entry.expectedRevision,
+    expectedUpdatedAt: entry.expectedUpdatedAt
+  }).then(result => {
     entry.songs = entry.songs.filter(s => s.id !== songId);
+    entry.expectedRevision = result && Number.isSafeInteger(result.revision) ? result.revision : entry.expectedRevision;
+    entry.expectedUpdatedAt = (result && result.setlist && result.setlist.updatedAt) || entry.expectedUpdatedAt;
     addBanner('Song removed from the recorded list.');
     renderSoon();
     return result;
   }).catch(error => {
-    addBanner('Could not correct that history record: ' + safeAuthMessage(error), true);
+    // Use the server's own message (right for aborted/failed-precondition
+    // stale-save rejections) rather than the unrelated PIN-login message.
+    addBanner('Could not correct that history record: ' + ((error && error.message) || 'That change could not be saved.'), true);
     renderSoon();
     throw error;
   });

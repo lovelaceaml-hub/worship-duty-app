@@ -14,6 +14,17 @@ function isStale(error) {
   return !!(error.payload && error.payload.revision != null);
 }
 
+/* The server's own rejection message ("This record changed since you loaded
+   it...") plus, when the details payload names who changed it
+   (updatedBy for a profile/song save, assignedBy or memberName for an
+   assignment slot), a short attribution. */
+function staleMessage(error) {
+  const base = (error && error.message) || 'That change could not be saved.';
+  const details = error && error.details;
+  const who = details && (details.updatedBy || details.assignedBy || details.memberName);
+  return who ? base + ' (changed by ' + who + ')' : base;
+}
+
 export function createSave({ key, run, onChange }) {
   const state = { key, status: 'unsaved', error: '', lastRun: null };
   controllers[key] = state;
@@ -36,8 +47,9 @@ export function createSave({ key, run, onChange }) {
           return result;
         })
         .catch(error => {
-          state.status = isStale(error) ? 'stale' : 'failed';
-          state.error = (error && error.message) || 'That change could not be saved.';
+          const stale = isStale(error);
+          state.status = stale ? 'stale' : 'failed';
+          state.error = stale ? staleMessage(error) : ((error && error.message) || 'That change could not be saved.');
           emit();
           throw error;
         });

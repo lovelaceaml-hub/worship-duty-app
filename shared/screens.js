@@ -197,15 +197,6 @@ export function buildManageMembersInfo(host, mem) {
   return { departments: choices, department, roster, rosterLoaded, query, searchResult, invite };
 }
 
-/* -------- Administrator: exceptions (informational; no server-side
-   "exception" record exists yet — see the ruling in
-   S3-MEMBERSHIP-INTERFACE.md, which only defines not-found search results,
-   not a persisted exception collection). -------- */
-
-export function buildManageExceptionsInfo(host) {
-  return { loaded: true };
-}
-
 /* -------- Administrator: authorized settings (scoped to the site
    passcode change already exposed elsewhere in the legacy bridge; the full
    Features/Leader-config/Data&Sync panels remain on the legacy bridge for
@@ -245,7 +236,7 @@ export function buildSongsHistoryInfo(host, mem) {
 
 export const SCREEN_IDS = [
   'schedule', 'duties', 'availability', 'reminders',
-  'manageSchedule', 'attention', 'manageMembers', 'manageExceptions', 'manageSettings',
+  'manageSchedule', 'attention', 'manageMembers', 'manageSettings',
   'songsMyService', 'songsHistory',
   'appearance', 'unavailable', 'legacy'
 ];
@@ -258,7 +249,6 @@ export function screenForRoute(route) {
   if (route === '#manage/schedule') return 'manageSchedule';
   if (route === '#manage/attention') return 'attention';
   if (route === '#manage/members') return 'manageMembers';
-  if (route === '#manage/exceptions') return 'manageExceptions';
   if (route === '#manage/settings') return 'manageSettings';
   if (route === '#songs/my-service') return 'songsMyService';
   if (route === '#songs/history') return 'songsHistory';
