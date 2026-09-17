@@ -1,5 +1,7 @@
 'use strict';
 
+import { startShell } from './shared/shell.js';
+
 /* ================= constants ================= */
 
 const CATEGORIES = [
@@ -112,7 +114,7 @@ async function sha256(s) {
 }
 
 function siteHash() { return (state.settings && state.settings.sitePinHash) || DEFAULT_SITE_HASH; }
-function siteUnlocked() { return localStorage.getItem('wds-site-unlock') === siteHash(); }
+function siteUnlocked() { return previewMode || localStorage.getItem('wds-site-unlock') === siteHash(); }
 
 function sheetUrl() { return (state.settings && state.settings.sheetUrl) || DEFAULT_SHEET_URL; }
 
@@ -499,6 +501,18 @@ function fbWrite(fn) {
 let settingsLoaded = false; // true once shared settings arrived (or local mode)
 let departmentsLoaded = false; // true once the departments doc arrived (or local mode)
 let membersLoaded = false; // true once the members doc arrived (or local mode)
+let scheduleDataReady = false; // true once the first schedule snapshot (or local mode) has been processed
+
+/* Local verification only. Honored ONLY on 127.0.0.1/localhost, with a
+   fictional signed-in account and the bundled seed-data.js services, and it
+   disables Firebase entirely (no init, no reads, no writes). Never active on
+   the deployed site: window.location.hostname there is never localhost. */
+const previewMode = (function () {
+  try {
+    const localHost = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+    return localHost && new URLSearchParams(location.search).get('wdPreview') === '1';
+  } catch (e) { return false; }
+})();
 
 const ui = {
   tab: 'schedule',
@@ -1814,104 +1828,20 @@ function renderForcedPinChange() {
 
 /* ================= rendering ================= */
 
-function renderMaintenanceSchedule() {
-  const root = document.getElementById('maintenance-schedule');
-  if (!root) return;
-  const focus = preferredScheduleService(state.services);
-  const services = (state.services || []).filter(service => service && focus &&
-    (service.date + (service.time || '') >= focus.date + (focus.time || '')))
-    .sort((left, right) => left.date.localeCompare(right.date) || String(left.time || '').localeCompare(String(right.time || '')))
-    .slice(0, 8);
-  if (!services.length) {
-    root.innerHTML = '<p class="hint">No upcoming services are available yet.</p>';
-    return;
-  }
-  root.innerHTML = services.map(service => {
-    const duties = Object.entries(service.assignments || {}).filter(([, member]) => member);
-    return '<section class="maintenance-service"><div class="maintenance-service-title">' +
-      esc(fmtDate(service.date)) + ', ' + esc(service.service || 'Service') + '</div>' +
-      '<div class="maintenance-service-time">' + esc(service.worship || '') +
-      (service.time ? ' at ' + esc(fmtTime(service.time)) : '') + '</div>' +
-      (duties.length ? duties.map(([duty, member]) => '<div class="maintenance-duty"><span>' + esc(duty) +
-        '</span><strong>' + esc(memberLabel(member)) + '</strong></div>').join('') : '<p class="hint">Duties have not been posted.</p>') +
-      '</section>';
-  }).join('');
-}
-
+/* render() no longer writes DOM directly. It keeps the domain corrections
+   that used to live alongside the old chrome updates (losing Presider/Manage
+   access moves the viewer off a screen they can no longer see), then hands
+   off to the shared shell (shared/shell.js) through the host's onChange
+   subscription set up in startShell(). The shell owns every DOM write,
+   including the site lock, sign-in, forced-PIN, and legacy My Duties/Manage/
+   Presider screens rendered through the host below. */
 function render() {
-  const nav = document.querySelector('nav.tabs');
-  if (document.documentElement.dataset.maintenance === 'active') {
-    nav.classList.toggle('hidden', true);
-    document.getElementById('banners').innerHTML = '';
-    document.getElementById('view').innerHTML = '';
-    renderMaintenanceSchedule();
-    return;
-  }
-  if (feat('siteLock') && !siteUnlocked()) {
-    nav.classList.toggle('hidden', true);
-    document.getElementById('banners').innerHTML = '';
-    document.getElementById('view').innerHTML = renderSiteLock();
-    const input = document.getElementById('site-pin-input');
-    if (input) input.focus();
-    return;
-  }
-  if (!isVerifiedSession()) {
-    nav.classList.toggle('hidden', true);
-    document.getElementById('banners').innerHTML = '';
-    document.getElementById('view').innerHTML = renderMemberLogin();
-    return;
-  }
-  if (isForcedSession()) {
-    nav.classList.toggle('hidden', true);
-    document.getElementById('banners').innerHTML = '';
-    document.getElementById('view').innerHTML = renderForcedPinChange();
-    return;
-  }
-  nav.classList.toggle('hidden', false);
-
-  // The Presider tab only exists for people with an upcoming Presider duty,
-  // same rule as the "Plan songs" button in My Duties. If the viewer stops
-  // qualifying while on the songs screen (name switch, schedule edit, feature
-  // toggle), kick them back to My Duties.
   const songEditor = canPermission('canEditSongs', authActor(), {});
   const isPresider = feat('songPicker') && !!ui.me &&
     (dutiesFor(ui.me).some(d => d.duty === 'Presider') || songEditor);
-  document.getElementById('tab-presider').classList.toggle('hidden', !isPresider);
   if (ui.tab === 'songs' && !isPresider) { ui.tab = 'my'; ui.songSvc = null; ui.songNav = false; }
-
-  const canManage = canManageAnyDepartment();
-  const tabManage = document.getElementById('tab-manage');
-  tabManage.classList.toggle('hidden', !canManage);
-  if (ui.tab === 'manage' && !canManage) ui.tab = 'schedule';
-
-  document.querySelectorAll('nav.tabs button').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === ui.tab);
-  });
-  const unread = Number(localStorage.getItem('wds-unread-' + ui.me) || 0);
-  const tabMy = document.getElementById('tab-my');
-  tabMy.innerHTML = 'My Duties' + (unread > 0 && ui.tab !== 'my' ? '<span class="dot"></span>' : '');
-  tabManage.innerHTML = 'Manage' + (actionableCountsForViewer().total > 0 && ui.tab !== 'manage' ? '<span class="dot"></span>' : '');
-
-  const view = document.getElementById('view');
-  // A background Firestore snapshot calls render(); replacing innerHTML would
-  // wipe whatever the editor is typing (service field, member name, sheet URL,
-  // change-request note) and drop focus. Skip the view refresh while a text
-  // input inside #view is focused, the next render() after they blur catches up.
-  if (!viewHasFocusedInput(view)) {
-    if (ui.tab === 'schedule') view.innerHTML = renderSchedule();
-    else if (ui.tab === 'my') view.innerHTML = renderMy();
-    else if (ui.tab === 'songs') renderSongs(view);
-    else view.innerHTML = renderManage();
-    pulse('tab_' + ui.tab); // counts once per device per day, see pulse()
-  }
-  renderBanners();
-}
-
-/* Placeholder shown between page load and the first Firestore snapshot, so the
-   screen isn't blank (or a misleading "no services" empty state) while data loads. */
-function renderLoading() {
-  const view = document.getElementById('view');
-  if (view) view.innerHTML = '<div class="empty">Loading schedule…</div>';
+  if (ui.tab === 'manage' && !canManageAnyDepartment()) ui.tab = 'my';
+  notifyHostChange();
 }
 
 function viewHasFocusedInput(view) {
@@ -1923,26 +1853,115 @@ function viewHasFocusedInput(view) {
   return ['text', 'search', 'url', 'password', 'number', 'email', 'tel', 'date', 'time'].indexOf(t) !== -1;
 }
 
-function renderBanners() {
-  if ((feat('siteLock') && !siteUnlocked()) || !isVerifiedSession() || isForcedSession()) {
-    document.getElementById('banners').innerHTML = '';
-    return;
-  }
+/* ================= shared runtime shell host =================
+   One host object, same pattern as the existing songCtx() below. Shared
+   modules (shared/state.js, shared/shell.js, layouts/*) never import this
+   file and never touch Firebase; they only call these functions. */
+
+const hostChangeListeners = [];
+function notifyHostChange() {
+  hostChangeListeners.forEach(cb => {
+    try { cb(); } catch (e) { /* one bad subscriber must not break the rest */ }
+  });
+}
+
+function hostPhase() {
+  if (document.documentElement.dataset.maintenance === 'active') return 'maintenance';
+  if (feat('siteLock') && !siteUnlocked()) return 'locked';
+  if (!isVerifiedSession()) return 'signin';
+  if (isForcedSession()) return 'forcedPin';
+  return 'ready';
+}
+
+function hostAccount() {
+  if (!isVerifiedSession() || isForcedSession()) return null;
+  const actor = authActor();
+  return {
+    name: ui.me,
+    uid: verifiedSession.memberId,
+    canManage: canManageAnyDepartment(),
+    isAdmin: canPermission('isAdmin', actor),
+    departments: authorizedDepartments(),
+    isPresider: feat('songPicker') && !!ui.me && dutiesFor(ui.me).some(d => d.duty === 'Presider'),
+    canEditSongs: canPermission('canEditSongs', actor, {})
+  };
+}
+
+function hostStartRoute() {
+  const account = hostAccount();
+  if (!account) return '#schedule';
+  if (account.isAdmin) return '#manage/attention';
+  if (account.canManage) return '#manage/schedule';
+  if (account.isPresider) return '#songs/my-service';
+  return '#duties';
+}
+
+function hostBanners() {
   const items = [];
+  if (previewMode) {
+    items.push('<div class="wd-banner alert"><span><b>Local preview.</b> Fictional account and bundled seed data. Firebase is disabled; nothing here is saved or sent.</span></div>');
+  }
   if (canManageAnyDepartment()) {
     const counts = actionableCountsForViewer();
     if (counts.total) {
-      items.push('<div class="banner alert"><button class="linkish" data-act="open-manage-queue">' +
-        esc(counts.message) + '</button></div>');
+      items.push('<div class="wd-banner alert"><span>' + esc(counts.message) + '</span>' +
+        '<button data-act="open-manage-queue">Review</button></div>');
     }
   }
-  items.push('<div class="banner"><span>Signed in as <b>' + esc(memberLabel(ui.me)) + '</b></span>' +
-    '<button class="linkish" data-act="member-logout">Sign out</button></div>');
-  items.push.apply(items, ui.banners.map((b, i) =>
-    '<div class="banner' + (b.alert ? ' alert' : '') + '"><span>' + esc(b.txt) + '</span>' +
-    '<button class="x" data-act="dismiss-banner" data-i="' + i + '" aria-label="Dismiss">✕</button></div>'
-  ));
-  document.getElementById('banners').innerHTML = items.join('');
+  items.push('<div class="wd-banner"><span>Signed in as <b>' + esc(memberLabel(ui.me)) + '</b></span>' +
+    '<button data-act="member-logout">Sign out</button></div>');
+  ui.banners.forEach((b, i) => {
+    items.push('<div class="wd-banner' + (b.alert ? ' alert' : '') + '"><span>' + esc(b.txt) + '</span>' +
+      '<button data-act="dismiss-banner" data-i="' + i + '" aria-label="Dismiss">✕</button></div>');
+  });
+  return items;
+}
+
+/* Same schedule this device saw last, formatted for the maintenance phase.
+   Replaces the old DOM-writing renderMaintenanceSchedule(). */
+function maintenanceScheduleHtml() {
+  const focus = preferredScheduleService(state.services);
+  const services = (state.services || []).filter(service => service && focus &&
+    (service.date + (service.time || '') >= focus.date + (focus.time || '')))
+    .sort((left, right) => left.date.localeCompare(right.date) || String(left.time || '').localeCompare(String(right.time || '')))
+    .slice(0, 8);
+  if (!services.length) return '<p class="hint">No upcoming services are available yet.</p>';
+  return services.map(service => {
+    const duties = Object.entries(service.assignments || {}).filter(([, member]) => member);
+    return '<section class="maintenance-service"><div class="maintenance-service-title">' +
+      esc(fmtDate(service.date)) + ', ' + esc(service.service || 'Service') + '</div>' +
+      '<div class="maintenance-service-time">' + esc(service.worship || '') +
+      (service.time ? ' at ' + esc(fmtTime(service.time)) : '') + '</div>' +
+      (duties.length ? duties.map(([duty, member]) => '<div class="maintenance-duty"><span>' + esc(duty) +
+        '</span><strong>' + esc(memberLabel(member)) + '</strong></div>').join('') : '<p class="hint">Duties have not been posted.</p>') +
+      '</section>';
+  }).join('');
+}
+
+function hostLegacyMy() { ui.tab = 'my'; return renderMy(); }
+function hostLegacyManage() { ui.tab = 'manage'; return renderManage(); }
+function hostLegacySongs(container) { ui.tab = 'songs'; renderSongs(container); }
+
+function buildHost() {
+  return {
+    phase: hostPhase,
+    account: hostAccount,
+    services: () => state.services || [],
+    counts: actionableCountsForViewer,
+    currentOrNext: () => preferredScheduleService(state.services),
+    dataReady: () => scheduleDataReady,
+    appearance: () => document.documentElement.getAttribute('data-appearance') || 'classic',
+    startRoute: hostStartRoute,
+    banners: hostBanners,
+    addBanner,
+    siteLockHtml: renderSiteLock,
+    loginHtml: renderMemberLogin,
+    forcedPinHtml: renderForcedPinChange,
+    maintenanceHtml: maintenanceScheduleHtml,
+    legacy: { my: hostLegacyMy, manage: hostLegacyManage, songs: hostLegacySongs },
+    pulse: name => pulse('tab_' + name),
+    onChange: cb => { hostChangeListeners.push(cb); }
+  };
 }
 
 function pillFor(member) {
@@ -4056,10 +4075,13 @@ document.addEventListener('input', e => {
 
 /* ================= startup ================= */
 
+let syncLive = false;
 function setSyncPill(live) {
-  const pill = document.getElementById('sync-pill');
-  pill.textContent = live ? 'Live sync on' : 'This device only';
-  pill.classList.toggle('live', !!live);
+  // The old header carried a dedicated "Live sync on / This device only"
+  // pill element; the new shell header does not reserve that space. The
+  // signal is kept (syncLive) in case a later section wants to surface it
+  // again, but no longer requires a specific DOM node to exist.
+  syncLive = !!live;
 }
 
 /* ---- Pulse: the smallest honest answer to "does anyone open this?" ----
@@ -4207,6 +4229,7 @@ async function initFirebase(config) {
       state = loadLocal() || seedState();
       persistAll();
       setSyncPill(true); // data is now flowing, safe to claim "Live sync on"
+      scheduleDataReady = true;
       afterDataChange();
       scheduleSyncSoon();
       return;
@@ -4216,11 +4239,13 @@ async function initFirebase(config) {
       canonicalizeStateNames();
     fb.knownIds = snap.docs.map(d => d.id);
     setSyncPill(true); // data has landed, flip the pill to live now, not before
+    scheduleDataReady = true;
     afterDataChange();
     scheduleSyncSoon(); // auto-pull from the sheet once, shortly after real data lands
   }, err => {
     addBanner('Could not connect to the shared database (' + err.code + '). Showing this device\'s copy.', true);
     if (!state.services.length) { state = loadLocal() || seedState(); render(); }
+    scheduleDataReady = true;
     setSyncPill(false);
   });
   fsMod.onSnapshot(fsMod.doc(db, 'app', 'members'), snap => {
@@ -4275,24 +4300,41 @@ async function initFirebase(config) {
 }
 
 function init() {
+  startShell(buildHost());
+  if (previewMode) {
+    // Local verification path: no service worker, no Firebase, a fictional
+    // signed-in account over the bundled seed-data.js services. Nothing here
+    // is persisted (no saveLocal()/persistAll()) so it never contaminates a
+    // real device's cached schedule.
+    document.title = document.title + ' (local preview)';
+    state = seedState();
+    departmentsLoaded = true;
+    membersLoaded = true;
+    scheduleDataReady = true;
+    authStatus = 'local';
+    verifiedSession = { memberName: 'B. Anthony', memberId: 'preview-uid', mustChangePin: false };
+    ui.me = 'B. Anthony';
+    afterDataChange();
+    return;
+  }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (window.FIREBASE_CONFIG) {
-    // Paint the schedule this device saw last, right now, instead of a
-    // "Loading…" placeholder. The live snapshot overwrites it moments later.
+    // Paint the schedule this device saw last, right now, instead of an
+    // empty state. The live snapshot overwrites it moments later.
     // membersLoaded / departmentsLoaded stay false on purpose: they gate the
     // sheet sync, which must not run against a cached roster.
     const cached = loadLocal();
     if (cached && cached.services && cached.services.length) {
       state = cached;
+      scheduleDataReady = true;
       render();
-    } else {
-      renderLoading();
     }
     initFirebase(window.FIREBASE_CONFIG).catch(() => {
       addBanner('Firebase config is invalid - running on this device only.', true);
       state = loadLocal() || seedState();
       departmentsLoaded = true;
       membersLoaded = true;
+      scheduleDataReady = true;
       authStatus = 'local';
       setSyncPill(false);
       afterDataChange();
@@ -4301,6 +4343,7 @@ function init() {
     state = loadLocal() || seedState();
     departmentsLoaded = true;
     membersLoaded = true;
+    scheduleDataReady = true;
     authStatus = 'local';
     saveLocal();
     setSyncPill(false);

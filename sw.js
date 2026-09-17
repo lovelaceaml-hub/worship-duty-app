@@ -41,10 +41,22 @@ try {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const data = (e.notification && e.notification.data) || {};
+  // A route on the payload becomes the shell's pendingDestination once the
+  // page (re)opens and calls shared/state.js's setPendingDestination(), see
+  // app.js's registerPush()/message handling. Opening or focusing the tab at
+  // ./#<route> is enough for that to pick it up on load.
+  const target = data.route ? './#' + String(data.route).replace(/^#/, '') : './';
   e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs =>
-      cs.length ? cs[0].focus() : self.clients.openWindow('./')
-    )
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+      const existing = cs[0];
+      if (existing) {
+        existing.focus();
+        if (data.route && 'navigate' in existing) existing.navigate(target).catch(() => {});
+        return undefined;
+      }
+      return self.clients.openWindow(target);
+    })
   );
 });
 

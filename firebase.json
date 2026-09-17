@@ -29,7 +29,11 @@
       { "source": "song-app.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
       { "source": "song-app.css", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
       { "source": "song-seed.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
-      { "source": "song-lib.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+      { "source": "song-lib.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "appearance-boot.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "shared/**", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "layouts/**", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "styles/**", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
     ],
     "rewrites": [
       { "source": "/ics/**", "function": "ics" }

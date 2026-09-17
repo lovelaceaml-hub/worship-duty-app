@@ -1,0 +1,148 @@
+/* Shared controls, loaded before the appearance-specific arrangement sheet.
+   Tokens, resets, and the shared wd- component classes used by every layout,
+   plus the legacy bridge stylesheet (My duties, Manage, Presider, and the
+   auth-phase cards, all scoped under .wd-legacy). Appearance sheets restyle
+   these classes; they do not fork the markup. */
+@import url('legacy.css');
+
+:root {
+  --brand-blue: #2383c6;
+  --brand-blue-deep: #075f96;
+  --brand-blue-dark: #174a6b;
+  --brand-rose: #da0f47;
+  --ink: #202428;
+  --muted: #56616b;
+  --faint: #6a747d;
+  --canvas: #f3f6f8;
+  --surface: #ffffff;
+  --line: #d6e0e6;
+  --hairline: #e6ecef;
+  --accent: var(--brand-blue-deep);
+  --accent-2: var(--brand-blue);
+  --accent-grad: linear-gradient(135deg, var(--brand-blue-deep), var(--brand-blue));
+  --accent-soft: #eaf5fb;
+  --danger: #b80d3c;
+  --ok: #16734c;
+  --warn: #8a5a0a;
+  --shadow: 0 10px 28px rgba(23, 74, 107, 0.07);
+  --shadow-soft: 0 4px 14px rgba(23, 74, 107, 0.06);
+  --shadow-bar: 0 -8px 24px rgba(23, 74, 107, 0.10);
+  --r-lg: 14px;
+  --r-md: 10px;
+  --sans: "Avenir Next", Avenir, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --gutter: 16px;
+  --wd-nav-height: 64px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; min-height: 100vh; color: var(--ink); background: var(--canvas);
+  font-family: var(--sans); font-size: 16px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  padding-bottom: calc(var(--wd-nav-height) + env(safe-area-inset-bottom));
+}
+button, input, select, textarea { font: inherit; }
+button { touch-action: manipulation; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 3px solid rgba(35, 131, 198, 0.34); outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}
+
+.wd-shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ---- header ---- */
+.wd-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px var(--gutter) 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.wd-header-title { font-weight: 700; font-size: 18px; color: var(--brand-blue-dark); }
+.wd-appearance-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--brand-blue-deep); font-size: 13px; font-weight: 700; cursor: pointer; }
+.wd-appearance-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-blue); }
+
+/* ---- secondary tabs ---- */
+.wd-secondary-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px var(--gutter); background: var(--canvas); border-bottom: 1px solid var(--hairline); }
+.wd-secondary-tabs-empty { display: none; }
+.wd-tab-btn { flex: 0 0 auto; min-height: 40px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+.wd-tab-btn.active { border-color: var(--brand-blue-deep); background: var(--brand-blue-deep); color: #fff; }
+
+/* ---- body ---- */
+.wd-body { flex: 1; padding: 14px var(--gutter) 24px; }
+.wd-banners { display: grid; gap: 8px; margin-bottom: 12px; }
+.wd-banner { display: flex; gap: 10px; align-items: center; padding: 10px 13px; border: 1px solid #bcd8e8; border-left: 4px solid var(--brand-blue); border-radius: var(--r-md); background: var(--accent-soft); font-size: 14px; }
+.wd-banner.alert { border-color: #edc0ce; border-left-color: var(--brand-rose); background: #fff5f8; }
+.wd-banner button { margin-left: auto; padding: 4px 8px; border: 0; background: none; color: var(--muted); font-size: 13px; font-weight: 650; cursor: pointer; }
+
+.wd-search { margin-bottom: 10px; }
+.wd-search-input { width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 16px; }
+.wd-month-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 12px 0; }
+.wd-month-step { min-height: 40px; min-width: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 18px; cursor: pointer; }
+.wd-month-step:disabled { opacity: .4; cursor: default; }
+.wd-month-label { font-weight: 700; color: var(--brand-blue-dark); min-width: 150px; text-align: center; }
+
+.wd-week-group { margin-bottom: 18px; }
+.wd-week-range { font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin: 14px 2px 6px; }
+.wd-day { padding: 8px 0; border-top: 1px solid var(--hairline); }
+.wd-day:first-child { border-top: 0; }
+.wd-day-label { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.wd-day.out-of-month { opacity: .45; }
+.wd-service-card { margin: 6px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-soft); }
+.wd-service-title { font-weight: 700; color: var(--brand-blue-dark); }
+.wd-service-time { color: var(--muted); font-size: 13px; }
+.wd-service-current { border-color: var(--brand-blue-deep); box-shadow: 0 0 0 3px rgba(35,131,198,.14); }
+
+.wd-assignment-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 14px; }
+.wd-assignment-duty { color: var(--muted); font-size: 12.5px; }
+.wd-assignment-name { font-weight: 650; }
+.wd-assignment-row.mine .wd-assignment-name { color: var(--brand-blue-deep); }
+.wd-assignment-open { color: var(--faint); font-style: italic; }
+
+.wd-pager { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+.wd-pager-btn { min-height: 40px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.wd-pager-btn:disabled { opacity: .4; cursor: default; }
+.wd-pager-label { font-size: 13px; color: var(--muted); }
+
+.wd-empty, .wd-unknown { padding: 40px 16px; text-align: center; color: var(--muted); font-size: 15px; }
+.wd-warning { padding: 10px 13px; border-radius: 8px; background: #fff7e7; color: var(--warn); font-size: 13px; font-weight: 650; }
+.wd-skeleton { display: grid; gap: 10px; }
+.wd-skeleton-row { height: 52px; border-radius: 10px; background: linear-gradient(90deg, var(--hairline), var(--line), var(--hairline)); background-size: 200% 100%; animation: wd-shimmer 1.3s infinite; }
+@keyframes wd-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.wd-member-picker { width: 100%; min-height: 46px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; }
+
+.wd-dialog-backdrop { position: fixed; inset: 0; background: rgba(20,30,40,.4); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 200; }
+.wd-dialog { width: min(100%, 420px); background: var(--surface); border-radius: var(--r-lg); padding: 20px; box-shadow: var(--shadow); }
+.wd-dialog-title { font-weight: 700; font-size: 17px; color: var(--brand-blue-dark); margin-bottom: 10px; }
+.wd-dialog-actions { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---- save bar ---- */
+.wd-save-bar { position: fixed; left: 0; right: 0; bottom: calc(var(--wd-nav-height) + env(safe-area-inset-bottom)); display: none; align-items: center; gap: 10px; padding: 8px var(--gutter); background: var(--surface); border-top: 1px solid var(--line); font-size: 13px; z-index: 40; }
+.wd-save-bar.wd-save-saving, .wd-save-bar.wd-save-failed, .wd-save-bar.wd-save-stale { display: flex; }
+.wd-save-failed .wd-save-label, .wd-save-stale .wd-save-label { color: var(--danger); font-weight: 700; }
+.wd-save-retry { margin-left: auto; min-height: 32px; padding: 4px 12px; border: 1px solid var(--brand-blue-deep); border-radius: 7px; background: var(--brand-blue-deep); color: #fff; font-weight: 700; }
+
+/* ---- floating main nav ---- */
+.wd-main-nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-around; padding: 8px var(--gutter) calc(8px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); box-shadow: var(--shadow-bar); z-index: 50; height: var(--wd-nav-height); }
+body.wd-keyboard-open .wd-main-nav { display: none; }
+.wd-nav-btn { flex: 1; min-height: 44px; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 650; cursor: pointer; }
+.wd-nav-btn.active { color: var(--brand-blue-deep); }
+.wd-nav-label { display: block; }
+
+/* ---- auth phases (lock / signin / forced pin change / loading / recovery) ---- */
+.wd-auth { min-height: 70vh; display: grid; place-items: center; padding: 24px var(--gutter); }
+.wd-auth-frame { width: min(100%, 420px); }
+.wd-recovery-panel { max-width: 420px; margin: 60px auto; padding: 28px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); text-align: center; box-shadow: var(--shadow); }
+.wd-recovery-panel h2 { color: var(--brand-blue-dark); margin: 0 0 8px; }
+.wd-recovery-actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+
+/* ---- appearance screen ---- */
+.wd-appearance-intro { color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+.wd-appearance-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.wd-appearance-tile { text-align: left; padding: 14px; border: 2px solid var(--line); border-radius: var(--r-lg); background: var(--surface); cursor: pointer; }
+.wd-appearance-tile.active { border-color: var(--brand-blue-deep); }
+.wd-appearance-tile strong { display: block; color: var(--brand-blue-dark); margin-bottom: 4px; }
+.wd-appearance-tile small { color: var(--muted); font-size: 12px; }
+.wd-appearance-back { margin-top: 16px; min-height: 44px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.wd-unavailable-screen { padding: 20px 4px; }
+
+@media (max-width: 379px) { :root { --gutter: 12px; } }
