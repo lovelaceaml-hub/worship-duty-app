@@ -1,6 +1,15 @@
-# Welcome to LV Zion Worship Service
+# Welcome to LV Zion Worship Service (historical)
 
-A simple guide to using the app — no technical background needed.
+Status: Historical, superseded by [USER-MANUAL.md](USER-MANUAL.md). This guide
+describes an earlier version of the app: a single shared 4-digit site
+passcode with no member sign-in, and an editor passcode for Manage. The live
+app now uses member account sign-in with a personal PIN, department-scoped
+roles, and Firestore rules that require a verified session for writes; the
+old editor passcode does not work. For current, accurate day-to-day
+instructions, use [USER-MANUAL.md](USER-MANUAL.md). The rest of this file is
+kept only as a historical record and should not be followed.
+
+A simple guide to using the app, as it worked before member accounts.
 
 **The app:** https://lv-zion-duties.web.app
 
