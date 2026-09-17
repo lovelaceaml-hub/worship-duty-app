@@ -161,3 +161,198 @@ recorder itself is deployed.
 - No real member name, PIN, or password was used anywhere; every account in the seed is fictional.
 - Both emulators were stopped at the end of this session; `lsof` on ports 8080/9099/4400/4500/9150 and `ps aux` for `firebase`/`cloud-firestore-emulator` both show nothing running.
 - The temporary `node_modules` and `functions/node_modules` symlinks used to run the harness were removed before this commit; `git status` shows only the intended `staging-harness/` and `firebase.json` changes.
+
+## Addendum 2026-09-17: root cause, pre-existing check, and applied fix
+
+Follow-up session, same hard limits (emulator only, `--project demo-lv-zion-duties`,
+no deploy/push/production access, no real PINs or member data). Java and
+`node_modules`/`functions/node_modules` were set up the same way as above and
+removed again afterward.
+
+### 1. Is it pre-existing?
+
+Yes. A separate isolated emulator instance (own ports, own `firebase.json`,
+never touching this worktree's own `firebase.json` or the running repo
+harness) was started from a scratch directory so `firestore.rules` as of
+commit `1e0b6fd` (the rules currently live in production, captured with `git
+show 1e0b6fd:firestore.rules`) could be loaded without ever modifying this
+repo's `firestore.rules`. A fictional `T. Fictitia` account/profile was
+seeded fresh in that instance, matching exactly what `updateDepartmentProfile`
+(`functions/department-handlers.js`) writes in production: `attribution`
+(`createdBy`/`createdAt`/`updatedBy`/`updatedAt`) and `fieldAttribution` (a
+`{source, authority, by, at}` decision for each of `status`, `eligibleDuties`,
+`schedulable`, `availability`). Both commit `1e0b6fd` and this branch's
+`functions/department-handlers.js` already write this shape; `git show
+1e0b6fd:functions/department-handlers.js` already contains `fieldAttribution`
+(7 references), and `firestore.rules` at `1e0b6fd` already defines and calls
+`profileAttributionShapeSafe`/`profileFieldAttributionShapeSafe`/
+`profileFieldDecisionShapeSafe` (16 references, identical count to this
+branch's `firestore.rules`). The only rules diff between `1e0b6fd` and this
+branch's original `firestore.rules` is adding `'revision'` to two `hasOnly()`
+allowlists and an explicit `departmentInvitations` deny match, nothing that
+touches the expensive shape-validation chain.
+
+Four-way matrix (member reading their own profile, minimal availability:
+4 recurring keys + empty exceptions):
+
+| Rules | No attribution/fieldAttribution, no revision | With attribution/fieldAttribution, no revision | With attribution/fieldAttribution + revision |
+| --- | --- | --- | --- |
+| Old (`1e0b6fd`, live production) | PASS (200) | **FAIL (403, expression-budget)** | **FAIL (403, expression-budget)** |
+| New (this branch, pre-fix) | PASS (200) | **FAIL (403, expression-budget)** | **FAIL (403, expression-budget)** |
+
+Document-size variation (large availability: 4 recurring keys + 60 date
+exceptions vs. the minimal 4 recurring keys + 0 exceptions) made no
+difference to the outcome under either ruleset: both sizes passed when
+`attribution`/`fieldAttribution` were absent and both failed identically,
+with the same "maximum of 1000 expressions" message, when present. The
+budget failure tracks the *shape* of the document (whether the
+`attribution`/`fieldAttribution` maps exist at all), not the number of
+entries inside `availability`.
+
+**Conclusion: pre-existing.** The `revision` field, and this plan's addition
+of it to `departmentProfileKeysSafe`, are not the cause. Any department
+profile that has ever been saved once through `updateDepartmentProfile`
+(which is any profile a leader or member has edited since the attribution
+feature shipped, an earlier feature already live at `1e0b6fd`) already
+carries `attribution`/`fieldAttribution` and already exceeds the rules
+engine's expression budget on every read, under the rules currently deployed
+to production today, independent of this plan's revision change or of this
+branch entirely.
+
+### 2. What's expensive, and the fix
+
+The expensive part is `departmentProfileValuesSafe(data)` (via
+`profileMetadataShapeSafe` calling `profileAttributionShapeSafe` once and
+`profileFieldAttributionShapeSafe` up to three times, itself calling
+`profileFieldDecisionShapeSafe` four times each) plus `departmentProfileKeysSafe`
+and the full multi-field `profileIdentityAtPath` check, all evaluated **before**
+the authorization OR-chain, and all of it re-validating a document shape that
+only the trusted server callables can ever write (`allow create, update: if
+false` for this collection; the Admin SDK bypasses rules entirely). A read
+does not need to re-prove the write-time shape, and re-proving it each time
+is what exhausts the budget. Separately, `isAdmin()`/`managesDepartment()`
+are themselves expensive: each independently re-invokes `claimsCurrent()` →
+`hasAccount()`/`accountData()`, and the original rule ordered the
+authorization check as `isAdmin() || request.auth.uid == memberUid ||
+managesDepartment(...)`, paying for `isAdmin()`'s full false path even on the
+overwhelmingly common case (a member reading their own profile).
+
+Applied fix (`firestore.rules`, `canReadDepartmentProfile`, now at line 544):
+narrowed the read path to signed-in, secret-fields-absent, the document's own
+`memberUid` field matching the path, and admin-or-own-uid-or-manages-department,
+with `request.auth.uid == memberUid` checked **first** so the common case
+short-circuits before any claims lookup runs:
+
+```
+function canReadDepartmentProfile(departmentId, memberUid, data) {
+  return signedIn()
+    && secretFieldsAbsent(data)
+    && data.keys().hasAny(['memberUid'])
+    && data.memberUid == memberUid
+    && (
+      request.auth.uid == memberUid
+      || isAdmin()
+      || managesDepartment(departmentId)
+    );
+}
+```
+
+This was applied because question 1 showed the new (this branch's) rules
+fail identically to production for realistic documents, so the minimal fix
+was needed rather than left proposed-only, per the run instructions.
+
+Re-verification after applying the fix:
+
+- Isolated-emulator four-way matrix against the fixed rules: all four
+  combinations PASS (200), for both minimal and large availability (8/8
+  cells pass; see summary lines logged as `fixed-rules + ...` during this
+  session).
+- Full repo staging harness rerun (`staging-harness/seed.mjs` then
+  `staging-harness/checks.mjs`, standard ports 8080/9099, fresh reseed):
+  **27/27 checks passed, including the previously-failing check 23**
+  ("rules: member can read their own profile after it carries revision" -
+  `read ok, revision={"integerValue":"1"}`).
+- Cross-department denial: a member of a different department (Usher
+  Sisters) reading a Worship member's profile is still refused (403) - the
+  fix does not weaken the authorization boundary.
+- Admin read of another member's profile: PASS after the fix (previously
+  also budget-failed under both old and new pre-fix rules, for the same
+  root-cause reason as the member's own-profile read - `isAdmin()`
+  short-circuits true quickly for an actual admin token, so once the
+  expensive shape-validation was removed this case now passes).
+
+**Known remaining gap, not fixed in this session:** a department leader
+reading a *different* member's profile (not their own) in a department they
+lead still hits the same "maximum of 1000 expressions" error after this fix,
+both under the fixed rules and under the unmodified old/new rules for the
+same reason. This is not caused by the fix above and is not a regression -
+it reproduces identically before and after - it is `isAdmin()` and
+`managesDepartment()` themselves that are expensive: `isAdmin()` must
+evaluate all of `hasRole('admin')`, `claimBool('admin')`, and
+`accountRole('admin')` to false for a non-admin leader (each independently
+re-running `claimsCurrent()`), and `managesDepartment()` then reruns
+`isAdmin()` again plus `hasDepartmentLeaderAuthority()` (7 OR terms) and
+`hasDepartmentMembership()` (4 OR terms), each term again independently
+calling into `claimsCurrent()`/`accountData()`. This cost is paid throughout
+the rules file everywhere `isAdmin()`/`managesDepartment()` are called, not
+just in `canReadDepartmentProfile`, so fixing it properly is a file-wide
+refactor of those two helpers (for example, restructuring them to compute
+the claims/account lookups once and reuse the result) and is out of scope
+for "the smallest change to the READ path" this session was asked for. This
+should go back to whoever owns Section 3/rules review as a follow-up: department
+leaders viewing a department roster member's profile (not just their own)
+may already be failing in production today for the same reason, for any
+profile that carries `attribution`/`fieldAttribution`.
+
+### 3. Does the live app's member flow depend on this direct read today?
+
+No client-side direct read of `departments/{id}/members/{uid}` was found in
+`app.js`; a full-text search for the collection path and for
+`departments/`.../`members/` there turns up nothing. The compact-phone
+client only reaches this data through the Section 3 callables (e.g.
+`saveMemberAvailability`, `updateDepartmentProfile`, `listDepartmentRoster`),
+which run through the Admin SDK server-side and bypass `firestore.rules`
+entirely - callables are unaffected by this defect regardless of whether it
+is fixed. `staging-harness/checks.mjs`'s check 23 is the only caller of this
+direct rules-gated read path found anywhere in this worktree, added
+specifically to exercise `firestore.rules` itself rather than to mirror a
+real client call.
+
+**User-visible effect today: none currently, but latent.** Since `app.js`
+does not perform this direct read, no user sees `PERMISSION_DENIED` today
+because of this defect. It is a real, reproducible defect in the rules file
+as deployed to production right now (confirmed pre-existing above), but it
+has no live blast radius unless or until a client (compact-phone or
+otherwise) starts reading `departments/{id}/members/{uid}` directly from the
+browser SDK instead of through a callable - at that point every read of a
+profile that has ever been saved once would fail with `PERMISSION_DENIED`,
+which is exactly the failure mode the original review's "Expected" section
+describes production hitting "the first time a member's compact-phone
+client tries to read their own availability/profile screen after the
+Section 3 deploy" if such a direct-read path were ever added. The fix
+applied in this session closes that latent trap for the own-profile and
+admin cases; the leader-reads-another-member gap above remains open for any
+future direct-read caller.
+
+### Confirmation (this addendum)
+
+- No `firebase deploy` of any kind ran in this session. No `git push` ran.
+- The isolated four-way-matrix/authz emulator instance ran on its own ports
+  (Firestore 8180, Auth 9199) from a scratch directory outside this repo,
+  loading `firestore.rules` content captured from `1e0b6fd` and from this
+  branch, never overwriting this worktree's own `firestore.rules` while
+  those checks ran.
+- The repo's own `firestore.rules` was edited only once, to apply the fix
+  above (via the repo's own emulator on the standard 8080/9099 ports for the
+  official 27-check rerun), and is the only product-code change in this
+  commit.
+- No real member name, PIN, or password was used anywhere; every account in
+  this addendum's checks is fictional (reusing the same seeded names as the
+  original run, plus a fictional `Q. Sample`/`Usher Sisters` cross-department
+  check).
+- Both the scratch matrix/authz emulator pair and the repo's own emulator
+  pair were stopped at the end of this session; `lsof` on ports
+  8080/8180/9099/9199/4400/4500/9150 and `ps aux` for
+  `firebase`/`cloud-firestore-emulator` show nothing running.
+- The temporary `node_modules`/`functions/node_modules` symlinks were
+  removed again before this commit.

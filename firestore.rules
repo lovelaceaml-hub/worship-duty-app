@@ -542,11 +542,28 @@ service cloud.firestore {
     }
 
     function canReadDepartmentProfile(departmentId, memberUid, data) {
+      // Reads do not re-validate the full write-time shape (departmentProfileKeysSafe/
+      // departmentProfileValuesSafe/profileIdentityAtPath): create/update on this
+      // path are `if false` for clients, so every stored document was already
+      // shape-validated by the trusted server callables at write time (Admin SDK,
+      // bypasses rules). Re-running that validation on every read is what drove
+      // this rule past Firestore's 1000-expression budget (see the compact-phone
+      // staging review). The read boundary only needs: signed in, the document's
+      // own memberUid field matches the path (so a member can't be handed
+      // another member's doc through a mismatched path), no secret fields, and
+      // the caller is the member themself, an admin, or manages the department.
+      // request.auth.uid == memberUid is checked first so the common case (a
+      // member reading their own profile) short-circuits before the
+      // isAdmin()/managesDepartment() claim lookups ever run.
       return signedIn()
-        && departmentProfileKeysSafe(data)
-        && departmentProfileValuesSafe(data)
-        && profileIdentityAtPath(data, departmentId, memberUid)
-        && (isAdmin() || request.auth.uid == memberUid || managesDepartment(departmentId));
+        && secretFieldsAbsent(data)
+        && data.keys().hasAny(['memberUid'])
+        && data.memberUid == memberUid
+        && (
+          request.auth.uid == memberUid
+          || isAdmin()
+          || managesDepartment(departmentId)
+        );
     }
 
     function canCreateDepartmentProfile(departmentId, memberUid) {
