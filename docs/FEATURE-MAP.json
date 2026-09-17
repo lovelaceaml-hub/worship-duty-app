@@ -1,194 +1,564 @@
 {
-  "title": "Worship Duty current feature map",
+  "title": "Worship Duty compact-phone feature map",
   "scope": {
-    "status": "Approved compact-phone refactor, Package 0 active; production unchanged",
-    "baseline": "86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427",
+    "status": "Approved compact-phone refactor in progress. Section 2 (shared runtime) and Section 3 (server workflows) are built and committed on their own lane branches, not yet merged to the integration branch. Section 4 (role screens) has not shipped. Production is unchanged.",
     "plan": "docs/PLAN-COMPACT-PHONE-REFACTOR.md",
-    "index_owner": "Section 5B code and document indexing, Luna High",
-    "boundary": "This map describes existing source behavior and planned interfaces. It does not describe a shipped compact-phone runtime."
+    "index_owner": "Section 5B code and document indexing",
+    "as_of": "2026-09-17",
+    "boundary": "Built entries below are verified against the lane worktree's git history and file contents, not against this worktree's checked-out files (this worktree only has the S5B branch checked out). Planned entries describe the binding interface rulings for what Section 4 still has to add.",
+    "integration_status_2026_09_17": "Controller note added during the Section 6 integration merge, after this map was written. Sections 2, 3, 4, 5A and 5B are now all merged onto branch claude/compact-integration. Section 4 (role screens) is built: every route below marked planned or legacy-bridge for Section 4 should be re-read against docs/runs/compact-phone-refactor/lanes/S4.md, which records the actual built screens and the disclosed scope reductions (the songs library and parts of manage settings remain on the legacy bridge, and the exceptions screen is a placeholder). The four_layout_placement table below is therefore accurate for Sections 2 and 3 but stale for Section 4. Nothing is deployed; production is unchanged."
+  },
+  "lane_branches": {
+    "integration_branch": "codex/compact-phone-refactor (baseline 86a476f, not yet updated with S2/S3)",
+    "S2_shared_runtime": {
+      "branch": "claude/compact-runtime",
+      "worktree": "/Users/anthony/Projects/worship-duty-app-worktrees/compact-runtime",
+      "state": "built, reviewed, not merged",
+      "commits": [
+        "a1246a6 Section 2: shared runtime foundation for the compact phone refactor",
+        "db8f610 Section 2 correction: unknown routes resolve to #unavailable, validate notification routes"
+      ],
+      "lane_record": "docs/runs/compact-phone-refactor/lanes/S2.md (populated only in this branch's worktree; the S2.md checked out in the compact-index worktree is the original unfilled template)"
+    },
+    "S3_server_workflows": {
+      "branch": "claude/compact-server",
+      "worktree": "/Users/anthony/Projects/worship-duty-app-worktrees/compact-server-claude",
+      "state": "built, reviewed, not merged",
+      "commits": [
+        "1083e4b Section 3: server workflows for the compact phone refactor",
+        "fdd8dd8 Record Section 3 completion in the Build log"
+      ],
+      "lane_record": "docs/runs/compact-phone-refactor/lanes/S3.md (populated only in this branch's worktree)",
+      "note": "A separate, earlier, superseded server-side attempt (membership module only, gpt-5.6-luna) lives on branch codex/compact-server / worktree compact-server; the controller switched Section 3 authorship to Claude on claude/compact-server, which is the complete, reviewed build described here."
+    },
+    "S4_role_screens": {
+      "branch": "not yet started",
+      "state": "not shipped; running in parallel elsewhere per the task brief",
+      "note": "shared/screens.js in claude/compact-runtime already contains buildScheduleInfo/buildAppearanceInfo for the three Section 2 screens; Section 4 adds one information builder plus four layout placements per screen, per the S2-LAYOUT-INTERFACE.md contract."
+    }
   },
   "entrypoints": {
-    "browser_shell": ["index.html", "app.js", "permissions.js", "firebase-config.js", "seed-data.js"],
-    "lazy_presider": ["song-app.js", "song-app.css", "song-lib.js", "song-seed.js"],
+    "browser_shell_legacy": [
+      "index.html",
+      "app.js",
+      "permissions.js",
+      "firebase-config.js",
+      "seed-data.js"
+    ],
+    "browser_shell_compact_built_on_S2": [
+      "appearance-boot.js",
+      "shared/state.js",
+      "shared/nav.js",
+      "shared/save-state.js",
+      "shared/components.js",
+      "shared/screens.js",
+      "shared/shell.js",
+      "layouts/_common.js",
+      "layouts/original.js",
+      "layouts/prism.js",
+      "layouts/navy.js",
+      "layouts/aurora.js",
+      "layouts/index.js",
+      "styles/shared.css",
+      "styles/legacy.css",
+      "styles/original.css",
+      "styles/prism.css",
+      "styles/navy.css",
+      "styles/aurora.css"
+    ],
+    "lazy_presider": [
+      "song-app.js",
+      "song-app.css",
+      "song-lib.js",
+      "song-seed.js"
+    ],
     "service_worker": "sw.js",
-    "backend": ["functions/index.js", "functions/member-auth.js", "functions/department-auth.js", "functions/department-handlers.js", "firestore.rules"]
+    "backend_legacy": [
+      "functions/index.js",
+      "functions/member-auth.js",
+      "functions/department-auth.js",
+      "functions/department-handlers.js",
+      "firestore.rules"
+    ],
+    "backend_compact_built_on_S3": [
+      "functions/revision.js",
+      "functions/song-history.js",
+      "functions/compact-workflows.js"
+    ]
   },
-  "features": [
-    {
-      "id": "auth-and-startup",
-      "user_surfaces": ["site passcode", "member sign in", "forced PIN change", "editor access"],
-      "existing_sources": [
-        {"path": "app.js", "symbols": ["render", "renderLoading", "renderSiteLock", "renderMemberLogin", "renderForcedPinChange", "memberLogin", "memberChangePin", "memberLogout", "isVerifiedSession", "init", "initFirebase"]},
-        {"path": "functions/index.js", "symbols": ["verifyMemberPin", "changeMemberPin", "resetMemberPin", "callableActor", "readCurrentAccount"]},
-        {"path": "functions/member-auth.js", "symbols": ["createMemberAuthCallables", "verifyMemberPin", "changeMemberPin", "resetMemberPin"]},
-        {"path": "permissions.js", "symbols": ["createPermissions", "canManageDepartment", "canEditSongs"]}
-      ],
-      "existing_data": ["app/settings", "accounts/{memberId}", "localStorage wds-site-unlock and wds-unlock", "Firebase Auth custom-token session"],
-      "existing_layout_placement": {"Original": "render() gate and index.html lock cards", "Prism": "all-pages.js auth wrapper and gallery host gate", "Navy & Cream": "NavyDesign.paint preserves the shared gate", "Aurora": "aurora decorate and workspace shell preserve the shared gate"},
-      "planned_replacement_interface": "One shared startup and access state builder supplies loading, site lock, member auth, forced PIN, and authorized role state to every explicit renderer."
-    },
-    {
-      "id": "appearance-selection",
-      "user_surfaces": ["Appearance chooser", "four layouts", "palette and motion controls"],
-      "existing_sources": [
-        {"path": "design-gallery/choice.js", "symbols": ["MODES", "NAMES", "migrate", "persist", "change", "afterRender", "window.WorshipDesign"]},
-        {"path": "design-gallery/host-bridge.js", "symbols": ["originals", "render", "design.configure", "saveFields", "restoreFields"]},
-        {"path": "design-gallery/build.mjs", "symbols": ["prismShell", "auroraShell", "prismSongViews", "auroraCore", "files"]}
-      ],
-      "current_appearances": {
-        "Original": {"source": ["app.js", "index.html"], "adapter": "direct render() dispatch and original inline styles", "state": "shared app state"},
-        "Prism": {"source": ["prototype-prism/prism.js", "prototype-prism/all-pages.js", "prototype-prism/song-pages.js"], "adapter": "compiled into design-gallery/host-bridge.js", "state": "shared app state; aui holds Prism view selection"},
-        "Navy & Cream": {"source": ["design-gallery/navy-adapter.js", "design-gallery/navy.css"], "adapter": "NavyDesign.paint inserts generated panels over the shared view", "state": "shared app state; closure holds month, selected, full, and manualSelection"},
-        "Aurora": {"source": ["prototype/aurora.js", "prototype/workspaces.js", "prototype/presider-workspace.js"], "adapter": "compiled into design-gallery/host-bridge.js", "state": "shared app state; aui holds Aurora view selection"}
+  "shared_runtime_structure": {
+    "status": "built on claude/compact-runtime, per S2-LAYOUT-INTERFACE.md",
+    "flow": "app.js domain state and permissions (host object) -> shared information builders in shared/screens.js -> one of four explicit layout renderers in layouts/*.js -> shared components in shared/components.js",
+    "modules": [
+      {
+        "path": "appearance-boot.js",
+        "purpose": "Classic script, first in <head>. Pre-paint appearance selection; reads the saved preference, sets html[data-appearance], writes the chosen stylesheet render-blocking.",
+        "status": "built"
       },
-      "planned_replacement_interface": "A single appearance contract keeps one route, selection, filter, page, draft, and save state while four renderers arrange shared information and controls."
+      {
+        "path": "shared/state.js",
+        "purpose": "Route store (route(), go(), back()), per-route memory(), draft()/setDraft()/clearDraft(), isDirty(), pendingDestination.",
+        "status": "built"
+      },
+      {
+        "path": "shared/nav.js",
+        "purpose": "buildNavigation(account): main destinations and secondary tabs from capabilities.",
+        "status": "built"
+      },
+      {
+        "path": "shared/save-state.js",
+        "purpose": "createSave({ key, run }): Unsaved, Saving, Saved, Failed, Stale save controller. Saved only after server acknowledgement; a rejection with code aborted/failed-precondition, or a newer revision, shows Stale.",
+        "status": "built"
+      },
+      {
+        "path": "shared/components.js",
+        "purpose": "Pure HTML-string components: mainNav, secondaryTabs, appearanceButton, searchField, monthNav, pager, saveBar, warning, emptyState, unknownState, skeleton, assignmentRow, memberPicker, dialog.",
+        "status": "built"
+      },
+      {
+        "path": "shared/screens.js",
+        "purpose": "Screen registry (id, route pattern, information builder, required sections). Built: buildScheduleInfo, buildAppearanceInfo, and the unavailable screen. Planned (S4): one builder per remaining role screen.",
+        "status": "partially built; schedule/appearance/unavailable done, role screens planned"
+      },
+      {
+        "path": "shared/shell.js",
+        "purpose": "startShell(host): render loop, delegated event handling, history, layout dispatch.",
+        "status": "built"
+      },
+      {
+        "path": "layouts/original.js, layouts/prism.js, layouts/navy.js, layouts/aurora.js",
+        "purpose": "One explicit renderer per appearance, implementing the layout renderer contract (shell, phase.*, weekGroup, serviceSummary, screens.*).",
+        "status": "built for the Section 2 screens; screens map grows in Section 4"
+      },
+      {
+        "path": "layouts/index.js",
+        "purpose": "Registry plus verifyLayouts(), which checks all four layouts define every required key and every screen id in shared/screens.js. The gallery build runs it and fails on a gap.",
+        "status": "built"
+      },
+      {
+        "path": "styles/shared.css, styles/legacy.css, styles/original.css, styles/prism.css, styles/navy.css, styles/aurora.css",
+        "purpose": "Shared controls stylesheet, a legacy-bridge stylesheet, then one arrangement sheet per appearance.",
+        "status": "built"
+      }
+    ],
+    "clean_startup": "Storage key wds-design-gallery-v1 preserved; migrations wds-design-choice-v1 and wds-appearance-navy-v1 preserved; ?design=classic session-only recovery preserved. appearance-boot.js removes the delayed Original-to-selected repaint. Stylesheet/module load failure shows a recovery panel with Retry and Use Original for now, session-only, saved preference untouched. Built on claude/compact-runtime.",
+    "legacy_bridge": "Until Section 4 replaces them, My duties, Manage, and the Presider planner run through one `legacy` screen: the shell body hosts the existing renderMy/renderManage/renderSongs output inside a .wd-legacy container, with the existing Original content rules scoped under that class. This is the one compatibility wrapper the plan allows; Section 4 removes it screen by screen.",
+    "build_and_release": "design-gallery/build.mjs becomes a packager (copies appearance-boot.js, shared/, layouts/, styles/; stamps ?v=DEV and the service worker RELEASE; runs verifyLayouts() and syntax checks). No longer reads prototype/, prototype-prism/, or docs/design/. design-gallery/test.mjs and live-design/ target the retired compiler and are superseded, not repaired (per S2-LAYOUT-INTERFACE.md section 8).",
+    "open_item_for_anthony": "Prism and Aurora live light/dark and motion toggles are not in the approved Weekbook prototype. Section 2 did not invent them and left the stored wds-prism-palette keys untouched; Anthony needs to rule on this before Section 6."
+  },
+  "server_workflows": {
+    "status": "built on claude/compact-server, per S3-SERVER-INTERFACE.md and S3-MEMBERSHIP-INTERFACE.md",
+    "modules": [
+      {
+        "path": "functions/revision.js",
+        "purpose": "Pure. currentRevision(doc), nextRevision(doc), assertFresh({ expectedRevision, expectedWitness, currentRevision, currentWitness, details }). Shared version-aware-save primitive; no database, no imports beyond Node.",
+        "status": "built"
+      },
+      {
+        "path": "functions/song-history.js",
+        "purpose": "Pure server copies of song-lib.js's serviceIdFor/recompute/applySung/removeHistoryEntry semantics, plus applyCorrection for authorized corrections. Does not require the root song-lib.js (deploy package boundary).",
+        "status": "built"
+      },
+      {
+        "path": "functions/compact-workflows.js",
+        "purpose": "Factory createCompactWorkflowHandlers({ db, now, permissionConfig, logger }): saveMemberAvailability, resolveDutyAttention, saveSongService, correctSongHistory, recordSongHistory.",
+        "status": "built"
+      },
+      {
+        "path": "functions/department-auth.js",
+        "purpose": "Extended: revision added to PROFILE_METADATA_FIELDS (spread into PROFILE_ALLOWED_FIELDS); exported effectiveAvailability.",
+        "status": "extended"
+      },
+      {
+        "path": "functions/department-handlers.js",
+        "purpose": "Extended: updateProfile moved into a transaction with assertFresh/revision; assignDepartmentDuty/overrideDepartmentAssignment/unassignDepartmentDuty accept optional expectedRevision/expectedMemberName, bump schedule/{id}.assignmentRevisions[duty], return revision; errorWithCode carries optional details; exported inputData/profileRef/assignmentForSchedule/assignmentRecord/errorWithCode/rejectDecision for compact-workflows.js reuse.",
+        "status": "extended"
+      },
+      {
+        "path": "functions/index.js",
+        "purpose": "exposeDepartmentCallable forwards error.details into HttpsError; wires the four new callables (saveMemberAvailability, resolveDutyAttention, saveSongService, correctSongHistory); adds songHistoryRecorder (onSchedule, every 30 minutes); reconcileScheduleAssignmentProjection gains self-healing Needs-replacement marker removal and writes revision.",
+        "status": "extended, callables confirmed present (grep-verified lines 417-434)"
+      },
+      {
+        "path": "firestore.rules",
+        "purpose": "revision added to departmentProfileKeysSafe and assignmentKeysSafe read/write-shape allowlists.",
+        "status": "extended, confirmed present (lines 381, 629)"
+      }
+    ],
+    "membership_interface_status": "The membership interface (searchDepartmentCandidates, createDepartmentInvitation, revokeDepartmentInvitation, acceptDepartmentInvitation) was ruled and built earlier as functions/compact-membership.js on the first bounded server unit, per S3-MEMBERSHIP-INTERFACE.md. It is out of scope for the later S3-SERVER-INTERFACE.md ruling, which covers the four remaining areas below.",
+    "callables_added": [
+      {
+        "name": "saveMemberAvailability",
+        "input": "{ memberUid, departments: [{ departmentId, availability, expectedRevision?, expectedUpdatedAt? }] }",
+        "output": "{ ok, revision, departments: [{ departmentId, revision, profile }], replacements: { marked, cleared } }"
+      },
+      {
+        "name": "resolveDutyAttention",
+        "input": "{ departmentId, serviceId, duty, requestId?, decision?, replacementMemberUid?, acknowledgeConflict?, expectedRevision?, expectedMemberName? }",
+        "output": "{ ok, revision, serviceId, duty, memberName, assignment, requestId, requestStatus }"
+      },
+      {
+        "name": "saveSongService",
+        "input": "{ serviceId, songs, glorySong, thanksSong, notes, confirm, expectedRevision?, expectedUpdatedAt? }",
+        "output": "{ ok, revision, serviceId, setlist }"
+      },
+      {
+        "name": "correctSongHistory",
+        "input": "{ serviceId, songs, glorySong?, thanksSong?, notes?, expectedRevision?, expectedUpdatedAt? }",
+        "output": "{ ok, revision, serviceId, setlist, changedSongs }"
+      },
+      {
+        "name": "songHistoryRecorder",
+        "input": "none (scheduled)",
+        "output": "onSchedule, every 30 minutes; idempotent automatic history recording after the three-hour service window"
+      }
+    ],
+    "callables_extended": [
+      "assignDepartmentDuty",
+      "overrideDepartmentAssignment",
+      "unassignDepartmentDuty",
+      "updateDepartmentProfile",
+      "updateMemberAvailability"
+    ],
+    "firestore_fields_added": {
+      "departments/{d}/members/{uid}": [
+        "revision"
+      ],
+      "departmentAssignments/{id}": [
+        "revision"
+      ],
+      "schedule/{id}": [
+        "needsReplacement (map by duty)",
+        "assignmentRevisions (integer map by duty)"
+      ],
+      "setlists/{id}": [
+        "revision",
+        "historySource",
+        "recordedAt",
+        "recordedBy",
+        "correctedAt",
+        "correctedByUid",
+        "correctedBy"
+      ],
+      "songStats/{songId}.history[]": [
+        "source"
+      ],
+      "audit": [
+        "action song-history-corrected"
+      ],
+      "requests/{id}": [
+        "assignmentId (on approved resolutions with a replacement)"
+      ]
+    },
+    "no_new_collections": true,
+    "no_composite_indexes": true,
+    "verification": "56/56 existing functions/test/*.test.js passing unchanged; node --check on every changed file; hand-written in-memory Firestore/transaction smoke script covering revision bumps, stale-write rejection, conflict acknowledgement, availability fan-out, automatic recorder idempotency, and corrections. No Firestore emulator run (no Java on this Mac), no live/authenticated walkthrough (this section ships no client-observable behavior). Not deployed, no production writes.",
+    "section4_handoff": "Needs-attention derivation (requests/replacements/unfilled/conflicts) is a client-side computation over existing data per the predicate table in S3-SERVER-INTERFACE.md section 2.1, for the information builder behind #manage/attention. None of Section 4's client wiring to these callables exists yet."
+  },
+  "four_layout_placement": {
+    "legend": "built = shipped in claude/compact-runtime across all four layouts; legacy-bridge = reachable today only through the .wd-legacy compatibility wrapper, not yet a dedicated layout screen; planned = target route defined in S2-LAYOUT-INTERFACE.md section 4, no builder or renderer yet (Section 4 scope)",
+    "screens": [
+      {
+        "route": "#schedule",
+        "status": "built",
+        "layouts": {
+          "classic": "built",
+          "prism": "built",
+          "navy": "built",
+          "aurora": "built"
+        },
+        "builder": "shared/screens.js buildScheduleInfo"
+      },
+      {
+        "route": "#appearance",
+        "status": "built",
+        "layouts": {
+          "classic": "built",
+          "prism": "built",
+          "navy": "built",
+          "aurora": "built"
+        },
+        "builder": "shared/screens.js buildAppearanceInfo"
+      },
+      {
+        "route": "#unavailable",
+        "status": "built",
+        "layouts": {
+          "classic": "built",
+          "prism": "built",
+          "navy": "built",
+          "aurora": "built"
+        },
+        "builder": "shared/screens.js (unknown/unauthorized destination fallback)"
+      },
+      {
+        "route": "#duties",
+        "status": "legacy-bridge",
+        "layouts": {
+          "classic": "legacy-bridge",
+          "prism": "legacy-bridge",
+          "navy": "legacy-bridge",
+          "aurora": "legacy-bridge"
+        },
+        "builder": "planned (Section 4); currently app.js renderMy inside .wd-legacy"
+      },
+      {
+        "route": "#service/{id}",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#edit/{id}",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#availability",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4); server callable saveMemberAvailability already built"
+      },
+      {
+        "route": "#reminders",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#manage/schedule",
+        "status": "legacy-bridge",
+        "layouts": {
+          "classic": "legacy-bridge",
+          "prism": "legacy-bridge",
+          "navy": "legacy-bridge",
+          "aurora": "legacy-bridge"
+        },
+        "builder": "planned (Section 4); currently app.js renderManage inside .wd-legacy"
+      },
+      {
+        "route": "#manage/attention",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4); server callable resolveDutyAttention already built; predicate table in S3-SERVER-INTERFACE.md section 2.1"
+      },
+      {
+        "route": "#manage/members",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#manage/add-member",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4); server callables in functions/compact-membership.js already built"
+      },
+      {
+        "route": "#manage/profile/{id}",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#manage/invite",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4); server callables in functions/compact-membership.js already built"
+      },
+      {
+        "route": "#manage/exceptions",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#manage/settings",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#songs/my-service",
+        "status": "legacy-bridge",
+        "layouts": {
+          "classic": "legacy-bridge",
+          "prism": "legacy-bridge",
+          "navy": "legacy-bridge",
+          "aurora": "legacy-bridge"
+        },
+        "builder": "planned (Section 4); currently app.js renderSongs/song-app.js inside .wd-legacy; server callable saveSongService already built"
+      },
+      {
+        "route": "#songs/library",
+        "status": "legacy-bridge",
+        "layouts": {
+          "classic": "legacy-bridge",
+          "prism": "legacy-bridge",
+          "navy": "legacy-bridge",
+          "aurora": "legacy-bridge"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#songs/song-detail",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      },
+      {
+        "route": "#songs/history",
+        "status": "legacy-bridge",
+        "layouts": {
+          "classic": "legacy-bridge",
+          "prism": "legacy-bridge",
+          "navy": "legacy-bridge",
+          "aurora": "legacy-bridge"
+        },
+        "builder": "planned (Section 4); server callable correctSongHistory already built"
+      },
+      {
+        "route": "#songs/history-detail",
+        "status": "planned",
+        "layouts": {
+          "classic": "planned",
+          "prism": "planned",
+          "navy": "planned",
+          "aurora": "planned"
+        },
+        "builder": "planned (Section 4)"
+      }
+    ],
+    "phases_not_routes": [
+      "maintenance",
+      "locked",
+      "signin",
+      "forcedPin",
+      "loading",
+      "ready phase gate itself"
+    ],
+    "phases_status": "All six phases (site lock, sign-in, forced PIN change, loading, recovery, maintenance) render from the active layout from the first frame, built in claude/compact-runtime. Lock/sign-in/PIN screens currently reuse the Original card inside each appearance frame rather than four bespoke cards (noted limitation in S2.md)."
+  },
+  "owners_and_documentation": {
+    "S2_shared_runtime": {
+      "owner": "Section 2 runtime worker (Claude, claude/compact-runtime)",
+      "docs": [
+        "docs/runs/compact-phone-refactor/decisions/S2-LAYOUT-INTERFACE.md",
+        "docs/runs/compact-phone-refactor/lanes/S2.md (in the compact-runtime worktree)"
+      ]
+    },
+    "S3_server_workflows": {
+      "owner": "Section 3 server worker (Claude, claude/compact-server)",
+      "docs": [
+        "docs/runs/compact-phone-refactor/decisions/S3-SERVER-INTERFACE.md",
+        "docs/runs/compact-phone-refactor/decisions/S3-MEMBERSHIP-INTERFACE.md",
+        "docs/runs/compact-phone-refactor/lanes/S3.md (in the compact-server-claude worktree)"
+      ]
+    },
+    "S4_role_screens": {
+      "owner": "pending, not yet started",
+      "docs": [
+        "docs/runs/compact-phone-refactor/decisions/S2-LAYOUT-INTERFACE.md section 5 (layout renderer contract)",
+        "docs/runs/compact-phone-refactor/decisions/S3-SERVER-INTERFACE.md section 5 (what Section 3 delivers for Section 4 to consume)"
+      ]
+    },
+    "human_guides": {
+      "owner": "Section 5A documentation worker (separate worktree, not this one)",
+      "docs": [
+        "docs/PLAYBOOK.md",
+        "docs/USER-MANUAL.md",
+        "docs/COMPACT-DESIGN-HANDOFF.md"
+      ]
+    },
+    "plan_and_records": {
+      "owner": "controller",
+      "docs": [
+        "docs/PLAN-COMPACT-PHONE-REFACTOR.md",
+        "docs/HANDOFF.md",
+        "README.md",
+        "AGENTS.md"
+      ]
+    }
+  },
+  "known_drift_points_carried_from_pre_refactor": [
+    {
+      "id": "attention-counts",
+      "note": "Pre-refactor drift (multiple count implementations in app.js and department-workflows.js) is the reason S3-SERVER-INTERFACE.md section 2.1 defines one predicate table for Needs attention; Section 4 must consume that table rather than reintroducing separate count logic."
     },
     {
-      "id": "schedule-and-defaults",
-      "user_surfaces": ["Schedule", "service detail", "department filter", "past services", "maintenance read-only schedule"],
-      "existing_sources": [
-        {"path": "app.js", "symbols": ["sortedServices", "upcomingServices", "pastServices", "preferredScheduleService", "renderSchedule", "renderServiceCard", "renderServiceList", "renderDeptChips", "renderMaintenanceSchedule"]},
-        {"path": "functions/sheet-lib.js", "symbols": ["sheetRowsToServices", "parseCSV", "parseSheetDate", "parseSheetTime"]},
-        {"path": "functions/index.js", "symbols": ["scheduledSheetSync", "publicSchedule"]}
-      ],
-      "existing_data": ["schedule/{YYYY-MM-DD_service-slug}", "Google Sheet published CSV", "app/settings.sheetUrl", "service date, time, worship, choirSong, assignments, conflictOk"],
-      "existing_actions": ["month and service selection in adapters", "department filter", "show past", "Manage service edit", "sheet sync", "maintenance read-only view"],
-      "existing_layout_placement": {"Original": "renderSchedule list and service cards", "Prism": "calendar, agenda, inspector, and service cards from prototype-prism/prism.js", "Navy & Cream": "date rail, service times, hero, and hidden original cards from NavyDesign.schedule", "Aurora": "date browser, selected service, all-services list, and context rail from prototype/aurora.js"},
-      "planned_replacement_interface": "Shared schedule information builder owns the Pacific-time current-or-next default, explicit selection preservation, filters, counts, and loading or empty states before layout rendering."
+      "id": "schedule-selection",
+      "note": "Resolved for #schedule by shared/screens.js buildScheduleInfo (built), which is now the single Pacific-time current-or-next default and explicit-selection preservation for all four layouts."
     },
     {
-      "id": "own-duties-and-availability",
-      "user_surfaces": ["My Duties", "next duty", "full lineup", "change request entry", "own department availability"],
-      "existing_sources": [
-        {"path": "app.js", "symbols": ["dutiesFor", "renderMy", "renderYourRequests", "requestChangeTrigger", "requestChangeForm", "loadOwnDepartmentProfiles", "saveOwnDepartmentAvailability", "checkNewDuties", "checkReminders"]},
-        {"path": "department-profile.js", "symbols": ["normalizeDepartmentProfile", "normalizeAvailability", "isAvailable", "isCurrentlySchedulable"]},
-        {"path": "functions/department-handlers.js", "symbols": ["updateMemberAvailability"]}
-      ],
-      "existing_data": ["ui.me and wds-me", "schedule assignments", "departments/{department}/members/{memberUid}", "availability.recurring and availability.exceptions", "requests"],
-      "existing_actions": ["choose member", "expand Who else is serving", "open Presider songs", "request a change", "edit and save own availability"],
-      "existing_layout_placement": {"Original": "renderMy builds duty cards and request cards", "Prism": "all-pages.js wraps the base My Duties page", "Navy & Cream": "NavyDesign.paint adds next-duty hero", "Aurora": "workspaces.js and contextRail add the compact My Duties workspace"},
-      "planned_replacement_interface": "One member workspace model provides duties, alerts, availability, requests, and draft state to all four layouts."
-    },
-    {
-      "id": "department-roster-and-assignment",
-      "user_surfaces": ["Manage departments", "roster", "member profile", "eligibility", "schedulability", "assignment picker", "administrator override"],
-      "existing_sources": [
-        {"path": "app.js", "symbols": ["loadDepartmentRoster", "loadOwnDepartmentProfiles", "departmentProfileAssignable", "saveDepartmentProfile", "assignDepartmentDutyForService", "unassignDepartmentDutyForService", "handleAct", "handleChg"]},
-        {"path": "department-workflows.js", "symbols": ["membersForDepartment", "setDepartmentMembershipStatus", "departmentForDuty", "routeRequest", "actionableCounts"]},
-        {"path": "department-profile.js", "symbols": ["createDepartmentProfile", "updateDepartmentProfile", "mergeHistorySeed", "isDutyEligible", "isSchedulable", "effectiveAvailability"]},
-        {"path": "functions/department-auth.js", "symbols": ["authorizeProfileRead", "authorizeProfileUpdate", "authorizeAssignment", "authorizeAssignmentOverride"]},
-        {"path": "functions/department-handlers.js", "symbols": ["listDepartmentRoster", "updateDepartmentProfile", "updateMemberAvailability", "createDepartmentProfile", "assignDepartmentDuty", "unassignDepartmentDuty", "overrideDepartmentAssignment"]},
-        {"path": "functions/index.js", "symbols": ["updateDepartmentMembership", "updateRoleConfiguration", "reconcileScheduleAssignmentProjection"]}
-      ],
-      "existing_data": ["app/departments legacy name map", "memberships", "departments/{department}/members/{memberUid}", "departmentAssignments", "audit"],
-      "existing_actions": ["list scoped roster", "add or archive membership", "edit profile", "edit availability exceptions", "assign normal duty", "record administrator override"],
-      "existing_layout_placement": {"Original": "renderManageDepartments, renderManageDepartment, renderDepartmentMember, renderManagePeople", "Prism": "all-pages.js page adapters around Manage People and service assignment", "Navy & Cream": "painted Manage heading and stats while base controls remain", "Aurora": "workspaces.js transforms Manage People, Services, Planning, and department forms"},
-      "planned_replacement_interface": "Shared roster and assignment rows, member picker, warnings, and Save feedback consume server-authoritative profiles and permitted actions."
-    },
-    {
-      "id": "requests-conflicts-and-attention",
-      "user_surfaces": ["Request change", "Manage Requests", "Planning conflicts", "attention badges and banner"],
-      "existing_sources": [
-        {"path": "app.js", "symbols": ["conflictsFor", "activeConflicts", "findPendingRequest", "requestIsActionable", "effectiveRequestStatus", "pendingRequestsCount", "actionableCountsForViewer", "renderManageRequests", "renderManageConflicts", "resolveRequest"]},
-        {"path": "department-workflows.js", "symbols": ["createChangeRequest", "transitionRequestStatus", "resolveRequest", "composeConflicts", "activeConflicts", "actionableCounts", "aggregateAuthorizedOutstanding"]},
-        {"path": "functions/index.js", "symbols": ["onRequestCreated", "onRequestResolved"]},
-        {"path": "firestore.rules", "symbols": ["match /requests/{requestId}", "match /conflicts/{conflictId}", "match /audit/{auditId}"]}
-      ],
-      "existing_data": ["requests/{requestId}", "schedule.conflictOk", "conflicts", "audit"],
-      "existing_actions": ["submit request", "show completed history when schedule changed", "approve or decline request", "mark conflict OK", "open service", "route by department"],
-      "existing_layout_placement": {"Original": "renderYourRequests, renderManageRequests, renderManageConflicts, tab badges", "Prism": "all-pages.js wraps Requests and Planning pages", "Navy & Cream": "painted subpage heading and stats, base cards remain", "Aurora": "workspaces.js transforms Manage Requests and Planning"},
-      "planned_replacement_interface": "One attention model supplies request and conflict categories, authorized counts, history status, and atomic resolution actions to every layout."
-    },
-    {
-      "id": "songs-planning-and-history",
-      "user_surfaces": ["Presider Home", "Library", "Services", "Insights", "setlist editor", "history correction"],
-      "existing_sources": [
-        {"path": "app.js", "symbols": ["loadSongAssets", "loadSongApp", "songCtx", "renderSongs", "canEditSongService", "canManagePresiders"]},
-        {"path": "song-app.js", "symbols": ["mount", "renderHome", "renderLibrary", "renderServices", "renderInsights", "updateSetlist", "confirmSetlist", "markSetlistSung", "undoSetlistSung", "ensureSetlist", "syncPresiderSchedule"]},
-        {"path": "song-lib.js", "symbols": ["serviceIdFor", "applySung", "applyUndo", "applyBackfill", "removeHistoryEntry", "totalDuration"]},
-        {"path": "song-seed.js", "symbols": ["SONG_SEED"]}
-      ],
-      "existing_data": ["setlists/{serviceId}", "songStats/{songId}", "app/presiders", "app/songEditors", "schedule assignments.Presider"],
-      "existing_actions": ["choose service", "search and add songs", "order setlist", "save draft", "confirm", "mark sung", "undo or correct history", "manage presider list"],
-      "existing_layout_placement": {"Original": "lazy song-app mount inside #song-root", "Prism": "song-pages.js and compiled Prism library layout", "Navy & Cream": "painted Presider heading with original song module", "Aurora": "presider-workspace.js wraps song home, library, rows, services, and insights"},
-      "planned_replacement_interface": "A shared presider information model keeps service selection, draft, confirmation, history, permissions, and loading states stable while layouts arrange the same song controls."
-    },
-    {
-      "id": "notifications-and-routing",
-      "user_surfaces": ["new-duty alerts", "day-before reminders", "request notifications", "notification click destination", "calendar subscription"],
-      "existing_sources": [
-        {"path": "app.js", "symbols": ["notifyGranted", "notifyOn", "sysNotify", "registerPush", "unregisterPush", "checkNewDuties", "checkReminders", "downloadICS", "subscribeICS", "copyICSLink"]},
-        {"path": "functions/index.js", "symbols": ["onScheduleWrite", "dutyReminders", "onRequestCreated", "onRequestResolved", "ics", "loadTokenTargets", "sendToTargets"]},
-        {"path": "functions/ics-lib.js", "symbols": ["dutiesForMember", "buildIcsForMember"]},
-        {"path": "sw.js", "symbols": ["notificationclick", "fetch", "cacheFirst", "networkFirst"]}
-      ],
-      "existing_data": ["tokens/{fcmToken}", "sent/{markerId}", "localStorage wds-alerts, wds-seen, wds-unread, wds-fcm-token", "hosting rewrite /ics/{member}"],
-      "existing_actions": ["enable or disable notifications", "clear local alert list", "open notification destination after sign-in", "download or subscribe to calendar feed"],
-      "existing_layout_placement": {"Original": "renderBanners and My Duties notification controls", "Prism": "decorated My Duties and shared notification controls", "Navy & Cream": "painted My Duties hero plus base notification controls", "Aurora": "workspace notification and reminder panels"},
-      "planned_replacement_interface": "Shared alert and routing state exposes destination, authorization, unread count, and recovery message independently of layout."
-    },
-    {
-      "id": "persistence-and-release",
-      "user_surfaces": ["Saved feedback", "connection status", "backup and restore", "Google Sheet sync", "PWA cache", "Hosting release"],
-      "existing_sources": [
-        {"path": "app.js", "symbols": ["saveLocal", "loadLocal", "persistService", "persistMembers", "persistSettings", "persistDepartments", "persistRequest", "persistAll", "fbWrite", "afterDataChange", "setSyncPill"]},
-        {"path": "design-gallery/build.mjs", "symbols": ["upstream", "requireOne", "assertSyntax", "manifest", "dest"]},
-        {"path": "design-gallery/release.mjs", "symbols": ["git", "compatibleLive", "--publish", "--preview"]},
-        {"path": "scripts/guard-gallery-deploy.mjs", "symbols": ["Four-design gallery release guard"]},
-        {"path": "sw.js", "symbols": ["RELEASE", "CACHE", "activate"]}
-      ],
-      "existing_data": ["localStorage wds-data-v2", "Firestore schedule and app documents", "release-stamped hosting files", "design-gallery-release.json"],
-      "existing_actions": ["local fallback", "verified-session writes", "batch seed or import", "export and import backup", "build gallery", "preview or publish Hosting only"],
-      "planned_replacement_interface": "Shared Save state reports Unsaved, Saving, Saved, and Failed with server acknowledgement, draft retention, stale-save handling, and deduplicated taps. Release remains a guarded integration responsibility."
+      "id": "song-state-boundary",
+      "note": "song-lib.js at the repository root stays untouched and is not required from functions/ (deploy package boundary); functions/song-history.js is a separate pure server copy with identical semantics, confirmed by the writer."
     }
   ],
-  "compact_design_handoff": {
-    "status": "Approved Weekbook direction for design handoff; shared production runtime integration remains planned",
-    "source_boundary": "The compact-phone files are local design evidence and do not add a released feature or replace the four current appearance adapters.",
-    "prototype_sources": [
-      {"path": "docs/design/prototype/compact-phone/index.html", "role": "four-appearance Weekbook chooser with role selection"},
-      {"path": "docs/design/prototype/compact-phone/weekbook.html", "role": "Weekbook route shell and prototype entry page"},
-      {"path": "docs/design/prototype/compact-phone/app.js", "role": "shared current-snapshot adapter, explicit layout renderers, role routes and browser-local demonstrations"},
-      {"path": "docs/design/prototype/compact-phone/styles.css", "role": "shared controls and four distinct Weekbook layout arrangements"}
-    ],
-    "approved_direction": {
-      "name": "Weekbook",
-      "month_navigation": "Place month navigation below search and above weekly cards.",
-      "handoff": "Finish the designs, then hand off. Runtime work and release remain future scope."
-    },
-    "current_snapshot_boundary": {
-      "resource": "/preview-data.js",
-      "source_control": "One current-service and public-song snapshot lives outside Git.",
-      "fallback": "None. Do not fall back to seed-data.js.",
-      "read_only_verification_2026_09_15": {"services_may_dec": 180, "september": 42, "october": 21},
-      "payload": "Current service dates, labels, worship names and times, plus 537 public catalog songs. No member names or assignments; do not copy records into this map."
-    },
-    "helper_sources": [
-      {"path": "scripts/refresh-compact-preview.cjs", "role": "refreshes current service metadata and the live public song catalog outside Git"},
-      {"path": "scripts/serve-compact-designs.py", "role": "serves the explicitly allowed compact design assets and /preview-data.js"}
-    ],
-    "future_placement_map": {
-      "path": "docs/design/prototype/compact-phone/HANDOFF-MAP.md",
-      "status": "Design placement and dependency map complete; production interfaces remain planned."
-    },
-    "integration_handoff": "The integrated handoff document is docs/COMPACT-DESIGN-HANDOFF.md when present in the integration checkout."
-  },
-  "known_drift_points": [
-    {"id": "attention-counts", "evidence": ["app.js:2309 pendingRequestsCount", "app.js:2339 actionableCountsForViewer", "department-workflows.js:1098 actionableCounts", "department-workflows.js:1185 aggregateAuthorizedOutstanding"], "risk": "Badges, Planning, Requests, and banners can use different scopes or status rules.", "planned_fix": "One shared attention information builder supplies categories, authorized items, and counts."},
-    {"id": "schedule-selection", "evidence": ["app.js:1121 preferredScheduleService", "prototype-prism/prism.js:4-40 aui and selection handlers", "prototype/aurora.js:6-44 aui and ensureSelection", "design-gallery/navy-adapter.js:4-47 month, selected, full, manualSelection"], "risk": "Four views can select different same-day services or lose explicit selection on rerender.", "planned_fix": "Shared route and selection state with one Pacific-time default and explicit-selection preservation."},
-    {"id": "layout-transforms", "evidence": ["design-gallery/host-bridge.js:84-111 slot swapping and field restoration", "prototype-prism/all-pages.js and song-pages.js renderer wrappers", "prototype/workspaces.js and presider-workspace.js renderer wrappers", "design-gallery/navy-adapter.js:23-64 generated DOM insertion"], "risk": "Markup-specific adapters can drift in placement, labels, controls, and accessibility while still sharing domain handlers.", "planned_fix": "Explicit four renderers consume shared information and reusable controls."},
-    {"id": "song-state-boundary", "evidence": ["app.js:2195 songCtx", "app.js:2223 renderSongs", "song-app.js:mount", "design-gallery/build.mjs:167-178 song bridge"], "risk": "The lazy Presider module has its own render and state contract while the host owns identity, schedule, and permissions.", "planned_fix": "Keep the named mount and permission contract, then expose shared presider information to each layout."},
-    {"id": "legacy-and-secure-rosters", "evidence": ["app.js:727 localDepartmentRoster", "app.js:747 loadDepartmentRoster", "functions/department-handlers.js:listDepartmentRoster", "firestore.rules:departments and departmentAssignments matches"], "risk": "Local fallback names and secure UID-backed profiles have different fields and authorization guarantees.", "planned_fix": "Shared roster interface marks source, loading, error, and permitted actions without treating local fallback as secure production evidence."}
-  ],
-  "documentation": [
-    {"path": "docs/PLAN-COMPACT-PHONE-REFACTOR.md", "use": "approved product decisions, interfaces, ownership, verification, and Build log"},
-    {"path": "docs/HANDOFF.md", "use": "architecture, live release history, current boundaries, and appearance gallery status"},
-    {"path": "docs/FEATURES.md", "use": "feature toggles and shared settings behavior"},
-    {"path": "docs/USER-JOURNEYS.md", "use": "member, presider, and coordinator success paths"},
-    {"path": "docs/PLAYBOOK.md", "use": "operations, passcodes, notifications, sync, and release procedures"},
-    {"path": "design-gallery/README.md", "use": "current four-appearance integration and guarded Hosting release"},
-    {"path": "prototype/README.md", "use": "Aurora prototype source boundaries and known offline-only behavior"},
-    {"path": "prototype-prism/README.md", "use": "Prism prototype source boundaries and known offline-only behavior"},
-    {"path": "docs/runs/compact-phone-refactor/lanes/S5B.md", "use": "indexing lane record owned by the coordinator"}
+  "excluded_from_this_map": [
+    "In-app search infrastructure (not owned by Section 5B)",
+    "Runtime code changes (this is a read-only index)",
+    "5A-owned guides: docs/PLAYBOOK.md, docs/USER-MANUAL.md, docs/COMPACT-DESIGN-HANDOFF.md",
+    "docs/PLAN-COMPACT-PHONE-REFACTOR.md, README.md, docs/HANDOFF.md, AGENTS.md (controller-owned)"
   ]
 }
