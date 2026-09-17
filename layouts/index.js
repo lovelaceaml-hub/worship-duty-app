@@ -10,7 +10,7 @@ const REQUIRED_PHASES = ['locked', 'signin', 'forcedPin', 'loading', 'recovery',
 const REQUIRED_SCREENS = [
   'schedule', 'duties', 'availability', 'reminders',
   'manageSchedule', 'attention', 'manageMembers', 'manageSettings',
-  'songsMyService', 'songsHistory',
+  'songsMyService', 'songsHistory', 'invite',
   'appearance', 'unavailable', 'legacy'
 ];
 

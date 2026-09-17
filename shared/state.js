@@ -15,7 +15,12 @@ const ROUTES = [
   '#manage/add-member/', '#manage/profile/', '#manage/invite',
   '#manage/settings',
   '#songs/my-service', '#songs/library', '#songs/song-detail', '#songs/history',
-  '#songs/history-detail', '#appearance', '#unavailable'
+  '#songs/history-detail', '#appearance', '#unavailable',
+  /* '#invite/<token>': the department invitation link a leader shares. It is
+     open to any signed-in member, not just leaders, and it is the one route
+     that regularly arrives before sign-in, so it must be a known route for
+     setPendingDestination to keep it across the sign-in screen. */
+  '#invite/'
 ];
 
 const memories = Object.create(null);

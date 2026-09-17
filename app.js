@@ -553,6 +553,11 @@ const departmentRuntime = {
   loading: Object.create(null),
   errors: Object.create(null),
   drafts: Object.create(null),
+  /* Section 3 stale-save witnesses, kept beside the drafts rather than inside
+     them: a draft is a patch of real profile fields and every consumer
+     (departmentDraftProfile, the availability-only guard, the patch builder)
+     treats every key in it as a field to save. */
+  witnesses: Object.create(null),
   assignmentBusy: Object.create(null)
 };
 
@@ -565,6 +570,7 @@ function clearDepartmentRuntime() {
   departmentRuntime.loading = Object.create(null);
   departmentRuntime.errors = Object.create(null);
   departmentRuntime.drafts = Object.create(null);
+  departmentRuntime.witnesses = Object.create(null);
   departmentRuntime.assignmentBusy = Object.create(null);
   ui.departmentView = 'list';
   ui.departmentMember = '';
@@ -722,7 +728,9 @@ function replaceDepartmentProfile(profile) {
   if (ownIndex !== -1) own[ownIndex] = normalized;
   else if (isOwnDepartmentProfile(normalized.departmentId, normalized.memberUid)) own.push(normalized);
   if (own.length) departmentRuntime.ownProfiles[normalized.departmentId] = own;
-  delete departmentRuntime.drafts[departmentRuntimeKey(normalized.departmentId, normalized.memberUid)];
+  const runtimeKey = departmentRuntimeKey(normalized.departmentId, normalized.memberUid);
+  delete departmentRuntime.drafts[runtimeKey];
+  delete departmentRuntime.witnesses[runtimeKey];
   return true;
 }
 
@@ -853,14 +861,74 @@ function departmentPatch(department, memberUid, patch) {
     // Section 3 stale-save witness, captured once when the draft opens (the
     // first edit), not re-read fresh at save time -- the profile as the
     // editor loaded it, per docs/runs/compact-phone-refactor/decisions/
-    // S3-SERVER-INTERFACE.md section 3.
-    departmentRuntime.drafts[key].expectedRevision = Number.isSafeInteger(profile.revision) ? profile.revision : 0;
+    // S3-SERVER-INTERFACE.md section 3. Stored beside the draft, never in it.
+    const witness = { expectedRevision: Number.isSafeInteger(profile.revision) ? profile.revision : 0 };
     if (profile.updatedAt !== undefined && profile.updatedAt !== null) {
-      departmentRuntime.drafts[key].expectedUpdatedAt = profile.updatedAt;
+      witness.expectedUpdatedAt = profile.updatedAt;
     }
+    departmentRuntime.witnesses[key] = witness;
   }
   renderSoon();
   return Promise.resolve(departmentRuntime.drafts[key]);
+}
+
+/* The witness captured when this record's draft opened (departmentPatch), in
+   the top-level shape every Section 3 profile callable expects. */
+function departmentSaveWitness(department, memberUid) {
+  const stored = departmentRuntime.witnesses[departmentRuntimeKey(department, memberUid)] || {};
+  const witness = { expectedRevision: Number.isSafeInteger(stored.expectedRevision) ? stored.expectedRevision : 0 };
+  if (stored.expectedUpdatedAt !== undefined) witness.expectedUpdatedAt = stored.expectedUpdatedAt;
+  return witness;
+}
+
+/* Availability saves, for a member's own profile and for a leader editing a
+   member's, go through saveMemberAvailability: it is the only availability
+   write path that runs the Needs-replacement fan-out, which flags a duty the
+   member is now unavailable for without unassigning them
+   (S3-SERVER-INTERFACE.md sections 1.1 and 1.4). The payload is the
+   per-department list that ruling defines, with the full availability object
+   for the department, not a partial merge. */
+function saveDepartmentAvailability(department, memberUid, availability) {
+  const witness = departmentSaveWitness(department, memberUid);
+  return authCall('saveMemberAvailability', {
+    memberUid,
+    departments: [Object.assign({
+      departmentId: department,
+      availability: normalizeDepartmentAvailability(availability)
+    }, witness)]
+  }).then(result => {
+    const rows = (result && Array.isArray(result.departments)) ? result.departments : [];
+    const row = rows.find(item => item && item.departmentId === department);
+    if (!result || !row || !row.profile) throw new Error('The availability response was not valid.');
+    // Each returned profile carries its department's new revision, so storing
+    // it is what arms the witness for the next save (departmentPatch reads
+    // profile.revision when the next draft opens).
+    rows.forEach(item => { if (item && item.profile) replaceDepartmentProfile(item.profile); });
+    addBanner('Availability saved.');
+    announceReplacementMarks(result.replacements);
+    renderSoon();
+    return row.profile;
+  }).catch(error => {
+    addBanner('Your availability was not saved: ' + departmentErrorMessage(error), true);
+    renderSoon();
+    throw error;
+  });
+}
+
+/* Plain words for the duties the server just flagged: the member stays
+   assigned, and a leader is asked to find a replacement. */
+function announceReplacementMarks(replacements) {
+  const marked = (replacements && Array.isArray(replacements.marked)) ? replacements.marked : [];
+  if (!marked.length) return;
+  const named = marked.map(item => {
+    const svc = findService(item && item.serviceId);
+    const when = svc ? (fmtDate(svc.date) + ' ' + (svc.service || svc.time || '')).trim() : String((item && item.serviceId) || '');
+    return (item && item.duty ? item.duty + ' on ' : '') + when;
+  });
+  addBanner(marked.length === 1
+    ? 'You are still assigned to ' + named[0] + '. It is now flagged for a leader to find a replacement.'
+    : 'You are still assigned to ' + marked.length + ' duties you are no longer available for (' + named.join('; ') +
+      '). They are now flagged for a leader to find replacements.');
 }
 
 function saveDepartmentProfile(department, memberUid) {
@@ -878,18 +946,23 @@ function saveDepartmentProfile(department, memberUid) {
     renderSoon();
     return Promise.resolve(next);
   }
-  const availabilityOnly = Object.keys(patch).length === 1 && Object.prototype.hasOwnProperty.call(patch, 'availability') &&
-    isOwnDepartmentProfile(department, memberUid);
-  const callable = availabilityOnly ? 'updateMemberAvailability' : 'updateDepartmentProfile';
+  // An availability-only save always goes through saveMemberAvailability so
+  // the server's Needs-replacement fan-out runs (S3-SERVER-INTERFACE.md
+  // section 1.1), whether the editor is the member or a department leader.
+  const availabilityOnly = Object.keys(patch).length === 1 &&
+    Object.prototype.hasOwnProperty.call(patch, 'availability');
+  if (availabilityOnly) return saveDepartmentAvailability(department, memberUid, patch.availability);
   // Section 3 stale-save witness, captured when the draft opened (see
-  // departmentPatch above), not re-read fresh here at save time.
-  patch.expectedRevision = Number.isSafeInteger(draft.expectedRevision) ? draft.expectedRevision : 0;
-  if (draft.expectedUpdatedAt !== undefined) patch.expectedUpdatedAt = draft.expectedUpdatedAt;
-  return authCall(callable, {
+  // departmentPatch above), not re-read fresh here at save time. It belongs
+  // at the top level of the payload, beside departmentId/memberUid/patch:
+  // the server strips it there, while anything unknown inside `patch` is
+  // rejected by normalizeProfilePatch as invalid-argument.
+  const witness = departmentSaveWitness(department, memberUid);
+  return authCall('updateDepartmentProfile', Object.assign({
     departmentId: department,
     memberUid,
     patch
-  }).then(result => {
+  }, witness)).then(result => {
     if (!result || result.departmentId !== department || result.memberUid !== memberUid || !result.profile) {
       throw new Error('The department profile response was not valid.');
     }
@@ -909,7 +982,8 @@ function saveOwnDepartmentAvailability(department, memberUid) {
   if (!isOwnDepartmentProfile(department, memberUid)) {
     return Promise.reject(new Error('Only the signed-in member may save this availability.'));
   }
-  if (!draft || Object.keys(draft).some(field => field !== 'availability')) {
+  if (!draft || !Object.prototype.hasOwnProperty.call(draft, 'availability') ||
+      Object.keys(draft).some(field => field !== 'availability')) {
     return Promise.reject(new Error('Only availability changes may be saved from My Duties.'));
   }
   return saveDepartmentProfile(department, memberUid);
@@ -1085,9 +1159,46 @@ function canonicalizeStateNames() {
   }
 }
 
+/* Fields on a schedule document that only the server ever writes:
+   `needsReplacement` (Section 3's Needs-replacement markers) and
+   `assignmentRevisions` (the per-duty stale-save counters). The client must
+   never create, change or clear either one. Every browser write to
+   `schedule/{id}` is a whole-document setDoc, so a document assembled from an
+   older copy (this device's offline copy, a spreadsheet import, a service
+   object built locally) would silently delete a marker the server added since
+   -- and the firestore.rules allowlists, which deliberately do not name these
+   two keys, would reject the whole save as a side effect. Keeping the latest
+   values the schedule listener saw means the write carries them through
+   unchanged, so they never appear in the diff at all. */
+const SERVER_OWNED_SERVICE_FIELDS = ['needsReplacement', 'assignmentRevisions'];
+const serverOwnedServiceFields = Object.create(null);
+
+function rememberServerOwnedServiceFields(docs) {
+  (docs || []).forEach(d => {
+    const data = d.data() || {};
+    const kept = {};
+    SERVER_OWNED_SERVICE_FIELDS.forEach(field => {
+      if (data[field] && typeof data[field] === 'object') kept[field] = data[field];
+    });
+    if (Object.keys(kept).length) serverOwnedServiceFields[d.id] = kept;
+    else delete serverOwnedServiceFields[d.id];
+  });
+}
+
+function serviceWriteBody(svc) {
+  const id = svcId(svc);
+  const kept = serverOwnedServiceFields[id];
+  const body = Object.assign({}, svc);
+  SERVER_OWNED_SERVICE_FIELDS.forEach(field => {
+    if (kept && kept[field]) body[field] = kept[field];
+    else delete body[field];
+  });
+  return body;
+}
+
 /* persistence that works in both modes */
 function persistService(svc) {
-  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), svc)).catch(error => {
+  if (fb) fbWrite(() => fb.setDoc(fb.doc(fb.db, 'schedule', svcId(svc)), serviceWriteBody(svc))).catch(error => {
     addBanner('The service change was not saved: ' + safeAuthMessage(error), true);
     renderSoon();
   });
@@ -1145,7 +1256,7 @@ function persistAll() {
   state.services.forEach(svc => {
     const id = svcId(svc);
     keep[id] = true;
-    ops.push(b => b.set(fb.doc(fb.db, 'schedule', id), svc));
+    ops.push(b => b.set(fb.doc(fb.db, 'schedule', id), serviceWriteBody(svc)));
   });
   (fb.knownIds || []).forEach(id => { if (!keep[id]) ops.push(b => b.delete(fb.doc(fb.db, 'schedule', id))); });
   ops.push(b => b.set(fb.doc(fb.db, 'app', 'members'), { list: state.members }));
@@ -2389,19 +2500,144 @@ function hostAddMember(department, memberUid, memberName) {
   });
 }
 
+/* An invitation is a link, not a code to read out: this app's own origin and
+   path plus the #invite/<token> route the shell knows how to accept. The
+   token is never logged, never put in a query string, and never written to
+   any document from here. */
+function inviteLinkFor(token) {
+  if (!token) return '';
+  return location.origin + location.pathname + '#invite/' + encodeURIComponent(token);
+}
+
 const inviteRuntime = Object.create(null);
 function hostCreateInvite(department) {
   return authCall('createDepartmentInvitation', { departmentId: department }).then(result => {
-    inviteRuntime[department] = { token: (result && result.token) || '', error: '' };
+    const token = (result && result.token) || '';
+    inviteRuntime[department] = {
+      token,
+      link: inviteLinkFor(token),
+      canShare: typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+      error: '',
+      note: ''
+    };
     renderSoon();
     return result;
   }).catch(error => {
-    inviteRuntime[department] = { token: '', error: safeAuthMessage(error) };
+    inviteRuntime[department] = { token: '', link: '', canShare: false, error: safeAuthMessage(error), note: '' };
     renderSoon();
     throw error;
   });
 }
 function hostPendingInvite(department) { return inviteRuntime[department] || null; }
+
+function hostShareInvite(department) {
+  const invite = inviteRuntime[department];
+  if (!invite || !invite.link) return Promise.resolve(false);
+  const payload = {
+    title: 'Join ' + department,
+    text: 'Join the ' + department + ' department in LV Zion Worship Duty.',
+    url: invite.link
+  };
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    return navigator.share(payload).then(() => {
+      invite.note = 'Invite link shared.';
+      renderSoon();
+      return true;
+    }).catch(() => {
+      // A cancelled share is not a failure and needs no message.
+      renderSoon();
+      return false;
+    });
+  }
+  return hostCopyInvite(department);
+}
+
+function hostCopyInvite(department) {
+  const invite = inviteRuntime[department];
+  if (!invite || !invite.link) return Promise.resolve(false);
+  const done = ok => {
+    invite.note = ok ? 'Invite link copied. Paste it into a message.' : 'Could not copy the link. Press and hold it to copy.';
+    renderSoon();
+    return ok;
+  };
+  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    return navigator.clipboard.writeText(invite.link).then(() => done(true), () => done(false));
+  }
+  return Promise.resolve(done(false));
+}
+
+/* ---- Accepting an invitation (#invite/<token>) ----
+   The shell validates the route shape, keeps it through sign-in as the
+   pending destination, and renders this screen once the member is signed in.
+   Outcomes are reported in plain words; the token is never logged. */
+const inviteAcceptRuntime = { token: '', status: 'idle', departmentId: '', message: '' };
+
+function inviteTokenFromRoute(route) {
+  const raw = String(route || '').replace(/^#invite\//, '');
+  let token = raw;
+  try { token = decodeURIComponent(raw); } catch (e) { token = raw; }
+  return /^[A-Za-z0-9_-]{1,200}$/.test(token) ? token : '';
+}
+
+function hostInviteState(route) {
+  const token = inviteTokenFromRoute(route);
+  if (!token) {
+    return { status: 'invalid', message: 'That invitation link is not complete. Ask the leader who sent it for a new one.' };
+  }
+  if (inviteAcceptRuntime.token !== token) {
+    inviteAcceptRuntime.token = token;
+    inviteAcceptRuntime.status = 'ready';
+    inviteAcceptRuntime.departmentId = '';
+    inviteAcceptRuntime.message = '';
+  }
+  return {
+    status: inviteAcceptRuntime.status,
+    departmentId: inviteAcceptRuntime.departmentId,
+    message: inviteAcceptRuntime.message,
+    memberName: ui.me || ''
+  };
+}
+
+function inviteFailureMessage(error) {
+  const code = String(error && error.code || '').replace(/^functions\//, '');
+  if (code === 'already-exists') {
+    return 'That invitation link has already been used. Ask the leader who sent it for a new one.';
+  }
+  if (code === 'failed-precondition') {
+    return 'That invitation link has expired or was withdrawn. Ask the leader who sent it for a new one.';
+  }
+  if (code === 'permission-denied' || code === 'unauthenticated') {
+    return 'Sign in again, then open the invitation link once more.';
+  }
+  return 'The invitation could not be accepted right now. Try again in a moment.';
+}
+
+function hostAcceptInvite() {
+  const token = inviteAcceptRuntime.token;
+  if (!token || inviteAcceptRuntime.status === 'working') return Promise.resolve(null);
+  inviteAcceptRuntime.status = 'working';
+  inviteAcceptRuntime.message = '';
+  renderSoon();
+  return authCall('acceptDepartmentInvitation', { token }).then(result => {
+    const department = (result && result.departmentId) || '';
+    inviteAcceptRuntime.departmentId = department;
+    inviteAcceptRuntime.status = result && result.alreadyMember ? 'alreadyMember' : 'accepted';
+    inviteAcceptRuntime.message = result && result.alreadyMember
+      ? 'You are already on the ' + department + ' roster, so nothing changed.'
+      : 'You have joined ' + department + '. Set your availability so leaders know when you can serve.';
+    // The new profile changes what this account can see and edit.
+    departmentRuntime.ownLoaded = false;
+    departmentRuntime.ownError = '';
+    loadOwnDepartmentProfiles().catch(() => {});
+    renderSoon();
+    return result;
+  }).catch(error => {
+    inviteAcceptRuntime.status = 'failed';
+    inviteAcceptRuntime.message = inviteFailureMessage(error);
+    renderSoon();
+    throw error;
+  });
+}
 
 /* ================= Section 4 increment 4: Presider (My service, Songs
    confirm, History). Song picking itself (the "Songs"/#songs/library
@@ -2409,19 +2645,35 @@ function hostPendingInvite(department) { return inviteRuntime[department] || nul
    docs/runs/compact-phone-refactor/lanes/S4.md limitations. ================= */
 
 /* Section 3 stale-save witness for saveSongService: setlist.revision
-   (missing reads as 0) and updatedAt "from the setlist as loaded", captured
-   the first time the My-service list shows this service, not re-read fresh
-   at confirm time. A service with no setlist doc yet gets no witness (a
-   brand-new setlist that does not exist yet, per the ruling). Updated after
-   a successful confirm so a second confirm in the same session uses the
-   revision the server just returned. */
+   (missing reads as 0) and updatedAt, taken from the setlist this screen is
+   actually displaying. A service with no setlist doc yet gets no witness (a
+   brand-new setlist that does not exist yet, per the ruling).
+
+   Confirm has no compact draft of its own: it reads the live setlist
+   (setlistIndex) at the moment it runs, and the presider picks the songs in
+   the legacy song-app.js picker, which bumps the setlist's updatedAt. So a
+   witness captured once and never refreshed goes stale the instant the
+   presider picks a song, and Confirm would always be rejected as a conflict
+   against an edit the presider made themselves. The witness is therefore
+   re-captured whenever the displayed setlist's revision or updatedAt moves,
+   except while that service's own confirm is in flight, where the witness in
+   hand is the one the pending save is using. */
 const presiderSongWitness = Object.create(null);
 function ensurePresiderSongWitness(serviceId) {
-  if (!(serviceId in presiderSongWitness)) {
-    const sl = setlistIndex[serviceId];
-    presiderSongWitness[serviceId] = sl
-      ? { expectedRevision: Number.isSafeInteger(sl.revision) ? sl.revision : 0, expectedUpdatedAt: sl.updatedAt }
-      : null;
+  const sl = setlistIndex[serviceId];
+  const held = presiderSongWitness[serviceId];
+  const saving = songSaveControllers[serviceId] && songSaveControllers[serviceId].state().status === 'saving';
+  if (saving && serviceId in presiderSongWitness) return held;
+  if (!sl) {
+    presiderSongWitness[serviceId] = null;
+    return null;
+  }
+  const live = {
+    expectedRevision: Number.isSafeInteger(sl.revision) ? sl.revision : 0,
+    expectedUpdatedAt: sl.updatedAt
+  };
+  if (!held || held.expectedRevision !== live.expectedRevision || held.expectedUpdatedAt !== live.expectedUpdatedAt) {
+    presiderSongWitness[serviceId] = live;
   }
   return presiderSongWitness[serviceId];
 }
@@ -2446,7 +2698,13 @@ function hostConfirmSongsRun(serviceId) {
   const list = setlistIndex[serviceId] || {};
   const songs = (list.songs || []).map(s => (s && typeof s === 'object') ? (s.id || s.songId || '') : s).filter(Boolean);
   if (!songs.length) return Promise.reject(new Error('Pick at least one song before confirming.'));
-  const witness = ensurePresiderSongWitness(serviceId);
+  /* The witness comes from the very setlist object these songs were read
+     from, so it always matches what the presider is looking at, including
+     their own picks made a moment ago in the legacy picker. */
+  const witness = setlistIndex[serviceId]
+    ? { expectedRevision: Number.isSafeInteger(list.revision) ? list.revision : 0, expectedUpdatedAt: list.updatedAt }
+    : null;
+  presiderSongWitness[serviceId] = witness;
   return authCall('saveSongService', Object.assign({
     serviceId, songs, glorySong: list.glorySong || null, thanksSong: list.thanksSong || null,
     notes: list.notes || '', confirm: true
@@ -2588,6 +2846,7 @@ function buildHost() {
     departmentRosterReady: hostDepartmentRosterReady,
     memberSearchResults: hostMemberSearchResults,
     pendingInvite: hostPendingInvite,
+    inviteState: hostInviteState,
     presiderServices: hostPresiderServices,
     songSaveState: hostSongSaveState,
     songHistoryReady: hostSongHistoryReady,
@@ -2611,6 +2870,9 @@ function buildHost() {
       acknowledgeConflict: hostAcknowledgeConflict,
       addMember: hostAddMember,
       createInvite: hostCreateInvite,
+      shareInvite: hostShareInvite,
+      copyInvite: hostCopyInvite,
+      acceptInvite: hostAcceptInvite,
       confirmSongs: hostConfirmSongs,
       removeHistorySong: hostRemoveHistorySong,
       retrySongHistory: hostRetrySongHistory
@@ -4864,6 +5126,7 @@ async function initFirebase(config) {
     fsMod.query(fsMod.collection(db, 'schedule'), fsMod.where('date', '>=', isoDaysAgo(30))),
     snap => {
       if (historyLoaded || snap.empty) return;
+      rememberServerOwnedServiceFields(snap.docs);
       state.services = snap.docs.map(d => d.data());
       canonicalizeStateNames();
       setSyncPill(true);
@@ -4891,8 +5154,9 @@ async function initFirebase(config) {
       return;
     }
     firstSnapshot = false;
-      state.services = snap.docs.map(d => d.data());
-      canonicalizeStateNames();
+    rememberServerOwnedServiceFields(snap.docs);
+    state.services = snap.docs.map(d => d.data());
+    canonicalizeStateNames();
     fb.knownIds = snap.docs.map(d => d.id);
     setSyncPill(true); // data has landed, flip the pill to live now, not before
     scheduleDataReady = true;

@@ -21,6 +21,7 @@ const permissions = require('./permissions');
 const { createDepartmentHandlers, assignmentIdFor } = require('./department-handlers');
 const { currentRevision, nextRevision } = require('./revision');
 const { createCompactWorkflowHandlers } = require('./compact-workflows');
+const { createCompactMembershipHandlers } = require('./compact-membership');
 
 initializeApp();
 const db = getFirestore();
@@ -39,6 +40,13 @@ const compactWorkflowHandlers = createCompactWorkflowHandlers({
   now: () => Date.now(),
   permissionConfig: () => runtimePermissionConfig(),
   logger
+});
+/* createCompactMembershipHandlers({ db, now, randomBytes }): randomBytes
+   defaults to Node's crypto.randomBytes, which is what the interface ruling
+   asks for, so only db and now are passed here. */
+const compactMembershipHandlers = createCompactMembershipHandlers({
+  db,
+  now: () => Date.now()
 });
 
 const MEMBER_ALIASES = Object.freeze({
@@ -425,6 +433,25 @@ exports.saveSongService = exposeDepartmentCallable(
 );
 exports.correctSongHistory = exposeDepartmentCallable(
   compactWorkflowHandlers.correctSongHistory
+);
+
+/* Membership and invitations (S3-MEMBERSHIP-INTERFACE.md). exposeDepartmentCallable
+   only establishes the verified, active, current-role, no-forced-PIN actor;
+   each handler applies its own authorization on top. Search, create and
+   revoke call assertManagement for the department; accept deliberately does
+   not, because any signed-in member may redeem an invitation they were sent,
+   which is exactly what this wrapper allows. */
+exports.searchDepartmentCandidates = exposeDepartmentCallable(
+  compactMembershipHandlers.searchDepartmentCandidates
+);
+exports.createDepartmentInvitation = exposeDepartmentCallable(
+  compactMembershipHandlers.createDepartmentInvitation
+);
+exports.revokeDepartmentInvitation = exposeDepartmentCallable(
+  compactMembershipHandlers.revokeDepartmentInvitation
+);
+exports.acceptDepartmentInvitation = exposeDepartmentCallable(
+  compactMembershipHandlers.acceptDepartmentInvitation
 );
 
 /* ---- automatic song-history recorder ----

@@ -96,6 +96,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .wd-assignment-name { font-weight: 650; }
 .wd-assignment-row.mine .wd-assignment-name { color: var(--brand-blue-deep); }
 .wd-assignment-open { color: var(--faint); font-style: italic; }
+.wd-assignment-note { color: var(--faint); font-size: 12.5px; text-align: right; }
+
+/* An invite link is one long unbroken string; it must wrap rather than push
+   the phone layout sideways. */
+.wd-invite-link { font-size: 12.5px; word-break: break-all; overflow-wrap: anywhere; margin: 6px 0; }
+.wd-invite-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.wd-invite-actions button { min-height: 44px; }
+.wd-invite-screen { display: flex; flex-direction: column; gap: 10px; }
+.wd-invite-screen button { min-height: 44px; }
 
 .wd-pager { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
 .wd-pager-btn { min-height: 40px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }

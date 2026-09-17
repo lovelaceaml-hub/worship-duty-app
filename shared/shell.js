@@ -12,7 +12,7 @@ import {
   buildScheduleInfo, buildAppearanceInfo, buildUnavailableInfo, buildDutiesInfo,
   buildAvailabilityInfo, buildRemindersInfo, buildManageScheduleInfo, buildAttentionInfo,
   buildManageMembersInfo, buildManageSettingsInfo,
-  buildSongsMyServiceInfo, buildSongsHistoryInfo, screenForRoute
+  buildSongsMyServiceInfo, buildSongsHistoryInfo, buildInviteInfo, screenForRoute
 } from './screens.js';
 
 const SHEET_TIMEOUT_MS = 7000;
@@ -210,6 +210,7 @@ function renderReady() {
   else if (screenId === 'manageSettings') info = buildManageSettingsInfo(hostRef);
   else if (screenId === 'songsMyService') info = buildSongsMyServiceInfo(hostRef, state.memory('#songs/my-service'));
   else if (screenId === 'songsHistory') info = buildSongsHistoryInfo(hostRef, state.memory('#songs/history'));
+  else if (screenId === 'invite') info = buildInviteInfo(hostRef, route);
   else if (screenId === 'appearance') info = Object.assign(buildAppearanceInfo(hostRef), { returnRoute: state.startRouteFor(account) });
   else if (screenId === 'unavailable') info = buildUnavailableInfo(hostRef, route);
   else info = { kind: legacyKindFor(route) };
@@ -400,6 +401,15 @@ function onDocClick(e) {
   else if (act === 'wd-member-invite') {
     if (hostRef.actions && hostRef.actions.createInvite) hostRef.actions.createInvite(actEl.dataset.dept).then(renderNow).catch(renderNow);
   }
+  else if (act === 'wd-invite-share') {
+    if (hostRef.actions && hostRef.actions.shareInvite) hostRef.actions.shareInvite(actEl.dataset.dept).then(renderNow).catch(renderNow);
+  }
+  else if (act === 'wd-invite-copy') {
+    if (hostRef.actions && hostRef.actions.copyInvite) hostRef.actions.copyInvite(actEl.dataset.dept).then(renderNow).catch(renderNow);
+  }
+  else if (act === 'wd-invite-accept') {
+    if (hostRef.actions && hostRef.actions.acceptInvite) hostRef.actions.acceptInvite().then(renderNow).catch(renderNow);
+  }
   else if (act === 'wd-song-confirm') {
     if (hostRef.actions && hostRef.actions.confirmSongs) hostRef.actions.confirmSongs(actEl.dataset.svc).then(renderNow).catch(renderNow);
   }
@@ -447,6 +457,11 @@ export function startShell(host) {
   hostRef = host;
   mountEl = document.getElementById('wd-app');
   attachListeners();
+  /* An invitation link is normally opened by someone who is not signed in
+     yet, and the sign-in phase renders over whatever route was asked for.
+     Holding it as the pending destination is what carries it across sign-in;
+     it is consumed exactly once, on the first render after phase `ready`. */
+  if (screenForRoute(state.route()) === 'invite') state.setPendingDestination(state.route());
   const initialMode = (window.WD_APPEARANCE && LAYOUT_IDS.includes(window.WD_APPEARANCE.mode)) ? window.WD_APPEARANCE.mode : 'classic';
   // The layout module for the chosen appearance is already in this module
   // graph (see layouts/index.js), so the very first paint can use its own

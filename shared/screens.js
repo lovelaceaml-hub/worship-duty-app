@@ -234,10 +234,33 @@ export function buildSongsHistoryInfo(host, mem) {
   return { loaded, error, count: filtered.length, page: clampedPage, totalPages, entries: pageItems, query: (mem && mem.query) || '' };
 }
 
+/* -------- Accepting a department invitation (#invite/<token>) -------- */
+
+export function buildInviteInfo(host, route) {
+  const state = (typeof host.inviteState === 'function' ? host.inviteState(route) : null) ||
+    { status: 'invalid', message: 'That invitation link is not complete.' };
+  const account = host.account();
+  return {
+    status: state.status,
+    departmentId: state.departmentId || '',
+    message: state.message || '',
+    memberName: (account && account.name) || state.memberName || '',
+    startRoute: startRouteForAccount(account)
+  };
+}
+
+function startRouteForAccount(account) {
+  if (!account) return '#schedule';
+  if (account.isAdmin) return '#manage/attention';
+  if (account.canManage) return '#manage/schedule';
+  if (account.isPresider) return '#songs/my-service';
+  return '#duties';
+}
+
 export const SCREEN_IDS = [
   'schedule', 'duties', 'availability', 'reminders',
   'manageSchedule', 'attention', 'manageMembers', 'manageSettings',
-  'songsMyService', 'songsHistory',
+  'songsMyService', 'songsHistory', 'invite',
   'appearance', 'unavailable', 'legacy'
 ];
 
@@ -252,6 +275,7 @@ export function screenForRoute(route) {
   if (route === '#manage/settings') return 'manageSettings';
   if (route === '#songs/my-service') return 'songsMyService';
   if (route === '#songs/history') return 'songsHistory';
+  if (String(route || '').indexOf('#invite/') === 0) return 'invite';
   if (route === '#appearance') return 'appearance';
   if (route === '#unavailable') return 'unavailable';
   return 'legacy';

@@ -248,14 +248,27 @@ function screenManageMembers(info, c) {
     else if (!info.searchResult.members.length) html += c.emptyState('No registered member matches that name.');
     else html += '<div class="wd-week-range">Search results</div>' + info.searchResult.members.map(m => memberSearchRow(m, info.department, c)).join('');
   }
-  html += '<div class="wd-week-range">' + info.department + ' roster</div>';
+  html += '<div class="wd-week-range">' + c.esc(info.department) + ' roster</div>';
   if (!info.rosterLoaded) html += c.skeleton(3);
   else if (!info.roster.length) html += c.emptyState('No members on this roster yet.');
   else html += info.roster.map(p => memberRosterRow(p, c)).join('');
   html += '<button type="button" class="wd-ghost" data-act="wd-member-invite" data-dept="' + c.esc(info.department) + '">Create invite link</button>';
   if (info.invite) {
-    html += info.invite.error ? c.warning(info.invite.error)
-      : '<div class="wd-request-item"><div class="wd-request-note">Invite link (single-use, expires in 7 days):</div><div class="wd-request-note">' + c.esc(info.invite.token || '') + '</div></div>';
+    if (info.invite.error) html += c.warning(info.invite.error);
+    else if (info.invite.link) {
+      const dept = c.esc(info.department);
+      html += '<div class="wd-request-item">' +
+        '<div class="wd-request-note">Invite link for ' + dept + '. It can be used once and expires in 7 days.</div>' +
+        '<div class="wd-invite-link">' + c.esc(info.invite.link) + '</div>' +
+        '<div class="wd-invite-actions">' +
+        (info.invite.canShare
+          ? '<button type="button" class="wd-primary" data-act="wd-invite-share" data-dept="' + dept + '">Share</button>'
+          : '') +
+        '<button type="button" class="wd-ghost" data-act="wd-invite-copy" data-dept="' + dept + '">Copy link</button>' +
+        '</div>' +
+        (info.invite.note ? '<div class="wd-request-note">' + c.esc(info.invite.note) + '</div>' : '') +
+        '</div>';
+    }
   }
   return '<div class="wd-manage-members-screen">' + html + '</div>';
 }
@@ -299,9 +312,17 @@ function screenSongsMyService(info, c) {
 
 function historyEntryRow(entry, c) {
   const source = entry.historySource === 'automatic' ? 'Recorded automatically' : entry.historySource === 'corrected' ? 'Corrected' : 'Recorded';
+  /* A recorded service must keep at least one song: the server's correction
+     handler requires a non-empty list, so offering Remove on the last one
+     would only ever produce an error. The rule stays on the server; this
+     explains it here instead of letting the member find out by failing. */
+  const last = (entry.songs || []).length === 1;
   const songs = (entry.songs || []).map(s =>
     '<div class="wd-assignment-row"><span class="wd-assignment-duty">' + c.esc(s.title || s.id) + '</span>' +
-    '<button type="button" class="wd-danger-link" data-act="wd-history-remove-song" data-svc="' + c.esc(entry.serviceId) + '" data-song="' + c.esc(s.id) + '">Remove</button></div>'
+    (last
+      ? '<span class="wd-assignment-note">Last song, cannot be removed</span>'
+      : '<button type="button" class="wd-danger-link" data-act="wd-history-remove-song" data-svc="' + c.esc(entry.serviceId) + '" data-song="' + c.esc(s.id) + '">Remove</button>') +
+    '</div>'
   ).join('');
   return '<div class="wd-request-item"><div class="wd-request-head"><span>' + c.esc(entry.worship) + ' ' + c.esc(entry.service) + ', ' + c.esc(fmtDayLabel(entry.date)) + '</span>' +
     '<span class="wd-status-chip">' + c.esc(source) + '</span></div>' + (songs || c.emptyState('No songs recorded.')) + '</div>';
@@ -391,6 +412,33 @@ export function createLayout(config) {
       '<p><button class="wd-appearance-back" data-route="' + info.startRoute + '">Go to your workspace</button></p></div>';
   }
 
+  /* Accepting a department invitation. Every outcome the server can return is
+     named here in plain words; none of them shows the token. */
+  function screenInvite(info, c) {
+    const back = '<p><button class="wd-appearance-back" data-route="' + (info.startRoute || '#duties') + '">Go to your workspace</button></p>';
+    if (info.status === 'invalid') {
+      return '<div class="wd-invite-screen">' + c.warning(info.message) + back + '</div>';
+    }
+    if (info.status === 'working') {
+      return '<div class="wd-invite-screen"><p>Joining the department...</p>' + c.skeleton(2) + '</div>';
+    }
+    if (info.status === 'accepted' || info.status === 'alreadyMember') {
+      return '<div class="wd-invite-screen">' +
+        '<div class="wd-week-range">' + (info.status === 'accepted' ? 'You are in' : 'Already a member') + '</div>' +
+        '<p>' + c.esc(info.message) + '</p>' +
+        '<p><button class="wd-primary" data-route="#availability">Set your availability</button></p>' + back + '</div>';
+    }
+    if (info.status === 'failed') {
+      return '<div class="wd-invite-screen">' + c.warning(info.message) +
+        '<p><button type="button" class="wd-ghost" data-act="wd-invite-accept">Try again</button></p>' + back + '</div>';
+    }
+    return '<div class="wd-invite-screen">' +
+      '<div class="wd-week-range">Department invitation</div>' +
+      '<p>A leader invited you to join a department. Accepting adds you to its roster' +
+      (info.memberName ? ' as ' + c.esc(info.memberName) : '') + '. It does not change your sign-in or your role.</p>' +
+      '<p><button type="button" class="wd-primary" data-act="wd-invite-accept">Accept invitation</button></p>' + back + '</div>';
+  }
+
   function screenLegacy(info, c) {
     return '<div class="wd-legacy" id="wd-legacy-mount" data-legacy-kind="' + (info.kind || 'my') + '"></div>';
   }
@@ -406,6 +454,7 @@ export function createLayout(config) {
       manageSchedule: screenManageSchedule, attention: screenAttention, manageMembers: screenManageMembers,
       manageSettings: screenManageSettings,
       songsMyService: screenSongsMyService, songsHistory: screenSongsHistory,
+      invite: screenInvite,
       appearance: screenAppearance, unavailable: screenUnavailable, legacy: screenLegacy
     }
   };

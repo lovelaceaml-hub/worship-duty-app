@@ -1800,6 +1800,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Department invitations hold token digests and are written only by the
+    // membership callables through the Admin SDK, which bypasses these rules.
+    // The catch-all below already denies this collection; this match states
+    // the boundary explicitly so a later edit cannot open it by accident.
+    match /departmentInvitations/{invitationId} {
+      allow read, write: if false;
+    }
+
     // Every collection not explicitly listed above is deny-by-default.
     match /{document=**} { allow read, write: if false; }
   }
