@@ -27,7 +27,7 @@ For the active compact-phone plan, Anthony explicitly selected no new test cases
 - `song-lib.js` behavior is consumed by the local Signal ingest service. Preserve its public behavior.
 - Preserve the site-wide lock unless an explicitly reviewed migration replaces it.
 - Preserve the four distinct appearance layouts and Appearance controls. The approved compact-phone plan replaces top main navigation with an always-visible floating bottom bar and compact secondary tabs.
-- Keep Original, Prism, Navy & Cream, Aurora, and maintenance on one Pacific-time current-or-next Schedule selector. Test a same-day 5:00 AM and 7:30 PM pair at 7:20 PM and 9:06 PM Pacific before any Hosting release. Preserve an explicitly selected past service while advancing the automatic default.
+- Keep Original, Prism, Navy & Cream, Aurora, and maintenance on one Pacific-time Schedule selector: the default shows the first service whose start is strictly after now, and advances to the next upcoming service at or after that service's start minute. Anthony changed this rule on 2026-09-17, replacing the old three-hour "stays current" window. Test a same-day 5:00 AM and 7:30 PM pair before any Hosting release: 7:29 PM shows the 7:30 PM service, 7:31 PM shows the next upcoming service; also test 2:29 PM shows the afternoon service and 2:31 PM shows the evening service. Preserve an explicitly selected past service while advancing the automatic default.
 - Do not wipe or reseed the production schedule. Production migrations or record deletion require a dry run and Anthony's explicit approval.
 
 ## Preview fidelity

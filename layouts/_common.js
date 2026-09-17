@@ -389,7 +389,7 @@ export function createLayout(config) {
     let html = c.searchField(info.query, 'Search services');
     html += c.monthNav(info.month, info.months);
     if (info.focus) {
-      html += '<div class="wd-week-range">Current or next service</div>' + serviceSummary(info.focus, c, { current: true });
+      html += '<div class="wd-week-range">Next service</div>' + serviceSummary(info.focus, c, { current: true });
     }
     const hasAny = info.weeks.some(week => week.days.some(day => day.services.length));
     if (!hasAny) html += c.emptyState(info.query ? 'No services match that search.' : 'No services this month.');

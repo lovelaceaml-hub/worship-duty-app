@@ -142,3 +142,88 @@ browser/device timezone to something east of Pacific by several hours (or
 `TZ=UTC` if this ran server-side), open `#manage/schedule` in the evening
 Pacific time, and compare the listed services to `#schedule`'s list for the same
 window. Not fixed, per instructions to record rather than repair.
+
+## 2026-09-17: Rule change: advance when a service starts
+
+Anthony changed the rule directly in this chat: "when a service time starts,
+it should then start to show the next service. Example: 2:29pm shows
+afternoon service; 2:31pm shows evening service; 7:45pm shows the next
+upcoming service." This replaces the three-hour "stays current" window
+verified read-only above. Product code, `AGENTS.md`, and this file were
+changed under this task's own instructions, given directly by Anthony in
+chat, not through any tool/system channel. Scope: same worktree
+(`claude/compact-integration`), same hard limits (no deploy, no
+`design-gallery/release.mjs`, no push, no production access, no `functions/`
+or `firestore.rules` changes).
+
+### Changes made
+
+- `app.js`: `preferredScheduleService` rewritten to return the first service
+  whose start is strictly after Pacific "now" (via the existing
+  `Intl`-based Pacific wall-clock technique, now factored into
+  `pacificWallNow()`), falling back to the most recent service when none is
+  upcoming. The three-hour active window is removed.
+- `app.js`: new `pacificTodayISO()` helper (reuses `pacificWallNow()`), used
+  only by `hostManageServices()` so the Manage/Department leader schedule
+  list filters on the Pacific calendar day instead of the device-local day
+  (the related defect recorded above). All other `todayISO()` callers are
+  unchanged.
+- `app.js` and `layouts/_common.js`: "Current or next service" label changed
+  to "Next service" (member Schedule screen and shared layout factory).
+- `docs/USER-MANUAL.md`: Schedule description updated to plain language
+  matching the new behavior.
+- `AGENTS.md`: trap line rewritten with the new rule and new test times.
+
+### Three-hour uses found, left alone
+
+- `song-app.js` `SERVICE_ACTIVE_WINDOW_MS` (presider song planner's current-
+  service window): unchanged, out of scope per instructions.
+- `functions/compact-workflows.js` `THREE_HOURS_MS` and the matching comment
+  in `functions/index.js` (server song-history recorder): unchanged, out of
+  scope per instructions and inside the `functions/` hard limit.
+
+### Method
+
+Same two methods as the original gate: a pure-function Node harness with the
+exact source of `preferredScheduleService`/`pacificWallNow` extracted
+unmodified, run under `TZ=UTC`, `TZ=Asia/Tokyo`, and `TZ=America/Los_Angeles`;
+and a localhost `?wdPreview=1` browser walkthrough with a `window.Date`
+override, `node design-gallery/build.mjs`, and `node --check` on both changed
+files.
+
+### Cases
+
+| Case | Expected | Actual | Result |
+| --- | --- | --- | --- |
+| 2:29 PM Pacific, afternoon/evening pair (all 3 TZs) | Afternoon service | Afternoon service | PASS |
+| 2:31 PM Pacific, same pair (all 3 TZs) | Evening service | Evening service | PASS |
+| 7:29 PM Pacific, 5:00 AM/7:30 PM same-day pair (all 3 TZs) | 7:30 PM service | 7:30 PM service | PASS |
+| 7:31 PM Pacific, same pair, no later service that day (all 3 TZs) | Falls back to the 7:30 PM service (most recent; no upcoming exists in this two-service fixture) | Same | PASS |
+| 7:45 PM Pacific, same pair (all 3 TZs) | Same fallback as 7:31 PM | Same | PASS |
+| Last service of the day at one minute past its start, next day has a service | Rolls to tomorrow's service | Rolled to tomorrow's service | PASS |
+| No upcoming service exists | Falls back to the most recent (chronologically last) service | Most recent service returned | PASS |
+| DST-adjacent date (2026-03-08, US spring-forward Sunday), before and after a 1:30 AM service's start | Advances at the start minute, no crash or timezone leak | Advanced correctly, identical across all 3 TZs | PASS |
+| `node design-gallery/build.mjs` | Passes, `verifyLayouts()` clean | Passed | PASS |
+| `node --check app.js` / `layouts/_common.js` | No syntax errors | Clean | PASS |
+| Browser: Original, Prism, Navy & Cream, Aurora, maintenance, seed data 2026-07-25 14:59 to 15:01 Pacific (`Date` override) | All five show "Next service" advancing from the 15:00 Afternoon-equivalent (Morning-then-Evening seed pair) service to the Evening service at 15:01, identically | All five advanced identically, no console errors | PASS |
+| Explicit past-month browse (July to May) while clock stays at 15:01 Pacific | Browsed month stays on May; automatic "Next service" banner keeps showing the auto-advanced service | Confirmed unaffected | PASS |
+
+### Limitations
+
+Same limitations as the original gate apply here: the fictional 5:00 AM/7:30
+PM pair and the 2:29/2:31 PM example were exercised in the Node harness, not
+injected into the live browser (seed data does not include that exact
+fixture); the browser walkthrough instead used the real seeded 2026-07-25
+Morning/Afternoon/Evening services at the 14:59/15:01 Pacific boundary, which
+exercises the same advance-at-start-minute behavior end to end.
+
+### Review
+
+A fresh, read-only Haiku Explore-agent review of this diff ran focused on
+boundary minutes, timezone handling, and any leftover caller still on the
+old three-hour rule. Verdict: PASS on all checked points (boundary-minute
+correctness, Pacific timezone derivation with no device-local leak and no
+hardcoded DST offset, no leftover three-hour Schedule-default code,
+`song-app.js` and `functions/` confirmed untouched, `hostManageServices()`
+confirmed on the new Pacific-based date helper with other `todayISO()`
+callers unchanged). No bug found; no correction needed.
