@@ -2,7 +2,23 @@
 
 Status: Four clickable Weekbook appearances and role-screen designs are complete. Gemini Low review returned no material findings. Brief phone walkthroughs passed. Runtime implementation and release remain stopped at the handoff boundary. Data-dependent limitations below remain explicit.
 
-Last updated: 2026-09-15.
+Last updated: 2026-09-15. Status update added 2026-09-17 (see below).
+
+## Status update, 2026-09-17
+
+The handoff boundary described below has since been lifted by Anthony. The
+design work this document records is unchanged and still authoritative, but
+the "runtime implementation has not started" framing further down is
+historical. Since 2026-09-15: Section 2 (shared runtime foundation), Section 3
+(server workflows), Section 4 (role screens), Section 5A (documentation) and
+Section 5B (indexing) were each built and reviewed on their own branches and
+merged into the integration branch `claude/compact-integration`. Nothing has
+been deployed, and production still runs its unchanged live behavior. For the
+current state see `docs/PLAN-COMPACT-PHONE-REFACTOR.md` and its Build log, the
+lane records in `docs/runs/compact-phone-refactor/lanes/`, and the binding
+interface rulings in `docs/runs/compact-phone-refactor/decisions/`. The design
+artifacts themselves remain owned by the design lane in
+`docs/design/prototype/compact-phone/` and its `HANDOFF-MAP.md`.
 
 ## Approved direction and boundary
 

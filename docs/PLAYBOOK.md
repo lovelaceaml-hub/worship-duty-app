@@ -1,6 +1,6 @@
 # Playbook
 
-Last updated: 2026-09-15.
+Last updated: 2026-09-17.
 
 This is the one document to follow if you (Anthony) need to run the app day to
 day, or hand a task to an AI coding tool. It assumes no developer background.
@@ -13,10 +13,18 @@ day, or hand a task to an AI coding tool. It assumes no developer background.
 ### Current status
 
 The approved [complete phone refactor plan](PLAN-COMPACT-PHONE-REFACTOR.md) is
-in progress. Prototype approval and the integrated preview are still pending,
-so the production app remains on its current live behavior. Use the guidance
-below for the released app; planned phone navigation or other plan features
-are not instructions for the current live app.
+in progress, on separate development branches that have not been merged,
+reviewed as a whole, or released. The phone prototypes (Section 1) are
+finished and approved. The shared runtime foundation (Section 2) and the
+server-side workflows (Section 3) are built and reviewed on their own
+branches. The role screens that use them (Section 4) are built and reviewed
+as well, and all of that work is now merged onto a single integration branch
+awaiting your preview, a final review, and your release approval. None of
+this has reached the live site: production still runs
+its current, unchanged behavior. Use the guidance below for the released app;
+planned phone navigation, the floating bottom bar, or other plan features are
+not instructions for the current live app until an integrated preview and
+release are complete.
 
 For what each screen does day-to-day, see the main [README](../README.md).
 For architecture detail, see [HANDOFF.md](HANDOFF.md). For the visual design

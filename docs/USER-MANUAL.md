@@ -94,8 +94,13 @@ services and assignments remain when the sheet has no matching row.
 Use **Appearance** to choose Original, Prism, Navy & Cream, or Aurora. These
 four appearances share the released schedule, account sign-in, permissions,
 and song data. The approved [complete phone refactor plan](PLAN-COMPACT-PHONE-REFACTOR.md)
-is in progress; prototype approval and the integrated preview are pending.
-Planned refactor behavior is not live until that work is approved and released.
+is in progress on separate development branches: the phone prototypes are
+approved, and the compact phone layout, its server workflows, and the role
+screens are built, reviewed, and merged onto one integration branch, but not
+previewed, finally reviewed, or released. Nothing in this manual
+above has changed because of it. Planned refactor behavior (an always-visible
+bottom navigation bar, compact tabs, and similar) is not live until an
+integrated preview and release are complete.
 
 ## Getting help
 
