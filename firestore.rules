@@ -378,6 +378,7 @@ service cloud.firestore {
         'updatedAt',
         'updatedByUid',
         'updatedBy',
+        'revision',
         'createdAt',
         'createdBy',
         'attribution',
@@ -624,7 +625,8 @@ service cloud.firestore {
         'assignedBy',
         'profileId',
         'overriddenAt',
-        'overriddenByUid'
+        'overriddenByUid',
+        'revision'
       ]) && secretFieldsAbsent(data);
     }
 
