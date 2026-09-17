@@ -8,7 +8,7 @@ const sheetLib = require('./sheet-lib');
 const icsLib = require('./ics-lib');
 const { publicScheduleService } = require('./public-schedule');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
 const {
@@ -19,6 +19,8 @@ const {
 } = require('./member-auth');
 const permissions = require('./permissions');
 const { createDepartmentHandlers, assignmentIdFor } = require('./department-handlers');
+const { currentRevision, nextRevision } = require('./revision');
+const { createCompactWorkflowHandlers } = require('./compact-workflows');
 
 initializeApp();
 const db = getFirestore();
@@ -28,6 +30,14 @@ const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
 const departmentHandlers = createDepartmentHandlers({
   db,
   now: () => Date.now(),
+  logger
+});
+/* runtimePermissionConfig is a hoisted function declaration defined later
+   in this file; passing it by reference here is safe. */
+const compactWorkflowHandlers = createCompactWorkflowHandlers({
+  db,
+  now: () => Date.now(),
+  permissionConfig: () => runtimePermissionConfig(),
   logger
 });
 
@@ -60,6 +70,23 @@ async function reconcileScheduleAssignmentProjection(serviceId, before, after) {
   if (!changedDuties.length) return;
   const batch = db.batch();
   let writes = 0;
+  /* Self-healing for the Needs-replacement markers written by
+     saveMemberAvailability/resolveDutyAttention (Section 3): a marker is
+     live only while schedule.assignments[duty] still equals
+     needsReplacement[duty].memberName. This covers the legacy direct-write
+     and Sheet-sync paths, which do not know about markers at all. */
+  const existingNeedsReplacement = (after && after.needsReplacement) || {};
+  const needsReplacementClears = {};
+  for (const duty of changedDuties) {
+    const marker = existingNeedsReplacement[duty];
+    if (marker && String(afterAssignments[duty] || '') !== String(marker.memberName || '')) {
+      needsReplacementClears[duty] = FieldValue.delete();
+    }
+  }
+  if (Object.keys(needsReplacementClears).length) {
+    batch.set(db.collection('schedule').doc(serviceId), { needsReplacement: needsReplacementClears }, { merge: true });
+    writes += 1;
+  }
   for (const duty of changedDuties) {
     const departmentId = permissions.departmentForDuty(duty);
     if (!departmentId) continue;
@@ -103,7 +130,8 @@ async function reconcileScheduleAssignmentProjection(serviceId, before, after) {
       assignedByUid: 'schedule-projection',
       assignedBy: 'schedule-projection',
       override: true,
-      authorization: 'administrator-schedule-reconciliation'
+      authorization: 'administrator-schedule-reconciliation',
+      revision: nextRevision(existing.exists ? (existing.data() || {}) : {})
     }, { merge: false });
     writes += 1;
   }
@@ -359,7 +387,8 @@ function exposeDepartmentCallable(handler) {
       const message = code === 'internal'
         ? 'The department authorization service is unavailable.'
         : String(error.message || 'The requested department action failed.');
-      throw new HttpsError(code, message);
+      const details = error && error.details && typeof error.details === 'object' ? error.details : undefined;
+      throw new HttpsError(code, message, details);
     }
   });
 }
@@ -384,6 +413,29 @@ exports.unassignDepartmentDuty = exposeDepartmentCallable(
 );
 exports.overrideDepartmentAssignment = exposeDepartmentCallable(
   departmentHandlers.overrideDepartmentAssignment
+);
+exports.saveMemberAvailability = exposeDepartmentCallable(
+  compactWorkflowHandlers.saveMemberAvailability
+);
+exports.resolveDutyAttention = exposeDepartmentCallable(
+  compactWorkflowHandlers.resolveDutyAttention
+);
+exports.saveSongService = exposeDepartmentCallable(
+  compactWorkflowHandlers.saveSongService
+);
+exports.correctSongHistory = exposeDepartmentCallable(
+  compactWorkflowHandlers.correctSongHistory
+);
+
+/* ---- automatic song-history recorder ----
+   Every 30 minutes, record confirmed song lists whose service's three-hour
+   window has passed. Idempotent: a second run finds status 'sung' and does
+   nothing. */
+exports.songHistoryRecorder = onSchedule(
+  { schedule: 'every 30 minutes', timeZone: TZ, region: REGION },
+  async () => {
+    await compactWorkflowHandlers.recordSongHistory();
+  }
 );
 
 async function readCurrentAccount(request) {

@@ -10,6 +10,7 @@
  */
 
 const authz = require('./department-auth.js');
+const { currentRevision, nextRevision, assertFresh } = require('./revision.js');
 
 const PROFILE_PATCH_FIELDS = new Set(authz.PROFILE_MUTABLE_FIELDS);
 const PROFILE_DECISION_FIELDS = Object.freeze([
@@ -35,12 +36,24 @@ const ASSIGNMENT_COMMAND_FIELDS = new Set([
   'time',
   'override',
   'overrideReason',
-  'profileId'
+  'profileId',
+  'expectedRevision',
+  'expectedMemberName'
 ]);
+/* Section 3 witness fields, stripped before the command reaches
+   authz.normalizeAssignment (which rejects unknown top-level fields). */
+const ASSIGNMENT_REVISION_FIELDS = ['expectedRevision', 'expectedMemberName'];
 
-function errorWithCode(code, message) {
+function assignmentCommandWithoutRevisionFields(data) {
+  const clean = { ...data };
+  ASSIGNMENT_REVISION_FIELDS.forEach(field => { delete clean[field]; });
+  return clean;
+}
+
+function errorWithCode(code, message, details) {
   const error = new Error(message);
   error.code = code;
+  if (details && typeof details === 'object') error.details = details;
   return error;
 }
 
@@ -74,15 +87,6 @@ function inputData(request) {
 
 function profileRef(db, department, memberUid) {
   return db.collection('departments').doc(department).collection('members').doc(memberUid);
-}
-
-async function readProfile(db, department, memberUid) {
-  const reference = profileRef(db, department, memberUid);
-  const snapshot = await reference.get();
-  if (!snapshot.exists) {
-    throw errorWithCode('not-found', 'The department member profile was not found.');
-  }
-  return { reference, data: snapshot.data() || {} };
 }
 
 function pathInputs(data) {
@@ -120,7 +124,9 @@ function patchFromRequest(data, options = {}) {
     'departmentId',
     'department',
     'memberUid',
-    'uid'
+    'uid',
+    'expectedRevision',
+    'expectedUpdatedAt'
   ]);
   const unknownCommandField = Object.keys(data).find(key => !allowedCommandFields.has(key));
   if (unknownCommandField) {
@@ -382,28 +388,51 @@ function createDepartmentHandlers(options = {}) {
     } catch (error) {
       throw error.code ? error : errorWithCode('invalid-argument', error.message);
     }
-    const current = await readProfile(db, path.department, path.memberUid);
     const patch = patchFromRequest(data, updateOptions);
+    const expectedRevision = data.expectedRevision;
+    const expectedUpdatedAt = data.expectedUpdatedAt;
     const at = now();
-    const next = profileWithPatch(current.data, patch, actor, at);
-    const authorizationCandidate = { ...next };
-    if (Object.prototype.hasOwnProperty.call(current.data, 'attribution')) {
-      authorizationCandidate.attribution = current.data.attribution;
-    } else {
-      delete authorizationCandidate.attribution;
+    if (typeof db.runTransaction !== 'function') {
+      throw errorWithCode('failed-precondition', 'Atomic profile storage is unavailable.');
     }
-    if (Object.prototype.hasOwnProperty.call(current.data, 'fieldAttribution')) {
-      authorizationCandidate.fieldAttribution = current.data.fieldAttribution;
-    } else {
-      delete authorizationCandidate.fieldAttribution;
-    }
-    const result = authz.authorizeProfileUpdate(actor, current.data, authorizationCandidate);
-    rejectDecision(result);
-    await current.reference.set(next, { merge: false });
+    const reference = profileRef(db, path.department, path.memberUid);
+    let next;
+    await db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(reference);
+      if (!snapshot.exists) {
+        throw errorWithCode('not-found', 'The department member profile was not found.');
+      }
+      const before = snapshot.data() || {};
+      assertFresh({
+        expectedRevision,
+        expectedWitness: expectedUpdatedAt,
+        currentRevision: currentRevision(before),
+        currentWitness: before.updatedAt,
+        details: { updatedAt: before.updatedAt, updatedBy: before.updatedBy }
+      });
+      const candidate = profileWithPatch(before, patch, actor, at);
+      candidate.revision = nextRevision(before);
+      const authorizationCandidate = { ...candidate };
+      if (Object.prototype.hasOwnProperty.call(before, 'attribution')) {
+        authorizationCandidate.attribution = before.attribution;
+      } else {
+        delete authorizationCandidate.attribution;
+      }
+      if (Object.prototype.hasOwnProperty.call(before, 'fieldAttribution')) {
+        authorizationCandidate.fieldAttribution = before.fieldAttribution;
+      } else {
+        delete authorizationCandidate.fieldAttribution;
+      }
+      const result = authz.authorizeProfileUpdate(actor, before, authorizationCandidate);
+      rejectDecision(result);
+      next = candidate;
+      transaction.set(reference, next, { merge: false });
+    });
     return {
       ok: true,
       departmentId: path.department,
       memberUid: path.memberUid,
+      revision: next.revision,
       profile: next
     };
   }
@@ -510,9 +539,11 @@ function createDepartmentHandlers(options = {}) {
     if (data.override === true) {
       throw errorWithCode('failed-precondition', 'Use the explicit administrator override callable.');
     }
+    const expectedRevision = data.expectedRevision;
+    const expectedMemberName = data.expectedMemberName;
     let assignment;
     try {
-      assignment = authz.normalizeAssignment(data);
+      assignment = authz.normalizeAssignment(assignmentCommandWithoutRevisionFields(data));
     } catch (error) {
       throw errorWithCode('invalid-argument', error.message);
     }
@@ -522,33 +553,46 @@ function createDepartmentHandlers(options = {}) {
     const profileReference = profileRef(db, assignment.departmentId, assignment.memberUid);
     const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
     let record;
+    let revisionValue;
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
       if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.');
-      const verifiedAssignment = assignmentForSchedule(assignment, scheduleSnapshot.data() || {});
+      const scheduleData = scheduleSnapshot.data() || {};
+      const verifiedAssignment = assignmentForSchedule(assignment, scheduleData);
       const profileSnapshot = await transaction.get(profileReference);
       if (!profileSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.');
       const profile = profileSnapshot.data() || {};
       if (assignment.memberName && assignment.memberName !== String(profile.memberName || profile.member || '')) {
         throw errorWithCode('invalid-argument', 'The member name does not match the verified profile.');
       }
+      const assignmentRevisions = scheduleData.assignmentRevisions || {};
+      const assignments = scheduleData.assignments || {};
+      assertFresh({
+        expectedRevision,
+        expectedWitness: expectedMemberName,
+        currentRevision: currentRevision({ revision: assignmentRevisions[verifiedAssignment.duty] }),
+        currentWitness: String(assignments[verifiedAssignment.duty] || ''),
+        details: { memberName: String(assignments[verifiedAssignment.duty] || '') }
+      });
       const result = authz.authorizeAssignment(actor, verifiedAssignment, profile);
       rejectDecision(result);
-      const assignments = scheduleSnapshot.data().assignments || {};
       const targetName = String(profile.memberName || profile.member || '');
       const conflictingDuty = Object.keys(assignments).find(duty => duty !== result.assignment.duty && assignments[duty] === targetName);
       if (conflictingDuty) throw errorWithCode('failed-precondition', 'The member is already serving in this service.');
+      revisionValue = nextRevision({ revision: assignmentRevisions[result.assignment.duty] });
       record = assignmentRecord(result.assignment, profile, actor, now(), {
         override: false,
-        authorization: 'normal-eligible-assignment'
+        authorization: 'normal-eligible-assignment',
+        revision: revisionValue
       });
       const assignmentReference = db.collection('departmentAssignments').doc(assignmentIdFor(result.assignment));
       transaction.set(assignmentReference, record, { merge: false });
       transaction.set(scheduleReference, {
-        assignments: { [result.assignment.duty]: record.memberName }
+        assignments: { [result.assignment.duty]: record.memberName },
+        assignmentRevisions: { [result.assignment.duty]: revisionValue }
       }, { merge: true });
     });
-    return { ok: true, assignment: record, override: false };
+    return { ok: true, revision: revisionValue, assignment: record, override: false };
   }
 
   async function overrideDepartmentAssignment(request) {
@@ -558,9 +602,11 @@ function createDepartmentHandlers(options = {}) {
     if (data.override !== true) {
       throw errorWithCode('failed-precondition', 'An explicit administrator override is required.');
     }
+    const expectedRevision = data.expectedRevision;
+    const expectedMemberName = data.expectedMemberName;
     let assignment;
     try {
-      assignment = authz.normalizeAssignment({ ...data, override: true });
+      assignment = authz.normalizeAssignment({ ...assignmentCommandWithoutRevisionFields(data), override: true });
     } catch (error) {
       throw errorWithCode('invalid-argument', error.message);
     }
@@ -575,27 +621,40 @@ function createDepartmentHandlers(options = {}) {
     const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
     let record;
     let auditId;
+    let revisionValue;
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
       if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.');
-      const verifiedAssignment = assignmentForSchedule(assignment, scheduleSnapshot.data() || {});
+      const scheduleData = scheduleSnapshot.data() || {};
+      const verifiedAssignment = assignmentForSchedule(assignment, scheduleData);
       const profileSnapshot = await transaction.get(profileReference);
       if (!profileSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.');
       const profile = profileSnapshot.data() || {};
       if (assignment.memberName && assignment.memberName !== String(profile.memberName || profile.member || '')) {
         throw errorWithCode('invalid-argument', 'The member name does not match the verified profile.');
       }
+      const assignmentRevisions = scheduleData.assignmentRevisions || {};
+      const assignments = scheduleData.assignments || {};
+      assertFresh({
+        expectedRevision,
+        expectedWitness: expectedMemberName,
+        currentRevision: currentRevision({ revision: assignmentRevisions[verifiedAssignment.duty] }),
+        currentWitness: String(assignments[verifiedAssignment.duty] || ''),
+        details: { memberName: String(assignments[verifiedAssignment.duty] || '') }
+      });
       const result = authz.authorizeAssignmentOverride(actor, verifiedAssignment, profile);
       rejectDecision(result);
       const id = assignmentIdFor(result.assignment);
       auditId = `administrator-assignment-override__${id}__${at}`;
+      revisionValue = nextRevision({ revision: assignmentRevisions[result.assignment.duty] });
       record = assignmentRecord(result.assignment, profile, actor, at, {
         override: true,
         authorization: 'administrator-override',
         overrideReason: result.assignment.overrideReason,
         overriddenAt: at,
         overriddenByUid: actor.uid,
-        auditId
+        auditId,
+        revision: revisionValue
       });
       const auditRecord = {
         action: 'administrator-assignment-override', authorization: 'administrator-override', override: true,
@@ -611,11 +670,13 @@ function createDepartmentHandlers(options = {}) {
       transaction.set(assignmentReference, record, { merge: false });
       transaction.set(auditReference, auditRecord, { merge: false });
       transaction.set(scheduleReference, {
-        assignments: { [result.assignment.duty]: record.memberName }
+        assignments: { [result.assignment.duty]: record.memberName },
+        assignmentRevisions: { [result.assignment.duty]: revisionValue }
       }, { merge: true });
     });
     return {
       ok: true,
+      revision: revisionValue,
       assignment: { ...record, auditId },
       override: true,
       auditId,
@@ -626,12 +687,21 @@ function createDepartmentHandlers(options = {}) {
   async function unassignDepartmentDuty(request) {
     const actor = requestActor(request);
     const data = inputData(request);
-    const allowed = new Set(['department', 'departmentId', 'duty', 'serviceId', 'serviceDate', 'date', 'serviceTime', 'time']);
+    const allowed = new Set([
+      'department', 'departmentId', 'duty', 'serviceId', 'serviceDate', 'date', 'serviceTime', 'time',
+      'expectedRevision', 'expectedMemberName'
+    ]);
     const unknown = Object.keys(data).find(key => !allowed.has(key));
     if (unknown) throw errorWithCode('invalid-argument', `Assignment field is not allowed: ${unknown}.`);
+    const expectedRevision = data.expectedRevision;
+    const expectedMemberName = data.expectedMemberName;
     let assignment;
     try {
-      assignment = authz.normalizeAssignment({ ...data, memberUid: actor.uid, override: false });
+      assignment = authz.normalizeAssignment({
+        ...assignmentCommandWithoutRevisionFields(data),
+        memberUid: actor.uid,
+        override: false
+      });
     } catch (error) {
       throw errorWithCode('invalid-argument', error.message);
     }
@@ -649,15 +719,31 @@ function createDepartmentHandlers(options = {}) {
     if (typeof db.runTransaction !== 'function') {
       throw errorWithCode('failed-precondition', 'Atomic schedule assignment storage is unavailable.');
     }
+    let revisionValue;
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
       if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.');
-      assignment = assignmentForSchedule(assignment, scheduleSnapshot.data() || {});
+      const scheduleData = scheduleSnapshot.data() || {};
+      assignment = assignmentForSchedule(assignment, scheduleData);
+      const assignmentRevisions = scheduleData.assignmentRevisions || {};
+      const assignments = scheduleData.assignments || {};
+      assertFresh({
+        expectedRevision,
+        expectedWitness: expectedMemberName,
+        currentRevision: currentRevision({ revision: assignmentRevisions[assignment.duty] }),
+        currentWitness: String(assignments[assignment.duty] || ''),
+        details: { memberName: String(assignments[assignment.duty] || '') }
+      });
+      revisionValue = nextRevision({ revision: assignmentRevisions[assignment.duty] });
       transaction.delete(assignmentReference);
-      transaction.set(scheduleReference, { assignments: { [assignment.duty]: '' } }, { merge: true });
+      transaction.set(scheduleReference, {
+        assignments: { [assignment.duty]: '' },
+        assignmentRevisions: { [assignment.duty]: revisionValue }
+      }, { merge: true });
     });
     return {
       ok: true,
+      revision: revisionValue,
       departmentId: assignment.departmentId,
       duty: assignment.duty,
       serviceId: assignment.serviceId
@@ -683,5 +769,11 @@ module.exports = {
   createDepartmentHandlers,
   assignmentIdFor,
   profileWithPatch,
-  requestActor
+  requestActor,
+  inputData,
+  profileRef,
+  assignmentForSchedule,
+  assignmentRecord,
+  errorWithCode,
+  rejectDecision
 };
