@@ -2,7 +2,7 @@
 
 ## Active compact-phone refactor
 
-The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progress on `codex/compact-phone-refactor`, based on clean commit `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`. Baseline and plan are saved. Two Astra High direction prototypes are ready for selection. Separate Luna High documentation, indexing, and standalone membership work is written; Gemini Low reviewed all four bounded units with final no-material-findings verdicts. Prototype approval still precedes runtime UI changes. Four distinct layouts share behavior. Production is unchanged. Historical notes below describe prior releases.
+The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progress on `codex/compact-phone-refactor`, based on clean commit `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`. Baseline and plan are saved. Anthony selected Weekbook. Four layouts with month navigation below search and verified current service data are complete, with bounded Gemini review and brief phone walkthroughs. See [the design handoff](COMPACT-DESIGN-HANDOFF.md). Anthony directed this task to end with a design handoff, before further runtime implementation or release. Separate Luna High documentation, indexing, and standalone membership work is written; Gemini Low reviewed all four bounded units with final no-material-findings verdicts. Prototype approval still precedes runtime UI changes. Four distinct layouts share behavior. Production is unchanged. Historical notes below describe prior releases.
 
 Last updated: 2026-09-15. Owner: Anthony (alovelace144@gmail.com).
 

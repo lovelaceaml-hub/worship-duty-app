@@ -142,6 +142,37 @@
       "planned_replacement_interface": "Shared Save state reports Unsaved, Saving, Saved, and Failed with server acknowledgement, draft retention, stale-save handling, and deduplicated taps. Release remains a guarded integration responsibility."
     }
   ],
+  "compact_design_handoff": {
+    "status": "Approved Weekbook direction for design handoff; shared production runtime integration remains planned",
+    "source_boundary": "The compact-phone files are local design evidence and do not add a released feature or replace the four current appearance adapters.",
+    "prototype_sources": [
+      {"path": "docs/design/prototype/compact-phone/index.html", "role": "four-appearance Weekbook chooser with role selection"},
+      {"path": "docs/design/prototype/compact-phone/weekbook.html", "role": "Weekbook route shell and prototype entry page"},
+      {"path": "docs/design/prototype/compact-phone/app.js", "role": "shared current-snapshot adapter, explicit layout renderers, role routes and browser-local demonstrations"},
+      {"path": "docs/design/prototype/compact-phone/styles.css", "role": "shared controls and four distinct Weekbook layout arrangements"}
+    ],
+    "approved_direction": {
+      "name": "Weekbook",
+      "month_navigation": "Place month navigation below search and above weekly cards.",
+      "handoff": "Finish the designs, then hand off. Runtime work and release remain future scope."
+    },
+    "current_snapshot_boundary": {
+      "resource": "/preview-data.js",
+      "source_control": "One current-service and public-song snapshot lives outside Git.",
+      "fallback": "None. Do not fall back to seed-data.js.",
+      "read_only_verification_2026_09_15": {"services_may_dec": 180, "september": 42, "october": 21},
+      "payload": "Current service dates, labels, worship names and times, plus 537 public catalog songs. No member names or assignments; do not copy records into this map."
+    },
+    "helper_sources": [
+      {"path": "scripts/refresh-compact-preview.cjs", "role": "refreshes current service metadata and the live public song catalog outside Git"},
+      {"path": "scripts/serve-compact-designs.py", "role": "serves the explicitly allowed compact design assets and /preview-data.js"}
+    ],
+    "future_placement_map": {
+      "path": "docs/design/prototype/compact-phone/HANDOFF-MAP.md",
+      "status": "Design placement and dependency map complete; production interfaces remain planned."
+    },
+    "integration_handoff": "The integrated handoff document is docs/COMPACT-DESIGN-HANDOFF.md when present in the integration checkout."
+  },
   "known_drift_points": [
     {"id": "attention-counts", "evidence": ["app.js:2309 pendingRequestsCount", "app.js:2339 actionableCountsForViewer", "department-workflows.js:1098 actionableCounts", "department-workflows.js:1185 aggregateAuthorizedOutstanding"], "risk": "Badges, Planning, Requests, and banners can use different scopes or status rules.", "planned_fix": "One shared attention information builder supplies categories, authorized items, and counts."},
     {"id": "schedule-selection", "evidence": ["app.js:1121 preferredScheduleService", "prototype-prism/prism.js:4-40 aui and selection handlers", "prototype/aurora.js:6-44 aui and ensureSelection", "design-gallery/navy-adapter.js:4-47 month, selected, full, manualSelection"], "risk": "Four views can select different same-day services or lose explicit selection on rerender.", "planned_fix": "Shared route and selection state with one Pacific-time default and explicit-selection preservation."},

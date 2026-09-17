@@ -51,6 +51,23 @@ The [design gallery README](../design-gallery/README.md) is the current source o
 
 The chooser and switch boundary is [design-gallery/choice.js](../design-gallery/choice.js), using `MODES`, `NAMES`, `migrate`, `change`, and `window.WorshipDesign`. [design-gallery/host-bridge.js](../design-gallery/host-bridge.js) preserves one DOM state and restores field values across switches. The plan's floating bottom navigation and compact secondary tabs are planned replacement interfaces, not current adapter behavior.
 
+## Compact design prototype handoff
+
+The compact-phone prototype is a design handoff boundary. It is not a released feature and does not replace the four current appearance adapters above.
+
+| Artifact | Role and evidence boundary |
+| --- | --- |
+| `docs/design/prototype/compact-phone/index.html` | Direction chooser for Service Ledger and Weekbook. |
+| `docs/design/prototype/compact-phone/weekbook.html` | Weekbook route shell and prototype entry page. |
+| `docs/design/prototype/compact-phone/app.js` | Shared current-snapshot adapter, four layout renderers, role routes and browser-local demonstrations. No embedded record fixtures. |
+| `docs/design/prototype/compact-phone/styles.css` | Shared styling for the compact direction studies. |
+| `scripts/refresh-compact-preview.cjs` | Integration helper that writes one current-service and public-song snapshot outside Git. |
+| `scripts/serve-compact-designs.py` | Integration helper that serves the explicitly allowed design assets and `/preview-data.js`. |
+
+The preview reads one `/preview-data.js` current snapshot outside Git. There is no fallback to `seed-data.js`. Read-only verification on September 15, 2026 found 180 services from May through December, including 42 in September and 21 in October. The preview boundary is service dates, labels and times plus 537 public catalog songs, without member names or assignments, and records must not be copied into this index.
+
+Anthony approved Weekbook month navigation below search and above weekly cards, then asked for the designs to be finished and handed off. That placement is an approved design decision, not a released runtime interface. The [design placement map](design/prototype/compact-phone/HANDOFF-MAP.md) records all four layouts and screen dependencies; `docs/COMPACT-DESIGN-HANDOFF.md` is the integration handoff document when present. Shared production runtime work remains planned.
+
 ## Known drift points to check before changing runtime
 
 - Counts are calculated in multiple places: `pendingRequestsCount` and `actionableCountsForViewer` in [app.js](../app.js), `actionableCounts` and `aggregateAuthorizedOutstanding` in [department-workflows.js](../department-workflows.js), plus adapter metrics in Prism, Navy, and Aurora.

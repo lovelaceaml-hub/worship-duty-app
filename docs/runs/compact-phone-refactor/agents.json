@@ -59,5 +59,51 @@
       "cache_read_tokens": 0,
       "total_tokens": 86390
     }
+  },
+  "followups": [
+    {
+      "id": "/root/compact_design",
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "responsibility": "Selected Weekbook month navigation and real-app source adaptation",
+      "state": "running",
+      "source": "Existing seed-data.js, historical May-July 2026; no current production access"
+    }
+  ],
+  "design_handoff_units": [
+    {
+      "id": "/root/compact_design",
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "responsibility": "Current-data Weekbook and four distinct role layouts",
+      "state": "completed; bounded review passed; integrated for design handoff"
+    },
+    {
+      "id": "/root/compact_docs",
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "responsibility": "COMPACT-DESIGN-HANDOFF.md only",
+      "state": "completed; bounded review passed; integrated for design handoff"
+    },
+    {
+      "id": "/root/compact_index",
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "responsibility": "Design sources in CODE-INDEX.md and FEATURE-MAP.json",
+      "state": "completed; bounded review passed; integrated for design handoff"
+    }
+  ],
+  "final_design_review": {
+    "model": "gemini-3.8-flash-low",
+    "effort": "low",
+    "conversation_id": "61e98df4-9754-4f2e-8c38-afa9966c3177",
+    "verdict": "NO_MATERIAL_FINDINGS",
+    "usage": {
+      "input_tokens": 62593,
+      "output_tokens": 417,
+      "thinking_tokens": 0,
+      "cache_read_tokens": 0,
+      "total_tokens": 63010
+    }
   }
 }

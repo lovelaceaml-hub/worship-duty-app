@@ -173,3 +173,12 @@ Never confuse local/mocked checks with authenticated production evidence. Releas
 - Two fictional leader prototypes pass brief local walkthroughs: floating main navigation, secondary tabs, browser-local save, return to page 2, and no horizontal overflow at 320 pixels. Direction selection and complete four-layout prototype approval remain pending.
 
 - One Gemini Low peer review per completed unit, batched into conversation 4ed3048e-1b4f-47f1-85c4-1a04e18a8409. Final determinations: no material findings in bounded design directions, documentation, indexing, or standalone membership module. Prototype selection remains pending; full role prototype and runtime work have not started. No deploy.
+
+- Anthony selected Weekbook. Replace numeric page controls for its schedule with month navigation below search and above cards; show the selected month grouped into weeks. This is an approved schedule exception to ten-result pagination. Preserve search/month/scroll on return. Other long lists retain the approved pagination unless changed.
+- Anthony requires real app data and phrases in previews. The next Weekbook iteration references the existing historical seed source, uses actual Worship duties, and labels its data age. No live records are copied or modified. Complete four-appearance prototype approval is still pending.
+
+- Correction: historical seed selection did not satisfy Anthony's request for real current app data. Read-only Firestore verification found 180 services through December 2026, including September 42 and October 21. Replaced preview source with a minimized current service snapshot outside Git. Assigned names require the pending narrowed preview-data permission; absent assignments must never be displayed as vacancies.
+- Anthony approved Weekbook and directed the current task to finish the four designs, then create a handoff. Stop after the design handoff; do not resume runtime implementation, production integration, or release without continuation. Existing standalone membership module remains unwired.
+
+- Four clickable Weekbook appearances and role-screen designs completed with current service metadata (180 services, May-December) and 537 public songs. Browser checks and Gemini Low bounded review passed; see final-design.md. Member-specific records remain unloaded with narrowed permission pending. Source snapshots remain outside Git.
+- Design handoff ready at docs/COMPACT-DESIGN-HANDOFF.md. Anthony's requested stop applies now: no further runtime implementation or release in this task. Full refactor remains incomplete.

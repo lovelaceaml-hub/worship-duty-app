@@ -63,6 +63,10 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 step-by-step instructions for entering the schedule, account sign-in, notifications,
 deploying, and troubleshooting, plus how to delegate further development to AI.
 
+## Compact design handoff
+
+[Design handoff](docs/COMPACT-DESIGN-HANDOFF.md) records the selected Weekbook direction, current-data evidence, preview commands, and the stop before runtime implementation or release. [Code index](docs/CODE-INDEX.md) separates prototype sources from the existing production runtime.
+
 ## Current member workspaces
 
 Members sign in with their own accounts. Schedule shows upcoming services; My Duties shows the signed-in member's duties, reminders and calendar actions. Authorized department leaders and administrators use Manage for their permitted departments. Presiders can plan songs in the embedded song workspace.

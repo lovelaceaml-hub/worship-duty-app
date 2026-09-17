@@ -29,3 +29,7 @@ For the active compact-phone plan, Anthony explicitly selected no new test cases
 - Preserve the four distinct appearance layouts and Appearance controls. The approved compact-phone plan replaces top main navigation with an always-visible floating bottom bar and compact secondary tabs.
 - Keep Original, Prism, Navy & Cream, Aurora, and maintenance on one Pacific-time current-or-next Schedule selector. Test a same-day 5:00 AM and 7:30 PM pair at 7:20 PM and 9:06 PM Pacific before any Hosting release. Preserve an explicitly selected past service while advancing the automatic default.
 - Do not wipe or reseed the production schedule. Production migrations or record deletion require a dry run and Anthony's explicit approval.
+
+## Preview fidelity
+
+Anthony requires previews and prototypes to use real app data and wording. Reuse existing approved app data sources rather than inventing service patterns, duties, names, or labels. Verify the actual current app source and date coverage before presenting designs. Historical seed data is not an acceptable substitute for current data unless Anthony explicitly requests historical content. Identify historical versus current data accurately. Reference existing source data without copying personal records into new fixtures or review packets. Prototype saves remain isolated from production.
