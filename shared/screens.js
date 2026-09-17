@@ -147,13 +147,120 @@ export function buildRemindersInfo(host) {
   };
 }
 
-export const SCREEN_IDS = ['schedule', 'duties', 'availability', 'reminders', 'appearance', 'unavailable', 'legacy'];
+/* -------- Department leader / Administrator: Upcoming services -------- */
+
+export function buildManageScheduleInfo(host, mem) {
+  const departments = (typeof host.authorizedDepartments === 'function' ? host.authorizedDepartments() : []) || [];
+  const isAdmin = departments.indexOf('All') !== -1;
+  const loaded = host.dataReady ? host.dataReady() !== false : true;
+  const query = (mem && mem.query || '').trim().toLowerCase();
+  const raw = (typeof host.manageServices === 'function' ? host.manageServices() : []) || [];
+  const matches = svc => !query || [svc.worship, svc.service, svc.date].some(v => String(v || '').toLowerCase().indexOf(query) !== -1);
+  return { loaded, departments, isAdmin, query: (mem && mem.query) || '', services: raw.filter(matches) };
+}
+
+/* -------- Department leader / Administrator: Needs attention -------- */
+
+export function buildAttentionInfo(host, mem) {
+  const loaded = host.dataReady ? host.dataReady() !== false : true;
+  const all = (typeof host.attentionItems === 'function' ? host.attentionItems() : []) || [];
+  const pageSize = 10;
+  const page = Math.max(1, (mem && mem.page) || 1);
+  const totalPages = Math.max(1, Math.ceil(all.length / pageSize));
+  const clampedPage = Math.min(page, totalPages);
+  const pageItems = all.slice((clampedPage - 1) * pageSize, clampedPage * pageSize).map(item => Object.assign({}, item, {
+    candidates: (item.kind === 'unfilled' || item.kind === 'replacement' || item.kind === 'request')
+      ? (typeof host.attentionCandidates === 'function' ? host.attentionCandidates(item.serviceId, item.duty) : [])
+      : [],
+    busy: typeof host.attentionBusy === 'function' ? host.attentionBusy(item.id) : false,
+    error: typeof host.attentionError === 'function' ? host.attentionError(item.id) : '',
+    conflictAdvisory: typeof host.attentionConflictAdvisory === 'function' ? host.attentionConflictAdvisory(item.id) : null,
+    expanded: !!(mem && mem.expanded && mem.expanded[item.id])
+  }));
+  return { loaded, count: all.length, page: clampedPage, totalPages, items: pageItems };
+}
+
+/* -------- Department leader / Administrator: Members -------- */
+
+export function buildManageMembersInfo(host, mem) {
+  const departments = (typeof host.authorizedDepartments === 'function' ? host.authorizedDepartments() : []) || [];
+  const isAdmin = departments.indexOf('All') !== -1;
+  const choices = isAdmin ? departments.filter(d => d !== 'All') : departments;
+  const department = (mem && mem.department && choices.indexOf(mem.department) !== -1) ? mem.department : (choices[0] || '');
+  const roster = department && typeof host.departmentRoster === 'function' ? host.departmentRoster(department) : [];
+  const rosterLoaded = department && typeof host.departmentRosterReady === 'function' ? host.departmentRosterReady(department) : true;
+  const query = (mem && mem.query) || '';
+  const searchResult = department && query.trim().length >= 2 && typeof host.memberSearchResults === 'function'
+    ? host.memberSearchResults(department, query.trim())
+    : null;
+  const invite = department && typeof host.pendingInvite === 'function' ? host.pendingInvite(department) : null;
+  return { departments: choices, department, roster, rosterLoaded, query, searchResult, invite };
+}
+
+/* -------- Administrator: exceptions (informational; no server-side
+   "exception" record exists yet — see the ruling in
+   S3-MEMBERSHIP-INTERFACE.md, which only defines not-found search results,
+   not a persisted exception collection). -------- */
+
+export function buildManageExceptionsInfo(host) {
+  return { loaded: true };
+}
+
+/* -------- Administrator: authorized settings (scoped to the site
+   passcode change already exposed elsewhere in the legacy bridge; the full
+   Features/Leader-config/Data&Sync panels remain on the legacy bridge for
+   now — see S4.md limitations). -------- */
+
+export function buildManageSettingsInfo(host) {
+  const account = host.account();
+  return { isAdmin: !!(account && account.isAdmin) };
+}
+
+/* -------- Presider: My service -------- */
+
+export function buildSongsMyServiceInfo(host, mem) {
+  const loaded = host.dataReady ? host.dataReady() !== false : true;
+  const services = (typeof host.presiderServices === 'function' ? host.presiderServices() : []) || [];
+  const saveState = typeof host.songSaveState === 'function' ? host.songSaveState() : null;
+  return { loaded, next: services[0] || null, upcoming: services.slice(1), saveState };
+}
+
+/* -------- Presider: History -------- */
+
+export function buildSongsHistoryInfo(host, mem) {
+  const loaded = typeof host.songHistoryReady === 'function' ? host.songHistoryReady() : true;
+  const error = typeof host.songHistoryError === 'function' ? host.songHistoryError() : '';
+  const all = (typeof host.songHistory === 'function' ? host.songHistory() : []) || [];
+  const query = (mem && mem.query || '').trim().toLowerCase();
+  const matches = entry => !query || [entry.worship, entry.service, entry.date].some(v => String(v || '').toLowerCase().indexOf(query) !== -1);
+  const filtered = all.filter(matches);
+  const pageSize = 10;
+  const page = Math.max(1, (mem && mem.page) || 1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const clampedPage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
+  return { loaded, error, count: filtered.length, page: clampedPage, totalPages, entries: pageItems, query: (mem && mem.query) || '' };
+}
+
+export const SCREEN_IDS = [
+  'schedule', 'duties', 'availability', 'reminders',
+  'manageSchedule', 'attention', 'manageMembers', 'manageExceptions', 'manageSettings',
+  'songsMyService', 'songsHistory',
+  'appearance', 'unavailable', 'legacy'
+];
 
 export function screenForRoute(route) {
   if (route === '#schedule') return 'schedule';
   if (route === '#duties') return 'duties';
   if (route === '#availability') return 'availability';
   if (route === '#reminders') return 'reminders';
+  if (route === '#manage/schedule') return 'manageSchedule';
+  if (route === '#manage/attention') return 'attention';
+  if (route === '#manage/members') return 'manageMembers';
+  if (route === '#manage/exceptions') return 'manageExceptions';
+  if (route === '#manage/settings') return 'manageSettings';
+  if (route === '#songs/my-service') return 'songsMyService';
+  if (route === '#songs/history') return 'songsHistory';
   if (route === '#appearance') return 'appearance';
   if (route === '#unavailable') return 'unavailable';
   return 'legacy';

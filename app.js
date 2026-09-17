@@ -2117,6 +2117,338 @@ function hostClearAlerts() {
   localStorage.setItem('wds-unread-' + ui.me, '0');
 }
 
+/* ================= Section 4 increment 2/3: Department leader and
+   Administrator screens (Upcoming services, Needs attention, Members).
+   Calls the four new Section 3 callables (saveMemberAvailability is not
+   used here; resolveDutyAttention is) by name/contract per
+   docs/runs/compact-phone-refactor/decisions/S3-SERVER-INTERFACE.md --
+   that server code lives on branch claude/compact-server, not in this
+   worktree, so these calls fail gracefully (Failed/local-preview) until
+   the controller merges it; see docs/runs/compact-phone-refactor/lanes/S4.md.
+   ================= */
+
+function hostAuthorizedDepartments() { return authorizedDepartments(); }
+
+function hostManageServices() {
+  const t = todayISO();
+  const allowed = authorizedDepartments();
+  const admin = allowed.indexOf('All') !== -1;
+  return (state.services || [])
+    .filter(s => s.date >= t)
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')))
+    .map(svc => ({
+      serviceId: svcId(svc), date: svc.date, time: svc.time, worship: svc.worship, service: svc.service,
+      duties: CATEGORIES.filter(cat => admin || allowed.indexOf(cat.name) !== -1)
+        .flatMap(cat => cat.duties.map(duty => ({ duty, department: cat.name, memberName: (svc.assignments || {})[duty] || '' })))
+    }));
+}
+
+/* Needs attention: one item list mirroring the predicate table in
+   S3-SERVER-INTERFACE.md section 2.1 (requests, replacements, unfilled,
+   conflicts), scoped to the viewer's authorized departments (unrestricted
+   for an administrator, since authorizedDepartments() already returns
+   'All' for them -- the same screen serves increments 2 and 3). */
+function hostAttentionItems() {
+  const allowed = authorizedDepartments();
+  const admin = allowed.indexOf('All') !== -1;
+  const inScope = department => admin || allowed.indexOf(department) !== -1;
+  const t = todayISO();
+  const items = [];
+
+  const seenReq = {};
+  (state.requests || []).forEach(r => {
+    if (!requestIsActionable(r) || !manageRequestVisible(r)) return;
+    const department = requestDepartment(r);
+    if (!inScope(department)) return;
+    const id = r.id || [r.name, r.date, r.service, r.duty].join('|');
+    if (seenReq[id]) return;
+    seenReq[id] = true;
+    items.push({
+      kind: 'request', id: 'req:' + id, department, serviceId: r.svcId, duty: r.duty,
+      date: r.date, worship: r.worship, service: r.service, memberName: r.name,
+      note: r.note, requestId: r.id
+    });
+  });
+
+  (state.services || []).forEach(svc => {
+    if (!svc || svc.date < t) return;
+    const serviceId = svcId(svc);
+    const assignments = svc.assignments || {};
+    const markers = svc.needsReplacement || {};
+    Object.keys(markers).forEach(duty => {
+      const department = actionableDepartmentForDuty(duty);
+      if (!inScope(department)) return;
+      const marker = markers[duty];
+      if (!marker || assignments[duty] !== marker.memberName) return; // self-healed, no longer live
+      items.push({
+        kind: 'replacement', id: 'rep:' + serviceId + ':' + duty, department, serviceId, duty,
+        date: svc.date, worship: svc.worship, service: svc.service, memberName: marker.memberName
+      });
+    });
+    CATEGORIES.forEach(cat => {
+      if (!inScope(cat.name)) return;
+      cat.duties.forEach(duty => {
+        if (assignments[duty]) return;
+        items.push({
+          kind: 'unfilled', id: 'open:' + serviceId + ':' + duty, department: cat.name, serviceId, duty,
+          date: svc.date, worship: svc.worship, service: svc.service, memberName: ''
+        });
+      });
+    });
+    activeConflicts(svc).forEach(c => {
+      if (!canPermission('canAcknowledgeConflict', authActor(), Object.assign({}, c, { serviceId, date: svc.date, service: svc.service }))) return;
+      const departments = Array.from(new Set(c.duties.map(actionableDepartmentForDuty)));
+      if (!departments.some(inScope)) return;
+      items.push({
+        kind: 'conflict', id: 'conf:' + serviceId + ':' + c.name, department: departments.join(', '),
+        serviceId, duty: c.duties.join(', '), date: svc.date, worship: svc.worship, service: svc.service,
+        memberName: c.name
+      });
+    });
+  });
+
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  return items;
+}
+
+function attentionItemById(id) { return hostAttentionItems().find(item => item.id === id) || null; }
+
+function hostAttentionCandidates(serviceId, duty) {
+  const svc = findService(serviceId);
+  if (!svc) return [];
+  const department = actionableDepartmentForDuty(duty);
+  if (!Array.isArray(departmentRuntime.rosters[department]) && !departmentRuntime.loading[department]) {
+    loadDepartmentRoster(department).catch(() => {});
+  }
+  const assignments = svc.assignments || {};
+  return departmentProfiles(department)
+    .filter(p => departmentProfileAssignable(p, svc, duty))
+    .map(p => ({
+      memberUid: p.memberUid, memberName: p.memberName,
+      hasAnotherDuty: Object.keys(assignments).some(d => d !== duty && assignments[d] === p.memberName)
+    }))
+    .sort((a, b) => (a.hasAnotherDuty === b.hasAnotherDuty ? 0 : a.hasAnotherDuty ? 1 : -1) || a.memberName.localeCompare(b.memberName));
+}
+
+const attentionRuntime = { busy: Object.create(null), error: Object.create(null), conflict: Object.create(null) };
+function hostAttentionBusy(id) { return !!attentionRuntime.busy[id]; }
+function hostAttentionError(id) { return attentionRuntime.error[id] || ''; }
+function hostAttentionConflictAdvisory(id) { return attentionRuntime.conflict[id] || null; }
+
+function hostResolveAttention(id, payload) {
+  const item = attentionItemById(id);
+  if (!item) return Promise.reject(new Error('That item is no longer in Needs attention.'));
+  attentionRuntime.busy[id] = true;
+  attentionRuntime.error[id] = '';
+  renderSoon();
+  const body = Object.assign(
+    { departmentId: item.department, serviceId: item.serviceId, duty: item.duty },
+    item.kind === 'request' ? { requestId: item.requestId } : {},
+    payload
+  );
+  return authCall('resolveDutyAttention', body).then(result => {
+    attentionRuntime.busy[id] = false;
+    attentionRuntime.conflict[id] = null;
+    addBanner('Needs attention item resolved.');
+    afterDataChange();
+    return result;
+  }).catch(error => {
+    attentionRuntime.busy[id] = false;
+    const details = error && error.details;
+    if (details && details.reason === 'conflict') {
+      attentionRuntime.conflict[id] = details;
+    } else {
+      attentionRuntime.error[id] = safeAuthMessage(error);
+    }
+    renderSoon();
+    throw error;
+  });
+}
+
+function hostAcknowledgeConflict(id) {
+  const item = attentionItemById(id);
+  if (!item || item.kind !== 'conflict') return;
+  const svc = findService(item.serviceId);
+  if (!svc) return;
+  const c = conflictsFor(svc).find(x => x.name === item.memberName);
+  if (!c) return;
+  if (!svc.conflictOk) svc.conflictOk = {};
+  const current = conflictsFor(svc);
+  Object.keys(svc.conflictOk).forEach(name => {
+    const match = current.find(x => x.name === name);
+    if (!match || !sameDuties(svc.conflictOk[name], match.duties)) delete svc.conflictOk[name];
+  });
+  svc.conflictOk[item.memberName] = c.duties;
+  persistService(svc);
+  afterDataChange();
+}
+
+/* Members: roster (existing listDepartmentRoster/loadDepartmentRoster) plus
+   search-by-name add (searchDepartmentCandidates + the already-wired
+   createDepartmentProfile direct-add, per S3-MEMBERSHIP-INTERFACE.md) and
+   invite-link creation (createDepartmentInvitation). */
+function hostDepartmentRoster(department) {
+  if (!department) return [];
+  if (!Array.isArray(departmentRuntime.rosters[department]) && !departmentRuntime.loading[department]) {
+    loadDepartmentRoster(department).catch(() => {});
+  }
+  return departmentProfiles(department);
+}
+function hostDepartmentRosterReady(department) {
+  return !department || Array.isArray(departmentRuntime.rosters[department]) || !!departmentRuntime.errors[department];
+}
+
+const memberSearchRuntime = Object.create(null);
+function hostMemberSearchResults(department, query) {
+  const key = department + '::' + query.toLocaleLowerCase();
+  if (!memberSearchRuntime[key]) {
+    memberSearchRuntime[key] = { members: null, error: '' };
+    authCall('searchDepartmentCandidates', { departmentId: department, query }).then(result => {
+      memberSearchRuntime[key].members = (result && result.members) || [];
+      renderSoon();
+    }).catch(error => {
+      memberSearchRuntime[key].members = [];
+      memberSearchRuntime[key].error = safeAuthMessage(error);
+      renderSoon();
+    });
+  }
+  const entry = memberSearchRuntime[key];
+  return entry.members === null ? null : { members: entry.members, error: entry.error };
+}
+
+function hostAddMember(department, memberUid, memberName) {
+  return authCall('createDepartmentProfile', {
+    departmentId: department, department, memberUid, uid: memberUid, memberName,
+    role: 'member', status: 'active', eligibleDuties: [], schedulable: false,
+    availability: { recurring: {}, exceptions: {} }
+  }).then(result => {
+    if (result && result.profile) replaceDepartmentProfile(result.profile);
+    addBanner(memberLabel(memberName) + ' added to ' + department + '.');
+    renderSoon();
+    return result;
+  }).catch(error => {
+    addBanner('Could not add that member: ' + safeAuthMessage(error), true);
+    renderSoon();
+    throw error;
+  });
+}
+
+const inviteRuntime = Object.create(null);
+function hostCreateInvite(department) {
+  return authCall('createDepartmentInvitation', { departmentId: department }).then(result => {
+    inviteRuntime[department] = { token: (result && result.token) || '', error: '' };
+    renderSoon();
+    return result;
+  }).catch(error => {
+    inviteRuntime[department] = { token: '', error: safeAuthMessage(error) };
+    renderSoon();
+    throw error;
+  });
+}
+function hostPendingInvite(department) { return inviteRuntime[department] || null; }
+
+/* ================= Section 4 increment 4: Presider (My service, Songs
+   confirm, History). Song picking itself (the "Songs"/#songs/library
+   screen) stays on the legacy song-app.js bridge for now -- see
+   docs/runs/compact-phone-refactor/lanes/S4.md limitations. ================= */
+
+function hostPresiderServices() {
+  const t = todayISO();
+  return (state.services || [])
+    .filter(svc => svc.date >= t && canEditSongService(svc))
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')))
+    .map(svc => {
+      const serviceId = svcId(svc);
+      return {
+        serviceId, date: svc.date, time: svc.time, worship: svc.worship, service: svc.service,
+        songState: songStateFor(serviceId)
+      };
+    });
+}
+
+function hostConfirmSongsRun(serviceId) {
+  const list = setlistIndex[serviceId] || {};
+  const songs = (list.songs || []).map(s => (s && typeof s === 'object') ? (s.id || s.songId || '') : s).filter(Boolean);
+  if (!songs.length) return Promise.reject(new Error('Pick at least one song before confirming.'));
+  return authCall('saveSongService', {
+    serviceId, songs, glorySong: list.glorySong || null, thanksSong: list.thanksSong || null,
+    notes: list.notes || '', confirm: true
+  });
+}
+
+const songSaveController = createSave({
+  key: 'song-confirm',
+  run: serviceId => hostConfirmSongsRun(serviceId),
+  onChange: () => renderSoon()
+});
+function hostSongSaveState() { return songSaveController.state(); }
+function hostConfirmSongs(serviceId) {
+  return songSaveController.trigger(serviceId).then(result => {
+    addBanner('Songs confirmed.');
+    return result;
+  });
+}
+
+let songHistoryRuntime = { loaded: false, loading: false, error: '', entries: [] };
+
+function loadSongHistory() {
+  if (songHistoryRuntime.loading) return;
+  songHistoryRuntime.loading = true;
+  if (!fb) {
+    songHistoryRuntime.entries = [];
+    songHistoryRuntime.loaded = true;
+    songHistoryRuntime.loading = false;
+    renderSoon();
+    return;
+  }
+  authReady.then(() => fb.getDocs(fb.query(fb.collection(fb.db, 'setlists'), fb.orderBy('date', 'desc'), fb.limit(150))))
+    .then(snap => {
+      songHistoryRuntime.entries = snap.docs.map(d => d.data()).filter(sl => sl.status === 'sung').map(sl => ({
+        serviceId: sl.id, date: sl.date, worship: sl.worshipType || sl.worship || '', service: sl.serviceLabel || sl.service || '',
+        historySource: sl.historySource || 'manual',
+        songs: (sl.songs || []).map(s => (s && typeof s === 'object') ? s : { id: s, title: s })
+      }));
+      songHistoryRuntime.loaded = true;
+      songHistoryRuntime.loading = false;
+      renderSoon();
+    }).catch(error => {
+      songHistoryRuntime.error = safeAuthMessage(error);
+      songHistoryRuntime.loaded = true;
+      songHistoryRuntime.loading = false;
+      renderSoon();
+    });
+}
+
+function hostSongHistoryReady() {
+  if (songHistoryRuntime.loaded) return true;
+  if (!songHistoryRuntime.loading) loadSongHistory();
+  return false;
+}
+function hostSongHistoryError() { return songHistoryRuntime.error; }
+function hostSongHistory() { return songHistoryRuntime.entries; }
+function hostRetrySongHistory() {
+  songHistoryRuntime = { loaded: false, loading: false, error: '', entries: [] };
+  loadSongHistory();
+}
+
+function hostRemoveHistorySong(serviceId, songId) {
+  const entry = songHistoryRuntime.entries.find(e => e.serviceId === serviceId);
+  if (!entry) return Promise.reject(new Error('That recorded service is not loaded.'));
+  const songs = entry.songs.filter(s => s.id !== songId).map(s => s.id);
+  return authCall('correctSongHistory', { serviceId, songs }).then(result => {
+    entry.songs = entry.songs.filter(s => s.id !== songId);
+    addBanner('Song removed from the recorded list.');
+    renderSoon();
+    return result;
+  }).catch(error => {
+    addBanner('Could not correct that history record: ' + safeAuthMessage(error), true);
+    renderSoon();
+    throw error;
+  });
+}
+
 function buildHost() {
   return {
     phase: hostPhase,
@@ -2143,6 +2475,22 @@ function buildHost() {
     availabilityError: hostAvailabilityError,
     availabilitySaveState: hostAvailabilitySaveState,
     reminders: hostReminders,
+    authorizedDepartments: hostAuthorizedDepartments,
+    manageServices: hostManageServices,
+    attentionItems: hostAttentionItems,
+    attentionCandidates: hostAttentionCandidates,
+    attentionBusy: hostAttentionBusy,
+    attentionError: hostAttentionError,
+    attentionConflictAdvisory: hostAttentionConflictAdvisory,
+    departmentRoster: hostDepartmentRoster,
+    departmentRosterReady: hostDepartmentRosterReady,
+    memberSearchResults: hostMemberSearchResults,
+    pendingInvite: hostPendingInvite,
+    presiderServices: hostPresiderServices,
+    songSaveState: hostSongSaveState,
+    songHistoryReady: hostSongHistoryReady,
+    songHistoryError: hostSongHistoryError,
+    songHistory: hostSongHistory,
     actions: {
       requestChange: hostSubmitChangeRequest,
       toggleAvailability: hostAvailabilityToggleRecurring,
@@ -2156,7 +2504,14 @@ function buildHost() {
       notifyOff: hostNotifyOff,
       subscribeIcs: subscribeICS,
       copyIcs: copyICSLink,
-      clearAlerts: hostClearAlerts
+      clearAlerts: hostClearAlerts,
+      resolveAttention: hostResolveAttention,
+      acknowledgeConflict: hostAcknowledgeConflict,
+      addMember: hostAddMember,
+      createInvite: hostCreateInvite,
+      confirmSongs: hostConfirmSongs,
+      removeHistorySong: hostRemoveHistorySong,
+      retrySongHistory: hostRetrySongHistory
     }
   };
 }
@@ -4372,6 +4727,8 @@ async function initFirebase(config) {
     collection: fsMod.collection,
     query: fsMod.query,
     where: fsMod.where,
+    orderBy: fsMod.orderBy,
+    limit: fsMod.limit,
     onSnapshot: fsMod.onSnapshot,
     getDoc: fsMod.getDoc,
     getDocs: fsMod.getDocs,

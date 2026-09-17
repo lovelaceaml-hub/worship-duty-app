@@ -10,7 +10,9 @@ import { layouts, LAYOUT_IDS } from '../layouts/index.js';
 import { buildNavigation } from './nav.js';
 import {
   buildScheduleInfo, buildAppearanceInfo, buildUnavailableInfo, buildDutiesInfo,
-  buildAvailabilityInfo, buildRemindersInfo, screenForRoute
+  buildAvailabilityInfo, buildRemindersInfo, buildManageScheduleInfo, buildAttentionInfo,
+  buildManageMembersInfo, buildManageExceptionsInfo, buildManageSettingsInfo,
+  buildSongsMyServiceInfo, buildSongsHistoryInfo, screenForRoute
 } from './screens.js';
 
 const SHEET_TIMEOUT_MS = 7000;
@@ -118,15 +120,27 @@ function legacyHasFocusedInput() {
   return ['text', 'search', 'url', 'password', 'number', 'email', 'tel', 'date', 'time'].indexOf(t) !== -1;
 }
 
-function focusedSearchState() {
-  const el = document.getElementById('wd-schedule-search');
+/* One text search field per screen that has one, each with its own DOM id
+   and its own route-memory `query`, so typing in one never clobbers another
+   screen's search state. */
+const SEARCH_FIELDS = {
+  schedule: { id: 'wd-schedule-search', route: '#schedule' },
+  manageSchedule: { id: 'wd-manage-schedule-search', route: '#manage/schedule' },
+  manageMembers: { id: 'wd-member-search', route: '#manage/members' },
+  songsHistory: { id: 'wd-song-history-search', route: '#songs/history' }
+};
+
+function focusedSearchState(screenId) {
+  const field = SEARCH_FIELDS[screenId];
+  const el = field && document.getElementById(field.id);
   if (!el || document.activeElement !== el) return null;
   return { start: el.selectionStart, end: el.selectionEnd };
 }
 
-function restoreSearchFocus(saved) {
+function restoreSearchFocus(saved, screenId) {
   if (!saved) return;
-  const el = document.getElementById('wd-schedule-search');
+  const field = SEARCH_FIELDS[screenId];
+  const el = field && document.getElementById(field.id);
   if (!el) return;
   el.focus();
   try { el.setSelectionRange(saved.start, saved.end); } catch (e) { /* ignore */ }
@@ -190,11 +204,18 @@ function renderReady() {
   else if (screenId === 'duties') info = buildDutiesInfo(hostRef, state.memory('#duties'));
   else if (screenId === 'availability') info = buildAvailabilityInfo(hostRef);
   else if (screenId === 'reminders') info = buildRemindersInfo(hostRef);
+  else if (screenId === 'manageSchedule') info = buildManageScheduleInfo(hostRef, state.memory('#manage/schedule'));
+  else if (screenId === 'attention') info = buildAttentionInfo(hostRef, state.memory('#manage/attention'));
+  else if (screenId === 'manageMembers') info = buildManageMembersInfo(hostRef, state.memory('#manage/members'));
+  else if (screenId === 'manageExceptions') info = buildManageExceptionsInfo(hostRef);
+  else if (screenId === 'manageSettings') info = buildManageSettingsInfo(hostRef);
+  else if (screenId === 'songsMyService') info = buildSongsMyServiceInfo(hostRef, state.memory('#songs/my-service'));
+  else if (screenId === 'songsHistory') info = buildSongsHistoryInfo(hostRef, state.memory('#songs/history'));
   else if (screenId === 'appearance') info = Object.assign(buildAppearanceInfo(hostRef), { returnRoute: state.startRouteFor(account) });
   else if (screenId === 'unavailable') info = buildUnavailableInfo(hostRef, route);
   else info = { kind: legacyKindFor(route) };
 
-  const savedSearch = screenId === 'schedule' ? focusedSearchState() : null;
+  const savedSearch = SEARCH_FIELDS[screenId] ? focusedSearchState(screenId) : null;
   const savedScrollY = window.scrollY;
   state.setMemory(lastKnownRoute, { scrollY: savedScrollY });
 
@@ -215,8 +236,8 @@ function renderReady() {
       else if (info.kind === 'manage') container.innerHTML = hostRef.legacy.manage();
       else container.innerHTML = hostRef.legacy.my();
     }
-  } else if (screenId === 'schedule') {
-    restoreSearchFocus(savedSearch);
+  } else if (SEARCH_FIELDS[screenId]) {
+    restoreSearchFocus(savedSearch, screenId);
   }
 
   const mem = state.memory(route);
@@ -324,11 +345,80 @@ function onDocClick(e) {
     if (hostRef.actions && hostRef.actions.clearAlerts) hostRef.actions.clearAlerts();
     renderNow();
   }
+  else if (act === 'wd-page-prev' || act === 'wd-page-next') {
+    const r = state.route();
+    const mem = state.memory(r);
+    const next = (mem.page || 1) + (act === 'wd-page-next' ? 1 : -1);
+    state.setMemory(r, { page: Math.max(1, next) });
+    renderNow();
+  }
+  else if (act === 'wd-attention-expand') {
+    const r = state.route();
+    const mem = state.memory(r);
+    const expanded = Object.assign({}, mem.expanded);
+    expanded[actEl.dataset.id] = !expanded[actEl.dataset.id];
+    state.setMemory(r, { expanded });
+    renderNow();
+  }
+  else if (act === 'wd-attention-approve' || act === 'wd-attention-decline') {
+    if (hostRef.actions && hostRef.actions.resolveAttention) {
+      hostRef.actions.resolveAttention(actEl.dataset.id, { decision: act === 'wd-attention-approve' ? 'approved' : 'declined' }).then(renderNow).catch(renderNow);
+    }
+  }
+  else if (act === 'wd-attention-assign' || act === 'wd-attention-assign-anyway') {
+    const card = actEl.closest('.wd-attention-card');
+    const select = card && card.querySelector('select[data-role="replacement"]');
+    const uid = select ? select.value : '';
+    if (!uid && act === 'wd-attention-assign') return;
+    if (hostRef.actions && hostRef.actions.resolveAttention) {
+      hostRef.actions.resolveAttention(actEl.dataset.id, {
+        replacementMemberUid: uid || undefined,
+        acknowledgeConflict: act === 'wd-attention-assign-anyway'
+      }).then(renderNow).catch(renderNow);
+    }
+  }
+  else if (act === 'wd-attention-open') {
+    if (hostRef.actions && hostRef.actions.resolveAttention) {
+      hostRef.actions.resolveAttention(actEl.dataset.id, { replacementMemberUid: null }).then(renderNow).catch(renderNow);
+    }
+  }
+  else if (act === 'wd-attention-conflict-ok') {
+    if (hostRef.actions && hostRef.actions.acknowledgeConflict) hostRef.actions.acknowledgeConflict(actEl.dataset.id);
+    renderNow();
+  }
+  else if (act === 'wd-members-department') {
+    state.setMemory('#manage/members', { department: actEl.dataset.dept, query: '' });
+    renderNow();
+  }
+  else if (act === 'wd-member-add') {
+    if (hostRef.actions && hostRef.actions.addMember) {
+      hostRef.actions.addMember(actEl.dataset.dept, actEl.dataset.uid, actEl.dataset.name).then(() => {
+        state.setMemory('#manage/members', { query: '' });
+        renderNow();
+      }).catch(renderNow);
+    }
+  }
+  else if (act === 'wd-member-invite') {
+    if (hostRef.actions && hostRef.actions.createInvite) hostRef.actions.createInvite(actEl.dataset.dept).then(renderNow).catch(renderNow);
+  }
+  else if (act === 'wd-song-confirm') {
+    if (hostRef.actions && hostRef.actions.confirmSongs) hostRef.actions.confirmSongs(actEl.dataset.svc).then(renderNow).catch(renderNow);
+  }
+  else if (act === 'wd-history-remove-song') {
+    if (hostRef.actions && hostRef.actions.removeHistorySong) hostRef.actions.removeHistorySong(actEl.dataset.svc, actEl.dataset.song).then(renderNow).catch(renderNow);
+  }
+  else if (act === 'wd-history-retry') {
+    if (hostRef.actions && hostRef.actions.retrySongHistory) hostRef.actions.retrySongHistory();
+  }
 }
 
 function onDocSearchInput(e) {
-  const search = e.target.closest('#wd-schedule-search');
-  if (search) { state.setMemory('#schedule', { query: search.value }); renderNow(); }
+  const match = Object.keys(SEARCH_FIELDS).find(id => e.target.closest('#' + SEARCH_FIELDS[id].id));
+  if (!match) return;
+  const field = SEARCH_FIELDS[match];
+  const el = document.getElementById(field.id);
+  state.setMemory(field.route, { query: el.value, page: 1 });
+  renderNow();
 }
 
 function selectAppearance(mode) {

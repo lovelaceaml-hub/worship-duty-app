@@ -148,6 +148,183 @@ function screenReminders(info, c) {
   return '<div class="wd-reminders-screen">' + html + '</div>';
 }
 
+/* -------- Department leader / Administrator: Upcoming services -------- */
+
+function manageServiceCard(svc, c) {
+  const rows = svc.duties.map(d => c.assignmentRow(d.duty, d.memberName || '')).join('');
+  return '<div class="wd-service-card">' +
+    '<div class="wd-service-title">' + c.esc(svc.worship || '') + ' &middot; ' + c.esc(svc.service || '') + '</div>' +
+    '<div class="wd-service-time">' + c.esc(fmtDayLabel(svc.date)) + (svc.time ? ' at ' + c.esc(svc.time) : '') + '</div>' +
+    (rows || c.emptyState('No duties in your departments for this service.')) + '</div>';
+}
+
+function screenManageSchedule(info, c) {
+  if (!info.loaded) return c.unknownState('The schedule has not loaded yet.');
+  let html = c.searchField(info.query, 'Search services', 'wd-manage-schedule-search');
+  if (!info.services.length) html += c.emptyState('No upcoming services.');
+  else html += info.services.map(svc => manageServiceCard(svc, c)).join('');
+  return '<div class="wd-manage-schedule-screen">' + html + '</div>';
+}
+
+/* -------- Department leader / Administrator: Needs attention -------- */
+
+const KIND_LABEL = { request: 'Change request', replacement: 'Needs replacement', unfilled: 'Unfilled duty', conflict: 'Double duty' };
+
+function attentionCandidatePicker(item, c) {
+  if (!item.candidates.length) return '<p class="wd-empty-note">No eligible, available member found in this department.</p>';
+  const options = item.candidates.map(cand =>
+    '<option value="' + c.esc(cand.memberUid) + '">' + c.esc(cand.memberName) + (cand.hasAnotherDuty ? ' (already serving this service)' : '') + '</option>'
+  ).join('');
+  return '<div class="wd-attention-picker">' +
+    '<select data-role="replacement" aria-label="Choose a replacement"><option value="">Choose a member</option>' + options + '</select>' +
+    '<button type="button" class="wd-primary" data-act="wd-attention-assign" data-id="' + c.esc(item.id) + '">Assign</button>' +
+    '</div>';
+}
+
+function attentionItemCard(item, c) {
+  const head = '<div class="wd-request-head"><span>' + c.esc(KIND_LABEL[item.kind] || item.kind) + ' &middot; ' + c.esc(item.duty) + '</span>' +
+    '<span class="wd-status-chip">' + c.esc(item.department) + '</span></div>' +
+    '<div class="wd-request-note">' + c.esc(item.worship) + ' ' + c.esc(item.service) + ', ' + c.esc(fmtDayLabel(item.date)) +
+    (item.memberName ? ' &middot; ' + c.esc(item.memberName) : '') + '</div>' +
+    (item.note ? '<div class="wd-request-note">' + c.esc(item.note) + '</div>' : '');
+
+  let actions = '';
+  if (item.kind === 'request') {
+    actions = '<div class="wd-request-actions">' +
+      '<button type="button" class="wd-primary" data-act="wd-attention-approve" data-id="' + c.esc(item.id) + '">Approve, leave open</button>' +
+      '<button type="button" class="wd-ghost" data-act="wd-attention-decline" data-id="' + c.esc(item.id) + '">Decline</button>' +
+      '<button type="button" class="wd-linkish" data-act="wd-attention-expand" data-id="' + c.esc(item.id) + '">' +
+      (item.expanded ? 'Hide replacement picker' : 'Approve with a replacement') + '</button></div>' +
+      (item.expanded ? attentionCandidatePicker(item, c) : '');
+  } else if (item.kind === 'unfilled' || item.kind === 'replacement') {
+    actions = attentionCandidatePicker(item, c) +
+      (item.kind === 'replacement'
+        ? '<button type="button" class="wd-ghost" data-act="wd-attention-open" data-id="' + c.esc(item.id) + '">Leave open</button>'
+        : '');
+  } else if (item.kind === 'conflict') {
+    actions = '<button type="button" class="wd-ghost" data-act="wd-attention-conflict-ok" data-id="' + c.esc(item.id) + '">Mark as OK</button>';
+  }
+
+  const advisory = item.conflictAdvisory
+    ? c.warning('This member already serves ' + item.conflictAdvisory.duties.join(', ') + ' in this service.') +
+      '<button type="button" class="wd-ghost" data-act="wd-attention-assign-anyway" data-id="' + c.esc(item.id) + '">Assign anyway</button>'
+    : '';
+  const error = item.error ? c.warning(item.error) : '';
+  return '<div class="wd-attention-card" data-id="' + c.esc(item.id) + '">' + head + error + advisory + actions + '</div>';
+}
+
+function screenAttention(info, c) {
+  if (!info.loaded) return c.unknownState('Needs attention has not loaded yet.');
+  if (!info.items.length) return c.emptyState('Nothing needs attention right now.');
+  return '<div class="wd-attention-screen">' +
+    info.items.map(item => attentionItemCard(item, c)).join('') +
+    c.pager(info.page, info.totalPages) + '</div>';
+}
+
+/* -------- Department leader / Administrator: Members -------- */
+
+function memberRosterRow(profile, c) {
+  return '<div class="wd-assignment-row"><span class="wd-assignment-duty">' + c.esc(profile.memberName) + '</span>' +
+    '<span class="wd-status-chip">' + c.esc(profile.status || 'active') + '</span></div>';
+}
+
+function memberSearchRow(candidate, department, c) {
+  return '<div class="wd-assignment-row"><span class="wd-assignment-duty">' + c.esc(candidate.memberName) + '</span>' +
+    '<button type="button" class="wd-primary" data-act="wd-member-add" data-dept="' + c.esc(department) + '" data-uid="' + c.esc(candidate.memberUid) + '" data-name="' + c.esc(candidate.memberName) + '">Add</button></div>';
+}
+
+function screenManageMembers(info, c) {
+  if (!info.departments.length) return c.emptyState('You do not manage a department yet.');
+  const tabs = info.departments.length > 1
+    ? '<div class="wd-secondary-tabs" role="tablist">' + info.departments.map(d =>
+        '<button type="button" class="wd-tab-btn' + (d === info.department ? ' active' : '') + '" data-act="wd-members-department" data-dept="' + c.esc(d) + '">' + c.esc(d) + '</button>'
+      ).join('') + '</div>'
+    : '';
+  let html = tabs;
+  html += c.searchField(info.query, 'Search members by name', 'wd-member-search');
+  if (info.query.trim().length >= 2) {
+    if (!info.searchResult) html += c.skeleton(2);
+    else if (info.searchResult.error) html += c.warning(info.searchResult.error);
+    else if (!info.searchResult.members.length) html += c.emptyState('No registered member matches that name.');
+    else html += '<div class="wd-week-range">Search results</div>' + info.searchResult.members.map(m => memberSearchRow(m, info.department, c)).join('');
+  }
+  html += '<div class="wd-week-range">' + info.department + ' roster</div>';
+  if (!info.rosterLoaded) html += c.skeleton(3);
+  else if (!info.roster.length) html += c.emptyState('No members on this roster yet.');
+  else html += info.roster.map(p => memberRosterRow(p, c)).join('');
+  html += '<button type="button" class="wd-ghost" data-act="wd-member-invite" data-dept="' + c.esc(info.department) + '">Create invite link</button>';
+  if (info.invite) {
+    html += info.invite.error ? c.warning(info.invite.error)
+      : '<div class="wd-request-item"><div class="wd-request-note">Invite link (single-use, expires in 7 days):</div><div class="wd-request-note">' + c.esc(info.invite.token || '') + '</div></div>';
+  }
+  return '<div class="wd-manage-members-screen">' + html + '</div>';
+}
+
+/* -------- Administrator: exceptions -------- */
+
+function screenManageExceptions(info, c) {
+  return '<div class="wd-manage-exceptions-screen">' +
+    c.emptyState('No unresolved membership exceptions right now. A name search that does not match a registered member appears here in a future update.') +
+    '</div>';
+}
+
+/* -------- Administrator: authorized settings -------- */
+
+function screenManageSettings(info, c) {
+  if (!info.isAdmin) return c.warning('Settings are restricted to administrators.');
+  return '<div class="wd-manage-settings-screen">' +
+    c.emptyState('Feature flags, leader configuration, and data sync remain on the existing Manage screen for now. Open Manage from a wider screen to reach them.') +
+    '</div>';
+}
+
+/* -------- Presider: My service -------- */
+
+function presiderServiceCard(svc, c, featured) {
+  const status = svc.songState;
+  const label = !status || !status.count ? 'No songs picked yet'
+    : status.confirmed ? 'Songs confirmed' : status.changed ? 'Changed since confirming' : status.count + ' song' + (status.count === 1 ? '' : 's') + ' picked, not confirmed';
+  return '<div class="wd-service-card' + (featured ? ' wd-service-current' : '') + '">' +
+    '<div class="wd-service-title">' + c.esc(svc.worship || '') + ' &middot; ' + c.esc(svc.service || '') + '</div>' +
+    '<div class="wd-service-time">' + c.esc(fmtDayLabel(svc.date)) + (svc.time ? ' at ' + c.esc(svc.time) : '') + '</div>' +
+    '<div class="wd-status-chip">' + c.esc(label) + '</div>' +
+    '<div class="wd-request-actions">' +
+    '<button type="button" class="wd-ghost" data-route="#songs/library">Open Songs</button>' +
+    (featured ? '<button type="button" class="wd-primary" data-act="wd-song-confirm" data-svc="' + c.esc(svc.serviceId) + '"' + (status && status.count ? '' : ' disabled') + '>Confirm songs</button>' : '') +
+    '</div></div>';
+}
+
+function screenSongsMyService(info, c) {
+  if (!info.loaded) return c.unknownState('Your services have not loaded yet.');
+  let html = '';
+  if (info.saveState && (info.saveState.status === 'saving' || info.saveState.status === 'failed' || info.saveState.status === 'stale')) html += c.saveBar(info.saveState);
+  if (!info.next) return html + c.emptyState('You have no upcoming service to preside over right now.');
+  html += '<div class="wd-week-range">Your next service</div>' + presiderServiceCard(info.next, c, true);
+  if (info.upcoming.length) html += '<div class="wd-week-range">Also upcoming</div>' + info.upcoming.map(svc => presiderServiceCard(svc, c, false)).join('');
+  return '<div class="wd-songs-my-service-screen">' + html + '</div>';
+}
+
+/* -------- Presider: History -------- */
+
+function historyEntryRow(entry, c) {
+  const source = entry.historySource === 'automatic' ? 'Recorded automatically' : entry.historySource === 'corrected' ? 'Corrected' : 'Recorded';
+  const songs = (entry.songs || []).map(s =>
+    '<div class="wd-assignment-row"><span class="wd-assignment-duty">' + c.esc(s.title || s.id) + '</span>' +
+    '<button type="button" class="wd-danger-link" data-act="wd-history-remove-song" data-svc="' + c.esc(entry.serviceId) + '" data-song="' + c.esc(s.id) + '">Remove</button></div>'
+  ).join('');
+  return '<div class="wd-request-item"><div class="wd-request-head"><span>' + c.esc(entry.worship) + ' ' + c.esc(entry.service) + ', ' + c.esc(fmtDayLabel(entry.date)) + '</span>' +
+    '<span class="wd-status-chip">' + c.esc(source) + '</span></div>' + (songs || c.emptyState('No songs recorded.')) + '</div>';
+}
+
+function screenSongsHistory(info, c) {
+  if (!info.loaded) return c.skeleton(3);
+  if (info.error) return c.warning(info.error) + '<button type="button" class="wd-ghost" data-act="wd-history-retry">Try again</button>';
+  let html = c.searchField(info.query, 'Search history', 'wd-song-history-search');
+  if (!info.entries.length) html += c.emptyState('No recorded services match.');
+  else html += info.entries.map(e => historyEntryRow(e, c)).join('');
+  html += c.pager(info.page, info.totalPages);
+  return '<div class="wd-songs-history-screen">' + html + '</div>';
+}
+
 export function createLayout(config) {
   const { id, name, stylesheet, weekGroup, serviceSummary } = config;
 
@@ -233,7 +410,11 @@ export function createLayout(config) {
     weekGroup, serviceSummary,
     screens: {
       schedule: screenSchedule, duties: screenDuties, availability: screenAvailability,
-      reminders: screenReminders, appearance: screenAppearance, unavailable: screenUnavailable, legacy: screenLegacy
+      reminders: screenReminders,
+      manageSchedule: screenManageSchedule, attention: screenAttention, manageMembers: screenManageMembers,
+      manageExceptions: screenManageExceptions, manageSettings: screenManageSettings,
+      songsMyService: screenSongsMyService, songsHistory: screenSongsHistory,
+      appearance: screenAppearance, unavailable: screenUnavailable, legacy: screenLegacy
     }
   };
 }
