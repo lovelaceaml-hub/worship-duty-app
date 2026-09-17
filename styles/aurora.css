@@ -1,0 +1,25 @@
+/* Aurora: spacious, dynamic workspace. Rounded pill tabs, soft rounded
+   service rows with a date ribbon, generous spacing. */
+:root {
+  --brand-blue-deep: #7c3aed;
+  --brand-blue: #06b6d4;
+  --brand-blue-dark: #4c1d95;
+  --accent-soft: #eef7fb;
+  --r-lg: 20px;
+  --gutter: 18px;
+}
+body { background: linear-gradient(180deg, #f5f8ff 0%, #f3f6f8 220px); }
+.wd-header { border-bottom: 0; border-radius: 0 0 18px 18px; background: var(--surface); box-shadow: var(--shadow-soft); }
+.wd-header-title { background: linear-gradient(120deg, var(--brand-blue-deep), var(--brand-blue)); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 800; }
+.wd-appearance-btn { border-radius: 999px; }
+.wd-secondary-tabs { border-bottom: 0; }
+.wd-tab-btn { border-radius: 999px; }
+.wd-tab-btn.active { background: linear-gradient(120deg, var(--brand-blue-deep), var(--brand-blue)); border-color: transparent; }
+.wd-week-group { border-radius: 18px; background: var(--surface); padding: 12px 14px; box-shadow: var(--shadow-soft); }
+.wd-service-card { border-radius: 16px; border: 0; box-shadow: var(--shadow-soft); }
+.wd-service-current { box-shadow: 0 0 0 3px var(--brand-blue); }
+.wd-main-nav { border-radius: 24px 24px 0 0; }
+.wd-nav-btn.active { color: var(--brand-blue-deep); }
+.wd-aurora-stack { display: grid; gap: 6px; margin-top: 10px; }
+.wd-aurora-field { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 10px; background: var(--canvas); font-size: 13px; }
+.wd-aurora-field span { color: var(--muted); }

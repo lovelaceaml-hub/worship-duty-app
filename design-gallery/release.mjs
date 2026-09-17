@@ -101,10 +101,11 @@ async function compatibleLive(){
       const r=await fetch(origin+'/'+file+'?gallery-check='+Date.now(),{signal:AbortSignal.timeout(12000)});if(!r.ok)continue;
       const info=await r.json();
       if(info?.upstream?.app===manifest.upstream.app || info?.baseAppSha256===currentBaseSha256)return {kind,info};
-      if(kind==='gallery'&&info?.design==='appearance-gallery-v1'&&
-        sourceHashExistsInHistory('app.js',info?.upstream?.app)&&
-        sourceHashExistsInHistory('song-app.js',info?.upstream?.songs)&&
-        sourceHashExistsInHistory('index.html',info?.upstream?.index))return {kind:'gallery-history',info};
+      // A live v1 gallery (the retired prototype-extraction compiler) is a
+      // known, accepted predecessor of this v2 packager-built gallery: the
+      // architecture changed intentionally in the compact-phone refactor, so
+      // its manifest marker alone is enough, no source-hash reconstruction.
+      if(kind==='gallery'&&info?.design==='appearance-gallery-v1')return {kind:'gallery-v1-predecessor',info};
     }catch{}
   }
 

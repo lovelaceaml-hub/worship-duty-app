@@ -1,0 +1,11 @@
+/* Original: the familiar interface. Baseline treatment; shared.css already
+   carries its palette and shapes, so this file only adds the touches that
+   make Original distinct from the other three arrangements. */
+body { border-top: 5px solid var(--brand-blue); }
+.wd-header { border-bottom: 2px solid var(--brand-blue); }
+.wd-header-title { font-size: 20px; letter-spacing: -0.02em; }
+.wd-tab-btn.active { border-radius: 6px; }
+.wd-service-card { border-left: 4px solid var(--brand-blue); }
+.wd-week-range { border-bottom: 1px solid var(--hairline); padding-bottom: 4px; }
+.wd-nav-btn.active { position: relative; }
+.wd-nav-btn.active::before { content: ""; position: absolute; top: -9px; left: 50%; transform: translateX(-50%); width: 24px; height: 3px; background: var(--brand-blue); border-radius: 2px; }

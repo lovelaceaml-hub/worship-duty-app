@@ -1,0 +1,27 @@
+/* Prism: calendar-first, clear workspace. Vertical accent title, underline
+   tabs, a date-spine treatment for the week groups. Restyles the shared wd-
+   classes; does not fork their markup. */
+:root {
+  --brand-blue-deep: #4338ca;
+  --brand-blue: #6d5bd0;
+  --brand-blue-dark: #2f2560;
+  --accent-soft: #f0eefb;
+  --r-lg: 16px;
+}
+body { background: #f7f6fd; }
+.wd-header { border-bottom: 0; padding-left: calc(var(--gutter) + 10px); position: relative; }
+.wd-header::before { content: ""; position: absolute; left: var(--gutter); top: 10px; bottom: 10px; width: 4px; border-radius: 3px; background: var(--brand-blue); }
+.wd-header-title { font-weight: 800; letter-spacing: -0.01em; }
+.wd-appearance-btn { border-radius: 999px; }
+.wd-secondary-tabs { background: transparent; border-bottom: 0; }
+.wd-tab-btn { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding-bottom: 10px; }
+.wd-tab-btn.active { border-bottom-color: var(--brand-blue); color: var(--brand-blue-deep); background: none; }
+.wd-week-group { border-left: 2px solid var(--line); padding-left: 12px; }
+.wd-week-range { color: var(--brand-blue-deep); }
+.wd-service-card { border-radius: 14px; border: 1px solid var(--line); box-shadow: none; background: #fff; }
+.wd-service-current { box-shadow: 0 0 0 2px var(--brand-blue); }
+.wd-main-nav { border-radius: 20px 20px 0 0; }
+.wd-nav-btn.active { color: var(--brand-blue-deep); font-weight: 800; }
+.wd-prism-cells { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px 12px; margin-top: 8px; }
+.wd-prism-cell { padding-top: 6px; border-top: 1px solid var(--hairline); font-size: 13px; }
+.wd-prism-cell span { display: block; color: var(--muted); font-size: 11px; }

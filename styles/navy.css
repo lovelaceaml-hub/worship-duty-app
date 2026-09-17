@@ -1,0 +1,29 @@
+/* Navy & Cream: warm, refined service timeline. Serif-leaning title, cream
+   canvas, bounded "paper" week groups and inset date tiles. */
+:root {
+  --brand-blue-deep: #16324f;
+  --brand-blue: #2e5c86;
+  --brand-blue-dark: #16324f;
+  --canvas: #f4ecdc;
+  --surface: #fffdf8;
+  --line: #e3d7bd;
+  --hairline: #ece2cc;
+  --accent-soft: #f1e6cd;
+  --r-lg: 8px;
+}
+body { background: var(--canvas); }
+.wd-header { background: var(--surface); border-bottom: 1px solid var(--line); }
+.wd-header-title { font-family: Georgia, "Times New Roman", serif; font-weight: 700; }
+.wd-secondary-tabs { background: var(--canvas); }
+.wd-tab-btn { border-radius: 3px; border-color: var(--line); }
+.wd-tab-btn.active { background: var(--brand-blue-deep); border-color: var(--brand-blue-deep); }
+.wd-week-group { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; background: var(--surface); }
+.wd-day { border-top-color: var(--hairline); }
+.wd-day-label { font-family: Georgia, "Times New Roman", serif; }
+.wd-service-card { border-radius: 4px; box-shadow: none; border: 1px solid var(--line); }
+.wd-main-nav { background: var(--surface); border-top-color: var(--line); }
+.wd-nav-btn.active { color: var(--brand-blue-deep); }
+.wd-navy-stamp { display: inline-block; margin-bottom: 4px; padding: 2px 8px; border-radius: 3px; background: var(--accent-soft); color: var(--brand-blue-deep); font-size: 11px; font-weight: 700; }
+.wd-navy-cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px 12px; margin-top: 8px; }
+.wd-navy-card { padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 13px; }
+.wd-navy-card span { display: block; color: var(--muted); font-size: 11px; }
