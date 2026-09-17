@@ -2378,14 +2378,23 @@ function hostConfirmSongsRun(serviceId) {
   });
 }
 
-const songSaveController = createSave({
-  key: 'song-confirm',
-  run: serviceId => hostConfirmSongsRun(serviceId),
-  onChange: () => renderSoon()
-});
-function hostSongSaveState() { return songSaveController.state(); }
+/* One save controller per service (like the availability per-department
+   controllers), so confirming one service's songs never shows a stale
+   Saved/Failed/Stale bar while looking at a different upcoming service. */
+const songSaveControllers = Object.create(null);
+function songSaveController(serviceId) {
+  if (!songSaveControllers[serviceId]) {
+    songSaveControllers[serviceId] = createSave({
+      key: 'song-confirm:' + serviceId,
+      run: () => hostConfirmSongsRun(serviceId),
+      onChange: () => renderSoon()
+    });
+  }
+  return songSaveControllers[serviceId];
+}
+function hostSongSaveState(serviceId) { return serviceId ? songSaveController(serviceId).state() : null; }
 function hostConfirmSongs(serviceId) {
-  return songSaveController.trigger(serviceId).then(result => {
+  return songSaveController(serviceId).trigger().then(result => {
     addBanner('Songs confirmed.');
     return result;
   });

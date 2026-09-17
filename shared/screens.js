@@ -221,8 +221,9 @@ export function buildManageSettingsInfo(host) {
 export function buildSongsMyServiceInfo(host, mem) {
   const loaded = host.dataReady ? host.dataReady() !== false : true;
   const services = (typeof host.presiderServices === 'function' ? host.presiderServices() : []) || [];
-  const saveState = typeof host.songSaveState === 'function' ? host.songSaveState() : null;
-  return { loaded, next: services[0] || null, upcoming: services.slice(1), saveState };
+  const next = services[0] || null;
+  const saveState = next && typeof host.songSaveState === 'function' ? host.songSaveState(next.serviceId) : null;
+  return { loaded, next, upcoming: services.slice(1), saveState };
 }
 
 /* -------- Presider: History -------- */
