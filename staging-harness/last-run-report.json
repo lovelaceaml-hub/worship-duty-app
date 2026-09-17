@@ -1,0 +1,145 @@
+{
+  "generatedAt": "2026-09-17T17:08:15.745Z",
+  "summary": {
+    "passed": 26,
+    "failed": 1,
+    "total": 27
+  },
+  "rows": [
+    {
+      "name": "profile stale-save: two clients, first succeeds",
+      "pass": true,
+      "detail": "first save -> revision 1"
+    },
+    {
+      "name": "profile stale-save: second client refused as aborted with details",
+      "pass": true,
+      "detail": "refused as aborted, details.updatedBy=L. Leaderman"
+    },
+    {
+      "name": "saveMemberAvailability marks Needs replacement without removing the assignment",
+      "pass": true,
+      "detail": "marker set, assignment intact"
+    },
+    {
+      "name": "saveMemberAvailability clears the marker when available again",
+      "pass": true,
+      "detail": "marker cleared"
+    },
+    {
+      "name": "resolveDutyAttention: conflicting replacement refused as failed-precondition/conflict",
+      "pass": true,
+      "detail": "refused, duties=[\"Sermon\"]"
+    },
+    {
+      "name": "resolveDutyAttention: succeeds and records conflictOk when acknowledged",
+      "pass": true,
+      "detail": "revision 1"
+    },
+    {
+      "name": "resolveDutyAttention: opens the duty when no replacement is given",
+      "pass": true,
+      "detail": "duty opened, slot deleted"
+    },
+    {
+      "name": "resolveDutyAttention: request approved with a clean replacement",
+      "pass": true,
+      "detail": "assignment memberName=W. Sampleton"
+    },
+    {
+      "name": "resolveDutyAttention: request declined, no assignment change",
+      "pass": true,
+      "detail": "declined, assignment unchanged"
+    },
+    {
+      "name": "searchDepartmentCandidates finds a seeded fictional member",
+      "pass": true,
+      "detail": "1 match(es)"
+    },
+    {
+      "name": "createDepartmentInvitation issues a token",
+      "pass": true,
+      "detail": "token issued (not logged)"
+    },
+    {
+      "name": "acceptDepartmentInvitation joins the member once",
+      "pass": true,
+      "detail": "joined, profile created"
+    },
+    {
+      "name": "acceptDepartmentInvitation refuses a second use",
+      "pass": true,
+      "detail": "refused as already-exists"
+    },
+    {
+      "name": "revokeDepartmentInvitation revokes, then refuses acceptance",
+      "pass": true,
+      "detail": "revoked and refused"
+    },
+    {
+      "name": "acceptDepartmentInvitation refuses an expired token",
+      "pass": true,
+      "detail": "expired and refused"
+    },
+    {
+      "name": "saveSongService: draft save",
+      "pass": true,
+      "detail": "revision 1"
+    },
+    {
+      "name": "saveSongService: confirm",
+      "pass": true,
+      "detail": "confirmed, revision 2"
+    },
+    {
+      "name": "saveSongService: confirm succeeds after an out-of-band updatedAt bump (Finding 4 scenario)",
+      "pass": true,
+      "detail": "confirmed after bump, revision 3"
+    },
+    {
+      "name": "correctSongHistory swaps songs and updates songStats history",
+      "pass": true,
+      "detail": "changedSongs=[\"song-grace-and-truth\",\"song-new-covenant\",\"song-passover-joy\"]"
+    },
+    {
+      "name": "recordSongHistory: first run records only past, confirmed, unconfirmed-untouched planned lists",
+      "pass": true,
+      "detail": "candidates recorded=2, skipped=1"
+    },
+    {
+      "name": "recordSongHistory: recorded the two past confirmed lists and left the future one alone",
+      "pass": true,
+      "detail": "recorded=2 expected, actual recorded=2, skipped=1"
+    },
+    {
+      "name": "recordSongHistory: second run is a no-op for the already-recorded lists",
+      "pass": true,
+      "detail": "second run recorded=0, skipped=1"
+    },
+    {
+      "name": "rules: member can read their own profile after it carries revision",
+      "pass": false,
+      "detail": "expected 200, got 403: {\"error\":{\"code\":403,\"message\":\"\\nUnable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'get' @ L1675, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'get' @ L1812, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'get' @ L1675, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'get' @ L1812\",\"status\":\"PERMISSION_DENIED\"}}"
+    },
+    {
+      "name": "rules: a client cannot introduce needsReplacement on a schedule document",
+      "pass": true,
+      "detail": "denied as expected (403)"
+    },
+    {
+      "name": "rules: departmentInvitations is unreadable and unwritable from a client",
+      "pass": true,
+      "detail": "read and write both denied"
+    },
+    {
+      "name": "rules: legacy full-document admin schedule save with the new fields carried through unchanged passes",
+      "pass": true,
+      "detail": "accepted"
+    },
+    {
+      "name": "rules: a full-document save that drops needsReplacement/assignmentRevisions is refused",
+      "pass": true,
+      "detail": "refused as expected (403)"
+    }
+  ]
+}

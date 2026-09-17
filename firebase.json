@@ -14,7 +14,8 @@
       "scripts/**",
       "package.json",
       "package-lock.json",
-      "tests/**"
+      "tests/**",
+      "staging-harness/**"
     ],
     "headers": [
       { "source": "/", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
@@ -44,5 +45,12 @@
   },
   "functions": {
     "source": "functions"
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "functions": { "port": 5001 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
   }
 }
