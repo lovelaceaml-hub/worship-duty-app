@@ -9,7 +9,11 @@
  */
 
 import { createRequire } from 'module';
-import { db, auth, requestFor, mintIdToken, restGet, restPatch, createReport, assert, paDateOffset, authUidFor } from './lib.mjs';
+import {
+  db, auth, requestFor, mintIdToken, restGet, restPatch, createReport, assert, paDateOffset, authUidFor,
+  SONG_HISTORY_FLOOR_DATE, BELOW_FLOOR_SERVICE_ID, AT_FLOOR_SERVICE_ID, RECORDER_NOW,
+  PRE_FLOOR_PAST_SERVICE_ID, PRE_FLOOR_PAST2_SERVICE_ID, UNCONFIRMED_SERVICE_ID
+} from './lib.mjs';
 
 const require = createRequire(import.meta.url);
 const { createCompactWorkflowHandlers } = require('../functions/compact-workflows.js');
@@ -18,6 +22,11 @@ const { createCompactMembershipHandlers } = require('../functions/compact-member
 
 const now = () => Date.now();
 const workflows = createCompactWorkflowHandlers({ db: db(), now });
+/* The recorder checks run against a fixed clock (the day after the release-day
+   floor) so that both floor fixtures are always past their 3-hour window and
+   every relative-dated fixture is always still in the future. That makes the
+   recorder's scope deterministic no matter what day the harness is rerun. */
+const recorderWorkflows = createCompactWorkflowHandlers({ db: db(), now: () => RECORDER_NOW });
 const departmentHandlers = createDepartmentHandlers({ db: db(), now });
 const membership = createCompactMembershipHandlers({ db: db(), now });
 
@@ -355,27 +364,55 @@ async function main() {
    * 7. recordSongHistory: window + idempotency + scope
    * ------------------------------------------------------------- */
   let firstRunScope;
-  await report.check('recordSongHistory: first run records only past, confirmed, unconfirmed-untouched planned lists', async () => {
-    const result = await workflows.recordSongHistory();
+  await report.check('recordSongHistory: first run records only on-or-after-floor, past, confirmed planned lists', async () => {
+    const result = await recorderWorkflows.recordSongHistory();
     firstRunScope = result;
-    return `candidates recorded=${result.recorded}, skipped=${result.skipped}`;
+    assert(result.recorded === 1, `expected exactly the one on-or-after-floor list to be recorded, got ${result.recorded}`);
+    return `recorded=${result.recorded}, skipped=${result.skipped}`;
   });
 
-  await report.check('recordSongHistory: recorded the two past confirmed lists and left the future one alone', async () => {
-    const past1 = await db().collection('setlists').doc(`${paDateOffset(-1)}_evening-past`).get();
-    const past2 = await db().collection('setlists').doc(`${paDateOffset(-2)}_morning-past2`).get();
+  await report.check(`recordSongHistory: a confirmed, past-window setlist dated before the ${SONG_HISTORY_FLOOR_DATE} floor is NOT recorded`, async () => {
+    const belowFloor = await db().collection('setlists').doc(BELOW_FLOOR_SERVICE_ID).get();
+    const data = belowFloor.data();
+    assert(data.date < SONG_HISTORY_FLOOR_DATE, `fixture should be dated before the floor, got ${data.date}`);
+    assert(data.confirmedAt > 0, 'fixture should be confirmed, so the floor is the only reason it is skipped');
+    assert(data.status === 'planned' && !data.historySource,
+      `${BELOW_FLOOR_SERVICE_ID} is before the floor and must never be recorded, got status=${data.status}`);
+    const stats = await db().collection('songStats').doc('song-grace-and-truth').get();
+    const entry = (stats.data().history || []).find(h => h.service === BELOW_FLOOR_SERVICE_ID);
+    assert(!entry, 'no songStats history entry may be written for a pre-floor service');
+    for (const id of [PRE_FLOOR_PAST_SERVICE_ID, PRE_FLOOR_PAST2_SERVICE_ID]) {
+      const other = (await db().collection('setlists').doc(id).get()).data();
+      assert(other.status === 'planned' && !other.historySource, `${id} is before the floor and must stay untouched`);
+    }
+    return `before-floor lists left untouched (date=${data.date}, status=${data.status})`;
+  });
+
+  await report.check(`recordSongHistory: a confirmed, past-window setlist dated on the ${SONG_HISTORY_FLOOR_DATE} floor IS recorded`, async () => {
+    const atFloor = await db().collection('setlists').doc(AT_FLOOR_SERVICE_ID).get();
+    const data = atFloor.data();
+    assert(data.date === SONG_HISTORY_FLOOR_DATE, `fixture should be dated on the floor, got ${data.date}`);
+    assert(data.status === 'sung' && data.historySource === 'automatic',
+      `${AT_FLOOR_SERVICE_ID} is on the floor and must be recorded, got status=${data.status}`);
+    const stats = await db().collection('songStats').doc('song-new-covenant').get();
+    const entry = (stats.data().history || []).find(h => h.service === AT_FLOOR_SERVICE_ID);
+    assert(entry && entry.source === 'automatic', 'expected an automatic songStats history entry for the on-floor service');
+    return `on-floor list recorded (date=${data.date}, status=${data.status})`;
+  });
+
+  await report.check('recordSongHistory: future and never-confirmed lists are still left alone', async () => {
     const future = await db().collection('setlists').doc(songServiceId).get();
-    const unconfirmed = await db().collection('setlists').doc(`${paDateOffset(-3)}_evening-unconfirmed`).get();
-    assert(past1.data().status === 'sung' && past1.data().historySource === 'automatic', `${paDateOffset(-1)}_evening-past should be auto-recorded`);
-    assert(past2.data().status === 'sung' && past2.data().historySource === 'automatic', `${paDateOffset(-2)}_morning-past2 should be auto-recorded`);
+    const unconfirmed = await db().collection('setlists').doc(UNCONFIRMED_SERVICE_ID).get();
     assert(future.data().status === 'planned', 'the future confirmed setlist must NOT be recorded yet (3-hour window)');
     assert(unconfirmed.data().status === 'planned', 'the never-confirmed setlist must never be recorded');
-    return `recorded=2 expected, actual recorded=${firstRunScope.recorded}, skipped=${firstRunScope.skipped}`;
+    return `future and unconfirmed still planned; first run recorded=${firstRunScope.recorded}, skipped=${firstRunScope.skipped}`;
   });
 
-  await report.check('recordSongHistory: second run is a no-op for the already-recorded lists', async () => {
-    const result = await workflows.recordSongHistory();
+  await report.check('recordSongHistory: second run records nothing', async () => {
+    const result = await recorderWorkflows.recordSongHistory();
     assert(result.recorded === 0, `expected 0 newly recorded on the second run, got ${result.recorded}`);
+    const belowFloor = await db().collection('setlists').doc(BELOW_FLOOR_SERVICE_ID).get();
+    assert(belowFloor.data().status === 'planned', 'the before-floor list must still be untouched after a second run');
     return `second run recorded=${result.recorded}, skipped=${result.skipped}`;
   });
 

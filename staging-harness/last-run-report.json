@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-17T17:21:28.923Z",
+  "generatedAt": "2026-09-17T20:43:16.439Z",
   "summary": {
-    "passed": 27,
+    "passed": 29,
     "failed": 0,
-    "total": 27
+    "total": 29
   },
   "rows": [
     {
@@ -102,17 +102,27 @@
       "detail": "changedSongs=[\"song-grace-and-truth\",\"song-new-covenant\",\"song-passover-joy\"]"
     },
     {
-      "name": "recordSongHistory: first run records only past, confirmed, unconfirmed-untouched planned lists",
+      "name": "recordSongHistory: first run records only on-or-after-floor, past, confirmed planned lists",
       "pass": true,
-      "detail": "candidates recorded=2, skipped=1"
+      "detail": "recorded=1, skipped=1"
     },
     {
-      "name": "recordSongHistory: recorded the two past confirmed lists and left the future one alone",
+      "name": "recordSongHistory: a confirmed, past-window setlist dated before the 2026-09-17 floor is NOT recorded",
       "pass": true,
-      "detail": "recorded=2 expected, actual recorded=2, skipped=1"
+      "detail": "before-floor lists left untouched (date=2026-09-16, status=planned)"
     },
     {
-      "name": "recordSongHistory: second run is a no-op for the already-recorded lists",
+      "name": "recordSongHistory: a confirmed, past-window setlist dated on the 2026-09-17 floor IS recorded",
+      "pass": true,
+      "detail": "on-floor list recorded (date=2026-09-17, status=sung)"
+    },
+    {
+      "name": "recordSongHistory: future and never-confirmed lists are still left alone",
+      "pass": true,
+      "detail": "future and unconfirmed still planned; first run recorded=1, skipped=1"
+    },
+    {
+      "name": "recordSongHistory: second run records nothing",
       "pass": true,
       "detail": "second run recorded=0, skipped=1"
     },

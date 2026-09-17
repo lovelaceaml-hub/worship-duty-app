@@ -53,6 +53,19 @@ export function paDateOffset(days) {
   return dateInTimeZone(new Date(Date.now() + days * 24 * 60 * 60 * 1000));
 }
 
+/* ---- Recorder date-floor fixtures (absolute, never relative to the run
+   date) matching functions/compact-workflows.js SONG_HISTORY_FLOOR_DATE.
+   RECORDER_NOW is the clock the recorder checks run against, so both
+   fixtures are always well past their 3-hour window and the ONLY difference
+   between them is which side of the floor their service date falls on. ---- */
+export const SONG_HISTORY_FLOOR_DATE = '2026-09-17';
+export const BELOW_FLOOR_SERVICE_ID = '2026-09-16_evening-below-floor';
+export const AT_FLOOR_SERVICE_ID = '2026-09-17_morning-at-floor';
+export const PRE_FLOOR_PAST_SERVICE_ID = '2026-09-15_evening-past';
+export const PRE_FLOOR_PAST2_SERVICE_ID = '2026-09-16_morning-past2';
+export const UNCONFIRMED_SERVICE_ID = '2026-09-18_evening-unconfirmed';
+export const RECORDER_NOW = Date.parse('2026-09-19T12:00:00-07:00');
+
 /* Department profile documents and departmentAssignments records are keyed
    by the member's Firebase Auth uid (what functions/index.js calls
    `account.authUid`, defaulting to `member:${memberId}`), never by the

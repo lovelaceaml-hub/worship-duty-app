@@ -41,6 +41,9 @@ const SERVICE_DEFAULT_TIMES = Object.freeze({
   Evening: '20:00'
 });
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+// Release day. The automatic recorder only ever considers services on or after
+// this Pacific service date, so the pre-release back catalogue is never touched.
+const SONG_HISTORY_FLOOR_DATE = '2026-09-17';
 
 function plainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -596,7 +599,10 @@ function createCompactWorkflowHandlers(options = {}) {
     const snapshot = await db.collection('setlists').where('status', '==', 'planned').get();
     const candidates = snapshot.docs
       .map(document => ({ id: document.id, data: document.data() || {} }))
+      // The floor is applied in memory, not as a Firestore inequality, so no
+      // composite index is needed. A missing or malformed date fails closed.
       .filter(({ data }) => Array.isArray(data.songs) && data.songs.length &&
+        text(data.date) >= SONG_HISTORY_FLOOR_DATE &&
         Number(data.confirmedAt || 0) >= Number(data.updatedAt || 0) && Number(data.confirmedAt || 0) > 0);
 
     let recorded = 0;
@@ -617,6 +623,7 @@ function createCompactWorkflowHandlers(options = {}) {
           if (!freshSnapshot.exists) return;
           const setlist = freshSnapshot.data() || {};
           if (setlist.status === 'sung') return;
+          if (text(setlist.date) < SONG_HISTORY_FLOOR_DATE) return;
           if (!Array.isArray(setlist.songs) || !setlist.songs.length) return;
           if (!(Number(setlist.confirmedAt || 0) >= Number(setlist.updatedAt || 0) && Number(setlist.confirmedAt || 0) > 0)) return;
 

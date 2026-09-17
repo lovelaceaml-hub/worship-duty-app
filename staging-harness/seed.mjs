@@ -7,7 +7,11 @@
  * demo-lv-zion-duties emulator project (see staging-harness/README.md).
  */
 
-import { db, auth, ensureAuthUser, paDateOffset, authUidFor } from './lib.mjs';
+import {
+  db, auth, ensureAuthUser, paDateOffset, authUidFor,
+  BELOW_FLOOR_SERVICE_ID, AT_FLOOR_SERVICE_ID,
+  PRE_FLOOR_PAST_SERVICE_ID, PRE_FLOOR_PAST2_SERVICE_ID, UNCONFIRMED_SERVICE_ID
+} from './lib.mjs';
 import admin from 'firebase-admin';
 
 function slugify(value) {
@@ -238,19 +242,31 @@ async function main() {
     assignments: { Presider: 'T. Fictitia' }
   });
   await createSchedule({
-    id: `${paDateOffset(-1)}_evening-past`, date: paDateOffset(-1), service: 'Evening',
+    id: PRE_FLOOR_PAST_SERVICE_ID, date: '2026-09-15', service: 'Evening',
     assignments: { Presider: 'T. Fictitia' }
   });
   await createSchedule({
-    id: `${paDateOffset(-2)}_morning-past2`, date: paDateOffset(-2), service: 'Morning',
+    id: PRE_FLOOR_PAST2_SERVICE_ID, date: '2026-09-16', service: 'Morning',
     assignments: { Presider: 'T. Fictitia' }
   });
   await createSchedule({
-    id: `${paDateOffset(-3)}_evening-unconfirmed`, date: paDateOffset(-3), service: 'Evening',
+    id: UNCONFIRMED_SERVICE_ID, date: '2026-09-18', service: 'Evening',
     assignments: { Presider: 'T. Fictitia' }
   });
   await createSchedule({
     id: `${paDateOffset(-10)}_morning-already-sung`, date: paDateOffset(-10), service: 'Morning',
+    assignments: { Presider: 'T. Fictitia' }
+  });
+  /* Absolute, floor-anchored fixtures for the recorder's release-day date
+     floor (functions/compact-workflows.js SONG_HISTORY_FLOOR_DATE). These are
+     deliberately NOT relative to the run date, so the floor check means the
+     same thing whenever the harness is rerun. */
+  await createSchedule({
+    id: BELOW_FLOOR_SERVICE_ID, date: '2026-09-16', service: 'Evening',
+    assignments: { Presider: 'T. Fictitia' }
+  });
+  await createSchedule({
+    id: AT_FLOOR_SERVICE_ID, date: '2026-09-17', service: 'Morning',
     assignments: { Presider: 'T. Fictitia' }
   });
   await createSchedule({
@@ -268,16 +284,24 @@ async function main() {
     presider: 'T. Fictitia', songs: [songIds[0], songIds[1]], confirmed: false, status: 'planned'
   });
   await createSetlist({
-    id: `${paDateOffset(-1)}_evening-past`, date: paDateOffset(-1), service: 'Evening',
+    id: PRE_FLOOR_PAST_SERVICE_ID, date: '2026-09-15', service: 'Evening',
     presider: 'T. Fictitia', songs: [songIds[0], songIds[2]], confirmed: true, status: 'planned'
   });
   await createSetlist({
-    id: `${paDateOffset(-2)}_morning-past2`, date: paDateOffset(-2), service: 'Morning',
+    id: PRE_FLOOR_PAST2_SERVICE_ID, date: '2026-09-16', service: 'Morning',
     presider: 'T. Fictitia', songs: [songIds[1]], confirmed: true, status: 'planned'
   });
   await createSetlist({
-    id: `${paDateOffset(-3)}_evening-unconfirmed`, date: paDateOffset(-3), service: 'Evening',
+    id: UNCONFIRMED_SERVICE_ID, date: '2026-09-18', service: 'Evening',
     presider: 'T. Fictitia', songs: [songIds[0]], confirmed: false, status: 'planned'
+  });
+  await createSetlist({
+    id: BELOW_FLOOR_SERVICE_ID, date: '2026-09-16', service: 'Evening',
+    presider: 'T. Fictitia', songs: [songIds[0]], confirmed: true, status: 'planned'
+  });
+  await createSetlist({
+    id: AT_FLOOR_SERVICE_ID, date: '2026-09-17', service: 'Morning',
+    presider: 'T. Fictitia', songs: [songIds[1]], confirmed: true, status: 'planned'
   });
   const sungServiceId = `${paDateOffset(-10)}_morning-already-sung`;
   await createSetlist({
