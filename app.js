@@ -1,6 +1,7 @@
 'use strict';
 
 import { startShell } from './shared/shell.js';
+import { createSave } from './shared/save-state.js';
 
 /* ================= constants ================= */
 
@@ -1942,6 +1943,180 @@ function hostLegacyMy() { ui.tab = 'my'; return renderMy(); }
 function hostLegacyManage() { ui.tab = 'manage'; return renderManage(); }
 function hostLegacySongs(container) { ui.tab = 'songs'; renderSongs(container); }
 
+/* ================= Section 4: Member screens (My duties, Availability,
+   Reminders) — host data/actions consumed by shared/screens.js builders and
+   rendered by every layout via layouts/_common.js. Replaces the legacy "My
+   duties" bridge; #duties/#availability/#reminders no longer resolve to the
+   legacy screen (see shared/screens.js screenForRoute). ================= */
+
+function hostMyDuties() {
+  if (!ui.me) return [];
+  return dutiesFor(ui.me).map(d => ({
+    serviceId: svcId(d.svc), date: d.svc.date, time: d.svc.time,
+    worship: d.svc.worship, service: d.svc.service, duty: d.duty,
+    pendingRequest: !!findPendingRequest(svcId(d.svc), d.duty, ui.me)
+  }));
+}
+
+function hostMyRequests() {
+  if (!ui.me) return [];
+  return state.requests.filter(r => r.name === ui.me).slice()
+    .sort((a, b) => b.createdAt - a.createdAt).slice(0, 12)
+    .map(r => ({ id: r.id, duty: r.duty, worship: r.worship, service: r.service, date: r.date, note: r.note, status: effectiveRequestStatus(r) }));
+}
+
+function hostSubmitChangeRequest(serviceId, duty, note) {
+  const svc = findService(serviceId);
+  if (!svc || !ui.me || !verifiedSession) return Promise.reject(new Error('That duty is not available.'));
+  const createdAt = Date.now();
+  const req = {
+    id: requestId(serviceId, duty, createdAt),
+    name: ui.me,
+    memberId: verifiedSession.memberId,
+    requesterUid: (authUser && authUser.uid) || '',
+    svcId: serviceId, date: svc.date, service: svc.service, worship: svc.worship,
+    duty, department: actionableDepartmentForDuty(duty),
+    note: note || '', status: 'pending', createdAt
+  };
+  state.requests.push(req);
+  persistRequest(req);
+  afterDataChange();
+  return Promise.resolve(req);
+}
+
+/* Availability: reuses the existing shared department-profile draft/save
+   machinery (departmentRuntime, saveOwnDepartmentAvailability, the wired
+   `updateMemberAvailability` callable) that already powers the leader-facing
+   Manage screens; this just exposes it through the host/save-state contract
+   for the new dedicated Availability screen. */
+function hostMyAvailability() {
+  return ownDepartmentProfiles().map(profile => {
+    const draft = departmentDraftProfile(profile.departmentId, profile.memberUid) || profile;
+    const dirty = !!departmentRuntime.drafts[departmentRuntimeKey(profile.departmentId, profile.memberUid)];
+    const recurring = (draft.availability && draft.availability.recurring) || {};
+    const exceptions = (draft.availability && draft.availability.exceptions) || {};
+    const exceptionRows = [];
+    Object.keys(exceptions).sort().forEach(date => {
+      Object.keys(exceptions[date] || {}).sort().forEach(key => {
+        exceptionRows.push({ date, key, label: departmentServiceTimeLabel(key), status: exceptions[date][key] });
+      });
+    });
+    return {
+      departmentId: profile.departmentId,
+      memberUid: profile.memberUid,
+      dirty,
+      recurring: SERVICE_LABELS.map(label => {
+        const key = departmentServiceTimeKey(label);
+        return { key, label, status: recurring[key] || 'unavailable' };
+      }),
+      exceptions: exceptionRows
+    };
+  });
+}
+
+function hostAvailabilityReady() {
+  if (departmentRuntime.ownLoaded || departmentRuntime.ownError) return true;
+  if (!departmentRuntime.ownLoading) loadOwnDepartmentProfiles().catch(() => {});
+  return false;
+}
+
+function hostAvailabilityError() { return departmentRuntime.ownError || ''; }
+
+function hostAvailabilityRetryLoad() {
+  departmentRuntime.ownLoaded = false;
+  departmentRuntime.ownError = '';
+  loadOwnDepartmentProfiles().catch(() => {});
+  renderSoon();
+}
+
+function hostAvailabilityToggleRecurring(departmentId, memberUid, key) {
+  const profile = departmentDraftProfile(departmentId, memberUid) || departmentProfile(departmentId, memberUid);
+  if (!profile || !isOwnDepartmentProfile(departmentId, memberUid)) return;
+  const availability = normalizeDepartmentAvailability(profile.availability);
+  availability.recurring[key] = (availability.recurring[key] || 'unavailable') === 'available' ? 'unavailable' : 'available';
+  departmentPatch(departmentId, memberUid, { availability });
+}
+
+function hostAvailabilityAddException(departmentId, memberUid, date, key, status) {
+  if (!isOwnDepartmentProfile(departmentId, memberUid)) return;
+  const profile = departmentDraftProfile(departmentId, memberUid) || departmentProfile(departmentId, memberUid);
+  if (!profile || !/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !key || ['available', 'unavailable'].indexOf(status) === -1) return;
+  const availability = normalizeDepartmentAvailability(profile.availability);
+  if (!availability.exceptions[date]) availability.exceptions[date] = {};
+  availability.exceptions[date][key] = status;
+  departmentPatch(departmentId, memberUid, { availability });
+}
+
+function hostAvailabilityRemoveException(departmentId, memberUid, date, key) {
+  if (!isOwnDepartmentProfile(departmentId, memberUid)) return;
+  const profile = departmentDraftProfile(departmentId, memberUid) || departmentProfile(departmentId, memberUid);
+  if (!profile) return;
+  const availability = normalizeDepartmentAvailability(profile.availability);
+  if (availability.exceptions[date]) {
+    delete availability.exceptions[date][key];
+    if (!Object.keys(availability.exceptions[date]).length) delete availability.exceptions[date];
+  }
+  departmentPatch(departmentId, memberUid, { availability });
+}
+
+function hostAvailabilityReset(departmentId, memberUid) {
+  delete departmentRuntime.drafts[departmentRuntimeKey(departmentId, memberUid)];
+  renderSoon();
+}
+
+const availabilitySaveControllers = Object.create(null);
+function availabilitySaveController(departmentId, memberUid) {
+  const key = departmentRuntimeKey(departmentId, memberUid);
+  if (!availabilitySaveControllers[key]) {
+    availabilitySaveControllers[key] = createSave({
+      key,
+      run: () => saveOwnDepartmentAvailability(departmentId, memberUid),
+      onChange: () => renderSoon()
+    });
+  }
+  return availabilitySaveControllers[key];
+}
+
+function hostAvailabilitySaveState(departmentId, memberUid) {
+  return availabilitySaveController(departmentId, memberUid).state();
+}
+
+function hostAvailabilitySaveTrigger(departmentId, memberUid) {
+  return availabilitySaveController(departmentId, memberUid).trigger();
+}
+
+/* Reminders: existing notification/calendar-export behavior, exposed read-only
+   plus the same actions the legacy "My duties" notify box already used. */
+function hostReminders() {
+  const alerts = ui.me ? getJSON('wds-alerts-' + ui.me, []) : [];
+  return {
+    notifySupported: ('Notification' in window) && (feat('notifications') || feat('reminders')),
+    notifyOn: notifyOn(),
+    calendarEnabled: feat('calendarExport'),
+    alerts: alerts.slice(0, 6).map(a => ({ t: a.t, txt: a.txt }))
+  };
+}
+
+function hostNotifyOn() {
+  return Notification.requestPermission().then(p => {
+    if (p === 'granted') {
+      localStorage.setItem('wds-notify', '1');
+      sysNotify('Notifications are on', 'You\'ll hear about new duties and get reminders here.');
+      registerPush();
+    } else {
+      addBanner('Notifications were blocked. You can allow them in your browser settings.', true);
+    }
+  });
+}
+
+function hostNotifyOff() { localStorage.setItem('wds-notify', '0'); unregisterPush(); }
+
+function hostClearAlerts() {
+  if (!ui.me) return;
+  localStorage.removeItem('wds-alerts-' + ui.me);
+  localStorage.setItem('wds-unread-' + ui.me, '0');
+}
+
 function buildHost() {
   return {
     phase: hostPhase,
@@ -1960,7 +2135,29 @@ function buildHost() {
     maintenanceHtml: maintenanceScheduleHtml,
     legacy: { my: hostLegacyMy, manage: hostLegacyManage, songs: hostLegacySongs },
     pulse: name => pulse('tab_' + name),
-    onChange: cb => { hostChangeListeners.push(cb); }
+    onChange: cb => { hostChangeListeners.push(cb); },
+    myDuties: hostMyDuties,
+    myRequests: hostMyRequests,
+    myAvailability: hostMyAvailability,
+    availabilityReady: hostAvailabilityReady,
+    availabilityError: hostAvailabilityError,
+    availabilitySaveState: hostAvailabilitySaveState,
+    reminders: hostReminders,
+    actions: {
+      requestChange: hostSubmitChangeRequest,
+      toggleAvailability: hostAvailabilityToggleRecurring,
+      addAvailabilityException: hostAvailabilityAddException,
+      removeAvailabilityException: hostAvailabilityRemoveException,
+      saveAvailability: hostAvailabilitySaveTrigger,
+      resetAvailability: hostAvailabilityReset,
+      retrySave: hostAvailabilitySaveTrigger,
+      retryAvailabilityLoad: hostAvailabilityRetryLoad,
+      notifyOn: hostNotifyOn,
+      notifyOff: hostNotifyOff,
+      subscribeIcs: subscribeICS,
+      copyIcs: copyICSLink,
+      clearAlerts: hostClearAlerts
+    }
   };
 }
 

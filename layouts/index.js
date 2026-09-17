@@ -7,7 +7,7 @@ export const layouts = { classic: original, prism, navy, aurora };
 export const LAYOUT_IDS = ['classic', 'prism', 'navy', 'aurora'];
 
 const REQUIRED_PHASES = ['locked', 'signin', 'forcedPin', 'loading', 'recovery', 'maintenance'];
-const REQUIRED_SCREENS = ['schedule', 'appearance', 'unavailable', 'legacy'];
+const REQUIRED_SCREENS = ['schedule', 'duties', 'availability', 'reminders', 'appearance', 'unavailable', 'legacy'];
 
 /* Checks that all four layouts define every key the renderer contract
    requires, and every screen id shared/screens.js knows about. Missing keys

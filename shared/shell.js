@@ -8,7 +8,10 @@ import * as state from './state.js';
 import * as components from './components.js';
 import { layouts, LAYOUT_IDS } from '../layouts/index.js';
 import { buildNavigation } from './nav.js';
-import { buildScheduleInfo, buildAppearanceInfo, buildUnavailableInfo, screenForRoute } from './screens.js';
+import {
+  buildScheduleInfo, buildAppearanceInfo, buildUnavailableInfo, buildDutiesInfo,
+  buildAvailabilityInfo, buildRemindersInfo, screenForRoute
+} from './screens.js';
 
 const SHEET_TIMEOUT_MS = 7000;
 
@@ -184,6 +187,9 @@ function renderReady() {
   const screenId = screenForRoute(route);
   let info;
   if (screenId === 'schedule') info = buildScheduleInfo(hostRef, state.memory('#schedule'));
+  else if (screenId === 'duties') info = buildDutiesInfo(hostRef, state.memory('#duties'));
+  else if (screenId === 'availability') info = buildAvailabilityInfo(hostRef);
+  else if (screenId === 'reminders') info = buildRemindersInfo(hostRef);
   else if (screenId === 'appearance') info = Object.assign(buildAppearanceInfo(hostRef), { returnRoute: state.startRouteFor(account) });
   else if (screenId === 'unavailable') info = buildUnavailableInfo(hostRef, route);
   else info = { kind: legacyKindFor(route) };
@@ -258,6 +264,65 @@ function onDocClick(e) {
   else if (act === 'wd-appearance-use-original') {
     window.WD_APPEARANCE.useOriginalForSession();
     applyMode('classic').then(renderNow);
+  }
+  else if (act === 'wd-request-open') { state.setMemory('#duties', { reqKey: actEl.dataset.key }); renderNow(); }
+  else if (act === 'wd-request-cancel') { state.setMemory('#duties', { reqKey: null }); renderNow(); }
+  else if (act === 'wd-request-submit') {
+    const note = (document.getElementById('wd-request-note') || {}).value || '';
+    if (!hostRef.actions || typeof hostRef.actions.requestChange !== 'function') return;
+    hostRef.actions.requestChange(actEl.dataset.svc, actEl.dataset.duty, note)
+      .then(() => { state.setMemory('#duties', { reqKey: null }); renderNow(); })
+      .catch(() => { renderNow(); });
+  }
+  else if (act === 'wd-availability-toggle') {
+    const d = actEl.dataset;
+    if (hostRef.actions && hostRef.actions.toggleAvailability) hostRef.actions.toggleAvailability(d.dept, d.uid, d.key);
+  }
+  else if (act === 'wd-availability-exception-remove') {
+    const d = actEl.dataset;
+    if (hostRef.actions && hostRef.actions.removeAvailabilityException) hostRef.actions.removeAvailabilityException(d.dept, d.uid, d.date, d.key);
+  }
+  else if (act === 'wd-availability-exception-add') {
+    const card = actEl.closest('[data-dept]');
+    const form = actEl.closest('.wd-exception-form');
+    if (!card || !form) return;
+    const dateInput = form.querySelector('input[type="date"]');
+    const keySelect = form.querySelector('select[data-role="key"]');
+    const statusSelect = form.querySelector('select[data-role="status"]');
+    if (!dateInput || !keySelect || !statusSelect) return;
+    if (hostRef.actions && hostRef.actions.addAvailabilityException) {
+      hostRef.actions.addAvailabilityException(card.dataset.dept, card.dataset.uid, dateInput.value, keySelect.value, statusSelect.value);
+    }
+  }
+  else if (act === 'wd-availability-save') {
+    const d = actEl.dataset;
+    if (hostRef.actions && hostRef.actions.saveAvailability) hostRef.actions.saveAvailability(d.dept, d.uid).catch(() => {});
+  }
+  else if (act === 'wd-availability-reset') {
+    const d = actEl.dataset;
+    if (hostRef.actions && hostRef.actions.resetAvailability) hostRef.actions.resetAvailability(d.dept, d.uid);
+  }
+  else if (act === 'wd-availability-retry') {
+    if (hostRef.actions && hostRef.actions.retryAvailabilityLoad) hostRef.actions.retryAvailabilityLoad();
+  }
+  else if (act === 'wd-save-retry') {
+    // Generic retry for any per-card save bar: the nearest ancestor carrying
+    // data-dept/data-uid identifies which save controller to re-trigger.
+    const card = actEl.closest('[data-dept][data-uid]');
+    if (card && hostRef.actions && hostRef.actions.retrySave) hostRef.actions.retrySave(card.dataset.dept, card.dataset.uid);
+  }
+  else if (act === 'wd-reminder-notify-on') {
+    if (hostRef.actions && hostRef.actions.notifyOn) hostRef.actions.notifyOn().then(renderNow);
+  }
+  else if (act === 'wd-reminder-notify-off') {
+    if (hostRef.actions && hostRef.actions.notifyOff) hostRef.actions.notifyOff();
+    renderNow();
+  }
+  else if (act === 'wd-reminder-subscribe-ics') { if (hostRef.actions && hostRef.actions.subscribeIcs) hostRef.actions.subscribeIcs(); }
+  else if (act === 'wd-reminder-copy-ics') { if (hostRef.actions && hostRef.actions.copyIcs) hostRef.actions.copyIcs(); }
+  else if (act === 'wd-reminder-clear-alerts') {
+    if (hostRef.actions && hostRef.actions.clearAlerts) hostRef.actions.clearAlerts();
+    renderNow();
   }
 }
 

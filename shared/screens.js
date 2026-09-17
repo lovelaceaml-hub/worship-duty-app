@@ -94,10 +94,66 @@ export function buildUnavailableInfo(host, route) {
   };
 }
 
-export const SCREEN_IDS = ['schedule', 'appearance', 'unavailable', 'legacy'];
+/* Member: My next duty / Upcoming duties. `next` is the soonest upcoming
+   duty (host.myDuties() is already date/time/duty ordered); `days` groups the
+   rest by day -> service for card display. `reqKey` (serviceId:duty) marks
+   which duty's change-request form is open, read from route memory so it
+   survives a re-render. */
+export function buildDutiesInfo(host, mem) {
+  const raw = (typeof host.myDuties === 'function' ? host.myDuties() : []) || [];
+  const loaded = host.dataReady ? host.dataReady() !== false : true;
+  const days = [];
+  const dayIndex = Object.create(null);
+  raw.forEach(d => {
+    let day = dayIndex[d.date];
+    if (!day) { day = dayIndex[d.date] = { date: d.date, services: [] }; days.push(day); }
+    let se = day.services.find(s => s.serviceId === d.serviceId);
+    if (!se) { se = { serviceId: d.serviceId, worship: d.worship, service: d.service, time: d.time, duties: [] }; day.services.push(se); }
+    se.duties.push(d);
+  });
+  const requests = (typeof host.myRequests === 'function' ? host.myRequests() : []) || [];
+  return {
+    loaded,
+    next: raw[0] || null,
+    days,
+    count: raw.length,
+    requests,
+    reqKey: (mem && mem.reqKey) || null
+  };
+}
+
+/* Member: Availability. One record per department the member belongs to,
+   each carrying its own dirty/save state so several department cards can be
+   edited independently (a member may belong to more than one department). */
+export function buildAvailabilityInfo(host) {
+  const loaded = typeof host.availabilityReady === 'function' ? host.availabilityReady() : true;
+  const error = typeof host.availabilityError === 'function' ? host.availabilityError() : '';
+  const profiles = loaded && !error && typeof host.myAvailability === 'function' ? (host.myAvailability() || []) : [];
+  const withState = profiles.map(p => Object.assign({}, p, {
+    saveState: p.dirty && typeof host.availabilitySaveState === 'function'
+      ? host.availabilitySaveState(p.departmentId, p.memberUid) : null
+  }));
+  return { loaded, error, profiles: withState };
+}
+
+/* Member: Reminders (notifications + calendar export + recent alerts). */
+export function buildRemindersInfo(host) {
+  const r = (typeof host.reminders === 'function' ? host.reminders() : {}) || {};
+  return {
+    notifySupported: !!r.notifySupported,
+    notifyOn: !!r.notifyOn,
+    calendarEnabled: !!r.calendarEnabled,
+    alerts: r.alerts || []
+  };
+}
+
+export const SCREEN_IDS = ['schedule', 'duties', 'availability', 'reminders', 'appearance', 'unavailable', 'legacy'];
 
 export function screenForRoute(route) {
   if (route === '#schedule') return 'schedule';
+  if (route === '#duties') return 'duties';
+  if (route === '#availability') return 'availability';
+  if (route === '#reminders') return 'reminders';
   if (route === '#appearance') return 'appearance';
   if (route === '#unavailable') return 'unavailable';
   return 'legacy';
