@@ -2829,6 +2829,8 @@ function renderDepartmentProfileRow(profile, options = {}) {
   const memberUid = profile.memberUid;
   const isLeader = departmentProfileIsLeader(profile);
   const canEdit = options.canEdit === true;
+  const department = options.department || '';
+  const canReset = canPermission('canResetPin', authActor(), { name: profile.memberName, departments: [department] });
   return '<div class="department-member-row ' + (profile.status === 'inactive' ? 'is-inactive' : '') + '">' +
     '<button class="department-member-open" data-act="department-member-open" data-uid="' + esc(memberUid) + '" aria-label="Open ' + esc(memberLabel(profile.memberName)) + ' profile">' +
     '<span class="department-member-name">' + esc(memberLabel(profile.memberName)) + '</span>' +
@@ -2836,6 +2838,7 @@ function renderDepartmentProfileRow(profile, options = {}) {
     '</button>' +
     '<span class="department-member-meta">' + departmentStatusBadge(profile) + '<span>' + esc(departmentProfileSummary(profile)) + '</span></span>' +
     (canEdit ? '<button class="ghost mini" data-act="department-status" data-uid="' + esc(memberUid) + '" data-status="' + (profile.status === 'active' ? 'inactive' : 'active') + '">' + (profile.status === 'active' ? 'Archive' : 'Restore') + '</button>' : '') +
+    (canReset ? '<button class="ghost mini" data-act="reset-member-pin" data-name="' + esc(profile.memberName) + '" data-dept="' + esc(department) + '">Reset PIN</button>' : '') +
     '</div>';
 }
 
@@ -2874,10 +2877,10 @@ function renderDepartmentLoading(department) {
   return '';
 }
 
-function renderDepartmentRosterGroup(label, profiles, canEdit) {
+function renderDepartmentRosterGroup(label, profiles, canEdit, department) {
   if (!profiles.length) return '<section class="department-group"><h3>' + esc(label) + '</h3><p class="department-empty-note">No profiles in this group.</p></section>';
   return '<section class="department-group"><div class="department-group-heading"><h3>' + esc(label) + '</h3><span>' + profiles.length + '</span></div>' +
-    profiles.map(profile => renderDepartmentProfileRow(profile, { canEdit })).join('') + '</section>';
+    profiles.map(profile => renderDepartmentProfileRow(profile, { canEdit, department })).join('') + '</section>';
 }
 
 function renderManageDepartment() {
@@ -2904,8 +2907,8 @@ function renderManageDepartment() {
       '<button class="primary" type="submit">Add member profile</button></form>';
   }
   html += '<div class="department-roster-groups">' +
-    renderDepartmentRosterGroup('Active profiles', profiles.filter(profile => profile.status === 'active'), canEdit) +
-    renderDepartmentRosterGroup('Inactive profiles', profiles.filter(profile => profile.status !== 'active'), canEdit) +
+    renderDepartmentRosterGroup('Active profiles', profiles.filter(profile => profile.status === 'active'), canEdit, department) +
+    renderDepartmentRosterGroup('Inactive profiles', profiles.filter(profile => profile.status !== 'active'), canEdit, department) +
     '</div>';
   return html;
 }
