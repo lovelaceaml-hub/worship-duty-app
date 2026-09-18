@@ -117,3 +117,123 @@ design-gallery-review --expires 7d`, no functions/rules/production data).
   7:29/7:31/7:45 PM) was verified against a fictional two-service fixture in
   the Node harness, not against real seeded/production service times, since
   no real service happens to start at those exact minutes.
+
+## Live release, 2026-09-17 (Pacific)
+
+Anthony approved publishing F1 to the live PWA on 2026-09-17, and asked that
+members see the app's maintenance message while the live app was being
+changed.
+
+### Correction to the earlier "Firestore flag" note
+
+The "Unverified" section above assumed a shared Firestore `app/settings`
+maintenance flag. That is wrong, and nothing in `app.js` reads such a field.
+The real, documented mechanism (commits `54fee56` "Show read-only maintenance
+schedule during live repair" and `c057c3e` "Restore full app after read-only
+maintenance release", both 2026-09-14) is a single source line in
+`index.html`, published through the normal guarded Hosting release:
+
+```
+<html lang="en">
+<script>document.documentElement.dataset.maintenance = 'active';</script>
+```
+
+`index.html` CSS rules `html[data-maintenance="active"] body > .wrap` and
+`... > .maintenance-screen` swap the app for the read-only maintenance panel,
+and `render()` in `app.js` short-circuits to `renderMaintenanceSchedule()`.
+The design-gallery build passes the line through untouched (its only
+`index.html` edit at that point is the `data-design-gallery="on"` marker), so
+it survives the compiler. No Firestore write was made, and no Firestore write
+is needed. Maintenance state before this release: OFF (the live `index.html`
+did not contain the line).
+
+### Goal-line check
+
+Plan goal line: "Preserve Original, Prism, Navy & Cream, and Aurora as four
+distinct layouts." `git diff 1e0b6fd..HEAD --stat` touches only `AGENTS.md`,
+`app.js`, `docs/PLAN-COMPACT-PHONE-REFACTOR.md`, `docs/USER-GUIDE.md`,
+`docs/USER-MANUAL.md`, and this record. No stylesheet, no markup structure,
+no appearance source (`design-gallery/`, `prototype*/`, `live-design/`), and
+no navigation. The only `app.js` changes are selector logic and one heading
+string. Goal line intact.
+
+### Sequence and markers
+
+| Step | Time (Pacific) | Live marker | Maintenance |
+| --- | --- | --- | --- |
+| Before | 2026-09-17 19:03 | `gallery1789446013699` (built 2026-09-15T04:20:13.732Z) | OFF |
+| Release 1: F1 + maintenance line | 2026-09-17 19:05 | `gallery1789697104384` (built 2026-09-18T02:05:04.403Z) | ON |
+| Release 2: maintenance line removed | 2026-09-17 19:06 | `gallery1789697177680` (built 2026-09-18T02:06:17.705Z) | OFF (restored) |
+
+Both releases ran `node design-gallery/release.mjs --publish` from this
+worktree with `npm_config_cache=/tmp/npm-cache`. The publisher's
+`compatibleLive()` guard reported `gallery-history` on release 1 (the live
+app matched an `app.js`/`song-app.js`/`index.html` triple present in this
+branch's history, as expected since F1 changes `app.js`), and the
+`scripts/guard-gallery-deploy.mjs` predeploy guard passed on both. Hosting
+only: `firebase deploy --only hosting` with the staged
+`.hosting-gallery/firebase.gallery.json`. No functions, no Firestore rules,
+no bare `firebase deploy`, no schedule or account records touched.
+
+### Verification
+
+- Live site HTTP 200 on every check.
+- Release 1: served `index.html` contained
+  `dataset.maintenance = 'active'` (1 occurrence) and the heading
+  "Schedule maintenance in progress". Browser load at 375x812 with no
+  sign-in rendered the maintenance panel, kicker "LAS VEGAS ZION", the
+  preservation note, and the read-only service list region. Console clean
+  (no error-level messages).
+- F1 code confirmed live: the served `app.js` contains `pacificWallNow` and
+  the "Next service" heading.
+- Appearance assets, identical list before and after (all HTTP 200):
+  `design-choice.css`, `prism-live.css`, `navy-live.css`, `aurora-live.css`,
+  plus `design-choice.js`, `app.js`, `permissions.js`, `seed-data.js`,
+  `firebase-config.js`. Four distinct appearance stylesheets still served.
+  The publisher's own post-deploy check printed "Verified live: ... Original
+  + Prism + Navy & Cream + Aurora" on both releases.
+- Release 2: served `index.html` contains 0 occurrences of
+  `dataset.maintenance = 'active'`. Browser load at 375x812 rendered the
+  normal app shell (Schedule / My Duties / Presider / Manage tabs, department
+  chips, sync pill), console clean. The maintenance page is gone.
+- Working tree after the restore is clean for `index.html`
+  (`git checkout -- index.html`), so the maintenance line exists in no commit
+  on this branch.
+
+### Limitation
+
+The verifying browser profile held an existing signed-in member session, so
+the site passcode / sign-in screen itself was not re-exercised from a cold
+device in this session, and the Schedule tab showed "No upcoming services
+yet" because the live Firestore schedule currently has no future-dated
+services. Both are pre-existing conditions, unchanged by F1: the same empty
+state appeared before the release. Anthony should open
+https://lv-zion-duties.web.app on his phone once a future service exists to
+see the "Next service" card with real data.
+
+### Rollback
+
+1. Hosting rollback (preferred, one click, no build): open
+   https://console.firebase.google.com/project/lv-zion-duties/hosting/sites/lv-zion-duties
+   find the release dated 2026-09-15 with marker `gallery1789446013699`, and
+   use its row menu -> Rollback. This CLI has no `firebase hosting:rollback`
+   command (verified: `firebase hosting --help` lists only `hosting:clone`,
+   `hosting:disable`, `hosting:channel`, `hosting:sites`), so the console is
+   the rollback path.
+2. Source rollback, if a rebuild is wanted instead:
+   ```
+   cd /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-features
+   git checkout 1e0b6fd -- app.js
+   npm_config_cache=/tmp/npm-cache node design-gallery/release.mjs --publish
+   ```
+3. Turn the maintenance message back on (then off) at any time:
+   ```
+   cd /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-features
+   # ON: insert this line in /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-features/index.html
+   #     directly after <html lang="en"> and before <head>
+   #     <script>document.documentElement.dataset.maintenance = 'active';</script>
+   npm_config_cache=/tmp/npm-cache node design-gallery/release.mjs --publish
+   # OFF: remove that line again, then
+   git checkout -- index.html
+   npm_config_cache=/tmp/npm-cache node design-gallery/release.mjs --publish
+   ```

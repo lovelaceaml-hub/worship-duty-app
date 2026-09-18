@@ -252,6 +252,23 @@ Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
 Always use the `/tmp/npm-cache` prefix on Anthony's Mac. The CLI is already
 authenticated.
 
+### 8a. Showing the maintenance message during a repair
+
+When members should see "Schedule maintenance in progress" instead of the app
+while you change the live site, add one line to `index.html`, directly after
+`<html lang="en">` and before `<head>`:
+
+```
+<script>document.documentElement.dataset.maintenance = 'active';</script>
+```
+
+Then release normally (section 8). The maintenance panel and its read-only
+upcoming-service list are already built into `index.html` and `app.js`; the
+line just switches them on. To restore the full app, remove the line (`git
+checkout -- index.html`) and release again. There is no Firestore flag for
+this, and none is needed. Used this way on 2026-09-14 (commits `54fee56` and
+`c057c3e`) and 2026-09-17 (the F1 release).
+
 ### 9. The Firebase console map
 
 Project console: https://console.firebase.google.com/project/lv-zion-duties
