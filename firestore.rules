@@ -1825,6 +1825,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Member feedback (bug reports, suggestions). Any signed-in member may
+    // create one entry stamped with their own auth UID; only administrators
+    // read, update (mark done), or delete. No member can read others' feedback.
+    match /feedback/{feedbackId} {
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'kind', 'message', 'screen', 'appearance', 'createdAt', 'status'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.kind in ['feedback', 'bug', 'suggestion']
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.status == 'new';
+      allow read, update, delete: if isAdmin();
+    }
+
     // Every collection not explicitly listed above is deny-by-default.
     match /{document=**} { allow read, write: if false; }
   }
