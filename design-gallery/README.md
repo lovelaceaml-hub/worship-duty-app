@@ -6,7 +6,7 @@ This integration places **Original, Prism, Navy & Cream, and Aurora** behind one
 
 After the existing site passcode/login gate is cleared and shared settings have loaded, the app offers a four-card appearance chooser. Members can use **Appearance** at any time to switch again. The choice is stored only in that browser/device under `wds-design-gallery-v1`; it does not change another member's view.
 
-Schedule, My Duties, Presider, and Manage sit at the top of the screen on wide screens. At phone widths the same tabs become an always-visible floating bar at the bottom of the screen, styled by each appearance with its own colors and radii, hidden on the lock, sign-in, loading and maintenance screens and while the on-screen keyboard is open. Every appearance exposes exactly one Appearance button in its top controls.
+Schedule, My Duties, Presider, and Manage sit at the top of the screen on wide screens. At phone widths the same tabs become an always-visible floating bar at the bottom of the screen, styled by each appearance with its own colors and radii, hidden on the lock, sign-in, loading and maintenance screens and while the on-screen keyboard is open. Every appearance exposes exactly one Appearance button, a small icon inside the shared header next to the member chip.
 
 Existing Prism users are migrated from `wds-design-choice-v1` and remain on Prism before the new gallery is shown. A previous Navy preference in `wds-appearance-navy-v1` is also recognized. The gallery is shown once after migration so those members can discover the two additional choices without silently changing their current appearance. `?design=classic` is an emergency session-only way to stay on Original if an experimental stylesheet has a problem.
 
@@ -19,7 +19,7 @@ All four modes preserve the original app's actual actions and data model. In par
 - **Navy & Cream**: warm cream surfaces, navy shell, burgundy selections, gold details and restrained motion across Schedule, My Duties, Presider and Manage.
 - **Aurora**: the latest `prototype/aurora-workspace` design, adapted to the live runtime instead of its offline reference-data sandbox: desktop navigation rail, dynamic schedule workspace, dedicated My Duties/Manage layouts and the actual Presider song-planning workspaces.
 
-Prism and Aurora keep their existing light/dark and motion controls. Navy uses its warm-light palette and respects the operating system's reduced-motion preference. The shared chooser itself has no domain actions.
+All four appearances share one header structure (brand badge, "LV ZION", the current screen's name from `paintHeader()` in `app.js`, a discreet icon-sized Appearance control, and the member chip). The markup lives once in `index.html`; `build.mjs` reuses it inside the Prism and Aurora shells, and `design-gallery/header.css` holds each appearance's styling of it. Prism and Aurora have no manual light/dark or motion controls: dark mode follows `prefers-color-scheme` live, and motion follows `prefers-reduced-motion`. Navy and Original stay on their light palettes and also respect the reduced-motion preference. The shared chooser itself has no domain actions.
 
 ## Safety boundaries
 

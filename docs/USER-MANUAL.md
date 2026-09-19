@@ -92,7 +92,12 @@ services and assignments remain when the sheet has no matching row.
 
 ## Appearance and current refactor
 
-Use **Appearance** to choose Original, Prism, Navy & Cream, or Aurora. These
+Use **Appearance** (the small palette icon in the header, next to your name) to
+choose Original, Prism, Navy & Cream, or Aurora. Every appearance shares one
+header layout: the LV badge, "LV ZION", the current screen's name, and the
+signed-in member. Prism and Aurora follow the device's dark mode setting and
+every appearance follows the device's reduce-motion setting; the app has no
+dark mode or pause button. These
 four appearances share the released schedule, account sign-in, permissions,
 and song data. The approved [complete phone refactor plan](PLAN-COMPACT-PHONE-REFACTOR.md)
 is in progress; prototype approval and the integrated preview are pending.

@@ -76,11 +76,22 @@
     outline: 3px solid rgba(35, 131, 198, 0.34); outline-offset: 2px;
   }
 
-  header.app { display: grid; grid-template-columns: 1fr auto; gap: 8px 24px; align-items: center; padding: 38px 2px 24px; border-bottom: 1px solid var(--line); }
-  .header-home { grid-column: 1; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
-  header.app .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--brand-blue-deep); }
-  .header-home .app-title { display: block; margin: 0; font-weight: 650; font-size: clamp(28px, 5vw, 38px); letter-spacing: -0.025em; line-height: 1.12; color: var(--brand-blue-dark); }
-  header.app .sub { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  /* One shared header structure for every appearance: round brand badge, brand
+     name, a second line naming the current screen, and the signed-in member
+     chip on the right. These rules are the structure plus Original's own look;
+     Prism, Navy & Cream, and Aurora restyle it in design-gallery/header.css. */
+  header.app { display: flex; align-items: center; gap: 10px 14px; padding: 26px 2px 18px; border-bottom: 1px solid var(--line); }
+  .wd-head-brand { display: flex; align-items: center; gap: 12px; flex: 0 1 auto; min-width: 0; margin-right: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .wd-head-mark { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--accent-grad); color: #fff; font-size: 15px; font-weight: 750; letter-spacing: -0.03em; }
+  .wd-head-text { display: block; min-width: 0; }
+  .wd-head-name { display: block; color: var(--brand-blue-dark); font-size: 17px; font-weight: 750; letter-spacing: 0.04em; line-height: 1.15; white-space: nowrap; }
+  .wd-head-screen { display: block; margin-top: 3px; overflow: hidden; color: var(--brand-blue-deep); font-size: 11.5px; font-weight: 700; letter-spacing: 0.15em; line-height: 1.3; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+  .wd-head-tools { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: 0 1 auto; min-width: 0; }
+  .wd-head-member { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; min-height: 40px; padding: 3px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+  .wd-head-member[hidden] { display: none; }
+  .wd-head-initials { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); color: var(--brand-blue-deep); font-size: 12px; font-weight: 750; }
+  .wd-head-person { min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wd-head-caret { flex: none; color: var(--muted); }
   .sync-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 650; box-shadow: var(--shadow-soft); }
   .sync-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
   .sync-pill.live { color: var(--ok); }
@@ -302,10 +313,17 @@
     .wrap { padding: 0 var(--gutter) calc(28px + env(safe-area-inset-bottom)); }
     /* Compact header: the title and the sync pill share one line, so the tab
        bar sits near the top of the screen instead of a third of the way down. */
-    header.app { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 2px 12px; }
-    header.app .eyebrow { font-size: 10.5px; letter-spacing: 0.13em; }
-    .header-home .app-title { margin-top: 0; font-size: 22px; }
-    header.app .sub { margin-top: 0; }
+    header.app { flex-wrap: wrap; gap: 6px 8px; padding: 14px 2px 10px; }
+    .wd-head-brand { gap: 10px; }
+    .wd-head-mark { width: 38px; height: 38px; font-size: 14px; }
+    .wd-head-name { font-size: 15px; }
+    .wd-head-screen { font-size: 10.5px; letter-spacing: 0.13em; }
+    .wd-head-member { gap: 6px; font-size: 12px; }
+    .wd-head-initials { width: 30px; height: 30px; font-size: 11px; }
+    .wd-head-person { max-width: 84px; }
+    /* Original's sync status keeps its place in the header, as a slim second row. */
+    header.app .sub { order: 5; flex: 1 0 100%; display: flex; justify-content: flex-end; margin-top: 0; }
+    @media (max-width: 359px) { .wd-head-person { display: none; } }
     .sync-pill { min-height: 28px; padding: 4px 9px; font-size: 11px; }
     /* On phones the main tabs float at the bottom of the screen, always in
        thumb reach. Same buttons, labels, dots, and click handling as the top
@@ -349,13 +367,11 @@
   </section>
 </main>
 <div class="wrap">
-  <header class="app">
-    <button class="header-home" data-act="home" aria-label="Return to schedule">
-      <span class="eyebrow">Las Vegas Zion</span>
-      <span class="app-title">Worship Service</span>
-    </button>
+  <header class="app wd-head">
+    <button class="header-home wd-head-brand" data-act="home" aria-label="Return to schedule"><span class="wd-head-mark" aria-hidden="true">LV</span><span class="wd-head-text"><span class="wd-head-name" data-wd-head="name">LV ZION</span><span class="wd-head-screen" data-wd-head="screen">Worship Duty</span></span></button>
     <h1 class="sr-only">LV Zion Worship Service</h1>
     <div class="sub"><span id="sync-pill" class="sync-pill">This device only</span></div>
+    <div class="wd-head-tools"><button class="wd-head-member" data-act="tab" data-tab="my" data-wd-head="member" hidden><span class="wd-head-initials" data-wd-head="initials" aria-hidden="true"></span><span class="wd-head-person" data-wd-head="person"></span><span class="wd-head-caret" aria-hidden="true">&#8964;</span></button></div>
   </header>
 
   <nav class="tabs">
