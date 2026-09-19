@@ -30,8 +30,16 @@ On **My Duties**, you can:
 - review upcoming assignments;
 - expand **Who else is serving?**;
 - request a schedule change and track its status;
-- edit your own department availability, when a department profile exists;
 - enable push notifications or add your duties to a calendar.
+
+Tap your name in the header to open the account menu:
+
+- **Availability**: edit your own department availability, when a department
+  profile exists;
+- **Settings**: notifications, the calendar link, and the Appearance chooser.
+  To change a member PIN, ask a department leader or administrator to reset it;
+- **Sign out**: available on every signed-in screen. The old "Signed in as"
+  bar under the header was removed.
 
 On iPhone, add the app to the Home Screen to receive web push while the app is
 closed. iOS web push requires iOS 16.4 or later.
@@ -61,7 +69,8 @@ access.
 
 Authorized leaders can update a department member's active status, eligible
 duties, schedulability, recurring availability, and date exceptions. Members
-can update only their own availability from My Duties. Archiving a department
+can update only their own availability, from the account menu under their
+name (Availability). Archiving a department
 profile removes it from the active roster while preserving the member and
 assignment history.
 
@@ -95,7 +104,7 @@ services and assignments remain when the sheet has no matching row.
 Use **Appearance** (the small palette icon in the header, next to your name) to
 choose Original, Prism, Navy & Cream, or Aurora. Every appearance shares one
 header layout: the LV badge, "LV ZION", the current screen's name, and the
-signed-in member. Prism and Aurora follow the device's dark mode setting and
+signed-in member, whose name opens the account menu. Prism and Aurora follow the device's dark mode setting and
 every appearance follows the device's reduce-motion setting; the app has no
 dark mode or pause button. These
 four appearances share the released schedule, account sign-in, permissions,

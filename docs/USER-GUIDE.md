@@ -34,7 +34,8 @@ Tap **My Duties** at the bottom (or top) of the screen.
 
 ### Turning on notifications
 
-Tap **Turn on notifications** on My Duties and allow the browser's prompt.
+Tap **Turn on notifications** on My Duties (or under your name, then
+**Settings**) and allow the browser's prompt.
 Once it's on, you'll get an alert when:
 
 - A new duty is assigned to you, or
@@ -129,9 +130,13 @@ and posted duties as a read-only schedule.
   appearance, always within thumb reach; on a wide screen they stay at the
   top. The header at the top looks the same in every appearance: the LV
   badge, "LV ZION", the name of the screen you are on (Schedule, My Duties,
-  Presider, or Manage), and your name on the right. Tap your name to open My
-  Duties. The small palette icon next to your name is the Appearance button:
-  tap it at any time to choose Original, Prism, Navy & Cream, or Aurora.
+  Presider, or Manage), and your name on the right. Tap your name to open a
+  small menu with **Availability**, **Settings**, and **Sign out**. Settings
+  holds your notifications, your calendar link, and the Appearance chooser.
+  Signing out is in this menu on every screen; there is no longer a "Signed in
+  as" bar under the header. The small palette icon next to your name is the
+  Appearance button: tap it at any time to choose Original, Prism, Navy &
+  Cream, or Aurora.
 - Prism and Aurora switch to their dark colors automatically when your phone
   or computer is set to dark mode, and back when it is set to light. There is
   no dark mode button and no pause button in the app. Animations turn off
@@ -194,7 +199,7 @@ department page:
 
 ### Updating your availability
 
-Open **My Duties** after signing in. Your shared department profile includes
+Tap your name at the top right, then **Availability**. Your shared department profile includes
 recurring service-time availability and date exceptions. You can edit only your
 own availability. Your department leader edits the same record, and the latest
 saved editor and time remain visible.
@@ -203,6 +208,8 @@ saved editor and time remain visible.
 
 - A small red dot appears on the **Manage** tab whenever there's a pending
   change request.
+  The dot is the only signal: the pink "need your attention" bar that used
+  to sit under the header was removed.
 - Go to **Manage → Requests** to see them, each with an **Approve**,
   **Decline**, or **Open service** button. "Open service" jumps straight to
   that service in Services so you can make the actual reassignment.

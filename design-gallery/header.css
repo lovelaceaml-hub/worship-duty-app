@@ -2,7 +2,8 @@
  *
  * Every appearance renders the same header structure from index.html: brand
  * badge, brand name "LV ZION", a second line naming the current screen, the
- * discreet Appearance control, and the signed-in member chip. The structure and
+ * discreet Appearance control, and the signed-in member chip with its account
+ * menu (Availability, Settings, Sign out). The structure and
  * Original's look live in index.html. This file holds the other three looks.
  * build.mjs appends each marked section to that appearance's compiled
  * stylesheet only (prism-live.css, navy-live.css, aurora-live.css), so every
@@ -22,6 +23,17 @@
 .prism .wd-head-initials{width:34px;height:34px;background:#f3e9d9;color:#796344;font-size:11px;font-weight:600}
 .prism .wd-head-person{max-width:160px}
 .prism .wd-head-caret{margin-left:4px;color:var(--muted)}
+/* Prism account menu: white rounded sheet, Prism's soft blue shadow, accent-tinted rows. */
+.prism .wd-account-menu{top:calc(100% + 8px);min-width:200px;padding:7px;border-color:var(--line);border-radius:18px;background:var(--surface);box-shadow:0 18px 44px #18346629}
+.prism .wd-account-menu button{min-height:44px;padding:8px 13px;border-radius:12px;color:var(--ink);font-size:13px;font-weight:650;letter-spacing:.01em}
+.prism .wd-account-menu button:hover,.prism .wd-account-menu button:focus-visible{background:var(--accent-soft);color:var(--accent)}
+.prism .wd-account-menu .wd-account-out{border-top-color:var(--hairline);border-radius:0 0 12px 12px;color:#b3263f}
+.prism .wd-account-who{color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.prism.dark .wd-account-menu{box-shadow:0 18px 44px #0009}
+.prism.dark .wd-account-menu .wd-account-out,.prism.dark .wd-account-menu .wd-account-out:hover,.prism.dark .wd-account-menu .wd-account-out:focus-visible{color:#ff9fb1}
+@media(min-width:601px) and (max-width:1000px){.prism .wd-account-who{display:block}}
+/* Prism's page heading already names the Availability or Settings view, so the view's own title and note stay for screen readers only. */
+.prism .account-view .account-title,.prism .account-view .account-note{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 .prism button.wd-design-button.wd-head-appearance{color:var(--muted)}
 @media(max-width:1000px){.prism .wd-head-person{display:none}}
 @media(max-width:760px){.prism .wd-head-brand{gap:9px}.prism .wd-head-name{font-size:12px}.prism .wd-head-screen{font-size:8px}.prism .wd-head-mark{width:36px;height:36px}.prism .wd-head-member{gap:3px;padding:0}.prism .wd-head-initials{width:29px;height:29px;font-size:9px}}
@@ -40,6 +52,14 @@ header.app .wd-head-screen{margin-top:4px;color:#decea7;font-size:9px;font-weigh
 header.app .wd-head-member{gap:8px;color:#f3eee5;font-size:12px;font-weight:600}
 header.app .wd-head-initials{width:32px;height:32px;border:1px solid #ffffff30;background:#ffffff12;color:#f3eee5;font-size:11px;font-weight:650}
 header.app .wd-head-caret{color:#decea7}
+/* Navy & Cream account menu: cream sheet with Navy's 18px corners and warm shadow, maroon rows. */
+header.app .wd-account-menu{top:calc(100% + 8px);min-width:204px;padding:7px;border:1px solid var(--line);border-radius:18px;background:var(--surface);box-shadow:0 16px 40px #271d2138}
+header.app .wd-account-menu button{min-height:46px;padding:8px 14px;border-radius:12px;color:var(--ink);font-size:14px;font-weight:600}
+header.app .wd-account-menu button:hover,header.app .wd-account-menu button:focus-visible{background:var(--accent-soft);color:var(--accent)}
+header.app .wd-account-menu .wd-account-out{border-top-color:var(--hairline);border-radius:0 0 12px 12px;color:var(--danger)}
+header.app .wd-account-who{color:var(--gold);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+/* Navy & Cream's page panel already names the Availability or Settings view, so the view's own title stays for screen readers only. */
+.account-view .account-title{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 header.app button.wd-design-button.wd-head-appearance{color:#f3eee5}
 header.app button.wd-design-button.wd-head-appearance:hover,header.app button.wd-design-button.wd-head-appearance:focus-visible{background:#ffffff1a}
 header.app.wd-head .sync-pill{max-width:none;white-space:nowrap}
@@ -60,6 +80,16 @@ body.aurora .wd-head-tools{gap:6px}
 body.aurora .wd-head-member{gap:8px;color:var(--ink);font-size:13px;font-weight:650}
 body.aurora .wd-head-initials{width:32px;height:32px;border:1px solid var(--line);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:650}
 body.aurora .wd-head-caret{color:var(--faint)}
+/* Aurora account menu: Aurora's rounded surface and indigo shadow, indigo-tinted rows. */
+body.aurora .wd-account-menu{top:calc(100% + 8px);min-width:200px;padding:7px;border-color:var(--line);border-radius:16px;background:var(--surface);box-shadow:0 20px 48px #1b24503d}
+body.aurora .wd-account-menu button{min-height:44px;padding:8px 13px;border-radius:11px;color:var(--ink);font-size:14px;font-weight:650}
+body.aurora .wd-account-menu button:hover,body.aurora .wd-account-menu button:focus-visible{background:var(--accent-soft);color:var(--accent)}
+body.aurora .wd-account-menu .wd-account-out{border-top-color:var(--hairline);border-radius:0 0 11px 11px;color:#b3263f}
+body.aurora .wd-account-who{color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
+/* Aurora's page heading already names the Availability or Settings view, so the view's own title and note stay for screen readers only. */
+body.aurora .account-view .account-title,body.aurora .account-view .account-note{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+body.dark .wd-account-menu{box-shadow:0 20px 48px #000a}
+body.dark .wd-account-menu .wd-account-out,body.dark .wd-account-menu .wd-account-out:hover,body.dark .wd-account-menu .wd-account-out:focus-visible{color:#ff9fb1}
 body.aurora button.wd-design-button.wd-head-appearance{color:var(--muted)}
 @media(max-width:600px){body.aurora .wd-head-brand{gap:10px}body.aurora .wd-head-mark{display:grid;width:36px;height:36px;border-radius:12px;font-size:15px}body.aurora .wd-head-name{font-size:14px}body.aurora .wd-head-screen{font-size:9px;letter-spacing:.16em;margin-top:3px}body.aurora .wd-head-member{gap:6px;font-size:12px}body.aurora .wd-head-initials{width:30px;height:30px;font-size:11px}body.aurora .wd-head-person{max-width:88px}body.aurora .topbar.wd-head{height:62px}}
 @media(max-width:359px){body.aurora .topbar.wd-head{min-width:0;gap:6px}}

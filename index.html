@@ -92,6 +92,21 @@
   .wd-head-initials { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); color: var(--brand-blue-deep); font-size: 12px; font-weight: 750; }
   .wd-head-person { min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wd-head-caret { flex: none; color: var(--muted); }
+  /* Account menu: opens from the member chip (Availability, Settings, Sign out).
+     Structure plus Original's look; Prism, Navy & Cream, and Aurora restyle it
+     in design-gallery/header.css. It sits above the floating bottom bar (50 to
+     90) and the appearance toast (110). */
+  .wd-head-tools { position: relative; }
+  .wd-head-member[aria-expanded="true"] .wd-head-caret { transform: rotate(180deg); }
+  .wd-account-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 120; display: grid; gap: 2px; width: max-content; min-width: 196px; max-width: calc(100vw - 24px); padding: 6px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: 0 14px 34px rgba(23, 74, 107, 0.16); }
+  .wd-account-menu[hidden] { display: none; }
+  .wd-account-menu button { display: flex; align-items: center; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 9px; background: none; box-shadow: none; color: var(--ink); font: inherit; font-size: 14px; font-weight: 650; text-align: left; white-space: nowrap; cursor: pointer; }
+  .wd-account-menu button:hover, .wd-account-menu button:focus-visible { background: var(--accent-soft); color: var(--brand-blue-deep); }
+  .wd-account-menu .wd-account-out { margin-top: 4px; border-top: 1px solid var(--hairline); border-radius: 0 0 9px 9px; color: var(--danger); }
+  .wd-account-who { display: none; padding: 8px 12px 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
+  .account-view .account-title { margin: 2px 2px 4px; font-size: 19px; }
+  .account-view .account-title:focus { outline: none; }
+  .account-view .card > :last-child { margin-bottom: 0; }
   .sync-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 650; box-shadow: var(--shadow-soft); }
   .sync-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
   .sync-pill.live { color: var(--ok); }
@@ -328,6 +343,8 @@
     header.app .sync-pill { gap: 0; min-height: 0; width: 20px; height: 20px; padding: 0; justify-content: center; overflow: hidden; border: 0; border-radius: 50%; background: none; box-shadow: none; font-size: 0; line-height: 0; color: transparent; white-space: nowrap; }
     header.app .sync-pill::before { flex: none; width: 9px; height: 9px; }
     @media (max-width: 359px) { .wd-head-person { display: none; } }
+    /* The chip shows initials only at this width, so the account menu names the member. */
+    @media (max-width: 359px) { .wd-account-who { display: block; } }
     .sync-pill { min-height: 28px; padding: 4px 9px; font-size: 11px; }
     /* On phones the main tabs float at the bottom of the screen, always in
        thumb reach. Same buttons, labels, dots, and click handling as the top
@@ -375,7 +392,7 @@
     <button class="header-home wd-head-brand" data-act="home" aria-label="Return to schedule"><span class="wd-head-mark" aria-hidden="true">LV</span><span class="wd-head-text"><span class="wd-head-name" data-wd-head="name">LV ZION</span><span class="wd-head-screen" data-wd-head="screen">Worship Duty</span></span></button>
     <h1 class="sr-only">LV Zion Worship Service</h1>
     <div class="sub"><span id="sync-pill" class="sync-pill" role="img" aria-label="This device only" title="This device only">This device only</span></div>
-    <div class="wd-head-tools"><button class="wd-head-member" data-act="tab" data-tab="my" data-wd-head="member" hidden><span class="wd-head-initials" data-wd-head="initials" aria-hidden="true"></span><span class="wd-head-person" data-wd-head="person"></span><span class="wd-head-caret" aria-hidden="true">&#8964;</span></button></div>
+    <div class="wd-head-tools"><button type="button" class="wd-head-member" data-wd-head="member" aria-haspopup="menu" aria-expanded="false" hidden><span class="wd-head-initials" data-wd-head="initials" aria-hidden="true"></span><span class="wd-head-person" data-wd-head="person"></span><span class="wd-head-caret" aria-hidden="true">&#8964;</span></button><div class="wd-account-menu" data-wd-head="menu" role="menu" aria-label="Your account" hidden><div class="wd-account-who" data-wd-head="who" aria-hidden="true"></div><button type="button" role="menuitem" data-act="account" data-view="availability">Availability</button><button type="button" role="menuitem" data-act="account" data-view="settings">Settings</button><button type="button" role="menuitem" class="wd-account-out" data-act="member-logout">Sign out</button></div></div>
   </header>
 
   <nav class="tabs">
