@@ -508,6 +508,7 @@ const ui = {
   manageDept: 'All',
   departmentView: 'list',
   departmentMember: '',
+  departmentSearch: null,
   deptFilter: (function () {
     const v = localStorage.getItem('wds-dept') || 'All';
     return v === 'All' || CATEGORIES.some(c => c.name === v) ? v : 'All';
@@ -2825,6 +2826,64 @@ function departmentProfileSummary(profile) {
     (exceptionCount ? ' · ' + exceptionCount + ' date exception' + (exceptionCount === 1 ? '' : 's') : '');
 }
 
+function departmentSearchState(department) {
+  const state = ui.departmentSearch;
+  return state && state.department === department ? state : null;
+}
+
+function renderDepartmentMemberSearch(department) {
+  const state = departmentSearchState(department) || {};
+  const members = Array.isArray(state.members) ? state.members : [];
+  const pages = Math.max(1, Math.ceil((Number(state.total) || 0) / 10));
+  let results = '';
+  if (state.busy) results = '<p class="department-empty-note">Searching...</p>';
+  else if (state.error) results = '<p class="department-empty-note">' + esc(state.error) + '</p>';
+  else if (state.searched && !members.length) results = '<p class="department-empty-note">No registered member matches that name. Check the spelling, or ask an administrator if the member has no account yet.</p>';
+  else if (members.length) {
+    results = members.map(member => {
+      const existing = departmentProfile(department, member.memberUid);
+      return '<div class="department-member-row"><span class="department-member-name">' + esc(memberLabel(member.memberName)) + '</span>' +
+        (existing
+          ? '<span class="department-member-meta"><span>Already in ' + esc(department) + '</span></span>'
+          : '<button class="ghost mini" type="button" data-act="department-member-add" data-dept="' + esc(department) + '" data-uid="' + esc(member.memberUid) + '" data-name="' + esc(member.memberName) + '"' + (state.adding ? ' disabled' : '') + '>Add</button>') +
+        '</div>';
+    }).join('');
+    if (pages > 1) {
+      results += '<div class="department-save-bar"><button class="ghost mini" type="button" data-act="department-member-search-page" data-dept="' + esc(department) + '" data-page="' + (state.page - 1) + '"' + (state.page <= 1 ? ' disabled' : '') + '>Previous</button>' +
+        '<span class="department-attribution">Page ' + state.page + ' of ' + pages + '</span>' +
+        '<button class="ghost mini" type="button" data-act="department-member-search-page" data-dept="' + esc(department) + '" data-page="' + (state.page + 1) + '"' + (state.page >= pages ? ' disabled' : '') + '>Next</button></div>';
+    }
+  }
+  return '<form class="card department-add-form" data-act="department-member-search" data-dept="' + esc(department) + '"><div class="department-eyebrow">Add a department member</div><h3>Find a member by name</h3>' +
+    '<p class="hint">Search registered members by name, then choose Add. Adding a profile does not grant a leadership role.</p>' +
+    '<div class="department-form-grid"><label>Member name<input id="department-member-query" type="search" required minlength="2" maxlength="160" autocomplete="off" placeholder="Type at least two letters" value="' + esc(ui.departmentSearchDraft != null ? ui.departmentSearchDraft : (state.query || '')) + '"></label></div>' +
+    '<button class="primary" type="submit"' + (state.busy ? ' disabled' : '') + '>Search</button>' +
+    (results ? '<div class="department-roster-groups">' + results + '</div>' : '') + '</form>';
+}
+
+function searchDepartmentMembers(department, query, page) {
+  ui.departmentSearchDraft = null;
+  const state = ui.departmentSearch = { department, query, page, members: [], total: 0, busy: true, error: '', searched: false };
+  render();
+  const lookup = fb ? authCall('searchDepartmentCandidates', { departmentId: department, query, page })
+    : Promise.resolve({ ok: true, departmentId: department, members: [], page, total: 0 });
+  return lookup.then(result => {
+    if (ui.departmentSearch !== state) return;
+    if (!result || result.departmentId !== department || !Array.isArray(result.members)) throw new Error('The member search response was not valid.');
+    state.members = result.members.filter(member => member && member.memberUid && member.memberName);
+    state.total = Number(result.total) || state.members.length;
+    state.page = Number(result.page) || page;
+  }).catch(error => {
+    if (ui.departmentSearch !== state) return;
+    state.error = 'The search did not finish: ' + departmentErrorMessage(error);
+  }).then(() => {
+    if (ui.departmentSearch !== state) return;
+    state.busy = false;
+    state.searched = true;
+    render();
+  });
+}
+
 function renderDepartmentProfileRow(profile, options = {}) {
   const memberUid = profile.memberUid;
   const isLeader = departmentProfileIsLeader(profile);
@@ -2847,7 +2906,7 @@ function renderManageDepartments() {
   if (!departments.length) return '<div class="empty">No department leadership scope is attached to this account.</div>';
   let html = '<div class="department-scope card"><div class="department-eyebrow">Leader-scoped workspace</div>' +
     '<h2>Departments</h2><p class="hint">Only departments returned by your verified account are shown. Each card opens a department-scoped roster.</p>' +
-    '<p class="department-security-note">Roster profiles are loaded by department and UID. No congregation-wide member list is used here.</p></div>';
+    '<p class="department-security-note">Roster profiles are loaded by department. No congregation-wide member list is shown here.</p></div>';
   html += '<div class="department-card-grid">' + departments.map(department => {
     const profiles = departmentProfiles(department);
     const leaders = profiles.filter(departmentProfileIsLeader);
@@ -2898,13 +2957,9 @@ function renderManageDepartment() {
     '<section class="department-hero card"><div class="department-eyebrow">Department roster</div><h2>' + esc(department) + '</h2>' +
     '<p class="hint">This page shows the leaders and active or inactive profiles returned for ' + esc(department) + '.</p>' +
     '<div class="department-leader-strip"><strong>Leaders</strong><span>' + (leaders.length ? leaders.map(profile => esc(memberLabel(profile.memberName))).join(', ') : 'No leader record returned by the secure roster') + '</span></div>' +
-    '<p class="department-attribution">Roster read is scoped to <code>' + esc(department) + '</code>. Profile changes carry UID and timestamp attribution.</p></section>';
+    '<p class="department-attribution">Roster read is scoped to <code>' + esc(department) + '</code>. Profile changes record who made them and when.</p></section>';
   if (canEdit) {
-    html += '<form class="card department-add-form" data-act="department-member-add"><div class="department-eyebrow">Add a department member</div><h3>Add by verified member UID</h3>' +
-      '<p class="hint">A UID is the member identity used by the secure callable. Adding a profile does not grant a leadership role.</p>' +
-      '<div class="department-form-grid"><label>Member UID<input id="department-member-uid" type="text" required maxlength="128" autocomplete="off" placeholder="Firebase member UID"></label>' +
-      '<label>Display name<input id="department-member-name" type="text" required maxlength="160" autocomplete="off" placeholder="Name shown to leaders"></label></div>' +
-      '<button class="primary" type="submit">Add member profile</button></form>';
+    html += renderDepartmentMemberSearch(department);
   }
   html += '<div class="department-roster-groups">' +
     renderDepartmentRosterGroup('Active profiles', profiles.filter(profile => profile.status === 'active'), canEdit, department) +
@@ -2999,7 +3054,7 @@ function renderDepartmentMember() {
   const fieldAttribution = profile.fieldAttribution && typeof profile.fieldAttribution === 'object' ? profile.fieldAttribution : {};
   const draftExists = !!departmentRuntime.drafts[departmentRuntimeKey(department, memberUid)];
   let html = '<button class="linkish department-back" data-act="department-back-member">Back to ' + esc(department) + '</button>' +
-    '<section class="department-profile-hero card"><div class="department-eyebrow">Member profile</div><div class="department-profile-title"><div><h2>' + esc(memberLabel(profile.memberName)) + '</h2><p class="department-uid">UID: ' + esc(profile.memberUid) + '</p></div>' + departmentStatusBadge(profile) + '</div>' +
+    '<section class="department-profile-hero card"><div class="department-eyebrow">Member profile</div><div class="department-profile-title"><div><h2>' + esc(memberLabel(profile.memberName)) + '</h2></div>' + departmentStatusBadge(profile) + '</div>' +
     '<p class="department-attribution">' + departmentAttribution(profile) + '</p>' +
     '<p class="department-profile-note">Identity and role are immutable here. This editor changes only status, eligible duties, schedulability, and availability.</p>' +
     (canEdit ? '<div class="department-profile-actions"><button class="ghost" data-act="department-status" data-uid="' + esc(memberUid) + '" data-status="' + (profile.status === 'active' ? 'inactive' : 'active') + '">' + (profile.status === 'active' ? 'Move to inactive' : 'Restore to active') + '</button></div>' : '') +
@@ -3243,7 +3298,7 @@ function canRunAction(act, el) {
     const department = dutyCategory(el.dataset.duty).name;
     return canPermission('isAdmin', actor) && canPermission('canManageDepartment', actor, department);
   }
-  if (['department-member-add', 'department-status', 'department-profile-save', 'department-profile-reset',
+  if (['department-member-add', 'department-member-search', 'department-member-search-page', 'department-status', 'department-profile-save', 'department-profile-reset',
     'department-exception-add', 'department-exception-remove'].indexOf(act) !== -1) {
     const department = el.dataset.dept || selectedManageDepartment();
     return canManageSelectedDepartment(department);
@@ -3459,13 +3514,28 @@ function handleAct(act, el) {
     }
     departmentPatch(department, memberUid, { availability });
   }
+  else if (act === 'department-member-search') {
+    const department = el.dataset.dept || selectedManageDepartment();
+    const input = document.getElementById('department-member-query');
+    const query = String(input && input.value || '').trim();
+    if (!department || department === 'All') return;
+    if (query.length < 2) { addBanner('Type at least two letters of the member name.', true); render(); return; }
+    searchDepartmentMembers(department, query, 1);
+  }
+  else if (act === 'department-member-search-page') {
+    const department = el.dataset.dept || selectedManageDepartment();
+    const state = departmentSearchState(department);
+    const page = Number(el.dataset.page);
+    if (!state || state.busy || !Number.isInteger(page) || page < 1) return;
+    searchDepartmentMembers(department, state.query, page);
+  }
   else if (act === 'department-member-add') {
-    const department = selectedManageDepartment();
-    const uidInput = document.getElementById('department-member-uid');
-    const nameInput = document.getElementById('department-member-name');
-    const memberUid = String(uidInput && uidInput.value || '').trim();
-    const memberName = String(nameInput && nameInput.value || '').trim();
-    if (!department || department === 'All' || !memberUid || !memberName) return;
+    const department = el.dataset.dept || selectedManageDepartment();
+    const state = departmentSearchState(department);
+    const chosen = state && state.members.find(member => member.memberUid === el.dataset.uid);
+    if (!department || department === 'All' || !chosen || state.adding) return;
+    const memberUid = chosen.memberUid;
+    const memberName = chosen.memberName;
     const data = {
       departmentId: department,
       memberUid,
@@ -3475,15 +3545,18 @@ function handleAct(act, el) {
       schedulable: false,
       availability: { recurring: {}, exceptions: {} }
     };
+    state.adding = true;
+    render();
     const save = fb ? authCall('createDepartmentProfile', data) : Promise.resolve({ ok: true, profile: Object.assign({}, data, {
       uid: memberUid, role: 'member', updatedAt: Date.now(), updatedByUid: authActor() && authActor().uid
     }) });
     save.then(result => {
       if (!result || !result.profile || !replaceDepartmentProfile(result.profile)) throw new Error('The new department profile response was not valid.');
       addBanner(memberLabel(memberName) + ' was added to ' + department + '.');
-      render();
     }).catch(error => {
       addBanner('The department member was not added: ' + departmentErrorMessage(error), true);
+    }).then(() => {
+      state.adding = false;
       render();
     });
   }
@@ -4058,6 +4131,7 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-chg="req-note"]');
   if (el) handleChg('req-note', el);
+  if (e.target.id === 'department-member-query') ui.departmentSearchDraft = e.target.value;
 });
 
 /* ================= startup ================= */

@@ -52,11 +52,11 @@ Department leaders and administrators see **Manage** for the departments their
 verified account can manage. Select a department, then use **Departments** to
 open its secure roster or **Services** to work with assignments.
 
-Department profiles are keyed by the member's exact Firebase Auth UID. To add
-an existing account, open the department roster, choose **Add a department
-member**, enter the exact member UID and display name, then save. The server
-checks that the UID belongs to an existing member account and uses the verified
-account name. Adding a profile does not grant leadership or administrator
+To add an existing account, open the department roster and find **Add a
+department member**. Type at least two letters of the member's name, choose
+**Search**, then choose **Add** beside the right person. Members already in the
+department are labeled instead of offered again. Only registered, active
+accounts appear. Adding a profile does not grant leadership or administrator
 access.
 
 Authorized leaders can update a department member's active status, eligible

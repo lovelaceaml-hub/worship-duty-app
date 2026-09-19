@@ -178,8 +178,9 @@ department page:
   schedulability, recurring availability, and date exceptions only for a
   department they lead.
 - Each saved field shows who last changed it and when.
-- Adding a profile requires an existing signed-in member account and its exact
-  member UID. Adding a profile never grants a leader or administrator role.
+- To add someone, search for them by name in **Add a department member** and
+  choose **Add**. They need an existing member account. Adding a profile never
+  grants a leader or administrator role.
 
 ### Updating your availability
 
