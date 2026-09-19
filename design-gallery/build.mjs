@@ -208,6 +208,9 @@ const prismCSS=(await Promise.all(['prototype/aurora.css','prototype-prism/prism
 const navyCSS=(await read('design-gallery/navy.css'))+'\n'+headerSection('navy')+'\n.wd-navy-sentinel{--ready:1}\n';
 const auroraCSS=(await Promise.all(['prototype/aurora.css','prototype/workspaces.css'].map(read))).join('\n')+'\n'+headerSection('aurora')+'\n.wd-aurora-sentinel{--ready:1}\n';
 const files={'app.js':app,'song-app.js':songs,'index.html':index,'design-choice.js':choiceSource,'design-choice.css':await read('design-gallery/choice.css'),'prism-live.css':prismCSS,'navy-live.css':navyCSS,'aurora-live.css':auroraCSS};
+/* F10: design-gallery/feedback.css holds each appearance's look for the feedback button, sheet and list, one marked section per stylesheet (Original's lives in index.html). */
+const feedbackCSS=await read('design-gallery/feedback.css');
+for(const [file,name] of [['prism-live.css','prism'],['navy-live.css','navy'],['aurora-live.css','aurora']])files[file]+='\n'+between(feedbackCSS,'/* @'+name+' */','/* @end-'+name+' */','feedback styles for '+name)+'\n';
 for(const [token,label] of [['/* PRISM_HELPERS */','Prism helper slot'],['/* PRISM_VIEWS */','Prism view slot'],['/* PRISM_ALL_PAGES */','Prism page slot'],['/* AURORA_CORE */','Aurora core slot'],['/* AURORA_DECORATE */','Aurora decorator slot'],['/* AURORA_WORKSPACES */','Aurora workspace slot'],['/* NAVY_ADAPTER */','Navy adapter slot'],['/* PRISM_SHELL */','Prism shell slot'],['/* AURORA_SHELL */','Aurora shell slot']])if(host.includes(token))throw Error('Design gallery source-interface drift: unresolved '+label);
 assertSyntax(app,'gallery-app.js');
 assertSyntax(songs,'gallery-song-app.js',true);

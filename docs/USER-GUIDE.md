@@ -176,6 +176,25 @@ reflected on Schedule or My Duties.
 
 ---
 
+## Sending feedback
+
+Once you are signed in, a small round button with a speech bubble sits at the
+bottom right of every screen, just above the bottom bar on a phone. Tap it to
+tell the app administrators something:
+
+1. Pick one: **Feedback**, **Report a bug**, or **Suggest a change**.
+2. Type your message (up to 2,000 characters). For a bug, say which screen you
+   were on, what you did, and what you expected.
+3. Tap **Send**. You will see "Thank you. Your feedback was sent."
+
+If it does not send (for example, no signal), your message stays in the box and
+the button changes to **Retry**. **Cancel**, the Escape key, or a tap outside
+the box closes it without sending; what you typed is still there when you open
+it again. The button hides while the keyboard is open and is not shown before
+you sign in. Only administrators can read what you send.
+
+---
+
 ## For the scheduler / editor
 
 Everything below needs the separate **editor passcode** — ask whoever
