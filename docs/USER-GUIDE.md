@@ -48,7 +48,8 @@ ahead. Because it is a subscription rather than a one-time copy, it keeps
 itself right: when a duty is reassigned, or a service time moves, your calendar
 follows within about half a day. You do not need the app open for this.
 
-On Android, tap **Copy calendar link** instead, then in Google Calendar go to
+On Android, tap **How it works and Android steps** under those buttons, tap
+**Copy calendar link**, then in Google Calendar go to
 **Other calendars → From URL** and paste it.
 
 ---

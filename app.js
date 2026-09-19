@@ -1273,6 +1273,7 @@ function checkReminders() {
   const now = Date.now();
   const reminded = getJSON('wds-reminded', {});
   let changed = false;
+  const due = [];
   dutiesFor(ui.me).forEach(d => {
     const when = svcDateTime(d.svc).getTime();
     const key = ui.me + '|' + svcId(d.svc) + '|' + d.duty;
@@ -1280,9 +1281,13 @@ function checkReminders() {
       reminded[key] = now;
       changed = true;
       if (!serverPushActive()) sysNotify('Duty reminder', dutyLabel(d));
-      addBanner('Reminder: ' + dutyLabel(d), false);
+      due.push(d);
     }
   });
+  // One in-app banner per check, not one per duty: several duties on the same day
+  // used to stack a banner each above My Duties, which already lists them.
+  if (due.length === 1) addBanner('Reminder: ' + dutyLabel(due[0]), false);
+  else if (due.length > 1) addBanner('Reminder: you have ' + due.length + ' duties in the next 24 hours. See My Duties.', false);
   if (changed) {
     Object.keys(reminded).forEach(k => { if (now - reminded[k] > 7 * 24 * 3600 * 1000) delete reminded[k]; });
     localStorage.setItem('wds-reminded', JSON.stringify(reminded));
@@ -2048,13 +2053,21 @@ function renderMy() {
       : '<button class="primary" data-act="notify-on">Turn on notifications</button>';
   }
   if (feat('calendarExport')) {
-    controls += '<button class="ghost" data-act="subscribe-ics">Add my duties to my calendar</button>' +
-      '<button class="ghost" data-act="copy-ics">Copy calendar link</button>';
+    controls += '<button class="ghost" data-act="subscribe-ics">Add my duties to my calendar</button>';
   }
   if (controls) {
+    // The explanation (and the Android-only copy button) stays one tap away inside a
+    // closed disclosure, so the duty list is not pushed down by a paragraph every visit.
+    // It keeps the .hint class and its place right after .notify-box: Prism and Aurora
+    // move that pair into their own panels.
     html += '<div class="notify-box">' + controls + '</div>' +
-      '<p class="hint">You\'ll be alerted when a new duty is added for you, and reminded the day before each duty. ' +
-      'Adding your duties to your calendar subscribes it to the live schedule, so the times stay correct by themselves if a service ever moves. On Android, tap Copy calendar link and add it in Google Calendar under Other calendars \u2192 From URL.</p>';
+      '<details class="hint notify-help"><summary>How it works' + (feat('calendarExport') ? ' and Android steps' : '') + '</summary>' +
+      '<p>You\'ll be alerted when a new duty is added for you, and reminded the day before each duty.' +
+      (feat('calendarExport')
+        ? ' Adding your duties to your calendar subscribes it to the live schedule, so the times stay correct by themselves if a service ever moves. On Android, tap Copy calendar link and add it in Google Calendar under Other calendars \u2192 From URL.</p>' +
+          '<button class="ghost mini" data-act="copy-ics">Copy calendar link</button>'
+        : '</p>') +
+      '</details>';
   }
 
   // recent alerts
