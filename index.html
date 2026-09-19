@@ -311,10 +311,23 @@
        thumb reach. Same buttons, labels, dots, and click handling as the top
        tabs on wider screens; the page reserves room so nothing sits behind them. */
     .wrap { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
-    nav.tabs { position: fixed; top: auto; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 50; gap: 4px; margin: 0; padding: 5px; background: var(--surface); border: 1px solid var(--line); border-radius: calc(var(--r-lg) + 5px); box-shadow: var(--shadow-bar), var(--shadow-soft); }
-    nav.tabs button { min-height: 50px; min-width: 0; padding: 8px 3px; border: 0; border-radius: var(--r-lg); font-size: 13px; }
-    nav.tabs button.active { background: var(--accent-soft); }
-    nav.tabs button .dot { top: 9px; right: max(8px, calc(50% - 38px)); }
+    /* F4b: the bar is made easier to notice with Original's own colors: a
+       blue-tinted outline and a deeper lifted shadow, a solid blue selected tab
+       with a white label (the same fill as the selected "All" chip), a small
+       icon over every label, a slight lift on the selected tab, press feedback,
+       and one short slide-up when the bar first appears. The reduced-motion
+       rule above switches every animation and transition off. */
+    nav.tabs { position: fixed; top: auto; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 50; gap: 4px; margin: 0; padding: 5px; background: var(--surface); border: 1px solid var(--line); border-color: color-mix(in srgb, var(--brand-blue) 45%, var(--surface)); border-radius: calc(var(--r-lg) + 5px); box-shadow: 0 14px 34px rgba(23, 74, 107, 0.26), 0 3px 10px rgba(23, 74, 107, 0.14); animation: wd-bar-in 0.22s ease-out; }
+    @keyframes wd-bar-in { from { opacity: 0; transform: translateY(18px); } }
+    nav.tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 54px; min-width: 0; padding: 7px 3px 6px; border: 0; border-radius: var(--r-lg); color: var(--brand-blue-dark); font-size: 12.5px; transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; }
+    body:not(.aurora) nav.tabs button::before { content: ""; flex: none; width: 20px; height: 20px; background: currentColor; -webkit-mask: var(--tab-icon) center / contain no-repeat; mask: var(--tab-icon) center / contain no-repeat; }
+    nav.tabs button[data-tab="schedule"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='3'/%3E%3Cpath d='M7 3v4m10-4v4M3 11h18m-13 4h2m4 0h2'/%3E%3C/svg%3E"); }
+    nav.tabs button[data-tab="my"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='4' width='14' height='17' rx='2'/%3E%3Cpath d='M9 4V2h6v2m-7 9 2 2 5-5'/%3E%3C/svg%3E"); }
+    nav.tabs button[data-tab="songs"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-3v13M9 9l12-3'/%3E%3Cellipse cx='6' cy='18' rx='3' ry='2'/%3E%3Cellipse cx='18' cy='15' rx='3' ry='2'/%3E%3C/svg%3E"); }
+    nav.tabs button[data-tab="manage"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h5m4 0h9M3 12h11m4 0h3M3 18h2m4 0h12'/%3E%3Ccircle cx='10' cy='6' r='2'/%3E%3Ccircle cx='16' cy='12' r='2'/%3E%3Ccircle cx='7' cy='18' r='2'/%3E%3C/svg%3E"); }
+    nav.tabs button.active { background: linear-gradient(135deg, var(--brand-blue-deep), var(--brand-blue-dark)); color: #fff; box-shadow: 0 6px 14px rgba(7, 95, 150, 0.34); transform: translateY(-2px); }
+    nav.tabs button:active { transform: scale(0.96); }
+    nav.tabs button .dot { top: 6px; right: calc(50% - 19px); width: 8px; height: 8px; box-shadow: 0 0 0 2px var(--surface); }
     nav.tabs.nav-loading, html[data-keyboard="open"] nav.tabs { display: none; }
     .card { padding: 17px 16px; }
     .duty-row .dname { flex-basis: 104px; }
