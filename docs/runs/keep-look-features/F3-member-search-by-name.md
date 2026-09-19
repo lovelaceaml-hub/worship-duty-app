@@ -62,3 +62,28 @@ deployed with `firebase-tools functions:list --project lv-zion-duties`.
 - Not verified: the signed-in screen itself. This session holds no site
   passcode or PIN. The preview reads and writes REAL records, so tapping Add
   there really adds the member to the department.
+
+## Live release, 2026-09-19
+
+Anthony approved F3 and ran both PLAYBOOK section 8a commands himself from
+this worktree, because the Claude Code auto mode classifier denied the
+production release to Claude. Hosting only, through
+`node design-gallery/release.mjs --publish`.
+
+| Step | Live marker | Maintenance |
+| --- | --- | --- |
+| Release 1: F3 + maintenance line | `gallery1789826273949` (built 2026-09-19T13:57:54.112Z) | ON |
+| Release 2: maintenance line removed | `gallery1789826356791` (built 2026-09-19T13:59:18.209Z) | OFF (restored) |
+
+Verified by Claude after each release: HTTP 200; maintenance line present
+after release 1 and absent after release 2; live `app.js` contains
+`searchDepartmentCandidates` and "Find a member by name" and no "Member UID";
+`design-choice.css`, `prism-live.css`, `navy-live.css`, `aurora-live.css` all
+200; working tree clean, so the maintenance line is in no commit. Not
+verified: the signed-in roster screen on live (no passcode held here).
+
+Rollback: Hosting console
+https://console.firebase.google.com/project/lv-zion-duties/hosting/sites/lv-zion-duties
+row menu, Rollback, to the release before `gallery1789826273949` (F2 marker
+`gallery1789701070255`). Source rollback and maintenance toggle: same steps
+as `F2-reset-pin-button.md`, section "Rollback".
