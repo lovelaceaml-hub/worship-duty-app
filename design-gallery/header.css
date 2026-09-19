@@ -29,6 +29,8 @@
 @media(max-width:359px){.prism .wd-head-person{display:none}}
 /* The utility row under the header lost its three controls (Appearance moved into the header, pause and dark mode removed); keep its label tidy. */
 .prism .prism-tools:empty{display:none}
+/* Dark mode is now automatic (system setting): keep the rose attention banner readable, the base rule hardcodes a near-white background. */
+body.dark .banner.alert{background:rgba(224,60,100,.16);border-color:rgba(237,120,150,.45)}
 /* @end-prism */
 
 /* @navy */
@@ -66,7 +68,7 @@ body.aurora button.wd-design-button.wd-head-appearance{color:var(--muted)}
 @media(max-width:600px){body.aurora .wd-head-brand{gap:10px}body.aurora .wd-head-mark{display:grid;width:36px;height:36px;border-radius:12px;font-size:15px}body.aurora .wd-head-name{font-size:14px}body.aurora .wd-head-screen{font-size:9px;letter-spacing:.16em;margin-top:3px}body.aurora .wd-head-member{gap:6px;font-size:12px}body.aurora .wd-head-initials{width:30px;height:30px;font-size:11px}body.aurora .wd-head-person{max-width:88px}body.aurora .topbar.wd-head{height:62px}}
 @media(max-width:359px){body.aurora .topbar.wd-head{min-width:0;gap:6px}}
 @media print{body.aurora .wd-head-tools{display:none!important}}
+/* Dark mode is now automatic (system setting): keep the rose attention banner readable, the base rule hardcodes a near-white background. */
+body.dark .banner.alert{background:rgba(224,60,100,.16);border-color:rgba(237,120,150,.45)}
 /* @end-aurora */
 
-/* Dark mode is now automatic (system setting), so the rose "needs your attention" banner must stay readable there: the base rule hardcodes a near-white background that washed out the pale dark-mode link text in Prism and Aurora. */
-body.dark .banner.alert{background:rgba(224,60,100,.16);border-color:rgba(237,120,150,.45)}
