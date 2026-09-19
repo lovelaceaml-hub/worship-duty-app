@@ -4178,6 +4178,10 @@ function setSyncPill(live) {
   const pill = document.getElementById('sync-pill');
   pill.textContent = live ? 'Live sync on' : 'This device only';
   pill.classList.toggle('live', !!live);
+  // On phones Original and Navy & Cream show the pill as a small dot, so the
+  // state must stay discoverable without the visible words.
+  pill.title = pill.textContent;
+  pill.setAttribute('aria-label', pill.textContent);
 }
 
 /* ---- Pulse: the smallest honest answer to "does anyone open this?" ----

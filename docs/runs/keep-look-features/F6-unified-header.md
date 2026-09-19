@@ -194,3 +194,67 @@ invented).
   `.breadcrumb`, `.top-tools` rules in the untouched stylesheets, and two old
   Appearance sizing rules in `choice.css`. Safe to prune after both lanes merge.
 - `README.md` and `docs/HANDOFF.md` are coordinator-owned and were not edited.
+
+## F6b follow-up (2026-09-19)
+
+Worktree `/Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5`,
+branch `claude/keep-look-f4f5` (F6 merged with the F4b bar restyle and the
+coordinator's dark banner fix). Writer: Fable 5.1. No deploy. Goal-line check:
+both tweaks were named by Anthony after he approved the header, both stay inside
+the header area, and the four layouts remain distinct. No `nav.tabs` rule was
+touched.
+
+1. Prism utility row removed (Anthony: remove it). `design-gallery/build.mjs`
+   now drops the whole `prism-utility` row from the Prism shell at every width,
+   instead of only its two buttons. The page heading below keeps its own padding
+   (20px on phones, 23px on wide screens), so nothing else moved; the heading
+   simply starts about 45px higher. The `.prism .prism-tools:empty` rule added in
+   F6 was removed from `design-gallery/header.css`. The old `.prism-utility`,
+   `.prism-concept` and `.prism-tools` rules in `prototype-prism/prism.css` were
+   left alone: they share long lines with `nav.tabs` rules and the standalone
+   Prism prototype still uses them.
+2. "Live sync on" is a small dot on phones (Anthony chose: "Shrink it to a small
+   green dot in the header row"). At 640px and below, Original and Navy & Cream
+   show the sync status as a 9px dot inside the main header row, left of the
+   Appearance icon: green when live, the existing grey (Original) or a muted
+   white (Navy) for "This device only". The second header row is gone and the
+   phone header is now always one row (`flex-wrap: nowrap`, brand fixed, member
+   name shrinks with an ellipsis). The words stay in the element as zero-size
+   text (not `display: none`), and `setSyncPill()` in `app.js` still sets
+   `textContent` and toggles `live`, and now also sets `title` and `aria-label`
+   (the element has `role="img"`), so the state is announced and shows on hover.
+   Wide screens keep the inline text pill. Prism and Aurora are unchanged: their
+   pill stays a text pill in the page footer.
+
+Verification: `node --check app.js` passed; `node design-gallery/build.mjs`
+passed. Mocked walkthrough, fixture member only, zero page errors:
+
+- 375 and 320 pixels, normal and 35 character test name, all four appearances:
+  `scrollWidth` equals the viewport, no two header items overlap, header stays
+  one row (Original 65px tall, Navy & Cream 85px, was 99px and 103px).
+- Dot color: Original live `rgb(22, 115, 76)`, offline `rgb(106, 116, 125)`;
+  Navy live `rgb(171, 211, 184)`, offline white at 40 percent. `aria-label` and
+  `title` read "Live sync on". 1280 pixels: text pill unchanged.
+- Prism: zero `.prism-utility` or `.prism-concept` elements in the page.
+- Dark banner contrast (browser emulating dark, text color against the
+  banner's effective background, WCAG formula):
+  - Aurora: 7.18 to 1. The coordinator's fix applies (`rgba(224,60,100,.16)`
+    over the dark surface). Readable, passes AA.
+  - Prism: 4.17 to 1. Readable, but just under the 4.5 to 1 AA line for normal
+    size text. Prism's own dark stylesheet gives the alert banner a brown fill
+    (`rgb(69, 60, 46)`) that outranks the coordinator's rule, so that rule has no
+    effect in Prism; the text is Prism's dark accent `rgb(130, 155, 255)`. This
+    is Prism's existing dark look, not a regression. Left for the coordinator:
+    it is outside the header.
+
+Screenshots (375x812 unless named) in
+`/Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5/docs/runs/keep-look-features/F6b-screens/`:
+`after-original-schedule.png`, `after-navy-cream-schedule.png`,
+`after-prism-schedule.png`, `after-aurora-schedule.png`,
+`after-prism-dark-banner.png`, `after-aurora-dark-banner.png`,
+`after-original-320px.png`, `after-navy-cream-320px.png`.
+
+Not verified: a real phone or a real screen reader reading the dot; the full
+`design-gallery/test.mjs` suite; production data. The earlier
+`docs/USER-GUIDE.md` text does not mention the sync pill's shape, so no guide
+change was needed.

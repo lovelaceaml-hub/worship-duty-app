@@ -313,16 +313,20 @@
     .wrap { padding: 0 var(--gutter) calc(28px + env(safe-area-inset-bottom)); }
     /* Compact header: the title and the sync pill share one line, so the tab
        bar sits near the top of the screen instead of a third of the way down. */
-    header.app { flex-wrap: wrap; gap: 6px 8px; padding: 14px 2px 10px; }
-    .wd-head-brand { gap: 10px; }
+    header.app { flex-wrap: nowrap; gap: 6px 8px; padding: 14px 2px 10px; }
+    .wd-head-brand { gap: 10px; flex: none; }
     .wd-head-mark { width: 38px; height: 38px; font-size: 14px; }
     .wd-head-name { font-size: 15px; }
     .wd-head-screen { font-size: 10.5px; letter-spacing: 0.13em; }
     .wd-head-member { gap: 6px; font-size: 12px; }
     .wd-head-initials { width: 30px; height: 30px; font-size: 11px; }
     .wd-head-person { max-width: 84px; }
-    /* Original's sync status keeps its place in the header, as a slim second row. */
-    header.app .sub { order: 5; flex: 1 0 100%; display: flex; justify-content: flex-end; margin-top: 0; }
+    /* Original's sync status stays in the header row as a small dot: green when
+       live, grey for "This device only". The words stay in the element for
+       screen readers (zero-size text, not display: none) and in its title. */
+    header.app .sub { flex: none; display: flex; align-items: center; margin-top: 0; }
+    header.app .sync-pill { gap: 0; min-height: 0; width: 20px; height: 20px; padding: 0; justify-content: center; overflow: hidden; border: 0; border-radius: 50%; background: none; box-shadow: none; font-size: 0; line-height: 0; color: transparent; white-space: nowrap; }
+    header.app .sync-pill::before { flex: none; width: 9px; height: 9px; }
     @media (max-width: 359px) { .wd-head-person { display: none; } }
     .sync-pill { min-height: 28px; padding: 4px 9px; font-size: 11px; }
     /* On phones the main tabs float at the bottom of the screen, always in
@@ -370,7 +374,7 @@
   <header class="app wd-head">
     <button class="header-home wd-head-brand" data-act="home" aria-label="Return to schedule"><span class="wd-head-mark" aria-hidden="true">LV</span><span class="wd-head-text"><span class="wd-head-name" data-wd-head="name">LV ZION</span><span class="wd-head-screen" data-wd-head="screen">Worship Duty</span></span></button>
     <h1 class="sr-only">LV Zion Worship Service</h1>
-    <div class="sub"><span id="sync-pill" class="sync-pill">This device only</span></div>
+    <div class="sub"><span id="sync-pill" class="sync-pill" role="img" aria-label="This device only" title="This device only">This device only</span></div>
     <div class="wd-head-tools"><button class="wd-head-member" data-act="tab" data-tab="my" data-wd-head="member" hidden><span class="wd-head-initials" data-wd-head="initials" aria-hidden="true"></span><span class="wd-head-person" data-wd-head="person"></span><span class="wd-head-caret" aria-hidden="true">&#8964;</span></button></div>
   </header>
 

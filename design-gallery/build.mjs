@@ -152,7 +152,8 @@ function prismShell(){
    shell=regexOnce(shell,/<button class="prism-brand"[\s\S]*?<\/button>/,()=>headBrand,'Prism brand becomes the shared header brand');
    shell=regexOnce(shell,/<button class="prism-member"[\s\S]*?<\/button>/,()=>headToolsLive,'Prism member chip becomes the shared header tools');
    shell=once(shell,'<header class="prism-header">','<header class="prism-header wd-head">','Prism shared header marker');
-   shell=once(shell,'<button class="icon-button" data-aurora="motion" aria-label="Pause animation">Ⅱ</button><button class="icon-button" data-aurora="theme" aria-label="Switch color theme">◐</button>','','Prism pause and dark mode buttons removed');
+   /* The whole utility row goes: Appearance moved into the header, pause and dark mode were removed, and Anthony asked for the leftover "PRISM" label row to be removed too. */
+   shell=regexOnce(shell,/<div class="prism-utility">[\s\S]*?<\/div><\/div>/,'','Prism utility row removed');
    shell=shell.replace('DESIGN 02','PRISM').replace('<span class="preview-tag">LOCAL PREVIEW</span>','').replace('<button class="reset-button" data-aurora="reset">Reset</button>','').replace('Repository reference data · July 1, 2026 preview clock · Not the live schedule','One shared schedule · Prism is your personal appearance choice');
    return '<div id="wd-prism-root">'+shell+'<span id="crumb" hidden></span></div>';
  });

@@ -27,8 +27,6 @@
 @media(max-width:760px){.prism .wd-head-brand{gap:9px}.prism .wd-head-name{font-size:12px}.prism .wd-head-screen{font-size:8px}.prism .wd-head-mark{width:36px;height:36px}.prism .wd-head-member{gap:3px;padding:0}.prism .wd-head-initials{width:29px;height:29px;font-size:9px}}
 @media(max-width:600px){.prism .wd-head-name{font-size:14px}.prism .wd-head-screen{font-size:9px}.prism .wd-head-mark{width:38px;height:38px}.prism .wd-head-tools{flex:0 1 auto}.prism .wd-head-member{gap:6px}.prism .wd-head-person{display:block;max-width:92px;font-size:11px}}
 @media(max-width:359px){.prism .wd-head-person{display:none}}
-/* The utility row under the header lost its three controls (Appearance moved into the header, pause and dark mode removed); keep its label tidy. */
-.prism .prism-tools:empty{display:none}
 /* Dark mode is now automatic (system setting): keep the rose attention banner readable, the base rule hardcodes a near-white background. */
 body.dark .banner.alert{background:rgba(224,60,100,.16);border-color:rgba(237,120,150,.45)}
 /* @end-prism */
@@ -48,7 +46,7 @@ header.app button.wd-design-button.wd-head-appearance{color:#f3eee5}
 header.app button.wd-design-button.wd-head-appearance:hover,header.app button.wd-design-button.wd-head-appearance:focus-visible{background:#ffffff1a}
 header.app.wd-head .sync-pill{max-width:none;white-space:nowrap}
 @media(max-width:800px){header.app .wd-head-name{font-size:16px}}
-@media(max-width:640px){header.app.wd-head{padding-bottom:12px}header.app.wd-head .header-home{gap:11px}header.app .wd-head-mark{width:32px;height:38px;font-size:21px}header.app .wd-head-name{font-size:15px}header.app .wd-head-screen{font-size:8.5px;letter-spacing:.14em}header.app .wd-head-initials{width:29px;height:29px;font-size:10px}header.app .wd-head-person{max-width:84px}header.app.wd-head .sync-pill{font-size:10px;line-height:1.3;min-height:24px;padding:3px 8px}}
+@media(max-width:640px){header.app.wd-head{padding-bottom:12px}header.app.wd-head .header-home{gap:11px;flex:none}header.app .wd-head-mark{width:32px;height:38px;font-size:21px}header.app .wd-head-name{font-size:15px}header.app .wd-head-screen{font-size:8.5px;letter-spacing:.14em}header.app .wd-head-initials{width:29px;height:29px;font-size:10px}header.app .wd-head-person{max-width:84px}header.app.wd-head .sync-pill{max-width:20px;font-size:0;line-height:0;min-height:0;padding:0;border:0;background:none;color:transparent}header.app.wd-head .sync-pill:before{background:#ffffff66}header.app.wd-head .sync-pill.live:before{background:#abd3b8;box-shadow:0 0 0 3px #abd3b82e}}
 @media print{.wd-head-tools{display:none!important}}
 /* @end-navy */
 
