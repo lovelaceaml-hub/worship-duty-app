@@ -1844,6 +1844,7 @@ function renderMaintenanceSchedule() {
 
 function render() {
   const nav = document.querySelector('nav.tabs');
+  nav.classList.remove('nav-loading');
   if (document.documentElement.dataset.maintenance === 'active') {
     nav.classList.toggle('hidden', true);
     document.getElementById('banners').innerHTML = '';
@@ -1916,6 +1917,9 @@ function render() {
 function renderLoading() {
   const view = document.getElementById('view');
   if (view) view.innerHTML = '<div class="empty">Loading schedule…</div>';
+  // The floating phone tab bar stays out of the way until the first real render().
+  const nav = document.querySelector('nav.tabs');
+  if (nav) nav.classList.add('nav-loading');
 }
 
 function viewHasFocusedInput(view) {
@@ -4390,5 +4394,20 @@ function init() {
   setInterval(checkReminders, 10 * 60 * 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
 }
+
+/* Floating phone tab bar: hide it while the on-screen keyboard is open so it
+   never covers the field being typed in. The keyboard shrinks the visual
+   viewport; the stylesheets read html[data-keyboard="open"]. */
+function watchKeyboardForTabBar() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const update = () => {
+    const open = window.innerHeight - vv.height * vv.scale > 150; // scale keeps pinch zoom from counting
+    if (open) document.documentElement.dataset.keyboard = 'open';
+    else delete document.documentElement.dataset.keyboard;
+  };
+  vv.addEventListener('resize', update);
+}
+watchKeyboardForTabBar();
 
 init();

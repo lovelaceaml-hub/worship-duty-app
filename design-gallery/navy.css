@@ -22,6 +22,6 @@ html #song-root{color:var(--ink)}html #song-root .ns-head{background:var(--surfa
 html[data-nc-motion=off] *,html[data-nc-motion=off] *:before,html[data-nc-motion=off] *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 @media print{.nc-appearance,nav.tabs,.nc-dialog,.nc-arrows,.nc-view-switch{display:none!important}.wrap{box-shadow:none;border:0;margin:0}.nc-hero:before,.nc-hero:after{display:none}#view{display:block!important}.nc-hero{print-color-adjust:exact}}
 
-/* The main page selector belongs below the header, never at the bottom edge. */
-nav.tabs{position:sticky;top:0;bottom:auto;left:auto;transform:none;width:100%;border-radius:0}
-@media(max-width:800px){.wrap{padding-bottom:30px}nav.tabs{top:0;bottom:auto;width:100%;border-radius:0}}
+/* Wide screens keep the main page selector below the header. At phone and small-tablet widths Navy's own floating bar above applies: cream surface, burgundy selection, 19px radius, safe-area aware, and the page reserves room under it. */
+@media(min-width:801px){nav.tabs{position:sticky;top:0;bottom:auto;left:auto;transform:none;width:100%;border-radius:0}}
+@media(max-width:800px){.wrap{padding-bottom:calc(104px + env(safe-area-inset-bottom))}nav.tabs button{min-width:0}html[data-keyboard=open] nav.tabs,nav.tabs.nav-loading{display:none!important}}

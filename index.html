@@ -305,10 +305,15 @@
     .header-home .app-title { margin-top: 0; font-size: 22px; }
     header.app .sub { margin-top: 0; }
     .sync-pill { min-height: 28px; padding: 4px 9px; font-size: 11px; }
-    /* Tabs live at the top on phones too, pinned so they are always reachable. */
-    nav.tabs { margin-inline: calc(var(--gutter) * -1); margin-bottom: 16px; padding-inline: var(--gutter); background: var(--canvas); box-shadow: var(--shadow-soft); }
-    nav.tabs button { min-height: 50px; padding: 14px 3px 11px; font-size: 13px; }
+    /* On phones the main tabs float at the bottom of the screen, always in
+       thumb reach. Same buttons, labels, dots, and click handling as the top
+       tabs on wider screens; the page reserves room so nothing sits behind them. */
+    .wrap { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+    nav.tabs { position: fixed; top: auto; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 50; gap: 4px; margin: 0; padding: 5px; background: var(--surface); border: 1px solid var(--line); border-radius: calc(var(--r-lg) + 5px); box-shadow: var(--shadow-bar), var(--shadow-soft); }
+    nav.tabs button { min-height: 50px; min-width: 0; padding: 8px 3px; border: 0; border-radius: var(--r-lg); font-size: 13px; }
+    nav.tabs button.active { background: var(--accent-soft); }
     nav.tabs button .dot { top: 9px; right: max(8px, calc(50% - 38px)); }
+    nav.tabs.nav-loading, html[data-keyboard="open"] nav.tabs { display: none; }
     .card { padding: 17px 16px; }
     .duty-row .dname { flex-basis: 104px; }
     .edit-grid { grid-template-columns: 1fr; }

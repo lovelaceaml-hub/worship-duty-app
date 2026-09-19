@@ -6,16 +6,10 @@ button.wd-design-button[hidden]{display:none!important}.wrap .wd-classic-choice{
 @media(max-width:359px){body.aurora .workspace,body.aurora #view,body.aurora .workspace-grid,body.aurora .schedule-main,body.aurora .date-browser,body.aurora .service-detail,body.aurora .context-rail{min-width:0!important;max-width:100%!important}body.aurora .context-rail{display:grid!important;grid-template-columns:minmax(0,1fr)!important;width:100%!important}body.aurora .context-rail>*{min-width:0!important;max-width:100%!important;width:100%!important}body.aurora .service-switch{max-width:100%;overflow-x:auto}body.aurora .topbar{min-width:0}body.aurora .breadcrumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}body.aurora .top-tools{min-width:0;flex:0 0 auto;gap:3px}body.aurora .top-tools .wd-design-button{width:32px;min-width:32px;height:36px;min-height:36px;padding:0;font-size:0;border-radius:9px}body.aurora .top-tools .wd-design-button::before{content:"◒";font-size:15px;line-height:1}}
 @media(prefers-reduced-motion:reduce){.wd-design-tile{transition:none}.wd-design-dialog::backdrop{backdrop-filter:none}}
 
-/* Every appearance keeps its primary page selector and Appearance control at the top. */
+/* Every appearance keeps its Appearance control at the top. On wide screens the primary page selector stays at the top too; on phones it is a floating bottom bar, styled where each appearance's own styles live (index.html for Original, prototype-prism/prism.css, design-gallery/navy.css, prototype/workspaces.css for Aurora). */
 .nc-appearance{display:none!important}
 html[data-nc-screen] .nc-appearance{display:inline-flex!important}
 html[data-nc-screen] .wd-classic-choice{display:none}
 html[data-nc-screen] header.app .sub{display:flex;align-items:center;gap:8px}
 #wd-design-status{bottom:24px}
-@media(max-width:600px){
-body.prism .prism-header{position:sticky;top:0;height:auto;min-height:67px;flex-wrap:wrap;padding:10px 17px 8px}
-body.prism .prism-header nav.tabs{position:static;order:3;flex:1 0 100%;border:0;border-radius:12px;padding:4px;box-shadow:none}
-body.prism .prism-page{padding-bottom:24px}
-body.aurora .rail{position:sticky;inset:auto;top:0;width:100%;height:auto;min-height:67px;padding:7px 12px;background:#151d39f5;border:0;border-bottom:1px solid #35405e;box-shadow:0 5px 25px #11234c0b}
-body.aurora .workspace{padding-bottom:22px}
-}
+@media(max-width:800px){#wd-design-status{bottom:calc(92px + env(safe-area-inset-bottom))}}
