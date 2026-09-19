@@ -100,7 +100,7 @@
       catch (err) { mode = old; await hooks.apply(old, next); throw err; }
       disableUnusedStyles(mode);
       if (remember) persist({mode:next, seen:true});
-      message(NAMES[next] + ' design enabled. Your schedules, duties, permissions and song plans are unchanged.' + (volatile ? ' This browser cannot save the preference.' : ''));
+      message(NAMES[next] + ' design enabled.' + (volatile ? ' This browser cannot save the preference.' : ''));
       return true;
     } catch (err) {
       console.warn('Appearance switch could not complete:', err);

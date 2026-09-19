@@ -177,12 +177,24 @@ if (window.WorshipDesign) {
   try{['wds-prism-palette','wds-prism-motion','wds-aurora-palette','wds-aurora-motion'].forEach(key=>localStorage.removeItem(key));}catch{}
   if(systemDark.addEventListener)systemDark.addEventListener('change',syncSystemScheme);else systemDark.addListener?.(syncSystemScheme);
 
+  /* The account menu's Availability and Settings views live inside My Duties.
+   * Prism and Aurora name the open one in their own page heading (Navy & Cream
+   * does it in its adapter, Original shows the view's own title). */
+  function paintAccountHeading(){
+    const view=isAccessible()&&(design.isPrism()||design.isAurora())?accountView():'';
+    if(!view)return;
+    const set=(id,text)=>{const el=document.getElementById(id);if(el)el.textContent=text;};
+    set('page-kicker','YOUR ACCOUNT');set('page-title',ACCOUNT_TITLES[view]);set('page-description',ACCOUNT_NOTES[view]);
+    const action=document.getElementById('heading-action');if(action)action.innerHTML='';
+  }
+
   const coreRender=render;
   render=function(){
     coreRender();
     if(design.isPrism())prismPaint();
     else if(design.isAurora())auroraPaint();
-    else if(design.isNavy())NavyDesign.paint(isAccessible()?liveContext():{ready:false,tab:ui.tab,sub:ui.sub});
+    else if(design.isNavy())NavyDesign.paint(isAccessible()?Object.assign(liveContext(),{account:ACCOUNT_TITLES[accountView()]||''}):{ready:false,tab:ui.tab,sub:ui.sub});
+    paintAccountHeading();
     design.afterRender();
   };
 

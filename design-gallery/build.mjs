@@ -138,7 +138,9 @@ const appearanceIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none
 const appearanceButton='<button type="button" class="wd-design-button wd-head-appearance" data-design-open data-design-label="icon-only" aria-label="Appearance" title="Appearance" hidden>'+appearanceIcon+'</button>';
 const sharedIndex=await read('index.html');
 const headBrand=sharedIndex.match(/<button class="header-home wd-head-brand"[\s\S]*?<\/button>/)?.[0];
-const headTools=sharedIndex.match(/<div class="wd-head-tools">[\s\S]*?<\/button><\/div>/)?.[0];
+/* The tools block ends with the account menu, so the match runs to the menu's closing tag plus the block's own. */
+const headTools=sharedIndex.match(/<div class="wd-head-tools">[\s\S]*?<\/button><\/div><\/div>/)?.[0];
+if(headTools&&!headTools.includes('data-wd-head="menu"'))throw Error('Design gallery source-interface drift: shared header account menu');
 if(!headBrand||!headTools)throw Error('Design gallery source-interface drift: shared header markup');
 requireOne(headTools,'<div class="wd-head-tools">','shared header tools');
 const headToolsLive=headTools.replace('<div class="wd-head-tools">','<div class="wd-head-tools">'+appearanceButton);

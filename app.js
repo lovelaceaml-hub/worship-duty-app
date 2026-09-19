@@ -1850,10 +1850,15 @@ function renderMaintenanceSchedule() {
 /* Shared header, all four appearances. The second line names the current
    screen from the same source the main tabs use (ui.tab), so it changes as the
    member moves between screens. Before sign-in it reads "Worship Duty". The
-   member chip shows who is signed in and opens My Duties. */
+   member chip shows who is signed in and opens the account menu. */
 const SCREEN_TITLES = { schedule: 'Schedule', my: 'My Duties', songs: 'Presider', manage: 'Manage' };
+const ACCOUNT_TITLES = { availability: 'Availability', settings: 'Settings' };
+const ACCOUNT_NOTES = {
+  availability: 'Tell your department when you can serve. Changes save to the shared record your department leader also sees.',
+  settings: 'Your personal settings on this device.'
+};
 function paintHeader(signedIn) {
-  const title = signedIn ? (SCREEN_TITLES[ui.tab] || SCREEN_TITLES.schedule) : 'Worship Duty';
+  const title = signedIn ? (accountView() ? ACCOUNT_TITLES[accountView()] : (SCREEN_TITLES[ui.tab] || SCREEN_TITLES.schedule)) : 'Worship Duty';
   const person = signedIn ? memberLabel(ui.me) : '';
   const initials = person.split(/\s+/).map(part => part.replace(/[^A-Za-z0-9]/g, '').charAt(0)).filter(Boolean).slice(0, 2).join('').toUpperCase();
   document.querySelectorAll('[data-wd-head="screen"]').forEach(el => { el.textContent = title; });
@@ -1862,9 +1867,54 @@ function paintHeader(signedIn) {
   document.querySelectorAll('[data-wd-head="member"]').forEach(el => {
     el.hidden = !person;
     el.title = person;
-    el.setAttribute('aria-label', person ? 'Signed in as ' + person + '. Open My Duties' : 'My Duties');
+    el.setAttribute('aria-label', person ? 'Signed in as ' + person + '. Account menu' : 'Account menu');
   });
+  document.querySelectorAll('[data-wd-head="who"]').forEach(el => { el.textContent = person; });
+  if (!person) setAccountMenu(false);
 }
+
+/* Account menu. The member chip opens a small menu: Availability, Settings,
+   Sign out. Availability and Settings are two personal views inside My Duties
+   (ui.account), so the bottom bar and every appearance keep working as they do
+   for My Duties. Sign out is the existing member-logout action. The menu closes
+   on any tap outside the chip (which covers choosing an item and changing
+   tabs), on Escape, and when focus leaves it. */
+function accountView() {
+  return ui.tab === 'my' && ACCOUNT_TITLES[ui.account] ? ui.account : '';
+}
+function accountMenuOpen() {
+  return Array.from(document.querySelectorAll('[data-wd-head="menu"]')).some(menu => !menu.hidden);
+}
+function setAccountMenu(open, focusTarget) {
+  document.querySelectorAll('[data-wd-head="menu"]').forEach(menu => { menu.hidden = !open; });
+  document.querySelectorAll('[data-wd-head="member"]').forEach(button => { button.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+  if (!focusTarget) return;
+  const scope = focusTarget === 'chip' ? '[data-wd-head="member"]' : '[data-wd-head="menu"] [role="menuitem"]';
+  const targets = Array.from(document.querySelectorAll(scope)).filter(el => el.offsetParent !== null);
+  const target = focusTarget === 'last' ? targets[targets.length - 1] : targets[0];
+  if (target) target.focus();
+}
+document.addEventListener('click', e => {
+  const chip = e.target.closest && e.target.closest('[data-wd-head="member"]');
+  if (chip) setAccountMenu(!accountMenuOpen(), 'first');
+  else if (accountMenuOpen()) setAccountMenu(false);
+});
+document.addEventListener('keydown', e => {
+  const onChip = e.target.closest && e.target.closest('[data-wd-head="member"]');
+  if (!accountMenuOpen()) {
+    if (onChip && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setAccountMenu(true, e.key === 'ArrowUp' ? 'last' : 'first'); }
+    return;
+  }
+  if (e.key === 'Escape') { e.preventDefault(); setAccountMenu(false, 'chip'); return; }
+  if (e.key === 'Tab') { setAccountMenu(false); return; }
+  const items = Array.from(document.querySelectorAll('[data-wd-head="menu"] [role="menuitem"]')).filter(el => el.offsetParent !== null);
+  if (!items.length || ['ArrowDown', 'ArrowUp', 'Home', 'End'].indexOf(e.key) === -1) return;
+  e.preventDefault();
+  const at = items.indexOf(document.activeElement);
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1
+    : e.key === 'ArrowDown' ? (at + 1) % items.length : (at <= 0 ? items.length - 1 : at - 1);
+  items[next].focus();
+});
 
 function render() {
   const nav = document.querySelector('nav.tabs');
@@ -1913,10 +1963,11 @@ function render() {
   const tabManage = document.getElementById('tab-manage');
   tabManage.classList.toggle('hidden', !canManage);
   if (ui.tab === 'manage' && !canManage) ui.tab = 'schedule';
+  if (ui.tab !== 'my') ui.account = '';
   paintHeader(true);
 
   document.querySelectorAll('nav.tabs button').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === ui.tab);
+    b.classList.toggle('active', b.dataset.tab === ui.tab && !accountView());
   });
   const unread = Number(localStorage.getItem('wds-unread-' + ui.me) || 0);
   const tabMy = document.getElementById('tab-my');
@@ -1930,7 +1981,7 @@ function render() {
   // input inside #view is focused, the next render() after they blur catches up.
   if (!viewHasFocusedInput(view)) {
     if (ui.tab === 'schedule') view.innerHTML = renderSchedule();
-    else if (ui.tab === 'my') view.innerHTML = renderMy();
+    else if (ui.tab === 'my') view.innerHTML = accountView() ? renderAccount() : renderMy();
     else if (ui.tab === 'songs') renderSongs(view);
     else view.innerHTML = renderManage();
     pulse('tab_' + ui.tab); // counts once per device per day, see pulse()
@@ -1962,16 +2013,10 @@ function renderBanners() {
     document.getElementById('banners').innerHTML = '';
     return;
   }
+  // No "needs your attention" banner here: the dot on the Manage tab carries the
+  // same actionableCountsForViewer() total (Anthony, 2026-09-19). The counts and
+  // the open-manage-queue action stay; only this banner stopped rendering.
   const items = [];
-  if (canManageAnyDepartment()) {
-    const counts = actionableCountsForViewer();
-    if (counts.total) {
-      items.push('<div class="banner alert"><button class="linkish" data-act="open-manage-queue">' +
-        esc(counts.message) + '</button></div>');
-    }
-  }
-  items.push('<div class="banner"><span>Signed in as <b>' + esc(memberLabel(ui.me)) + '</b></span>' +
-    '<button class="linkish" data-act="member-logout">Sign out</button></div>');
   items.push.apply(items, ui.banners.map((b, i) =>
     '<div class="banner' + (b.alert ? ' alert' : '') + '"><span>' + esc(b.txt) + '</span>' +
     '<button class="x" data-act="dismiss-banner" data-i="' + i + '" aria-label="Dismiss">✕</button></div>'
@@ -2066,11 +2111,10 @@ function renderSchedule() {
   return html;
 }
 
-function renderMy() {
+/* Notifications and calendar controls (feature-gated). Shown at the top of My
+   Duties and again in the account menu's Settings view, from this one source. */
+function renderNotifyControls() {
   let html = '';
-  if (!ui.me) return '<div class="empty">Sign in to see your duties.</div>';
-
-  // notifications + calendar controls (feature-gated)
   let controls = '';
   if (('Notification' in window) && (feat('notifications') || feat('reminders'))) {
     controls += notifyOn()
@@ -2094,6 +2138,39 @@ function renderMy() {
         : '</p>') +
       '</details>';
   }
+  return html;
+}
+
+/* The account menu's two personal views (see accountView()). Availability is
+   the same shared-availability editor that used to sit on My Duties; Settings
+   gathers what a member can set for themselves. Administrator settings stay in
+   Manage. */
+function renderAccount() {
+  const view = accountView();
+  const title = '<h2 class="account-title" tabindex="-1">' + esc(ACCOUNT_TITLES[view]) + '</h2>' +
+    '<p class="hint account-note">' + esc(ACCOUNT_NOTES[view]) + '</p>';
+  if (view === 'availability') {
+    return '<div class="account-view" data-account="availability">' + title +
+      (renderOwnAvailability() || '<div class="card"><p class="hint" style="margin:0">You are not on a department roster yet, so there is no availability to set. Your department leader adds you to the roster.</p></div>') +
+      '</div>';
+  }
+  const notify = renderNotifyControls();
+  return '<div class="account-view" data-account="settings">' + title +
+    '<section class="card"><h3 style="margin:0 0 10px">Notifications and calendar</h3>' +
+    (notify || '<p class="hint" style="margin:0">Notifications and the calendar link are turned off for this app right now.</p>') + '</section>' +
+    (window.WorshipDesign
+      ? '<section class="card"><h3 style="margin:0 0 6px">Appearance</h3><p class="hint" style="margin:0 0 12px">Choose how the app looks on this device. Your schedule stays the same.</p>' +
+        '<div class="notify-box" style="margin:0"><button type="button" class="ghost" data-design-open>Appearance</button></div></section>'
+      : '') +
+    '<section class="card"><h3 style="margin:0 0 6px">Member PIN</h3><p class="hint" style="margin:0">To change your PIN, ask your department leader or an administrator to reset it. You will choose a new PIN the next time you sign in.</p></section>' +
+    '</div>';
+}
+
+function renderMy() {
+  let html = '';
+  if (!ui.me) return '<div class="empty">Sign in to see your duties.</div>';
+
+  html += renderNotifyControls();
 
   // recent alerts
   const alerts = getJSON('wds-alerts-' + ui.me, []);
@@ -2106,7 +2183,7 @@ function renderMy() {
       '</div>';
   }
 
-  html += renderOwnAvailability();
+  // "Your availability" moved to the account menu (member chip, Availability).
 
   const duties = dutiesFor(ui.me);
   if (!duties.length) {
@@ -3316,6 +3393,7 @@ function canRunAction(act, el) {
   if (act === 'member-logout') return isVerifiedSession();
   if (act === 'home') return true;
   if (!isVerifiedSession() || isForcedSession()) return false;
+  if (act === 'account') return !!ACCOUNT_TITLES[el.dataset.view];
   if (act === 'tab') {
     if (el.dataset.tab === 'manage') return canManageAnyDepartment();
     if (el.dataset.tab === 'songs') return canEditSongService(findService(ui.songSvc)) ||
@@ -3456,8 +3534,18 @@ function handleAct(act, el) {
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+  else if (act === 'account') {
+    ui.tab = 'my';
+    ui.account = el.dataset.view;
+    ui.songSvc = null;
+    render();
+    window.scrollTo({ top: 0 });
+    const heading = document.querySelector('#view .account-title');
+    if (heading) heading.focus({ preventScroll: true });
+  }
   else if (act === 'tab') {
     ui.tab = el.dataset.tab;
+    ui.account = '';
     if (ui.tab === 'my') localStorage.setItem('wds-unread-' + ui.me, '0');
     // The Presider tab always opens the song planner on its Home view,
     // never a setlist left over from an earlier "Pick songs" deep link.

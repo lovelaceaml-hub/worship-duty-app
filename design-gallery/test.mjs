@@ -635,8 +635,8 @@ try {
     return !!write && write.assignment.override === true && write.assignment.overrideReason && profile.status === 'inactive';
   }));
   check('Administrator override does not write schedule directly after the callable', await domainWrites(page), scheduleWritesBeforeDepartmentOverride);
-  check('Manage alert banner shows request and conflict attention', await page.locator('#banners .banner.alert').allInnerTexts()
-    .then(texts => texts.some(text => text.includes('request') && text.includes('conflict'))));
+  // The "needs your attention" banner was removed (2026-09-19); the dot on the Manage tab carries that signal.
+  check('No request and conflict attention banner is rendered', await page.locator('#banners [data-act="open-manage-queue"]').count(), 0);
   check('Requests tab counts requests without adding conflicts', await page.locator('[data-act="sub"][data-sub="requests"]').innerText(), 'Requests (1)');
   await page.locator('[data-act="sub"][data-sub="requests"]').click();
   check('Stale request is removed from the pending queue', await page.locator('.aw-requests-content .card').allInnerTexts()
@@ -775,6 +775,9 @@ try {
   await current.page.keyboard.press('Escape');
   await current.page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
   await navigate(current.page, 'my');
+  // The availability editor opens from the account menu on the member chip.
+  await current.page.locator('[data-wd-head="member"]:visible').click();
+  await current.page.locator('[data-wd-head="menu"]:visible [data-view="availability"]').click();
   await current.page.waitForSelector('.own-availability-card');
   check('Member sees shared availability outside Manage', await current.page.locator('.own-availability-card').count(), 1);
   check('Member sees availability attribution', await current.page.locator('.own-availability-card .department-attribution').innerText()
