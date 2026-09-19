@@ -106,7 +106,12 @@ choose Original, Prism, Navy & Cream, or Aurora. Every appearance shares one
 header layout: the LV badge, "LV ZION", the current screen's name, and the
 signed-in member, whose name opens the account menu. Prism and Aurora follow the device's dark mode setting and
 every appearance follows the device's reduce-motion setting; the app has no
-dark mode or pause button. These
+dark mode or pause button. On a phone, a screen's secondary menu (the Manage
+sections, and Home, Library, Services, Insights inside Presider) is one
+sideways-scrolling row directly below the header, styled by each appearance;
+wide screens keep those menus where they were. In the main tabs a green dot on
+My Duties means a new duty for the signed-in member (it clears when My Duties
+is opened) and a red dot on Manage means pending requests or conflicts. These
 four appearances share the released schedule, account sign-in, permissions,
 and song data. The approved [complete phone refactor plan](PLAN-COMPACT-PHONE-REFACTOR.md)
 is in progress; prototype approval and the integrated preview are pending.
