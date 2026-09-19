@@ -103,6 +103,24 @@ and song data. The approved [complete phone refactor plan](PLAN-COMPACT-PHONE-RE
 is in progress; prototype approval and the integrated preview are pending.
 Planned refactor behavior is not live until that work is approved and released.
 
+## Member feedback (administrators)
+
+Signed-in members can send feedback, bug reports, and suggestions with the
+small round button at the bottom right of the app. Administrators read them in
+**Manage**, then **Feedback**. The entry appears for administrators only;
+department leaders and members never see it, and the app never requests the
+list for them.
+
+- The list shows the latest 100 notes, newest first: the member's name, the
+  kind of note, the message, when it was sent, and which screen and appearance
+  the member was using.
+- **Mark done** moves a note from **New** to the done group (open it with
+  **Show done**). **Delete** removes a note for good after a confirmation.
+- The list loads when you open it. Tap **Refresh** to check for new notes.
+- If you see "The feedback list is not available yet.", the server rule for
+  feedback has not been released yet. Nothing is lost; try again after the
+  release.
+
 ## Getting help
 
 For a missing duty, request, or department action, first confirm that you are
