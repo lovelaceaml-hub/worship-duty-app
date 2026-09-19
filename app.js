@@ -2837,15 +2837,33 @@ function renderManagePeople() {
   return renderDepartmentWorkspace();
 }
 
+/* Presentation only: an account ID is never shown. It resolves to a member name
+   from data already loaded (department profiles, the signed-in account, the member
+   list), otherwise the caller falls back to neutral wording. Stored data is unchanged. */
+function attributionName(value, isId) {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  const loaded = Object.keys(departmentRuntime.rosters).reduce((all, department) =>
+    all.concat(departmentProfiles(department)), []).concat(ownDepartmentProfiles());
+  const match = loaded.find(profile => profile && profile.memberName && (profile.memberUid === raw || profile.uid === raw));
+  if (match) return memberLabel(match.memberName);
+  if (raw === currentMemberUid() && verifiedSession && verifiedSession.memberName) return memberLabel(verifiedSession.memberName);
+  const listed = /^member:/.test(raw) && (state && state.members || []).indexOf(raw.slice(7)) !== -1;
+  if (listed) return memberLabel(raw.slice(7));
+  if (isId || /^member:/.test(raw) || /^[A-Za-z0-9_-]{20,}$/.test(raw)) return '';
+  return raw;
+}
+
 function departmentAttribution(profile) {
   const attribution = profile && profile.attribution || {};
-  const by = profile && (profile.updatedBy || attribution.updatedBy || profile.updatedByUid);
+  const recorded = profile && (profile.updatedBy || attribution.updatedBy || profile.updatedByUid);
+  const by = profile && (attributionName(profile.updatedBy) || attributionName(attribution.updatedBy) || attributionName(profile.updatedByUid, true));
   const at = profile && (profile.updatedAt || attribution.updatedAt);
-  if (!by && !at) return 'No change attribution returned yet.';
+  if (!recorded && !at) return 'No change attribution returned yet.';
   const when = Number.isFinite(Number(at)) ? new Date(Number(at)).toLocaleString(undefined, {
     month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
   }) : 'time unavailable';
-  return 'Last changed by ' + (by ? esc(by) : 'account unavailable') + ' on ' + esc(when) + '.';
+  return 'Last changed by ' + (by ? esc(by) : 'a department leader or administrator') + ' on ' + esc(when) + '.';
 }
 
 function departmentStatusBadge(profile) {
@@ -3120,7 +3138,8 @@ function renderDepartmentMember() {
   html += renderDepartmentHistory(profile);
   const fieldRows = ['status', 'eligibleDuties', 'schedulable', 'availability'].filter(field => fieldAttribution[field]).map(field => {
     const decision = fieldAttribution[field];
-    return '<li><strong>' + esc(field) + '</strong>: ' + esc(decision.authority || decision.source || 'recorded') + ' by ' + esc(decision.by || 'account') + '</li>';
+    const decidedBy = attributionName(decision.by);
+    return '<li><strong>' + esc(field) + '</strong>: ' + esc(decision.authority || decision.source || 'recorded') + (decidedBy ? ' by ' + esc(decidedBy) : ', name not available') + '</li>';
   }).join('');
   html += '<section class="card department-attribution-card"><div class="department-eyebrow">Change attribution</div><h3>Who changed the profile</h3><p class="department-attribution">' + departmentAttribution(profile) + '</p>' + (fieldRows ? '<ul>' + fieldRows + '</ul>' : '<p class="department-empty-note">Field-level attribution was not included in this roster response.</p>') + '</section>';
   if (canEdit) {

@@ -1,6 +1,6 @@
 # Worship Duty: Complete Phone Refactor
 
-Status: Approved for implementation on 2026-09-15. Package 0 active; prototype approval pending.
+Status: Approved for implementation on 2026-09-15. The integrated new-shell preview was rejected on 2026-09-17; since then the live look is kept and features ship one at a time. F1 to F6 are live as of 2026-09-19, from branch `claude/keep-look-f4f5` (see the Build log).
 Mode: Parallel. Runner: one controller, disjoint worktrees, integration last.
 Baseline: `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`, clean working tree on `change/actionable-request-counts`.
 Integration branch: `codex/compact-phone-refactor`.

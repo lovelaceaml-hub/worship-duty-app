@@ -6,14 +6,24 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 
 ## Quick links
 
-- **Active refactor:** [Complete phone plan](docs/PLAN-COMPACT-PHONE-REFACTOR.md), implementation started; prototype approval pending, production unchanged.
+- **Active refactor:** [Complete phone plan](docs/PLAN-COMPACT-PHONE-REFACTOR.md). The new-shell preview was rejected on 2026-09-17; the live look is kept and features are added one at a time. Releases F1 to F6 are live as of 2026-09-19, from branch `claude/keep-look-f4f5`.
 
 - **Website:** https://lv-zion-duties.web.app — share this link with members
 - **Status:** Live. **13 September 2026: secure member login, department-scoped
   management, Prism navigation, Presider Home, canonical choir-song sync, and
-  the four-choice Appearance gallery are released. The page-selection tabs now
-  stay at the top on phones in every appearance, and every appearance has a top
-  Appearance button.**
+  the four-choice Appearance gallery are released.**
+  **19 September 2026: releases F1 to F6 are live (Hosting release
+  `gallery1789833476547`, source branch `claude/keep-look-f4f5`). On phones the
+  page-selection tabs are an always-visible floating bar at the bottom of the
+  screen in all four appearances (this replaces the 13 September top tabs; wide
+  screens keep the tabs at the top). All four appearances share one header: the
+  LV badge, "LV ZION", the current screen's name, a small Appearance palette
+  icon, and the member chip. The old dark mode and pause buttons are gone: dark
+  mode in Prism and Aurora follows the device's system setting, and motion
+  follows the device's reduce-motion setting. On phones, "Live sync on" shows as
+  a small status dot in the header in Original and Navy & Cream. Department
+  members are added by name search (no account ID is typed or shown). Record:
+  [F4 to F6 release](docs/runs/keep-look-features/RELEASE-2026-09-19-F4-F5-F6.md).**
   **14 September 2026: confirmed duplicate member identities were removed from
   the live roster and schedule history. Hosting release `gallery1789369159506`
   and all 12 named Functions now prevent those variants from returning.**

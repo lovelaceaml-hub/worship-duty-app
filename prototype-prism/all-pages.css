@@ -244,6 +244,8 @@
 .prism :is([data-ps-page] .empty,#song-root .empty) {background:var(--ps-subtle);border:1px dashed var(--line);color:var(--muted);border-radius:13px;padding:32px 25px;font-size:13px;line-height:1.9;margin:14px 0;text-align:center;}
 .prism :is(.banner,#song-root .banner) {background:var(--ps-soft);color:var(--ps-blue);border:1px solid var(--line);border-left:3px solid var(--ps-blue);border-radius:11px;font-size:12px;line-height:1.75;padding:15px 18px;gap:14px;}
 .prism :is(.banner.alert,#song-root .banner.alert) {background:var(--ps-warning-bg);color:var(--ps-warning);border-left-color:var(--ps-warning);}
+/* F9: the attention banner's link used the dark accent #829bff on the dark warning fill #453c2e (4.17 to 1). Prism's own lighter dark blue reaches AA. Dark only, light mode untouched. */
+.prism.dark .banner.alert .linkish {color:var(--ps-blue);}
 .prism :is(.pin-error,#song-root .pin-error) {color:var(--ps-danger);background:var(--ps-danger-bg);padding:9px 12px;border-radius:7px;font-size:12px;line-height:1.6;}
 .prism :is(.lock-box.ps-auth,#song-root .lock-box.ps-auth) {max-width:490px;margin:28px auto 50px;padding:34px;}
 .prism .ps-auth .ps-auth-icon {margin:0 auto 21px;width:52px;height:52px;border-radius:16px;}

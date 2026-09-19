@@ -2,7 +2,9 @@
 
 ## Active compact-phone refactor
 
-The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progress on `codex/compact-phone-refactor`, based on clean commit `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`. Baseline and plan are saved. Anthony selected Weekbook. Four layouts with month navigation below search and verified current service data are complete, with bounded Gemini review and brief phone walkthroughs. See [the design handoff](COMPACT-DESIGN-HANDOFF.md). Anthony directed this task to end with a design handoff, before further runtime implementation or release. Separate Luna High documentation, indexing, and standalone membership work is written; Gemini Low reviewed all four bounded units with final no-material-findings verdicts. Prototype approval still precedes runtime UI changes. Four distinct layouts share behavior. Production is unchanged. Historical notes below describe prior releases.
+Current state, 2026-09-19: Anthony rejected the integrated new-shell preview on 2026-09-17 because it replaced the live look. The live look is kept and features are added to the existing screens one at a time. Releases F1 to F6 are live at https://lv-zion-duties.web.app: the Schedule default rule (F1), the Reset PIN button (F2), adding a department member by name search (F3), the floating bottom bar on phones in all four appearances (F4, F4b), the calmer My Duties notifications area (F5), and one shared header (F6, F6b). The source of the live app is branch `claude/keep-look-f4f5`; `claude/keep-look-features` stops at F3. Records: [the plan's Build log](PLAN-COMPACT-PHONE-REFACTOR.md) and [the F4 to F6 release](runs/keep-look-features/RELEASE-2026-09-19-F4-F5-F6.md).
+
+Earlier state, 2026-09-15 (superseded by the paragraph above, kept for history): The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progress on `codex/compact-phone-refactor`, based on clean commit `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`. Baseline and plan are saved. Anthony selected Weekbook. Four layouts with month navigation below search and verified current service data are complete, with bounded Gemini review and brief phone walkthroughs. See [the design handoff](COMPACT-DESIGN-HANDOFF.md). Anthony directed this task to end with a design handoff, before further runtime implementation or release. Separate Luna High documentation, indexing, and standalone membership work is written; Gemini Low reviewed all four bounded units with final no-material-findings verdicts. Prototype approval still precedes runtime UI changes. Four distinct layouts share behavior. Production is unchanged. Historical notes below describe prior releases.
 
 Last updated: 2026-09-15. Owner: Anthony (alovelace144@gmail.com).
 
@@ -86,12 +88,22 @@ The remaining July-era descriptions include superseded editor-passcode, identity
 | My Duties | Each member | Pick your name once; see only your duties, alerts, calendar export |
 | Manage | Editors (passcode) | Add/edit services, assign people, manage members, feature toggles, backups |
 
-Hosting release `gallery1789363204402` keeps Schedule, My Duties, Presider, and Manage
-at the top of the phone screen in all four appearances. Each appearance also
-has one visible Appearance button in its top controls. The gallery browser
-suite verifies both conditions at 390 pixels and checks for horizontal overflow
-from 320 through 1440 pixels. It was published on 2026-09-13 without changing
-Functions, Firestore rules, account settings, or schedule records.
+Navigation and header as of 2026-09-19 (Hosting release `gallery1789833476547`,
+source branch `claude/keep-look-f4f5`): on phones, Schedule, My Duties, Presider,
+and Manage are an always-visible floating bar at the bottom of the screen in all
+four appearances, each styled with its own colors; wide screens keep the tabs at
+the top. All four appearances share one header (markup once in `index.html`,
+`paintHeader()` and `SCREEN_TITLES` in `app.js`, per-appearance styling in
+`design-gallery/header.css`): the LV badge, "LV ZION", the current screen's
+name, a small Appearance palette icon, and the member chip. There are no dark
+mode or pause buttons: dark mode in Prism and Aurora follows the system setting
+(`design-gallery/host-bridge.js`), and motion follows the reduce-motion setting.
+On phones, "Live sync on" is a small status dot in the header in Original and
+Navy & Cream (the text stays for screen readers). Department members are added
+by name search. This replaces Hosting release `gallery1789363204402` of
+2026-09-13, which had put the four tabs and an Appearance button at the top of
+the phone screen. Hosting only: no Functions, Firestore rules, account settings,
+or schedule records changed.
 
 ## Architecture
 
