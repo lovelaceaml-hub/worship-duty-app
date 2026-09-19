@@ -2539,7 +2539,6 @@ function renderManage() {
     '<select id="manage-dept" data-chg="manage-dept">' + departmentOptions + '</select></div>' +
     '<div class="subnav">' + subs.map(s =>
     '<button data-act="sub" data-sub="' + s[0] + '"' + (ui.sub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>').join('') +
-    '<button class="lock-btn" data-act="member-logout">Sign out</button>' +
     '</div>';
   if (ui.sub === 'departments') html += renderDepartmentWorkspace();
   else if (ui.sub === 'services') html += renderManageServices();
