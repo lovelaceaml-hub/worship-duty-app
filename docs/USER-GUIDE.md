@@ -40,6 +40,11 @@ Once it's on, you'll get an alert when:
 - A new duty is assigned to you, or
 - One of your duties is coming up within the next 24 hours.
 
+Inside the app, a small green dot appears on the **My Duties** tab when a new
+duty has been added for you since you last looked (this follows the
+**New-duty alerts** switch in Manage, Features, which is on by default). Open My Duties and the dot clears. The first time you use a
+phone or browser, the duties you already have do not light the dot.
+
 ### Adding duties to your calendar
 
 Tap **Add my duties to my calendar**. Your phone subscribes to your own live
@@ -84,6 +89,9 @@ Once you're in the planner:
    counted in the setlist's total time.
 4. **Home** inside the planner shows your upcoming services; **Services**
    shows everyone's; **Insights** shows which songs are overdue to be sung.
+   On a phone this Home, Library, Services, Insights row sits at the top of
+   the screen, just below the header, and the Presider tab itself is in the
+   bar at the bottom.
 5. On the day of the service, a card's button becomes **Runsheet** — a big,
    easy-to-read order of worship for glancing at during the service.
 6. After the service, open **Services** and tap **Mark as sung** so the song
@@ -202,7 +210,11 @@ saved editor and time remain visible.
 ### Reviewing and approving requests
 
 - A small red dot appears on the **Manage** tab whenever there's a pending
-  change request.
+  change request or a scheduling conflict in a department you lead. (The
+  green dot on My Duties is different: it means a new duty for you.)
+- On a phone the Manage sections (Departments, Services, Planning, Requests
+  and any others your role has) are one row at the top of the screen, just
+  below the header. Swipe the row sideways to reach the rest.
 - Go to **Manage → Requests** to see them, each with an **Approve**,
   **Decline**, or **Open service** button. "Open service" jumps straight to
   that service in Services so you can make the actual reassignment.

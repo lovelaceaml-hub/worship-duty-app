@@ -101,6 +101,8 @@
   nav.tabs button { flex: 1; position: relative; min-height: 54px; padding: 15px 8px 12px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font-size: 14px; font-weight: 650; cursor: pointer; }
   nav.tabs button.active { color: var(--brand-blue-deep); border-bottom-color: var(--brand-blue); background: var(--surface); }
   nav.tabs button .dot { position: absolute; top: 11px; right: max(10px, calc(50% - 42px)); width: 7px; height: 7px; border-radius: 50%; background: var(--brand-rose); }
+  /* Green dot on My Duties: a new duty. Red dot on Manage: requests or conflicts. Each appearance supplies its own --ok green. */
+  nav.tabs button#tab-my .dot { background: var(--ok); }
   nav.tabs.hidden, nav.tabs button.hidden { display: none; }
 
   .card { margin-bottom: 14px; padding: 19px 21px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
@@ -179,6 +181,8 @@
   .subnav button { min-height: 44px; padding: 8px 13px; border: 1px solid #b8c7d0; border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; cursor: pointer; }
   .subnav button.active { border-color: var(--brand-blue-deep); background: var(--brand-blue-deep); color: #fff; }
   .subnav .lock-btn { margin-left: auto; }
+  /* Phone copy of a screen's secondary menu, placed below the header by watchTopSubnav() in app.js. */
+  nav#subnav-top, nav#subnav-top[hidden] { display: none; }
   form.add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   form.add-row input, form.add-row select { flex: 1; min-width: 105px; }
   .edit-grid { display: grid; grid-template-columns: 132px 1fr; gap: 8px 12px; align-items: center; margin: 8px 0; }
@@ -356,8 +360,14 @@
     .edit-grid { grid-template-columns: 1fr; }
     .edit-grid .lab { text-align: left; }
     .subnav .lock-btn { margin-left: 0; }
+    /* Secondary menus sit at the top on phones: one compact row that scrolls
+       sideways and never wraps. The in-page copy is hidden while this one shows. */
+    html[data-subnav-top="on"] nav#subnav-top:not([hidden]) { display: flex; flex-wrap: nowrap; align-items: center; margin: 12px 0 14px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    nav#subnav-top::-webkit-scrollbar { display: none; }
+    nav#subnav-top button { flex: 1 0 auto; white-space: nowrap; }
+    html[data-subnav-top="on"] #view .subnav:not(.chips), html[data-subnav-top="on"] #view #song-root .ns-tabs { display: none; }
   }
-  @media (max-width: 379px) { :root { --gutter: 12px; } nav.tabs button { font-size: 12px; } }
+  @media (max-width: 379px) { :root { --gutter: 12px; } nav.tabs button { font-size: 12px; } nav#subnav-top button { padding-left: 9px; padding-right: 9px; } }
 </style>
 </head>
 <body>

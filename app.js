@@ -1922,6 +1922,13 @@ function render() {
   const tabMy = document.getElementById('tab-my');
   tabMy.innerHTML = 'My Duties' + (unread > 0 && ui.tab !== 'my' ? '<span class="dot"></span>' : '');
   tabManage.innerHTML = 'Manage' + (actionableCountsForViewer().total > 0 && ui.tab !== 'manage' ? '<span class="dot"></span>' : '');
+  // The dots carry no text and the appearance adapters redraw them, so the
+  // meaning is announced from the button itself: green on My Duties is a new
+  // duty (styled by #tab-my), red on Manage is requests or conflicts.
+  [[tabMy, 'My Duties, new duty'], [tabManage, 'Manage, needs attention']].forEach(pair => {
+    if (pair[0].querySelector('.dot')) pair[0].setAttribute('aria-label', pair[1]);
+    else pair[0].removeAttribute('aria-label');
+  });
 
   const view = document.getElementById('view');
   // A background Firestore snapshot calls render(); replacing innerHTML would
@@ -4447,5 +4454,75 @@ function watchKeyboardForTabBar() {
   vv.addEventListener('resize', update);
 }
 watchKeyboardForTabBar();
+
+/* Secondary menus on phones: the Manage sub-tabs and the Presider Home, Library,
+   Services, Insights row are mirrored into one compact scrolling row placed
+   directly below the shared header. The original rows stay where each
+   appearance draws them (wide screens still use them) and keep every handler;
+   the stylesheets show one copy or the other. A mirrored button only presses
+   its original, so destinations, labels, order and permissions cannot drift. */
+function watchTopSubnav() {
+  const view = document.getElementById('view');
+  if (!view || !window.MutationObserver) return;
+  let slot = null, signature = '', activeKey = '';
+  const findSource = () => view.querySelector('#song-root .ns-tabs') || view.querySelector('.subnav:not(.chips)');
+  const sync = () => {
+    const source = findSource();
+    const banners = document.getElementById('banners');
+    if (!source || !banners) {
+      if (slot) slot.hidden = true;
+      signature = '';
+      delete document.documentElement.dataset.subnavTop;
+      return;
+    }
+    if (!slot) {
+      slot = document.createElement('nav');
+      slot.id = 'subnav-top';
+      slot.className = 'subnav';
+      slot.addEventListener('click', e => {
+        const b = e.target.closest('button[data-top-index]');
+        const live = b && findSource();
+        const original = live && live.querySelectorAll('button')[Number(b.dataset.topIndex)];
+        if (original) original.click();
+      });
+    }
+    // Sit above the page heading (Prism, Aurora) or the banners (Original, Navy & Cream).
+    const anchor = banners.parentNode.querySelector(':scope > .page-heading') || banners;
+    if (slot.nextElementSibling !== anchor) anchor.parentNode.insertBefore(slot, anchor);
+    const songs = source.classList.contains('ns-tabs');
+    const items = Array.from(source.querySelectorAll('button'));
+    const next = (songs ? 'songs' : 'manage') + '|' + items.map(b => b.textContent.trim() + (b.classList.contains('active') ? '*' : '')).join('|');
+    slot.hidden = false;
+    document.documentElement.dataset.subnavTop = 'on';
+    if (next === signature) return;
+    signature = next;
+    const focused = slot.contains(document.activeElement) ? document.activeElement.dataset.topIndex : '';
+    const keep = slot.scrollLeft;
+    slot.setAttribute('aria-label', songs ? 'Presider sections' : 'Manage sections');
+    slot.textContent = '';
+    let active = null;
+    items.forEach((b, i) => {
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.textContent = b.textContent.trim();
+      copy.dataset.topIndex = String(i);
+      if (b.classList.contains('lock-btn')) copy.classList.add('lock-btn');
+      if (b.classList.contains('active')) { copy.classList.add('active'); copy.setAttribute('aria-current', 'page'); active = copy; }
+      slot.appendChild(copy);
+      if (focused === String(i)) copy.focus({ preventScroll: true });
+    });
+    slot.scrollLeft = keep;
+    // Keep the selected item in view when the row scrolls sideways.
+    const key = (songs ? 'songs:' : 'manage:') + (active ? active.dataset.topIndex : '');
+    if (active && key !== activeKey) {
+      const s = slot.getBoundingClientRect(), a = active.getBoundingClientRect();
+      if (a.left < s.left || a.right > s.right) slot.scrollLeft += a.left - s.left - (s.width - a.width) / 2;
+    }
+    activeKey = key;
+  };
+  new MutationObserver(sync).observe(view, { childList: true, subtree: true });
+  sync();
+}
+watchTopSubnav();
 
 init();
