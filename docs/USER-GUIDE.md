@@ -127,8 +127,16 @@ and posted duties as a read-only schedule.
   for every date. Tap **All** to go back to seeing everything.
 - On a phone the main page tabs float at the bottom of the screen in every
   appearance, always within thumb reach; on a wide screen they stay at the
-  top. Use the Appearance button in the top controls at any time to choose
-  Original, Prism, Navy & Cream, or Aurora.
+  top. The header at the top looks the same in every appearance: the LV
+  badge, "LV ZION", the name of the screen you are on (Schedule, My Duties,
+  Presider, or Manage), and your name on the right. Tap your name to open My
+  Duties. The small palette icon next to your name is the Appearance button:
+  tap it at any time to choose Original, Prism, Navy & Cream, or Aurora.
+- Prism and Aurora switch to their dark colors automatically when your phone
+  or computer is set to dark mode, and back when it is set to light. There is
+  no dark mode button and no pause button in the app. Animations turn off
+  automatically when your device is set to reduce motion. Original and Navy &
+  Cream always use their light colors.
 - Tap **"Show past services"** near the bottom if you want to look back at
   services that already happened.
 

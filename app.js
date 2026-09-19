@@ -1847,9 +1847,29 @@ function renderMaintenanceSchedule() {
   }).join('');
 }
 
+/* Shared header, all four appearances. The second line names the current
+   screen from the same source the main tabs use (ui.tab), so it changes as the
+   member moves between screens. Before sign-in it reads "Worship Duty". The
+   member chip shows who is signed in and opens My Duties. */
+const SCREEN_TITLES = { schedule: 'Schedule', my: 'My Duties', songs: 'Presider', manage: 'Manage' };
+function paintHeader(signedIn) {
+  const title = signedIn ? (SCREEN_TITLES[ui.tab] || SCREEN_TITLES.schedule) : 'Worship Duty';
+  const person = signedIn ? memberLabel(ui.me) : '';
+  const initials = person.split(/\s+/).map(part => part.replace(/[^A-Za-z0-9]/g, '').charAt(0)).filter(Boolean).slice(0, 2).join('').toUpperCase();
+  document.querySelectorAll('[data-wd-head="screen"]').forEach(el => { el.textContent = title; });
+  document.querySelectorAll('[data-wd-head="person"]').forEach(el => { el.textContent = person; });
+  document.querySelectorAll('[data-wd-head="initials"]').forEach(el => { el.textContent = initials; });
+  document.querySelectorAll('[data-wd-head="member"]').forEach(el => {
+    el.hidden = !person;
+    el.title = person;
+    el.setAttribute('aria-label', person ? 'Signed in as ' + person + '. Open My Duties' : 'My Duties');
+  });
+}
+
 function render() {
   const nav = document.querySelector('nav.tabs');
   nav.classList.remove('nav-loading');
+  paintHeader(false);
   if (document.documentElement.dataset.maintenance === 'active') {
     nav.classList.toggle('hidden', true);
     document.getElementById('banners').innerHTML = '';
@@ -1893,6 +1913,7 @@ function render() {
   const tabManage = document.getElementById('tab-manage');
   tabManage.classList.toggle('hidden', !canManage);
   if (ui.tab === 'manage' && !canManage) ui.tab = 'schedule';
+  paintHeader(true);
 
   document.querySelectorAll('nav.tabs button').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === ui.tab);

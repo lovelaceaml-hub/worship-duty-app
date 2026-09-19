@@ -49,7 +49,6 @@ const NavyDesign = (() => {
   function paint(s){
     context=s;const view=document.getElementById('view');if(!view)return;clear(view);
     document.documentElement.dataset.ncScreen=s.tab;
-    document.querySelectorAll('header.app .eyebrow,header.app .app-title').forEach(el=>{el.dataset.ncOriginal||=el.textContent;el.textContent=el.classList.contains('eyebrow')?'LV ZION · WORSHIP DUTY':'Service Timeline';});
     const tabs={schedule:['calendar','Schedule'],my:['duties','My Duties'],songs:['songs','Presider'],manage:['manage','Manage']};
     document.querySelectorAll('nav.tabs button[data-tab]').forEach(b=>{const t=tabs[b.dataset.tab];if(!t)return;const dot=b.querySelector('.dot')?.outerHTML||'';b.innerHTML=icon(t[0])+`<span>${t[1]}</span>`+dot;if(b.classList.contains('active'))b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
     if(!s.ready)return;
@@ -61,7 +60,7 @@ const NavyDesign = (() => {
     const active=view.querySelector('.nc-date-rail [aria-pressed="true"]');if(active)active.parentElement.scrollLeft=Math.max(0,active.offsetLeft-active.parentElement.offsetLeft-active.parentElement.clientWidth/2+active.clientWidth/2);
     const route=s.tab+':'+s.sub;if(route!==lastRoute&&!reduce.matches){view.animate?.([{opacity:.65,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:220,easing:'ease-out'});}lastRoute=route;
   }
-  function leave(){const view=document.getElementById('view');clear(view);delete document.documentElement.dataset.ncScreen;document.querySelectorAll('header.app .eyebrow,header.app .app-title').forEach(el=>{if(el.dataset.ncOriginal)el.textContent=el.dataset.ncOriginal;});}
+  function leave(){const view=document.getElementById('view');clear(view);delete document.documentElement.dataset.ncScreen;}
   document.addEventListener('click',e=>{
     if(!window.WorshipDesign?.isNavy())return;const b=e.target.closest('[data-nc-act]');if(!b||!context)return;const act=b.dataset.ncAct;
     if(act==='month'){const d=new Date(month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(b.dataset.delta));month=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');selected='';manualSelection=true;}
