@@ -27,8 +27,6 @@
 @media(max-width:760px){.prism .wd-head-brand{gap:9px}.prism .wd-head-name{font-size:12px}.prism .wd-head-screen{font-size:8px}.prism .wd-head-mark{width:36px;height:36px}.prism .wd-head-member{gap:3px;padding:0}.prism .wd-head-initials{width:29px;height:29px;font-size:9px}}
 @media(max-width:600px){.prism .wd-head-name{font-size:14px}.prism .wd-head-screen{font-size:9px}.prism .wd-head-mark{width:38px;height:38px}.prism .wd-head-tools{flex:0 1 auto}.prism .wd-head-member{gap:6px}.prism .wd-head-person{display:block;max-width:92px;font-size:11px}}
 @media(max-width:359px){.prism .wd-head-person{display:none}}
-/* Dark mode is now automatic (system setting): keep the rose attention banner readable, the base rule hardcodes a near-white background. */
-body.dark .banner.alert{background:rgba(224,60,100,.16);border-color:rgba(237,120,150,.45)}
 /* @end-prism */
 
 /* @navy */
