@@ -41,7 +41,8 @@ const NavyDesign = (() => {
       html+=rail+times;
       html+=svc?hero(svc,date(svc.date,{weekday:'long',month:'short',day:'numeric'}),svc.worship||'Selected service'):'<p class="nc-empty">No services match this month and department. Use Full schedule or choose another month.</p>';
       html+=svc?'<div class="nc-section-label">Service team <span>All assigned departments</span></div>':'';
-      if(cards.length===entries.length){cards.forEach((c,i)=>{if(entries[i].id!==selected)c.dataset.ncHidden='';else c.dataset.ncSelected='';});view.querySelectorAll(':scope > .date-head').forEach(n=>n.dataset.ncHidden='');}
+      /* F12: the host's "Next service" block (.schedule-focus) carries a second copy of a service card. Day view already shows the chosen service once, so the block is hidden here. Full schedule keeps it, labelled, as Original does. */
+      if(cards.length===entries.length){cards.forEach((c,i)=>{if(entries[i].id!==selected)c.dataset.ncHidden='';else c.dataset.ncSelected='';});view.querySelectorAll(':scope > .date-head, :scope > .schedule-focus').forEach(n=>n.dataset.ncHidden='');}
     }
     insert(view,html);
     if(svc&&!full&&entries.length>1){const i=entries.findIndex(x=>x.id===selected),next=entries[i+1];if(next){const n=document.createElement('div');n.className='nc-generated nc-next';n.innerHTML=btn('service',`<span><small>Next service</small>${date(next.date,{weekday:'short',month:'short',day:'numeric'})} · ${escape(time(next.time))}</span>${icon('right')}`,`data-id="${escape(next.id)}"`);const card=view.querySelector('[data-nc-selected]');(card||view.lastElementChild).after(n);}}
