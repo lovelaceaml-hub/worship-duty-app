@@ -1,8 +1,10 @@
 # Implementation Guide
 
+> Historical as of 2026-09-20. This guide was written in July 2026, before member sign-in, department rosters, the four appearances, and the guarded release script. Its data model, security notes, and especially its deploy commands (`npx firebase-tools deploy`) are out of date: NEVER run them. For the current app read [HANDOFF.md](HANDOFF.md); to release read [PLAYBOOK.md](PLAYBOOK.md) section 8. Kept for the Google Sheet pipeline walkthrough and for history.
+
 For a developer or AI session picking this project up cold and needing to
-understand, extend, or redeploy it from scratch. This complements — it does
-not replace — [HANDOFF.md](HANDOFF.md) (architecture reference) and
+understand, extend, or redeploy it from scratch. This complements, it does
+not replace, [HANDOFF.md](HANDOFF.md) (architecture reference) and
 [PLAYBOOK.md](PLAYBOOK.md) (day-to-day operation + AI delegation briefs).
 Read those two first for anything not covered here; this doc's job is to
 walk through *implementing* things end to end, including the four newest
@@ -10,7 +12,7 @@ features and the Google Sheet pipeline in full.
 
 ## 1. What this is
 
-The **LV Zion Worship Service** app — a real-time web app a congregation
+The **LV Zion Worship Service** app, a real-time web app a congregation
 uses to see and manage worship service duty assignments (ushers, media
 booth, translation, lobby desk, etc.) and for presiders to plan songs.
 
@@ -32,24 +34,24 @@ booth, translation, lobby desk, etc.) and for presiders to plan songs.
 
 ### 2.1 Static hosting
 
-`index.html` and `app.js` are served as-is by Firebase Hosting — there is no
+`index.html` and `app.js` are served as-is by Firebase Hosting, there is no
 bundler, no npm build step for the client. `app.js` is loaded as an ES
 module (`<script type="module" src="app.js">`) so it can use dynamic
 `import()` for the Firebase SDK, loaded straight from
 `https://www.gstatic.com/firebasejs/10.12.2/...` at runtime. `firebase-config.js`
-(not checked in — contains the real project config + the Web Push/VAPID
+(not checked in, contains the real project config + the Web Push/VAPID
 key) is loaded as a plain script before `app.js`.
 
 Two operating modes, decided once at startup in `init()` (bottom of
 `app.js`):
 
-- **Firebase mode** — if `window.FIREBASE_CONFIG` is set, `initFirebase()`
+- **Firebase mode**, if `window.FIREBASE_CONFIG` is set, `initFirebase()`
   opens live Firestore listeners (`onSnapshot`) on `schedule`, `app/members`,
   `app/settings`, `app/departments`, and `requests`. The first client ever
   to see an empty `schedule` collection uploads `seed-data.js` as the
   starting state, then triggers a Google Sheet sync shortly after
   (`scheduleSyncSoon()`).
-- **Local-only mode** — no Firebase config: state lives in
+- **Local-only mode**, no Firebase config: state lives in
   `localStorage['wds-data-v2']` only, single device.
 
 ### 2.2 Firestore collections and document shapes
@@ -59,10 +61,10 @@ Two operating modes, decided once at startup in `init()` (bottom of
 | `schedule/{date}_{service-slug}` | `{ date: 'YYYY-MM-DD', time: 'HH:MM', service: 'Morning', worship: 'Sabbath Day', choirSong: '', assignments: { [dutyName]: memberName }, conflictOk?: { [memberName]: dutyName[] } }` | One doc per service. Id built by `svcId()` (`date + '_' + slugified service label`). `conflictOk` records acknowledged double-duty warnings, keyed by member name to their exact duty list at the time it was marked OK. Conflict detection intentionally ignores one prayer + one usher duty pairing; other duplicate pairs remain warnings. |
 | `app/members` | `{ list: string[] }` | Sorted array of every known member name. |
 | `app/settings` | `{ features: { [featureId]: boolean }, pinHash: string, sitePinHash: string, sheetUrl: string, schedulerName?: string }` | `pinHash`/`sitePinHash` are SHA-256 hex hashes (never plaintext). `sheetUrl` is the published-CSV link, overriding `DEFAULT_SHEET_URL` in app.js. `schedulerName` is who gets notified when a change request comes in. |
-| `app/departments` | `{ map: { [categoryName]: memberName[] } }` | Roster per category (Worship, Usher Sisters, Usher Brothers, Lobby, Translation, Media, Parking Lot, Offering) — see §3.2. Seeded once from `DEPARTMENTS_SEED` in app.js if missing/empty. |
+| `app/departments` | `{ map: { [categoryName]: memberName[] } }` | Roster per category (Worship, Usher Sisters, Usher Brothers, Lobby, Translation, Media, Parking Lot, Offering), see §3.2. Seeded once from `DEPARTMENTS_SEED` in app.js if missing/empty. |
 | `tokens/{fcmToken}` | `{ name: memberName, updatedAt: epoch-ms }` | One doc per device registered for push, keyed by the device's FCM token itself. Written client-side by `registerPush()`. Dead tokens are pruned by Cloud Functions on send failure. |
 | `sent/{markerId}` | `{ t: epoch-ms }` | Internal de-dupe markers for `dutyReminders`, e.g. `svcId_duty-slug_name-slug`. Auto-pruned after 7 days. Not client-readable (`allow read, write: if false`; only the Admin SDK, which bypasses rules, can touch it). |
-| `requests/{svcId_dutySlug_createdAt}` | `{ id, name, svcId, date, service, worship, duty, note, status: 'pending'\|'approved'\|'declined', createdAt: epoch-ms, resolvedAt?, resolvedBy? }` | One doc per change request — see §3.4. |
+| `requests/{svcId_dutySlug_createdAt}` | `{ id, name, svcId, date, service, worship, duty, note, status: 'pending'\|'approved'\|'declined', createdAt: epoch-ms, resolvedAt?, resolvedBy? }` | One doc per change request, see §3.4. |
 | `setlists/{serviceId}` | `{ id, date, worshipType, serviceLabel, presider, notes, songs: string[], status: 'planned'\|'sung', sungAt, updatedAt, updatedBy, glorySong?, thanksSong?, source? }` | Song picker (§3.5). `serviceId` uses `song-lib.js` `serviceIdFor()` (`date_service-slug`, matching the schedule's slug). `source` is `'schedule'`/`'signal'`/`'manual'`. |
 | `songStats/{songId}` | `{ songId, timesSung, lastSung: 'YYYY-MM-DD', history: [{date, service, by, markedAt, backfilled?}] }` | Song picker. `history` is the append-only source of truth; `timesSung`/`lastSung` are recomputed caches. Absence of a doc = 0×/Never. |
 | `app/songSettings` | `{ editorPinHash: string }` | Song picker's separate editor PIN (SHA-256 hex), distinct from the app's site/editor passcodes. |
@@ -84,22 +86,22 @@ identical notification body, sends one data-only multicast per batch via
 `getMessaging().sendEachForMulticast()`, and deletes any token Firebase
 Cloud Messaging reports as unregistered/invalid.
 
-1. **`onScheduleWrite`** (`onDocumentWritten` on `schedule/{id}`) — diffs
+1. **`onScheduleWrite`** (`onDocumentWritten` on `schedule/{id}`), diffs
    `before.assignments` vs `after.assignments`; for each member whose
    assignment changed to a new non-empty duty, sends "New duty assigned to
    you."
 2. **`dutyReminders`** (`onSchedule`, every 60 minutes,
-   `America/Los_Angeles`) — scans `schedule` docs with `date >= yesterday`,
+   `America/Los_Angeles`), scans `schedule` docs with `date >= yesterday`,
    computes each duty's actual start instant via `laStartMs()` (interprets
    date+time as LA wall-clock, deriving the UTC offset per-instant so DST
    is handled without a fixed offset constant), and sends "Duty reminder"
    for anything starting within the next 24 hours, guarded by a `sent/*`
    marker so it never double-sends.
-3. **`onRequestCreated`** (`onDocumentCreated` on `requests/{id}`) — reads
+3. **`onRequestCreated`** (`onDocumentCreated` on `requests/{id}`), reads
    `app/settings.schedulerName`; if set and the requester isn't the
    scheduler themself, sends "Schedule change requested" to the scheduler
    with the duty/date/service and note.
-4. **`onRequestResolved`** (`onDocumentUpdated` on `requests/{id}`) — fires
+4. **`onRequestResolved`** (`onDocumentUpdated` on `requests/{id}`), fires
    only when `status` transitions away from `'pending'`; sends "Schedule
    change approved/declined" to the original requester.
 
@@ -108,7 +110,7 @@ Cloud Messaging reports as unregistered/invalid.
 Deployed together with hosting/functions via `firebase.json`. Note the file
 also contains rules for two sibling apps sharing the same Firebase project
 (`songStats`/`setlists` for the New Song Selection app, `mpg_*` for the
-Morning Prayer Gathering app) — unrelated to this app but living in the same
+Morning Prayer Gathering app), unrelated to this app but living in the same
 rules file/project. This app's own collections: `schedule/*`, `app/*`,
 `tokens/*`, `requests/*` are all `allow read, write: if true` (open); `sent/*`
 is `allow read, write: if false` (Admin-SDK-only). See HANDOFF.md "Known
@@ -118,22 +120,22 @@ limitations" for the security tradeoff this represents.
 
 Two independent codebases cooperate:
 
-**Sheet side** (`LV Zion Duty Sheet.gs`, in the sheet's Apps Script project —
+**Sheet side** (`LV Zion Duty Sheet.gs`, in the sheet's Apps Script project , 
 source of truth copy lives at `/Users/anthony/Documents/Claude/Projects/
 Reminders and Calendars/LV Zion Duty Sheet.gs`, with a companion `README.md`
 there):
 
 - **Apps Script project** (container-bound to the schedule sheet):
   `https://script.google.com/u/0/home/projects/1B-2w9pCjQM8Bhvg71AlWFrDg-xGJMas6qDmAfs9fYi_iRE6sJeqfy0V-/edit`
-  — script id `1B-2w9pCjQM8Bhvg71AlWFrDg-xGJMas6qDmAfs9fYi_iRE6sJeqfy0V-`.
+ , script id `1B-2w9pCjQM8Bhvg71AlWFrDg-xGJMas6qDmAfs9fYi_iRE6sJeqfy0V-`.
   Because it is container-bound it does **not** appear in `clasp list`; clone
   it by id (`clasp clone <id>`, cache prefix per the environment skill).
-  Saving a script change does **not** rebuild anything — run
+  Saving a script change does **not** rebuild anything, run
   **Duty Tools → Rebuild Raw Data**, or edit `2026 Entry` to fire the trigger.
 
 - Two tabs only: **`2026 Entry`** (wide grid, header on row 2, one column
   per duty, edited by hand) and **`Raw Data`** (long-format, one row per
-  person/duty, auto-generated — never hand-edit it, it's wiped and
+  person/duty, auto-generated, never hand-edit it, it's wiped and
   rewritten on every rebuild).
 - `rebuildRawData()` flattens `2026 Entry` into `Raw Data`, called
   automatically on every edit to `2026 Entry` via an installable `onEdit`
@@ -168,22 +170,22 @@ there):
 - `GROUPS` defines the
   duty-to-category mapping written to the Category column (the app itself
   ignores this column and re-derives category from the duty name via its
-  own `CATEGORIES` constant — the two lists must stay in sync by hand).
+  own `CATEGORIES` constant, the two lists must stay in sync by hand).
   Choir Song lives under the Worship group but its Member value is a **song
   title**, not a person.
 - **Name canonicalization**: `normalizeMember_(s)` trims whitespace,
   normalizes a leading title prefix (`B`/`D`/`S`/`E`/`M` + optional period/
-  space) to `"X. "`, then maps through `CANONICAL_NAMES` — a fixed
+  space) to `"X. "`, then maps through `CANONICAL_NAMES`, a fixed
   old-spelling → canonical-spelling table (e.g. `'B. Anthony L' → 'B.
   Anthony'`). This runs automatically on every `rebuildRawData()` call, so
   new entries are normalized going forward with no extra step.
   `unifyNames()` is the one-time cleanup pass over *existing* cells already
   on `2026 Entry` (rewrites only the cells that actually change, then
-  re-runs `rebuildRawData()`) — safe to re-run, and reachable from **Duty
+  re-runs `rebuildRawData()`), safe to re-run, and reachable from **Duty
   Tools → Unify member names**.
 - **The published-CSV link is keyed to `Raw Data`'s internal sheet gid**
   (`453135143`), not its name. Renaming the tab is safe. **Deleting and
-  recreating it is not** — it gets a new gid and the published link breaks
+  recreating it is not**, it gets a new gid and the published link breaks
   silently. `rawDataSheet_()` looks up `Raw Data`, falling back to the old
   name `Data List`, falling back to creating `Raw Data` fresh, precisely so
   this never happens by accident during script changes.
@@ -193,24 +195,24 @@ there):
 - `DEFAULT_SHEET_URL` is the hardcoded fallback published-CSV link;
   `app/settings.sheetUrl` overrides it (editable in Manage → Data & Sync).
 - `syncFromSheet(manual)` fetches the CSV, parses it with `parseCSV()` (a
-  small hand-written RFC-4180-ish parser — quoted fields, embedded commas,
+  small hand-written RFC-4180-ish parser, quoted fields, embedded commas,
   escaped `""`, CRLF/LF), converts rows with `sheetRowsToServices()`, then
   merges via `mergeSheetServices()`.
 - `sheetRowsToServices()` requires Date/Service/Duty/Member columns present
   (by header name, case-insensitive); parses the date with
   `parseSheetDate()` + `inferYearISO()` (picks whichever of last/this/next
-  year lands the date closest to today — the sheet carries no year), and
+  year lands the date closest to today, the sheet carries no year), and
   the time with `parseSheetTime()` (12-hour `h:mm AM/PM` → 24-hour). A duty
   exactly `'Choir Song'` is special-cased: its Member value goes to
   `choirSong` instead of `assignments`, is never added to the members list,
   and never triggers an unknown-duty warning. Any other duty not in the
   app's own `CATEGORIES` constant is skipped and reported back as a
-  warning string (surfaced on the Data & Sync card) — never silently
+  warning string (surfaced on the Data & Sync card), never silently
   dropped, never a crash.
 - `mergeSheetServices()` does a **per-duty upsert**: it only writes duty
   slots the sheet's row actually mentions, so Media Booth, Parking Lot and
   Offering assignments and any manually-added/extra services in Manage
-  survive every sync untouched. It also grows `app/departments` rosters automatically — any
+  survive every sync untouched. It also grows `app/departments` rosters automatically, any
   `(duty, member)` pair seen adds that member to the roster for that duty's
   category if not already present.
 - New member names appearing in the sheet's Member column are added to
@@ -230,7 +232,7 @@ are separate codebases with separate copies of the same member list:
 - **Sheet side:** `CANONICAL_NAMES` map + `normalizeMember_()` (applied on
   every `rebuildRawData()`) + one-time `unifyNames()` menu action (see
   §2.5 above).
-- **App side:** `NAME_UNIFY_MAP` (top of `app.js`) — the same variant→
+- **App side:** `NAME_UNIFY_MAP` (top of `app.js`), the same variant→
   canonical mapping, kept in sync by hand with the sheet's
   `CANONICAL_NAMES`. `applyNameMap(map)` is a pure function that rewrites
   `state.members`, every service's `assignments`, and every service's
@@ -238,16 +240,16 @@ are separate codebases with separate copies of the same member list:
   `{ membersChanged, membersMerged, touchedServices }` for the caller to
   persist. Wired to the **Manage → Data & Sync → "Unify member names"**
   button (`handleAct('unify-names')`), which confirms, applies the map,
-  persists only what changed, and — if the *current device's own* selected
-  name (`ui.me`) was one of the merged variants — migrates that device's
+  persists only what changed, and, if the *current device's own* selected
+  name (`ui.me`) was one of the merged variants, migrates that device's
   local alert/seen/unread history to the canonical name and re-registers
   push under the new name.
 - **Rollout order when the sheet's names change:** run the sheet's **Duty
   Tools → Unify member names** first (cleans `2026 Entry` + rebuilds `Raw
   Data`), then in the app do **Manage → Data & Sync → Sync now** (pulls the
   now-clean sheet), then **Manage → Data & Sync → Unify member names**
-  (catches any pre-existing app-side data — assignments made before the
-  sheet cleanup, or `conflictOk` entries — that the sheet sync alone
+  (catches any pre-existing app-side data, assignments made before the
+  sheet cleanup, or `conflictOk` entries, that the sheet sync alone
   wouldn't touch).
 
 ### 3.2 Department rosters / scoped pickers
@@ -275,7 +277,7 @@ are separate codebases with separate copies of the same member list:
 
 ### 3.3 Department view filter
 
-- **Schedule tab** shows a row of chips — "All" plus one per category
+- **Schedule tab** shows a row of chips, "All" plus one per category
   (`renderDeptChips()`), backed by `ui.deptFilter` (persisted in
   `localStorage['wds-dept']`).
 - Selecting a chip (`data-act="dept-filter"`) filters `renderServiceList()`
@@ -292,7 +294,7 @@ are separate codebases with separate copies of the same member list:
   duties on **My Duties** sees a "Request change" link
   (`renderRequestChange()`); clicking it opens an inline note textarea
   (`ui.reqForm`, kept in memory so a mid-typing Firestore snapshot re-render
-  can't clobber the draft — the `input` listener mirrors keystrokes into
+  can't clobber the draft, the `input` listener mirrors keystrokes into
   `ui.reqForm.note` continuously, separate from the `change` event which
   only fires on blur).
 - Submitting (`req-submit`) writes a new doc to the `requests` collection
@@ -307,11 +309,11 @@ are separate codebases with separate copies of the same member list:
   then a collapsible "resolved requests" history. A red dot appears on the
   Manage tab itself when there's a pending count
   (`pendingRequestsCount()`). Approving a request does **not** itself
-  change the schedule — the editor still opens the service in Manage →
+  change the schedule, the editor still opens the service in Manage →
   Services and makes the actual reassignment; "Open service" jumps there
   directly.
 - **Manage → Features** has a "Scheduler" picker (`schedulerName` in
-  `app/settings`) — whoever is selected there is notified by the
+  `app/settings`), whoever is selected there is notified by the
   `onRequestCreated` Cloud Function when a request comes in (skipped if
   they request their own change). The requester is notified back by
   `onRequestResolved` when the scheduler approves or declines.
@@ -328,7 +330,7 @@ Gated by the `songPicker` feature toggle.
   kicks a viewer off the songs screen if they stop qualifying.
   `open-songs`/`close-songs` actions flip `ui.tab` between
   `'my'` and `'songs'` (`ui.songSvc` holds the deep-link target; `ui.songNav`
-  is a one-shot flag marking explicit taps — consumed by `songCtx()` as
+  is a one-shot flag marking explicit taps, consumed by `songCtx()` as
   `ctx.nav`, which tells `mount()` to navigate: setlist if a service was
   tapped, Home from the tab; background re-mounts don't navigate). `render()`
   dispatches `ui.tab === 'songs'` to `renderSongs()`, which lazy-`import()`s
@@ -348,7 +350,7 @@ Gated by the `songPicker` feature toggle.
      repeats the check (`rootHasFocusedInput()`) so a background Firestore
      snapshot can't wipe a half-typed song field.
 - **Shared pure logic (`song-lib.js`).** `applySung`, `applyUndo`,
-  `applyBackfill`, `serviceIdFor`, `recompute`, etc. — exported to the browser
+  `applyBackfill`, `serviceIdFor`, `recompute`, etc., exported to the browser
   as `window.SongLib` and under Node as `module.exports`. `song-app.js`
   consumes `window.SongLib`; the Signal ingest daemon `require()`s the same
   file. Mark-as-sung/undo run inside a Firestore `runTransaction` so two
@@ -370,11 +372,11 @@ Gated by the `songPicker` feature toggle.
 
 ### 4.1 Prerequisites
 
-- A Firebase project on the **Blaze** (pay-as-you-go) plan — required for
+- A Firebase project on the **Blaze** (pay-as-you-go) plan, required for
   Cloud Functions (Firestore + Hosting alone work on the free Spark plan,
   but the two notification functions and the scheduled `dutyReminders`
   function do not).
-- `firebase-config.js` in the app root (not checked into docs — has the
+- `firebase-config.js` in the app root (not checked into docs, has the
   real web app config) exporting `window.FIREBASE_CONFIG = {...}` and
   `window.FCM_VAPID_KEY = "..."` (from Firebase console → Project settings
   → Cloud Messaging → Web configuration).
@@ -414,7 +416,7 @@ exist), the *first client to load the app* uploads `seed-data.js`'s baked-in
 schedule automatically (see `initFirebase()`'s `onSnapshot` handler for
 `schedule`, the `firstSnapshot && snap.empty` branch), then schedules a
 Google Sheet sync ~1.5s later so the sheet's live data layers on top. No
-manual seeding step is required for a fresh deploy — just make sure
+manual seeding step is required for a fresh deploy, just make sure
 `seed-data.js` matches whatever baseline schedule you want as the starting
 point (or leave it mostly empty and let the sheet sync populate everything).
 `app/departments` is seeded the same lazy way from `DEPARTMENTS_SEED` if the
@@ -430,7 +432,7 @@ document comes back missing or with an empty map.
 3. If this is a fresh sheet (not already wired up), run `installRebuildTrigger()`
    once from the Apps Script editor to install the auto-rebuild-on-edit
    trigger, and approve the authorization prompt.
-4. Reload the sheet — the **Duty Tools** menu appears (built by `onOpen()`).
+4. Reload the sheet, the **Duty Tools** menu appears (built by `onOpen()`).
 5. Normal editing happens entirely on `2026 Entry`; `Raw Data` regenerates
    itself. Use **Duty Tools → Rebuild Raw Data** to force it immediately
    rather than waiting for the trigger, and **Duty Tools → Unify member
@@ -442,13 +444,13 @@ document comes back missing or with an empty map.
    rebuilds `Raw Data`).
 2. App: **Manage → Data & Sync → Sync now** (pulls the cleaned sheet).
 3. App: **Manage → Data & Sync → Unify member names** (catches anything
-   the sheet sync's per-duty upsert wouldn't touch — e.g. `conflictOk`
+   the sheet sync's per-duty upsert wouldn't touch, e.g. `conflictOk`
    entries, or assignments made in Manage directly rather than via the
    sheet).
 
 ## 5. Testing
 
-There is no permanent automated test suite committed to the repo — `app.js`
+There is no permanent automated test suite committed to the repo, `app.js`
 has no build step or test runner wired up. The pattern used during
 development sessions (including the four features documented above) is a
 **disposable Node "vm-harness" test**, written fresh per task into the
@@ -459,7 +461,7 @@ session's scratchpad directory and discarded afterward:
 - Use Node's built-in `vm` module to run the script inside a sandboxed
   context, stubbing out just enough of the browser globals it touches
   (`document`, `window`, `localStorage`, `crypto.subtle`, `fetch`) with
-  minimal fakes — enough to exercise pure functions like
+  minimal fakes, enough to exercise pure functions like
   `sheetRowsToServices()`, `mergeSheetServices()`, `applyNameMap()`,
   `conflictsFor()`, `parseCSV()`, `inferYearISO()`, etc. directly, without
   spinning up a real browser or Firebase emulator.
@@ -467,7 +469,7 @@ session's scratchpad directory and discarded afterward:
   expected output for a handful of representative inputs (a realistic CSV
   sample, a name-variant map, a conflicting-assignment fixture).
 - Run with `node scratch-test.js`, read the output, delete the scratch
-  file. These tests are intentionally ephemeral — they exist to verify a
+  file. These tests are intentionally ephemeral, they exist to verify a
   specific change during that session, not as regression coverage that
   persists in the repo.
 - For anything requiring a real DOM or live Firestore (rendering, rules
