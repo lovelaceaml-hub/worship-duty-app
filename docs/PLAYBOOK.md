@@ -12,8 +12,8 @@ day, or hand a task to an AI coding tool. It assumes no developer background.
 
 ### Current status
 
-Features F1 to F11 are live at https://lv-zion-duties.web.app as of 2026-09-20
-(release marker `gallery1789951374910`). Since 2026-09-17 the rule is: keep the
+Features F1 to F12 are live at https://lv-zion-duties.web.app as of 2026-09-20
+(release marker `gallery1789952310145`). Since 2026-09-17 the rule is: keep the
 live look, add features into the four existing appearances one at a time, show
 each on the preview channel first, release on Anthony's approval. The plan and
 its Build log are in [PLAN-COMPACT-PHONE-REFACTOR.md](PLAN-COMPACT-PHONE-REFACTOR.md).
@@ -293,7 +293,7 @@ line it inserts). Members see "Schedule maintenance in progress" with a
 read-only list of the next eight services.
 
 ```
-cd /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5 && perl -0pi -e 's|<html lang="en">\n|<html lang="en">\n<script>document.documentElement.dataset.maintenance = \x27active\x27;</script>\n|' /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5/index.html && npm_config_cache=/tmp/npm-cache node /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5/design-gallery/release.mjs --publish
+cd /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5 && sed -i '' 's|<html lang="en">|<html lang="en"><script>document.documentElement.dataset.maintenance = '"'"'active'"'"';</script>|' /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5/index.html && npm_config_cache=/tmp/npm-cache node /Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5/design-gallery/release.mjs --publish
 ```
 
 Command 3, remove the maintenance line and publish the full app.

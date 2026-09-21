@@ -12,7 +12,7 @@ reference material. For day-to-day operation and releases see
 
 ## 1. Current state (2026-09-20)
 
-- Features F1 to F11 are live. Live release marker: `gallery1789951374910`.
+- Features F1 to F12 are live. Live release marker: `gallery1789952310145`.
 - Approach since 2026-09-17: keep the live look. Anthony rejected the
   integrated new-shell preview because it replaced the app's look. Features are
   added into the four existing appearances (Original, Prism, Navy & Cream,
@@ -22,9 +22,9 @@ reference material. For day-to-day operation and releases see
 - Live Cloud Functions and live Firestore rules source: branch
   `claude/compact-integration` (deployed 2026-09-17; `feedback` rule added
   2026-09-20, commit `a5068d9`).
-- In progress on 2026-09-20: lane F12 (Navy & Cream Day view shows the selected
-  service card twice), lane F13 (test suite update), lane F14 (this
-  documentation pass). None of the three is released.
+- In progress on 2026-09-20: lane F13 (test suite update). Lane F12 (Navy & Cream
+  double card) was released the same day; lane F14 (this documentation pass)
+  is merged.
 - The durable record is the `## Build log` in
   [PLAN-COMPACT-PHONE-REFACTOR.md](PLAN-COMPACT-PHONE-REFACTOR.md), plus one
   record per feature in [runs/keep-look-features/](runs/keep-look-features/).
@@ -82,6 +82,7 @@ each pair.
 | F9 | Cleanup: Prism dark banner contrast, no raw ID in "last changed by", stale docs | 2026-09-20 | `gallery1789951374910` | [F9](runs/keep-look-features/F9-cleanup.md) |
 | F10 | Floating feedback button, feedback sheet, administrator Feedback list under Manage, Firestore collection `feedback` | 2026-09-20 | `gallery1789951374910` (rules deployed first from `claude/compact-integration`, `a5068d9`) | [F10](runs/keep-look-features/F10-feedback.md) |
 | F11 | Navy & Cream month arrows and next-service chevron now visible | 2026-09-20 | `gallery1789951374910` | [F11](runs/keep-look-features/F11-navy-month-arrows.md), [release](runs/keep-look-features/RELEASE-2026-09-20-F7-F11.md) |
+| F12 | Navy & Cream Day view shows each service once | 2026-09-20 | `gallery1789952310145` | [F12](runs/keep-look-features/F12-navy-double-card.md) |
 
 The F3 marker is taken from the "Before" row of the F4 to F6 release record.
 F3 has no release record of its own.
@@ -95,8 +96,8 @@ is `gallery1789833476547`. The `feedback` rule can stay in place on a rollback.
 
 This is the one list. Other documents point here.
 
-1. Navy & Cream Day view shows the selected service card twice. Lane F12, in
-   progress, not released.
+1. (Closed 2026-09-20) Navy & Cream Day view showed the selected service card
+   twice. Fixed and released as F12.
 2. `design-gallery/test.mjs` is out of date: it clicks sub-tab buttons that are
    now hidden on phones and expects account ID text that was removed. Lane F13,
    in progress.

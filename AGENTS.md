@@ -6,7 +6,7 @@ Last reviewed: 2026-09-20.
 
 This is the live LV Zion Worship Duty Firebase PWA at https://lv-zion-duties.web.app. Read `README.md`, `docs/HANDOFF.md`, `docs/PLAYBOOK.md`, and the active plan before changing behavior.
 
-How work is done now (Anthony's decision of 2026-09-17): keep the live look. The integrated new-shell preview was rejected because it replaced the app's look. Features are added into the four existing appearances (Original, Prism, Navy & Cream, Aurora) one at a time. Each feature goes to the private preview channel first, and goes live only on Anthony's approval. Features F1 to F11 are live as of 2026-09-20 (release marker `gallery1789951374910`).
+How work is done now (Anthony's decision of 2026-09-17): keep the live look. The integrated new-shell preview was rejected because it replaced the app's look. Features are added into the four existing appearances (Original, Prism, Navy & Cream, Aurora) one at a time. Each feature goes to the private preview channel first, and goes live only on Anthony's approval. Features F1 to F12 are live as of 2026-09-20 (release marker `gallery1789952310145`).
 
 Where the live app comes from:
 

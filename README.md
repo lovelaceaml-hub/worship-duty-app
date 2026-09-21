@@ -21,8 +21,8 @@ Last updated: 2026-09-20.
 
 ## Current status
 
-Live. Features F1 to F11 are released as of 2026-09-20 (Hosting release marker
-`gallery1789951374910`).
+Live. Features F1 to F12 are released as of 2026-09-20 (Hosting release marker
+`gallery1789952310145`).
 
 On 2026-09-17 Anthony rejected the integrated new-shell preview because it
 replaced the app's look. The decision since then: keep the live look, add
