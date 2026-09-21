@@ -6,7 +6,7 @@ import http from 'node:http';
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
-import {chromium} from 'playwright';
+import {chromium} from '../../tests/helpers/playwright.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const out=path.join(root,'prism-preview-artifacts');
 await fs.mkdir(path.join(out,'screenshots','all-pages'),{recursive:true});

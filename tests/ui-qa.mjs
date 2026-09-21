@@ -1,7 +1,8 @@
-import { chromium } from 'playwright';
-import AxeBuilder from '@axe-core/playwright';
+import { chromium, resolveFrom } from './helpers/playwright.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+
+const AxeBuilder = resolveFrom('@axe-core/playwright').module.AxeBuilder;
 
 const baseURL = process.env.UI_BASE_URL || 'http://127.0.0.1:8087';
 const evidenceDir = process.env.UI_EVIDENCE_DIR || '/tmp/worship-duty-ui-evidence';
