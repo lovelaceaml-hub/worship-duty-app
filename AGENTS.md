@@ -20,7 +20,7 @@ The active plan is `docs/PLAN-COMPACT-PHONE-REFACTOR.md`. Its goal line still go
 
 ## Verification
 
-For the active plan, Anthony selected no new test cases or automated suites. Use `node --check app.js`, `node design-gallery/build.mjs`, and brief privacy-safe browser walkthroughs of all four appearances at phone width. Preserve essential functional and department-access checks.
+For the active plan, Anthony originally selected no new test cases or automated suites; on 2026-09-20 he asked for the suites to be updated (lane F13), so `WD_STRICT=1 node design-gallery/test.mjs` (outside the macOS sandbox) and `node --test tests/*.test.mjs` now pass on the live source and should be run before a release that touches shared UI. Use `node --check app.js`, `node design-gallery/build.mjs`, and brief privacy-safe browser walkthroughs of all four appearances at phone width. Preserve essential functional and department-access checks.
 
 - Run `node --test tests/member-migration.test.mjs` for identity migration changes.
 - `node design-gallery/test.mjs` (run outside the macOS sandbox) covers shared UI in all four appearance modes. As of 2026-09-20 it is being updated by lane F13, because it still clicks sub-tab buttons that are hidden on phones and expects account ID text that was removed. Check `docs/HANDOFF.md` open items before trusting a failure or a pass.

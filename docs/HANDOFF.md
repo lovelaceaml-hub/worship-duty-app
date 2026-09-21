@@ -22,9 +22,8 @@ reference material. For day-to-day operation and releases see
 - Live Cloud Functions and live Firestore rules source: branch
   `claude/compact-integration` (deployed 2026-09-17; `feedback` rule added
   2026-09-20, commit `a5068d9`).
-- In progress on 2026-09-20: lane F13 (test suite update). Lane F12 (Navy & Cream
-  double card) was released the same day; lane F14 (this documentation pass)
-  is merged.
+- Lanes F12 (Navy & Cream double card, released), F13 (test suite update,
+  merged) and F14 (documentation pass, merged) all finished on 2026-09-20.
 - The durable record is the `## Build log` in
   [PLAN-COMPACT-PHONE-REFACTOR.md](PLAN-COMPACT-PHONE-REFACTOR.md), plus one
   record per feature in [runs/keep-look-features/](runs/keep-look-features/).
@@ -98,9 +97,15 @@ This is the one list. Other documents point here.
 
 1. (Closed 2026-09-20) Navy & Cream Day view showed the selected service card
    twice. Fixed and released as F12.
-2. `design-gallery/test.mjs` is out of date: it clicks sub-tab buttons that are
-   now hidden on phones and expects account ID text that was removed. Lane F13,
-   in progress.
+2. (Closed 2026-09-20) The test suites were updated in lane F13. On the merged
+   live source: `WD_STRICT=1 node design-gallery/test.mjs` 278 pass, 0 fail;
+   `node --test tests/*.test.mjs` 115 pass, 1 skipped (Firestore emulator).
+   Still open from that lane: Prism calendar arrow keys snap back to the
+   default service (keyboard only, kept as a todo test in
+   `prototype-prism/tests/calendar-navigation.mjs`); three legacy standalone
+   preview suites (`live-design/test.mjs`, `prototype/tests/preview.mjs`,
+   `prototype-prism/tests/all-pages.mjs`) still fail and need a retire or
+   repair decision. Run commands: `docs/runs/keep-look-features/F13-test-suite.md`.
 3. Dead CSS remains: utility-row and old header rules in the appearance
    stylesheets no longer match anything.
 4. Never done: a check on a real phone (keyboard hiding the bar, safe area,
