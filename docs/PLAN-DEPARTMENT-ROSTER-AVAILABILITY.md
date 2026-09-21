@@ -1,5 +1,7 @@
 # Department Roster, Duty Eligibility, and Availability
 
+> Historical as of 2026-09-20. This plan is complete: department rosters went live on 2026-09-14 (see [DEPARTMENT-ROSTER-AVAILABILITY-RELEASE.md](DEPARTMENT-ROSTER-AVAILABILITY-RELEASE.md)). The Status line below was never updated after the release. Its "add by exact UID" step was replaced by name search (F3, 2026-09-19).
+
 Status: Product decisions complete, awaiting implementation-mode selection
 
 Live baseline: `1fc07f4`

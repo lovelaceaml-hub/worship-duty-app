@@ -1,5 +1,7 @@
 # Weekbook: four-appearance design artifact
 
+> Historical as of 2026-09-17. The new shell built from these Weekbook designs was rejected. Kept as design evidence only. Current state: [docs/HANDOFF.md](../../../HANDOFF.md).
+
 Anthony selected Weekbook and requested finished clickable designs followed by a handoff. This artifact completes the bounded design screen families described below. It is not a runtime implementation, release, or authentication system. Controller browser verification, affected review, and the final handoff record are separate from this writer's delivery.
 
 ## Open the designs

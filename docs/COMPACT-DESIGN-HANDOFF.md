@@ -1,5 +1,7 @@
 # Compact phone design handoff
 
+> Historical as of 2026-09-17. Anthony rejected the new shell built from these Weekbook designs because it replaced the live look. The live app keeps its four existing appearances and gains features one at a time. Current state: [HANDOFF.md](HANDOFF.md). Nothing below is live or planned for release.
+
 Status: Four clickable Weekbook appearances and role-screen designs are complete. Gemini Low review returned no material findings. Brief phone walkthroughs passed. Runtime implementation and release remain stopped at the handoff boundary. Data-dependent limitations below remain explicit.
 
 Last updated: 2026-09-15.

@@ -1,43 +1,119 @@
 # LV Zion appearance gallery: Original + 3 optional designs
 
-This integration places **Original, Prism, Navy & Cream, and Aurora** behind one member-facing **Appearance** chooser while keeping one live application, one Firebase project, one schedule, one set of permissions and one Presider song planner.
+Last updated: 2026-09-20. Verified against `design-gallery/build.mjs` on branch
+`claude/keep-look-f4f5` (the source of the live app).
+
+This folder compiles **Original, Prism, Navy & Cream, and Aurora** into one
+Hosting build behind one member-facing **Appearance** chooser. There is one
+live application, one Firebase project, one schedule, one set of permissions,
+and one Presider song planner. The gallery is a compiler for the current app,
+not a second app.
 
 ## Member experience
 
-After the existing site passcode/login gate is cleared and shared settings have loaded, the app offers a four-card appearance chooser. Members can use **Appearance** at any time to switch again. The choice is stored only in that browser/device under `wds-design-gallery-v1`; it does not change another member's view.
+After the site passcode and member sign-in, and once shared settings have
+loaded, the app offers a four-card appearance chooser once. Members can change
+again at any time with the small Appearance icon in the header, or under their
+name, Settings, Appearance. The choice is stored only in that browser under
+`wds-design-gallery-v1`; it does not change another member's view.
 
-Schedule, My Duties, Presider, and Manage sit at the top of the screen on wide screens. At phone widths the same tabs become an always-visible floating bar at the bottom of the screen, styled by each appearance with its own colors and radii, hidden on the lock, sign-in, loading and maintenance screens and while the on-screen keyboard is open. Every appearance exposes exactly one Appearance button, a small icon inside the shared header next to the member chip.
+Shared by all four appearances (each styled with its own colors, fonts, and
+surfaces):
 
-Existing Prism users are migrated from `wds-design-choice-v1` and remain on Prism before the new gallery is shown. A previous Navy preference in `wds-appearance-navy-v1` is also recognized. The gallery is shown once after migration so those members can discover the two additional choices without silently changing their current appearance. `?design=classic` is an emergency session-only way to stay on Original if an experimental stylesheet has a problem.
+- **One header.** Brand badge, "LV ZION", the current screen's name, the
+  icon-sized Appearance control, and the member chip. The chip opens the
+  account menu (Availability, Settings, Sign out).
+- **Floating bottom bar on phones** (640 pixels wide or less): Schedule, My
+  Duties, Presider, Manage. Hidden on the lock, sign-in, loading, and
+  maintenance screens and while the on-screen keyboard is open. Wide screens
+  keep the tabs at the top.
+- **Secondary menus in one row under the header on phones** (the Manage
+  sections, and Home, Library, Services, Insights inside Presider).
+- **Dots:** green on My Duties for a new duty, red on Manage for requests or
+  conflicts.
+- **Feedback button** above the bottom bar, with its sheet and the
+  administrator list.
+- **No manual dark or motion controls.** Prism and Aurora follow
+  `prefers-color-scheme` live; Original and Navy & Cream stay light. Every
+  appearance respects `prefers-reduced-motion`. On phones, Original and Navy &
+  Cream show "Live sync on" as a status dot in the header. Prism's old utility
+  row is removed.
 
-All four modes preserve the original app's actual actions and data model. In particular, Presider remains the real Home / Library / Services / Insights song planner, and the native single prayer + single usher double-duty exception is unchanged.
+Existing Prism users are migrated from `wds-design-choice-v1` and stay on
+Prism. A previous Navy preference in `wds-appearance-navy-v1` is also
+recognized. `?design=classic` is an emergency, session-only way to stay on
+Original if another stylesheet has a problem.
 
-## Designs
+All four modes keep the original app's actions and data model. Presider remains
+the real Home, Library, Services, Insights song planner, and the single prayer
+plus single usher double-duty exception is unchanged.
 
-- **Original**: existing production interface.
-- **Prism**: the reviewed calendar-first workspace from `feature/prism-opt-in-live`.
-- **Navy & Cream**: warm cream surfaces, navy shell, burgundy selections, gold details and restrained motion across Schedule, My Duties, Presider and Manage.
-- **Aurora**: the latest `prototype/aurora-workspace` design, adapted to the live runtime instead of its offline reference-data sandbox: desktop navigation rail, dynamic schedule workspace, dedicated My Duties/Manage layouts and the actual Presider song-planning workspaces.
+## Designs and their sources
 
-All four appearances share one header structure (brand badge, "LV ZION", the current screen's name from `paintHeader()` in `app.js`, a discreet icon-sized Appearance control, and the member chip). The markup lives once in `index.html`; `build.mjs` reuses it inside the Prism and Aurora shells, and `design-gallery/header.css` holds each appearance's styling of it. Prism and Aurora have no manual light/dark or motion controls: dark mode follows `prefers-color-scheme` live, and motion follows `prefers-reduced-motion`. Navy and Original stay on their light palettes and also respect the reduced-motion preference. The shared chooser itself has no domain actions.
+| Appearance | Sources |
+| --- | --- |
+| Original | `index.html` (markup and inline styles), `app.js` |
+| Prism | `prototype-prism/prism.js`, `all-pages.js`, `song-pages.js`, `shell.html`, `prism.css`, `all-pages.css`, `safety.css`, plus helpers and `aurora.css` from `prototype/` |
+| Navy & Cream | `design-gallery/navy-adapter.js`, `design-gallery/navy.css` |
+| Aurora | `prototype/aurora.js`, `workspaces.js`, `presider-workspace.js`, `shell.html`, `aurora.css`, `workspaces.css` |
+
+## How the build compiles them (`build.mjs`)
+
+1. **Drift checks first.** The build requires exact, single occurrences of key
+   functions and strings in `app.js` and `song-app.js` (member sign-in, forced
+   PIN change, Manage permission guards, the Presider tab order, the choir song
+   merge, the four exact appearance names in `choice.js`). If the app changed
+   shape, the build stops before staging anything. Fix the source, do not loosen
+   the check.
+2. **Host bridge.** `host-bridge.js` is a template with slots
+   (`/* PRISM_HELPERS */`, `/* PRISM_VIEWS */`, `/* PRISM_ALL_PAGES */`,
+   `/* AURORA_CORE */`, `/* AURORA_DECORATE */`, `/* AURORA_WORKSPACES */`,
+   `/* NAVY_ADAPTER */`, `/* PRISM_SHELL */`, `/* AURORA_SHELL */`). The build
+   fills them from the Prism and Aurora prototype sources (with preview-only
+   wording replaced by live wording and prototype event listeners removed) and
+   from `navy-adapter.js`. The filled bridge is inserted into `app.js` just
+   before `init();`, so there is one state, one Firebase handle, and one set of
+   action handlers. It also owns following the system dark setting.
+3. **Shared header markup.** The header markup lives once in `index.html`.
+   The build lifts the brand button (`wd-head-brand`) and the tools block
+   (`wd-head-tools`, which must contain the account menu), adds the Appearance
+   icon button to the tools block, and reuses both inside the Prism and Aurora
+   shells in place of their own brand, member chip, and top bar. Prism's utility
+   row is removed from its shell. `paintHeader()` in `app.js` fills the header.
+4. **Stylesheets, one per appearance.** `prism-live.css`, `navy-live.css`, and
+   `aurora-live.css` are each built from that appearance's own CSS, plus its
+   marked section of `header.css` (`/* @prism */` to `/* @end-prism */`, and the
+   same for `navy` and `aurora`), plus its marked section of `feedback.css`.
+   Original's header and feedback styles live in `index.html`. The three
+   stylesheets are linked with `media="not all"` and switched on by
+   `choice.js` (`design-choice.js` in the build).
+5. **Song planner variants.** `song-app.js` gets a bridge that picks the Prism
+   or Aurora renderers for the planner's views when that appearance is active,
+   and the original renderers otherwise.
+6. **Staging.** Everything is written to `.hosting-gallery/` with the `?v=DEV`
+   stamp replaced by the release stamp (`gallery` plus a timestamp), along with
+   the untouched shared files, a stamped `sw.js`, `firebase.gallery.json`
+   (Hosting only), and `design-gallery-release.json` (the release marker, which
+   records hashes of the source `app.js`, `song-app.js`, and `index.html`).
+7. **Syntax check.** The generated `app.js` and `song-app.js` must parse.
+
+`release.mjs` runs the build, applies `app-fixes.mjs` (it adds the choir song
+date fix to the staged app when the source does not already have it), and for `--publish` first proves
+the live site is a known release from this branch's history before deploying.
 
 ## Safety boundaries
 
-`build.mjs` stages only hosting files in `.hosting-gallery`. It injects presentation dispatchers around the **unchanged original business/domain functions**. Original Firebase configuration, auth flow, realtime listeners, writes, notification logic, calendar route, change requests, feature flags, Firestore rules and Cloud Functions remain authoritative.
+`build.mjs` stages only Hosting files. It wraps presentation around the
+unchanged original domain functions. Firebase configuration, sign-in, realtime
+listeners, writes, notification logic, the calendar route, change requests, and
+feature switches remain authoritative in `app.js`.
 
-The integration never creates a second schedule or copies production records. Switching appearances keeps the same document alive and preserves in-progress text/select values. The Presider module is not remounted just to change appearance.
+The gallery never creates a second schedule or copies production records.
+Switching appearances keeps the same document alive and preserves in-progress
+text and select values. The Presider module is not remounted just to change
+appearance.
 
-GitHub Actions is QA-only and never deploys. Tests use mocked/isolated Firebase responses and block external traffic.
-
-## Verification
-
-The QA suite builds an isolated `.hosting-gallery`, mocks Firebase Auth and Firestore, blocks other network requests, and drives the real domain handlers at phone and desktop widths. It covers the site passcode and member login gates, forced PIN changes, exact four-design names, leader-only Manage visibility and department scope, alert badges, Presider Home with My Services and All Services, the restored Services tracking tab, Prism month and day navigation, canonical choir-song rendering, and no-write appearance switches.
-
-Run the focused browser suite with:
-
-```sh
-node design-gallery/test.mjs
-```
+GitHub Actions is QA-only and never deploys.
 
 ## Build
 
@@ -46,22 +122,47 @@ node design-gallery/build.mjs
 python3 -m http.server 8092 --directory .hosting-gallery
 ```
 
-The resulting build is wired to the repository's real Firebase config. For safe automated editing tests, use the QA suite rather than pointing a local browser at production.
+The resulting build is wired to the repository's real Firebase config. Do not
+point a local browser at production for editing tests.
+
+## Verification
+
+```sh
+node design-gallery/test.mjs
+```
+
+The suite builds an isolated `.hosting-gallery`, mocks Firebase Auth and
+Firestore, blocks other network requests, and drives the real handlers at phone
+and desktop widths. As of 2026-09-20 it is out of date and being updated (lane
+F13): it still clicks sub-tab buttons that are now hidden on phones and expects
+account ID text that was removed. See the open items in
+[docs/HANDOFF.md](../docs/HANDOFF.md).
 
 ## Release
 
-From an authenticated Firebase terminal in this repository:
+Full copy-paste commands with absolute paths are in
+[docs/PLAYBOOK.md](../docs/PLAYBOOK.md), sections 8 and 8a. In short, from the
+worktree `/Users/anthony/Projects/worship-duty-app-worktrees/keep-look-f4f5`:
 
 ```sh
-# temporary channel; still reads real Firebase records
+# private preview channel; reads and writes REAL Firebase records
 node design-gallery/release.mjs --preview
 
-# publish the four-choice gallery at the existing site
+# publish the four-choice gallery at the existing site (Anthony runs this)
 node design-gallery/release.mjs --publish
 ```
 
-The release script deploys **Hosting only**. Before production publication it accepts only a compatible Original, Prism, Navy & Cream, or prior Gallery release whose recorded upstream app hash matches this reviewed base. Otherwise it stops for reconciliation. It never deploys functions/rules or mutates Firestore data.
+The release script deploys **Hosting only**. It never deploys functions or
+rules and never changes Firestore data.
+
+Warning: the `firestore.rules` and `functions/` on this branch are older than
+what is live. The live rules and functions come from branch
+`claude/compact-integration`. Never deploy rules or functions from here.
 
 ## Important
 
-The isolated Aurora prototype's phrases such as "local preview", disabled sync and reference clock are removed in this live adapter. Aurora's layouts are reused, not its isolated storage or fake clock. Likewise, the Navy and Prism standalone choosers are not stacked together; this directory owns the single appearance preference and single popup.
+The isolated Aurora prototype's phrases such as "local preview", disabled sync,
+and reference clock are removed in this live adapter. Aurora's layouts are
+reused, not its isolated storage or fake clock. The Navy and Prism standalone
+choosers are not stacked together; this directory owns the single appearance
+preference and single popup.

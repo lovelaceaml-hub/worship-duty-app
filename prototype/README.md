@@ -1,4 +1,6 @@
-# Aurora — working design prototype
+# Aurora, working design prototype
+
+> Note added 2026-09-20. The standalone Aurora prototype described here is historical. Its source files in this folder are still live inputs: `design-gallery/build.mjs` compiles `aurora.js`, `workspaces.js`, `presider-workspace.js`, `shell.html`, and the CSS into the Aurora appearance of the live app, so edits here reach production. The prototype's own header, dark mode button, and pause button no longer exist in the live app. See [design-gallery/README.md](../design-gallery/README.md).
 
 An isolated, runnable redesign of **this repository's app**, not an image and not a fictional replacement. Desktop uses a navigation rail, focused day/time selection, grouped duty teams, and a personal upcoming-duties panel. Mobile uses bottom navigation and stacked layouts. Light/dark surfaces, subtle orbital motion, reduced-motion support, search, keyboard focus and local editing are included.
 
@@ -34,7 +36,7 @@ The build consumes **the original** `app.js`, `index.html` stylesheet, `song-app
 
 ## Reference data, not the live schedule
 
-The repository seed contains **74 services and 45 members**, dated May–July 2026. This preview deliberately fixes its internal reference clock to **July 1, 2026** so upcoming-duty behavior can be exercised without fabricating new dates or assignments. The original member-name variants remain intact; original song canonicalization still applies. No live Firestore schedule or song history is downloaded. Do not treat the preview as today's assignments or live usage statistics.
+The repository seed contains **74 services and 45 members**, dated May to July 2026. This preview deliberately fixes its internal reference clock to **July 1, 2026** so upcoming-duty behavior can be exercised without fabricating new dates or assignments. The original member-name variants remain intact; original song canonicalization still applies. No live Firestore schedule or song history is downloaded. Do not treat the preview as today's assignments or live usage statistics.
 
 The seed selects `B. Anthony L` so a real seeded Presider assignment is immediately available. Change the name in My Duties to test other people and the role gate.
 

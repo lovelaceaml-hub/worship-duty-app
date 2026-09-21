@@ -1,11 +1,14 @@
 {
   "title": "Worship Duty current feature map",
   "scope": {
-    "status": "Approved compact-phone refactor, Package 0 active; production unchanged",
+    "status": "Updated 2026-09-20. Features F1 to F11 are live (release marker gallery1789951374910). The new-shell approach was rejected on 2026-09-17; features are added into the four existing appearances one at a time.",
+    "live_sources": {"hosting": "branch claude/keep-look-f4f5", "functions_and_rules": "branch claude/compact-integration (deployed 2026-09-17, feedback rule a5068d9 on 2026-09-20). The firestore.rules and functions on keep-look-f4f5 are older and must never be deployed."},
+    "superseded": "Every planned_replacement_interface value below describes the rejected new-shell design (superseded 2026-09-17) and is kept for the record only. Line numbers under known_drift_points date from 2026-09-15 and have moved; search by symbol name.",
+    "open_items": "docs/HANDOFF.md section 5",
     "baseline": "86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427",
     "plan": "docs/PLAN-COMPACT-PHONE-REFACTOR.md",
     "index_owner": "Section 5B code and document indexing, Luna High",
-    "boundary": "This map describes existing source behavior and planned interfaces. It does not describe a shipped compact-phone runtime."
+    "boundary": "This map describes existing source behavior. The entries shared-header-and-account-menu, phone-navigation-and-dots, and member-feedback were added on 2026-09-20 for F4 to F10."
   },
   "entrypoints": {
     "browser_shell": ["index.html", "app.js", "permissions.js", "firebase-config.js", "seed-data.js"],
@@ -14,6 +17,40 @@
     "backend": ["functions/index.js", "functions/member-auth.js", "functions/department-auth.js", "functions/department-handlers.js", "firestore.rules"]
   },
   "features": [
+    {
+      "id": "shared-header-and-account-menu",
+      "released": "F6, F6b (2026-09-19), F7 (2026-09-20)",
+      "user_surfaces": ["one header in all four appearances", "current screen title", "Appearance icon", "member name menu: Availability, Settings, Sign out", "Live sync dot on phones in Original and Navy & Cream"],
+      "existing_sources": [
+        {"path": "index.html", "symbols": ["wd-head-brand", "wd-head-tools", "data-wd-head hooks", "wd-account-menu"]},
+        {"path": "app.js", "symbols": ["SCREEN_TITLES", "ACCOUNT_TITLES", "paintHeader", "accountView", "setAccountMenu", "renderAccount", "renderOwnAvailability", "renderNotifyControls", "setSyncPill"]},
+        {"path": "design-gallery/header.css", "symbols": ["@prism", "@navy", "@aurora sections"]},
+        {"path": "design-gallery/build.mjs", "symbols": ["headBrand", "headTools", "headToolsLive", "prismShell", "auroraShell", "headerSection"]},
+        {"path": "design-gallery/host-bridge.js", "symbols": ["systemDark (prefers-color-scheme)"]}
+      ],
+      "existing_layout_placement": {"Original": "index.html header and inline styles", "Prism": "shared markup inside the Prism shell, styled by the @prism section", "Navy & Cream": "index.html header, styled by the @navy section", "Aurora": "shared markup inside the Aurora top bar, styled by the @aurora section"}
+    },
+    {
+      "id": "phone-navigation-and-dots",
+      "released": "F4, F4b (2026-09-19), F8 (2026-09-20)",
+      "user_surfaces": ["floating bottom bar on phones", "secondary menus in one row under the header on phones", "green new-duty dot on My Duties", "red dot on Manage"],
+      "existing_sources": [
+        {"path": "index.html", "symbols": ["nav.tabs styles at max-width 640px"]},
+        {"path": "app.js", "symbols": ["render (tab dots and aria labels)", "watchKeyboardForTabBar", "watchTopSubnav", "checkNewDuties", "actionableCountsForViewer"]},
+        {"path": "design-gallery/navy.css, prototype-prism/*.css, prototype/*.css", "symbols": ["per-appearance bar and subnav styling"]}
+      ]
+    },
+    {
+      "id": "member-feedback",
+      "released": "F10 (2026-09-20)",
+      "user_surfaces": ["floating feedback button", "feedback sheet", "Manage, Feedback list for administrators"],
+      "existing_sources": [
+        {"path": "app.js", "symbols": ["FEEDBACK_KINDS", "feedbackReady", "syncFeedbackButton", "openFeedbackSheet", "sendFeedback", "loadFeedbackList", "renderManageFeedback", "changeFeedbackEntry"]},
+        {"path": "design-gallery/feedback.css", "symbols": ["@prism", "@navy", "@aurora sections"]},
+        {"path": "index.html", "symbols": ["wd-fbk styles for Original"]}
+      ],
+      "existing_data": ["feedback/{feedbackId}; the rule exists only in the live rules on branch claude/compact-integration"]
+    },
     {
       "id": "auth-and-startup",
       "user_surfaces": ["site passcode", "member sign in", "forced PIN change", "editor access"],
@@ -29,7 +66,7 @@
     },
     {
       "id": "appearance-selection",
-      "user_surfaces": ["Appearance chooser", "four layouts", "palette and motion controls"],
+      "user_surfaces": ["Appearance chooser", "four layouts", "no manual dark or motion controls since F6"],
       "existing_sources": [
         {"path": "design-gallery/choice.js", "symbols": ["MODES", "NAMES", "migrate", "persist", "change", "afterRender", "window.WorshipDesign"]},
         {"path": "design-gallery/host-bridge.js", "symbols": ["originals", "render", "design.configure", "saveFields", "restoreFields"]},
@@ -58,7 +95,7 @@
     },
     {
       "id": "own-duties-and-availability",
-      "user_surfaces": ["My Duties", "next duty", "full lineup", "change request entry", "own department availability"],
+      "user_surfaces": ["My Duties", "next duty", "full lineup", "change request entry", "own department availability (moved to the name menu in F7)"],
       "existing_sources": [
         {"path": "app.js", "symbols": ["dutiesFor", "renderMy", "renderYourRequests", "requestChangeTrigger", "requestChangeForm", "loadOwnDepartmentProfiles", "saveOwnDepartmentAvailability", "checkNewDuties", "checkReminders"]},
         {"path": "department-profile.js", "symbols": ["normalizeDepartmentProfile", "normalizeAvailability", "isAvailable", "isCurrentlySchedulable"]},
@@ -71,7 +108,7 @@
     },
     {
       "id": "department-roster-and-assignment",
-      "user_surfaces": ["Manage departments", "roster", "member profile", "eligibility", "schedulability", "assignment picker", "administrator override"],
+      "user_surfaces": ["Manage departments", "roster", "add member by name search (F3)", "Reset PIN button (F2)", "member profile", "eligibility", "schedulability", "assignment picker", "administrator override"],
       "existing_sources": [
         {"path": "app.js", "symbols": ["loadDepartmentRoster", "loadOwnDepartmentProfiles", "departmentProfileAssignable", "saveDepartmentProfile", "assignDepartmentDutyForService", "unassignDepartmentDutyForService", "handleAct", "handleChg"]},
         {"path": "department-workflows.js", "symbols": ["membersForDepartment", "setDepartmentMembershipStatus", "departmentForDuty", "routeRequest", "actionableCounts"]},
@@ -87,7 +124,7 @@
     },
     {
       "id": "requests-conflicts-and-attention",
-      "user_surfaces": ["Request change", "Manage Requests", "Planning conflicts", "attention badges and banner"],
+      "user_surfaces": ["Request change", "Manage Requests", "Planning conflicts", "red Manage dot (the attention banner was removed in F7)"],
       "existing_sources": [
         {"path": "app.js", "symbols": ["conflictsFor", "activeConflicts", "findPendingRequest", "requestIsActionable", "effectiveRequestStatus", "pendingRequestsCount", "actionableCountsForViewer", "renderManageRequests", "renderManageConflicts", "resolveRequest"]},
         {"path": "department-workflows.js", "symbols": ["createChangeRequest", "transitionRequestStatus", "resolveRequest", "composeConflicts", "activeConflicts", "actionableCounts", "aggregateAuthorizedOutstanding"]},
@@ -143,7 +180,7 @@
     }
   ],
   "compact_design_handoff": {
-    "status": "Approved Weekbook direction for design handoff; shared production runtime integration remains planned",
+    "status": "HISTORICAL. Superseded 2026-09-17: the new shell built from the Weekbook designs was rejected. Kept as design evidence only.",
     "source_boundary": "The compact-phone files are local design evidence and do not add a released feature or replace the four current appearance adapters.",
     "prototype_sources": [
       {"path": "docs/design/prototype/compact-phone/index.html", "role": "four-appearance Weekbook chooser with role selection"},
@@ -169,7 +206,7 @@
     ],
     "future_placement_map": {
       "path": "docs/design/prototype/compact-phone/HANDOFF-MAP.md",
-      "status": "Design placement and dependency map complete; production interfaces remain planned."
+      "status": "Historical. The production interfaces it maps to were rejected on 2026-09-17."
     },
     "integration_handoff": "The integrated handoff document is docs/COMPACT-DESIGN-HANDOFF.md when present in the integration checkout."
   },
@@ -182,7 +219,10 @@
   ],
   "documentation": [
     {"path": "docs/PLAN-COMPACT-PHONE-REFACTOR.md", "use": "approved product decisions, interfaces, ownership, verification, and Build log"},
-    {"path": "docs/HANDOFF.md", "use": "architecture, live release history, current boundaries, and appearance gallery status"},
+    {"path": "docs/HANDOFF.md", "use": "current state, branches, release history F1 to F11, open items, standing warnings, architecture"},
+    {"path": "docs/runs/keep-look-features/", "use": "one record per feature F1 to F14 and per live release"},
+    {"path": "docs/USER-GUIDE.md", "use": "member guide, every screen as it is now"},
+    {"path": "docs/USER-MANUAL.md", "use": "leader and administrator manual"},
     {"path": "docs/FEATURES.md", "use": "feature toggles and shared settings behavior"},
     {"path": "docs/USER-JOURNEYS.md", "use": "member, presider, and coordinator success paths"},
     {"path": "docs/PLAYBOOK.md", "use": "operations, passcodes, notifications, sync, and release procedures"},

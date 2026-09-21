@@ -1,9 +1,9 @@
 # Worship Duty: Complete Phone Refactor
 
-Status: Approved for implementation on 2026-09-15. The integrated new-shell preview was rejected on 2026-09-17; since then the live look is kept and features ship one at a time. F1 to F6 are live as of 2026-09-19, from branch `claude/keep-look-f4f5` (see the Build log).
-Mode: Parallel. Runner: one controller, disjoint worktrees, integration last.
+Status: Approved for implementation on 2026-09-15. The integrated new-shell preview was rejected on 2026-09-17; since then the live look is kept and features are added into the four existing appearances one at a time, preview channel first, live on Anthony's approval. F1 to F11 are live as of 2026-09-20 (release marker `gallery1789951374910`), Hosting from branch `claude/keep-look-f4f5`, Cloud Functions and Firestore rules from branch `claude/compact-integration` (see the Build log). What is still unbuilt is listed once, in `docs/HANDOFF.md` section 5.
+Mode: Parallel. Runner: one controller, disjoint worktrees, integration last. Since 2026-09-17: one Fable writer per feature lane, each in its own worktree made from `claude/keep-look-f4f5`; records in `docs/runs/keep-look-features/`.
 Baseline: `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`, clean working tree on `change/actionable-request-counts`.
-Integration branch: `codex/compact-phone-refactor`.
+Integration branch: `codex/compact-phone-refactor` (historical, stops at the pre-F1 commit `1e0b6fd`). Current source of the live app: `claude/keep-look-f4f5`.
 Live: https://lv-zion-duties.web.app
 
 ## 1. Goal and delivery agreement
@@ -77,6 +77,8 @@ People holding multiple roles retain access to their applicable workspaces.
 
 ## 3. Shared implementation structure
 
+> Superseded on 2026-09-17: this section describes the rejected new-shell approach (shared information builders feeding four new layout renderers, replacing the gallery compiler). The live app keeps `app.js` plus the design-gallery compiler, and features are added into the existing screens. The "Server interfaces" part below was built and deployed from `claude/compact-integration` on 2026-09-17 and stays live; most of it has no screen yet (see `docs/HANDOFF.md` section 5). Text kept for the record.
+
 Shared data/permissions -> shared screen information and actions -> four explicit layout renderers -> shared controls.
 
 - Each task has one information builder supplying records, counts, permitted actions, loading/error states.
@@ -100,6 +102,8 @@ Preserve identity/service IDs, department permissions, site lock, calendars, not
 One feature map identifies shared source, actions/components, four-layout placements, owner, and documentation. Documentation worker owns human guidance and supporting MD/YAML/JSON when useful. Indexing worker owns code/document navigation, not in-app search. Remove contradictions and mark superseded plans historical. Do not create redundant documents.
 
 ## 4. Execution, ownership, and review
+
+> Superseded on 2026-09-17: the model table and Sections 0 to 6 below describe how the rejected new-shell build was run. Sections 1, 2, 4, and the Hosting half of 6 produced the rejected shell; Section 3 and the server half of 6 are live. Work now runs as single-writer feature lanes (F1 onward) recorded in the Build log. Text kept for the record.
 
 | Responsibility | Model | Effort |
 | --- | --- | --- |
@@ -151,6 +155,8 @@ Setup: controller Sol; Review: Opus High once. Merge dependency order, present c
 Concurrent writers have separate worktrees, disjoint ownership, stable dependency snapshots. Shared interfaces have one sequential owner. Implementation-mode choice is the user's explicit pasted implementation request for this parallel plan.
 
 ## 5. Verification, release, completion
+
+> Superseded on 2026-09-17 in part: "release all roles together after the integrated preview" no longer applies. Each feature is previewed and released on its own through `docs/PLAYBOOK.md` sections 8 and 8a. The limits on testing, the guarded publisher, the dry-run rule for migrations, and the rule never to confuse mocked checks with production evidence all still apply.
 
 No new test cases or automated suites, broad security audit, arbitrary monitoring interval, or repeated full regressions. User-authorized build/syntax checks and brief privacy-safe browser walkthroughs only:
 

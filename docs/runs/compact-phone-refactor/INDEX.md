@@ -1,5 +1,7 @@
 # Run: compact-phone-refactor
 
+> Note added 2026-09-20: this index was never kept up to date and its lane table is misleading. Sections 0 to 6 all ran; the new shell they produced was rejected on 2026-09-17, and only the server work is live. The true record is the Build log in `docs/PLAN-COMPACT-PHONE-REFACTOR.md`; later work is in `docs/runs/keep-look-features/`.
+
 Plan ID: compact-phone-refactor
 Plan file: /Users/anthony/Projects/worship-duty-app/docs/PLAN-COMPACT-PHONE-REFACTOR.md
 Runner: pending
