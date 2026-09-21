@@ -28,3 +28,6 @@ export const runTransaction=async(db,fn)=>fn({get:getDoc,set:setDoc,update:updat
 export const arrayUnion=(...args)=>args;
 export const arrayRemove=(...args)=>args;
 export const increment=n=>n;
+/* Query helpers the app imports for one-time reads (administrator Feedback list). The double keeps every matching document. */
+export const orderBy=(...args)=>args;
+export const limit=n=>n;
