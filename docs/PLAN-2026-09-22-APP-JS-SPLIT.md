@@ -20,22 +20,24 @@ Live app and visual authority: https://lv-zion-duties.web.app
 
 `codex/compact-phone-refactor` at `f876565`, the current branch, `app.js` at **4,314 lines** (blob `ab50d2da`, byte-identical to `1e0b6fd` where the Interfaces were measured; the commits in between are docs only). Confirmed frozen by Section 0. The Interfaces section below was measured at exactly this tree, so it is binding rather than provisional and Section 0 only has to confirm it.
 
-### The trunk is `origin/main`, and local `main` is stale
+### The trunk, now cleaned up
 
-Measured 2026-09-22:
+Anthony fast-forwarded `main` on 2026-09-22. `origin/main`, local `main` and `codex/compact-phone-refactor` are all at the baseline `e3deb1b`, 0 ahead and 0 behind each other. The trunk carries the live code and is safe to branch from.
+
+The state that made the cleanup necessary, measured 2026-09-22 before it:
 
 | Ref | `app.js` | `firestore.rules` | Relationship |
 |---|---|---|---|
-| `origin/main` (`8b0c06c`, Sep 14) | 4,217 lines | 1,854 lines | the real trunk; a direct ancestor of this branch |
-| `codex/compact-phone-refactor` (`12481e9`) | 4,314 lines | 1,854 lines | 18 commits ahead of `origin/main`, a clean fast-forward, 0 behind |
-| local `main` (`6ed1ebb`, Sep 13) | 2,476 lines | 30 lines | **stale and diverged**: 4 local commits, 85 behind `origin/main`. Not the trunk. Do not branch from it or merge into it |
+| `origin/main` (`8b0c06c`, Sep 14) | 4,217 lines | 1,804 lines | the real trunk; a direct ancestor of this branch |
+| `codex/compact-phone-refactor` (baseline) | 4,314 lines | 1,804 lines | 18 commits ahead of `origin/main`, a clean fast-forward, 0 behind |
+| local `main` (`6ed1ebb`, Sep 13) | 2,476 lines | 30 lines | **stale and diverged**: 4 unpushed commits, 85 behind `origin/main`. Archived as the tag `archive/local-main-2026-09-13` and then reset |
 
 The 18 commits ahead of `origin/main` are two groups:
 
 - **Shipped production fixes, already live**: presider song tracking restored, presider services advanced by time, leader config repair, the read-only maintenance page, the unified Schedule current-or-next default, and its release receipts (`3b4280d` through `86a476f`). `docs/HANDOFF.md` records the matching Hosting stamps. These belong on the trunk.
 - **Compact phone artifacts**: the retired plan's record, design prototypes, the unwired standalone membership module and run records (`c44d021` through `1e0b6fd`), plus this plan (`12481e9`).
 
-**Answered by Anthony on 2026-09-22: trunk first.** Section 0 archived the four local-only `main` commits as the pushed tag `archive/local-main-2026-09-13`, then reset local `main` to `origin/main` (`8b0c06c`, 0 ahead, 0 behind). The remaining step is the remote fast-forward of `main` to the baseline, verified by dry run as `8b0c06c..f876565` with no merge commit and no force. Anthony runs that one command; the controller does not push to `main`. Section 1 does not depend on it.
+**Answered and done, 2026-09-22: trunk first.** Section 0 archived the four local-only `main` commits as the pushed tag `archive/local-main-2026-09-13`, then reset local `main` to `origin/main`. Anthony then ran the remote fast-forward himself (`8b0c06c..e3deb1b`, no merge commit, no force); the controller does not push to `main`. Sections branch from `main` at `e3deb1b` from here on.
 
 ### Retired: the compact phone refactor
 
@@ -390,6 +392,8 @@ Acceptance: every verification command passes on the trunk; the documents above 
 - 2026-09-22: Gallery scope contract discovered and quantified, the plan's distinctive risk. `design-gallery/build.mjs` injects `host-bridge.js` plus nine filled slots into `app.js`'s top-level module scope immediately before `init();`, so the injected code reaches `app.js`'s functions lexically. Identifier matching against the 250 declarations found **53 distinct names** reached by the injected sources across eight files, listed in Interfaces. Settled rule: `app.js` re-imports every name in that union into its own top-level scope, enforced by `scripts/check-app-split.mjs --gallery`, which recomputes the set at run time. Without this, a correct-looking split would pass every unit test and break all four appearances only at release.
 
 - 2026-09-22: **Section 0 complete.** Code baseline frozen at `f876565`; `app.js` byte-identical to the measurement commit (blob `ab50d2da`, 4,314 lines), working tree clean. Interfaces re-verified and frozen: 250 top-level declarations, **19** module-level `let` bindings, 0 exports, 0 `window.` assignments, the 53 name gallery scope contract unchanged, and `node design-gallery/build.mjs` green at the baseline so Section 1 has a working "before" state. The module map was checked as a partition: **0 overlapping lines, 0 unassigned declarations, 2 uncovered lines** (1 and 2, which stay in `app.js`). That check found and corrected two errors in the plan's own map: `core/session.js` and `views/shell.js` both claimed 1786 to 1814 (session is now 1548 to 1785, shell 1786 to 1947), and the `let` count was 20 rather than 19 (`pulseInFlight` is a mutated `const`, not a reassignable binding). Record: `docs/runs/2026-09-22-app-js-split/lanes/S0.md`. No production code, no deploy, no production reads or writes.
+
+- 2026-09-22: **Trunk fast-forward done by Anthony** (`8b0c06c..e3deb1b`, a clean fast-forward, no merge commit, no force). `origin/main`, local `main` and `codex/compact-phone-refactor` are now all at `e3deb1b`, 0 ahead and 0 behind each other, with a 4,314 line `app.js` and a 1,804 line `firestore.rules`. Sections branch from `main` at `e3deb1b`. Correction to the trunk table above: `firestore.rules` is 1,804 lines, not the 1,854 first recorded, which was inferred from a diff stat rather than measured.
 
 - 2026-09-22: **Trunk cleanup, Anthony's choice of trunk first.** Local `main` was stale: `6ed1ebb`, a 2,476 line `app.js`, a 30 line `firestore.rules`, 4 local commits never pushed and 85 behind `origin/main`. Those four (`6ed1ebb`, `af89b5b`, `1f70982`, `b3084cc`, Sep 12 to 13 appearance gallery and Prism/Aurora work) were preserved as the annotated tag `archive/local-main-2026-09-13` and pushed to GitHub before local `main` was reset to `origin/main`. Nothing discarded. The remote fast-forward of `main` to `f876565` is dry-run verified and left for Anthony to run.
 
