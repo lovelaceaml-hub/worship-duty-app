@@ -5,7 +5,9 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const source = readFileSync(path.join(root, 'app.js'), 'utf8');
+const readModule = name => { try { return readFileSync(path.join(root, name), 'utf8'); } catch { return ''; } };
+const manifest = JSON.parse(readFileSync(path.join(root, 'scripts/check-app-split.manifest.json'), 'utf8'));
+const source = manifest.moduleOrder.map(readModule).join('');
 const start = source.indexOf('function preferredScheduleService(');
 const end = source.indexOf('\nfunction dutiesFor(', start);
 assert.ok(start !== -1 && end > start, 'shared Schedule selector exists');

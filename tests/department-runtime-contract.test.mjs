@@ -6,7 +6,9 @@ import {fileURLToPath} from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
-const app = read('app.js');
+const readModule = name => { try { return fs.readFileSync(path.join(root, name), 'utf8'); } catch { return ''; } };
+const manifest = JSON.parse(read('scripts/check-app-split.manifest.json'));
+const app = manifest.moduleOrder.map(readModule).join('');
 const index = read('index.html');
 const bridge = read('design-gallery/host-bridge.js');
 const build = read('design-gallery/build.mjs');

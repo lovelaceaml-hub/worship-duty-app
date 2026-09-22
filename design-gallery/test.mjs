@@ -25,11 +25,23 @@ const protectedNames = [
   'app.js', 'song-app.js', 'index.html', 'permissions.js',
   'department-workflows.js', 'song-lib.js', 'song-app.css', 'song-seed.js',
   'firebase-config.js', 'firebase.json', 'sw.js', 'seed-data.js',
-  'firestore.rules'
+  'firestore.rules',
+  // docs/PLAN-2026-09-22-APP-JS-SPLIT.md module set. Not created until their section lands;
+  // hashes() skips a path that does not exist yet.
+  'core/constants.js', 'core/format.js', 'core/conflicts.js', 'core/planning.js', 'core/sheet-parse.js',
+  'core/state.js', 'core/auth.js', 'core/departments.js', 'core/schedule.js', 'core/notify.js',
+  'core/sheet-sync.js', 'core/calendar.js', 'core/session.js',
+  'views/shell.js', 'views/schedule.js', 'views/songs.js', 'views/requests.js',
+  'views/manage.js', 'views/departments.js',
+  'actions/dispatch.js'
 ];
-const hashes = async () => Object.fromEntries(await Promise.all(
-  protectedNames.map(async name => [name, hash(await fs.readFile(path.join(root, name)))])
-));
+const hashes = async () => {
+  const entries = await Promise.all(protectedNames.map(async name => {
+    try { return [name, hash(await fs.readFile(path.join(root, name)))]; }
+    catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  }));
+  return Object.fromEntries(entries.filter(Boolean));
+};
 
 const before = await hashes();
 execFileSync(process.execPath, [path.join(root, 'design-gallery/build.mjs')], {stdio: 'inherit'});
@@ -852,10 +864,15 @@ try {
     path.join(root, 'design-gallery/test.mjs'),
     path.join(root, 'design-gallery/README.md'),
     path.join(root, 'design-gallery/STATUS.md'),
-    path.join(root, '.github/workflows/design-gallery-qa.yml')
+    path.join(root, '.github/workflows/design-gallery-qa.yml'),
+    // docs/PLAN-2026-09-22-APP-JS-SPLIT.md module set, checked once each exists.
+    ...protectedNames.filter(name => name.startsWith('core/') || name.startsWith('views/') || name.startsWith('actions/'))
+      .map(name => path.join(root, name))
   ];
   for (const ownedPath of ownedPaths) {
-    const content = await fs.readFile(ownedPath, 'utf8');
+    let content;
+    try { content = await fs.readFile(ownedPath, 'utf8'); }
+    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
     check(path.basename(ownedPath) + ' has no typographic dash', /[\u2013\u2014]/u.test(content), false);
   }
   report.passed = true;
