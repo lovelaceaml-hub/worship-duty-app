@@ -526,7 +526,7 @@ async function captureLoadEffects(browser) {
 }
 
 /* ---------- Record / compare orchestration ---------- */
-async function recordAll() {
+async function recordAll({captureLoad = false} = {}) {
   await ensureBuilt();
   const browser = await chromium.launch();
   const results = {};
@@ -549,9 +549,15 @@ async function recordAll() {
         }
       }
     }
-    const loadEffects = await captureLoadEffects(browser);
-    await fs.mkdir(path.dirname(loadEffectsPath), {recursive: true});
-    await fs.writeFile(loadEffectsPath, JSON.stringify(loadEffects, null, 2) + '\n');
+    // Only --record refreshes the committed load-effects fixture. --compare must
+    // never silently rewrite it: timersScheduled is not perfectly deterministic
+    // run to run, so a --compare that recaptured it would leave the working tree
+    // dirty after every verification pass.
+    if (captureLoad) {
+      const loadEffects = await captureLoadEffects(browser);
+      await fs.mkdir(path.dirname(loadEffectsPath), {recursive: true});
+      await fs.writeFile(loadEffectsPath, JSON.stringify(loadEffects, null, 2) + '\n');
+    }
   } finally {
     await browser.close();
   }
@@ -600,7 +606,7 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const results = await recordAll();
+  const results = await recordAll({captureLoad: recordIndex !== -1});
   if (recordIndex !== -1) {
     const dir = path.resolve(root, args[recordIndex + 1]);
     await writeBaseline(dir, results);

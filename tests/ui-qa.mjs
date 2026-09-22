@@ -8,7 +8,7 @@ const evidenceDir = process.env.UI_EVIDENCE_DIR || '/tmp/worship-duty-ui-evidenc
 await fs.mkdir(evidenceDir, { recursive: true });
 const readModule = async name => { try { return await fs.readFile(path.resolve(name), 'utf8'); } catch { return ''; } };
 const manifest = JSON.parse(await fs.readFile(path.resolve('scripts/check-app-split.manifest.json'), 'utf8'));
-const appSource = (await Promise.all(manifest.moduleOrder.map(readModule))).join('');
+const appSource = (await Promise.all(manifest.moduleOrder.map(readModule))).join('\n');
 const unlockHash = appSource.match(/const DEFAULT_SITE_HASH = '([^']+)'/)?.[1] || '';
 if (!unlockHash) throw new Error('Could not find the local preview unlock hash');
 console.log('UI QA: launching Chromium');

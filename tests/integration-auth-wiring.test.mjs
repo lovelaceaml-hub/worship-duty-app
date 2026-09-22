@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const readModule = name => { try { return fs.readFileSync(path.join(root, name), 'utf8'); } catch { return ''; } };
 const manifest = JSON.parse(read('scripts/check-app-split.manifest.json'));
-const readAppSource = () => manifest.moduleOrder.map(readModule).join('');
+const readAppSource = () => manifest.moduleOrder.map(readModule).join('\n');
 
 test('browser runtime loads authorization before the app and removes passive identity loading', () => {
   const html = read('index.html');

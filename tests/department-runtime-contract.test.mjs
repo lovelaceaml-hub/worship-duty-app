@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const readModule = name => { try { return fs.readFileSync(path.join(root, name), 'utf8'); } catch { return ''; } };
 const manifest = JSON.parse(read('scripts/check-app-split.manifest.json'));
-const app = manifest.moduleOrder.map(readModule).join('');
+const app = manifest.moduleOrder.map(readModule).join('\n');
 const index = read('index.html');
 const bridge = read('design-gallery/host-bridge.js');
 const build = read('design-gallery/build.mjs');
@@ -58,7 +58,8 @@ test('assignment callables are the only normal and override write boundary', () 
   assert.ok(applyStart >= 0 && applyEnd > applyStart, 'assignment projection boundary is present');
   assert.doesNotMatch(app.slice(applyStart, applyEnd), /persistService/);
   const assignmentStart = app.indexOf('function assignDepartmentDutyForService(');
-  const assignmentEnd = app.indexOf('function seedState(', assignmentStart);
+  const assignmentEnd = app.indexOf('function unassignDepartmentDutyForService(', assignmentStart);
+  assert.ok(assignmentStart >= 0 && assignmentEnd > assignmentStart, 'assignment callable boundary is present');
   const assignment = app.slice(assignmentStart, assignmentEnd);
   assert.match(assignment, /authCall\(callable, payload\)/);
   assert.match(app, /function departmentAssignmentPayload\([\s\S]*memberUid:\s*profile\.memberUid/);
