@@ -244,10 +244,22 @@ function check(name, result, expected = true) {
   console.log('PASS', name);
 }
 
+// The app.js split (docs/PLAN-2026-09-22-APP-JS-SPLIT.md) stages real module
+// subdirectories (core/, views/, actions/) that app.js imports by relative
+// path, so the staged tree is no longer flat; walk it recursively.
+async function collectStagedFiles(dir, base = dir) {
+  const entries = await fs.readdir(dir, {withFileTypes: true});
+  const files = [];
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...await collectStagedFiles(full, base));
+    else if (entry.isFile()) files.push(path.relative(base, full));
+  }
+  return files;
+}
 const assets = new Map(await Promise.all(
-  (await fs.readdir(stage, {withFileTypes: true}))
-    .filter(entry => entry.isFile())
-    .map(async entry => [entry.name, await fs.readFile(path.join(stage, entry.name))])
+  (await collectStagedFiles(stage)).map(async relPath =>
+    [relPath.split(path.sep).join('/'), await fs.readFile(path.join(stage, relPath))])
 ));
 const firestoreMock = await fs.readFile(path.join(root, 'live-design/fixture-firestore.js'), 'utf8');
 const browser = await chromium.launch();

@@ -255,9 +255,24 @@ async function ensureBuilt() {
   execFileSync(process.execPath, [path.join(root, 'design-gallery/build.mjs')], {stdio: 'inherit'});
 }
 
+// The app.js split stages real module subdirectories (core/, views/,
+// actions/) that app.js imports by relative path, so the staged tree is no
+// longer flat; walk it recursively (mirrors design-gallery/test.mjs).
+async function collectStagedFiles(dir, base = dir) {
+  const entries = await fs.readdir(dir, {withFileTypes: true});
+  const files = [];
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...await collectStagedFiles(full, base));
+    else if (entry.isFile()) files.push(path.relative(base, full));
+  }
+  return files;
+}
+
 async function loadAssets() {
-  const entries = (await fs.readdir(stage, {withFileTypes: true})).filter(entry => entry.isFile());
-  return new Map(await Promise.all(entries.map(async entry => [entry.name, await fs.readFile(path.join(stage, entry.name))])));
+  const relPaths = await collectStagedFiles(stage);
+  return new Map(await Promise.all(relPaths.map(async relPath =>
+    [relPath.split(path.sep).join('/'), await fs.readFile(path.join(stage, relPath))])));
 }
 
 async function makeContext(browser, viewport, isoTime) {

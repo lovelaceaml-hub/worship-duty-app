@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "declaration": "initFirebase",
+    "find": "sharedNameMap = NAME_UNIFY_MAP;",
+    "replace": "setSharedNameMap(NAME_UNIFY_MAP);"
+  },
+  {
+    "declaration": "initFirebase",
+    "find": "sharedNameMap = map;",
+    "replace": "setSharedNameMap(map);"
+  },
+  {
+    "declaration": "state",
+    "find": "let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };",
+    "replace": "let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };\nsetConstantsStateRef(state);"
+  },
+  {
+    "declaration": "departmentProfileAssignable",
+    "find": "  return departmentAvailability(profile, svc && svc.date, svc && departmentServiceTimeKey(svc)) === 'available';\n}",
+    "replace": "  return departmentAvailability(profile, svc && svc.date, svc && departmentServiceTimeKey(svc)) === 'available';\n}\nsetPlanningRefs(state, departmentProfiles, departmentProfileAssignable);"
+  }
+]

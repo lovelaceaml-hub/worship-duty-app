@@ -17,9 +17,13 @@ export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 const DECL_RE = /^(export\s+)?(?:(async\s+function)\s+([A-Za-z_$][\w$]*)|(function)\s+([A-Za-z_$][\w$]*)|(const)\s+([A-Za-z_$][\w$]*)|(let)\s+([A-Za-z_$][\w$]*)|(var)\s+([A-Za-z_$][\w$]*))\b/;
 
-const IMPORT_NAMED_RE = /^import\s*\{([^}]*)\}\s*from\s*['"][^'"]+['"];?/;
-const IMPORT_DEFAULT_RE = /^import\s+([A-Za-z_$][\w$]*)\s*(?:,\s*\{([^}]*)\})?\s*from\s*['"][^'"]+['"];?/;
-const IMPORT_NAMESPACE_RE = /^import\s*\*\s*as\s+([A-Za-z_$][\w$]*)\s*from\s*['"][^'"]+['"];?/;
+// Multiline-aware: `[^}]`/`[^'"]` character classes already span newlines, so
+// a braced import list wrapped across several lines still matches as one
+// statement. These run with the `m` flag against the whole source, not
+// line by line, since a real import can and does wrap.
+const IMPORT_NAMED_RE = /^import\s*\{([^}]*)\}\s*from\s*['"][^'"]+['"];?/m;
+const IMPORT_DEFAULT_RE = /^import\s+([A-Za-z_$][\w$]*)\s*(?:,\s*\{([^}]*)\})?\s*from\s*['"][^'"]+['"];?/m;
+const IMPORT_NAMESPACE_RE = /^import\s*\*\s*as\s+([A-Za-z_$][\w$]*)\s*from\s*['"][^'"]+['"];?/m;
 
 const GALLERY_SOURCES = [
   'design-gallery/host-bridge.js',
@@ -31,6 +35,37 @@ const GALLERY_SOURCES = [
   'prototype/workspaces.js',
   'prototype/presider-workspace.js'
 ];
+
+const BLANK_RE = /^\s*$/;
+const LINE_COMMENT_RE = /^\s*\/\/.*$/;
+const SELF_CONTAINED_BLOCK_RE = /^\s*\/\*[\s\S]*\*\/\s*$/;
+const BLOCK_CLOSE_RE = /\*\/\s*$/;
+
+// A section banner ("/* ===== double-duty conflicts ===== */"), single-line or
+// wrapped across two lines, sits between two declarations in the source but
+// belongs, by the module map, to whichever declaration comes AFTER it, not the
+// one before. Trimming trailing blank/comment lines off a body keeps that
+// banner out of the comparison on both sides (baseline and current), so moving
+// a declaration next to a differently-assigned neighbor never fails on a
+// comment that carries no behavior.
+function trimTrailingNoise(lines) {
+  let end = lines.length;
+  while (end > 0) {
+    const line = lines[end - 1];
+    if (BLANK_RE.test(line) || LINE_COMMENT_RE.test(line)) { end--; continue; }
+    if (SELF_CONTAINED_BLOCK_RE.test(line)) { end--; continue; }
+    if (BLOCK_CLOSE_RE.test(line)) {
+      let openIndex = -1;
+      for (let i = end - 2; i >= 0; i--) {
+        if (lines[i].includes('/*')) { openIndex = i; break; }
+        if (lines[i].includes('*/')) break; // an unrelated, already-closed comment: stop rather than misattribute
+      }
+      if (openIndex !== -1) { end = openIndex; continue; }
+    }
+    break;
+  }
+  return lines.slice(0, end);
+}
 
 export function extractDeclarations(source) {
   const lines = source.split('\n');
@@ -46,39 +81,37 @@ export function extractDeclarations(source) {
   for (let i = 0; i < starts.length; i++) {
     const startLine = starts[i].line;
     const endLine = i + 1 < starts.length ? starts[i + 1].line : lines.length + 1;
-    const body = lines.slice(startLine - 1, endLine - 1).join('\n');
+    const bodyLines = trimTrailingNoise(lines.slice(startLine - 1, endLine - 1));
+    const body = bodyLines.join('\n');
     decls.push({name: starts[i].name, kind: starts[i].kind, exported: starts[i].exported, startLine, body});
   }
   return decls;
 }
 
+function addNamedBindings(names, namedList) {
+  for (const part of namedList.split(',')) {
+    const token = part.trim();
+    if (!token) continue;
+    const alias = token.split(/\s+as\s+/i).pop().trim();
+    if (alias) names.add(alias);
+  }
+}
+
 export function extractTopLevelImportedNames(source) {
   const names = new Set();
-  for (const rawLine of source.split('\n')) {
-    const line = rawLine.trim();
-    let m = line.match(IMPORT_NAMED_RE);
-    if (m) {
-      for (const part of m[1].split(',')) {
-        const token = part.trim();
-        if (!token) continue;
-        const alias = token.split(/\s+as\s+/i).pop().trim();
-        if (alias) names.add(alias);
+  for (const re of [IMPORT_NAMED_RE, IMPORT_DEFAULT_RE, IMPORT_NAMESPACE_RE]) {
+    const global = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+    let m;
+    while ((m = global.exec(source))) {
+      if (re === IMPORT_NAMED_RE) {
+        addNamedBindings(names, m[1]);
+      } else if (re === IMPORT_DEFAULT_RE) {
+        names.add(m[1]);
+        if (m[2]) addNamedBindings(names, m[2]);
+      } else {
+        names.add(m[1]);
       }
-      continue;
     }
-    m = line.match(IMPORT_DEFAULT_RE);
-    if (m) {
-      names.add(m[1]);
-      if (m[2]) for (const part of m[2].split(',')) {
-        const token = part.trim();
-        if (!token) continue;
-        const alias = token.split(/\s+as\s+/i).pop().trim();
-        if (alias) names.add(alias);
-      }
-      continue;
-    }
-    m = line.match(IMPORT_NAMESPACE_RE);
-    if (m) names.add(m[1]);
   }
   return names;
 }
@@ -139,6 +172,15 @@ export function buildCurrentDeclarationIndex(root, files) {
   for (const relPath of files) {
     const source = fs.readFileSync(path.join(root, relPath), 'utf8');
     for (const decl of extractDeclarations(source)) {
+      // A non-exported declaration inside a split module is private,
+      // module-internal infrastructure (for example a local placeholder a
+      // module declares to receive a value pushed in through a setter,
+      // avoiding an import cycle back to app.js). It is invisible outside
+      // its own file, so it cannot be the current home of a moved baseline
+      // declaration and must not collide with one that happens to share its
+      // name. app.js itself needs no export to be usable, since it is the
+      // entry script's own top-level scope, so its declarations always count.
+      if (relPath !== 'app.js' && !decl.exported) continue;
       const list = byName.get(decl.name) || [];
       list.push({file: relPath, body: decl.body});
       byName.set(decl.name, list);

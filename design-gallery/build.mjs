@@ -21,7 +21,19 @@ const between=(s,a,b,label=a+' -> '+b)=>{const na=count(s,a),nb=count(s,b),i=s.i
 const regexOnce=(s,re,repl,label)=>{let n=0;const out=s.replace(re,(...args)=>{n++;return typeof repl==='function'?repl(...args):repl;});if(n!==1)throw Error('Design gallery source drift: '+label+' ('+n+')');return out;};
 const optionalRegexOnce=(s,re,repl,label)=>{let n=0;const out=s.replace(re,(...args)=>{n++;return typeof repl==='function'?repl(...args):repl;});if(n>1)throw Error('Design gallery source-interface drift: '+label+' ('+n+')');return out;};
 const optionalOnce=(s,a,b,label)=>{const n=count(s,a);if(n>1)throw Error('Design gallery source-interface drift: '+label+' ('+n+')');return n?s.replace(a,()=>b):s;};
-const assertSyntax=(source,name,module=false)=>{const script=module?source.replace(/^export\s+function\s+mount\b/m,'function mount').replace(/^export\s*\{[^}]+\};?\s*$/gm,''):source;try{new Script(script,{filename:name});}catch(error){throw Error('Design gallery generated syntax drift in '+name+': '+error.message);}};
+// vm.Script parses as a classic script, not an ES module, so a real `import`
+// or `export` at the top level throws a plain SyntaxError there even though
+// it is perfectly valid module code. Strip both (they can wrap multiple
+// lines, e.g. the app.js split's `import {\n  a, b,\n} from './core/x.js';`)
+// before the syntax check; this is a sanity check for stray generated-code
+// drift, not a resolver, so dropping the statements themselves is enough.
+const stripModuleSyntax=source=>source
+  .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]*['"];?\s*$/gm,'')
+  .replace(/^import\s+[A-Za-z_$][\w$]*\s*(?:,\s*\{[\s\S]*?\})?\s*from\s*['"][^'"]*['"];?\s*$/gm,'')
+  .replace(/^import\s*\*\s*as\s+[A-Za-z_$][\w$]*\s*from\s*['"][^'"]*['"];?\s*$/gm,'')
+  .replace(/^export\s+(?=async\s+function|function|const|let|var)/gm,'')
+  .replace(/^export\s*\{[^}]*\};?\s*$/gm,'');
+const assertSyntax=(source,name)=>{const script=stripModuleSyntax(source);try{new Script(script,{filename:name});}catch(error){throw Error('Design gallery generated syntax drift in '+name+': '+error.message);}};
 const stamp=process.env.RELEASE_STAMP||('gallery'+Date.now());
 if(!/^[a-zA-Z0-9]+$/.test(stamp))throw Error('Invalid release stamp');
 await fs.rm(dest,{recursive:true,force:true});await fs.mkdir(dest,{recursive:true});
@@ -189,9 +201,23 @@ const auroraCSS=(await Promise.all(['prototype/aurora.css','prototype/workspaces
 const files={'app.js':app,'song-app.js':songs,'index.html':index,'design-choice.js':choiceSource,'design-choice.css':await read('design-gallery/choice.css'),'prism-live.css':prismCSS,'navy-live.css':navyCSS,'aurora-live.css':auroraCSS};
 for(const [token,label] of [['/* PRISM_HELPERS */','Prism helper slot'],['/* PRISM_VIEWS */','Prism view slot'],['/* PRISM_ALL_PAGES */','Prism page slot'],['/* AURORA_CORE */','Aurora core slot'],['/* AURORA_DECORATE */','Aurora decorator slot'],['/* AURORA_WORKSPACES */','Aurora workspace slot'],['/* NAVY_ADAPTER */','Navy adapter slot'],['/* PRISM_SHELL */','Prism shell slot'],['/* AURORA_SHELL */','Aurora shell slot']])if(host.includes(token))throw Error('Design gallery source-interface drift: unresolved '+label);
 assertSyntax(app,'gallery-app.js');
-assertSyntax(songs,'gallery-song-app.js',true);
+assertSyntax(songs,'gallery-song-app.js');
 for(const [name,text] of Object.entries(files))await fs.writeFile(path.join(dest,name),text.replaceAll('?v=DEV','?v='+stamp));
 for(const a of ['seed-data.js','permissions.js','firebase-config.js','song-seed.js','song-lib.js','song-app.css','icon.svg','manifest.json'])await fs.copyFile(path.join(root,a),path.join(dest,a));
+// The app.js split (docs/PLAN-2026-09-22-APP-JS-SPLIT.md) turns app.js into a
+// real ES module graph with relative imports (e.g. './core/constants.js').
+// Mirror whichever of its module directories exist yet, so the staged app.js
+// can resolve them; a section that hasn't created its directory is skipped.
+for(const moduleDir of ['core','views','actions']){
+  let entries;
+  try{entries=await fs.readdir(path.join(root,moduleDir));}
+  catch(error){if(error.code==='ENOENT')continue;throw error;}
+  await fs.mkdir(path.join(dest,moduleDir),{recursive:true});
+  for(const entry of entries){
+    if(!entry.endsWith('.js'))continue;
+    await fs.copyFile(path.join(root,moduleDir,entry),path.join(dest,moduleDir,entry));
+  }
+}
 await fs.mkdir(path.join(dest,'scripts'),{recursive:true});
 await fs.copyFile(path.join(root,'scripts','guard-gallery-deploy.mjs'),path.join(dest,'scripts','guard-gallery-deploy.mjs'));
 let sw=await read('sw.js');sw=once(sw,"const RELEASE = 'DEV';",`const RELEASE = '${stamp}';`,'service-worker stamp');await fs.writeFile(path.join(dest,'sw.js'),sw);

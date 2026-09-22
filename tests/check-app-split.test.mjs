@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {runCheck} from '../scripts/check-app-split.mjs';
+import {runCheck, loadAllowlist} from '../scripts/check-app-split.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -139,14 +139,80 @@ test('a name present in the gallery scope contract through an import passes', ()
   fs.rmSync(dir, {recursive: true, force: true});
 });
 
-test('the current untouched tree passes', () => {
+test('a gallery scope name reached through a multi-line import passes', () => {
+  const app = "'use strict';\n\nfunction ghost() {\n  return 1;\n}\n\nfunction bar() {\n  return 2;\n}\n";
+  const {dir, baselineSha} = makeFixture({
+    'app.js': app,
+    'design-gallery/host-bridge.js': 'ghost(); bar();'
+  });
+  fs.writeFileSync(
+    path.join(dir, 'app.js'),
+    "'use strict';\nimport {\n  ghost,\n  bar\n} from './core/leaf.js';\n"
+  );
+  fs.mkdirSync(path.join(dir, 'core'), {recursive: true});
+  fs.writeFileSync(path.join(dir, 'core', 'leaf.js'), 'export function ghost() {\n  return 1;\n}\nexport function bar() {\n  return 2;\n}\n');
+  const manifestPath = writeManifest(dir, {
+    moduleOrder: ['core/leaf.js', 'app.js'],
+    declarations: {ghost: 'core/leaf.js', bar: 'core/leaf.js'}
+  });
+  const {failures} = runCheck({root: dir, baselineSha, manifestPath, gallery: true, allowlist: []});
+  assert.deepEqual(failures, []);
+  fs.rmSync(dir, {recursive: true, force: true});
+});
+
+test('a section banner between two differently-assigned declarations does not fail either one', () => {
+  const app = "'use strict';\n\nfunction foo() {\n  return 1;\n}\n\n/* ================= next section ================= */\n\nfunction bar() {\n  return 2;\n}\n";
+  const {dir, baselineSha} = makeFixture({'app.js': app});
+  fs.writeFileSync(path.join(dir, 'app.js'), "'use strict';\n\nfunction bar() {\n  return 2;\n}\n");
+  fs.mkdirSync(path.join(dir, 'core'), {recursive: true});
+  // The banner physically sits right before bar() in the baseline, so a naive
+  // "body runs to the next declaration" extraction attributes it to foo()'s
+  // trailing text; foo() must still match here with none of that banner
+  // carried over into its moved body.
+  fs.writeFileSync(path.join(dir, 'core', 'foo.js'), 'export function foo() {\n  return 1;\n}\n');
+  const manifestPath = writeManifest(dir, {
+    moduleOrder: ['core/foo.js', 'app.js'],
+    declarations: {foo: 'core/foo.js', bar: 'app.js'}
+  });
+  const {failures} = runCheck({root: dir, baselineSha, manifestPath, gallery: false, allowlist: []});
+  assert.deepEqual(failures, []);
+  fs.rmSync(dir, {recursive: true, force: true});
+});
+
+test('a private non-exported local with the same name as a baseline declaration does not collide', () => {
+  const app = "'use strict';\n\nfunction foo() {\n  return 1;\n}\n\nlet shared = null;\nfunction useShared() {\n  return shared;\n}\n";
+  const {dir, baselineSha} = makeFixture({'app.js': app});
+  fs.writeFileSync(
+    path.join(dir, 'app.js'),
+    "'use strict';\n\nlet shared = null;\nfunction useShared() {\n  return shared;\n}\n"
+  );
+  fs.mkdirSync(path.join(dir, 'core'), {recursive: true});
+  // A module that needs a value still owned by app.js, but avoids importing
+  // it back (an import cycle to the entry module breaks evaluation order),
+  // declares its own private placeholder of the SAME name instead. It is
+  // never exported, so it must not be treated as a rival home for the real,
+  // exported "shared"/"foo" that the manifest tracks.
+  fs.writeFileSync(
+    path.join(dir, 'core', 'foo.js'),
+    "let shared;\nexport function setSharedRef(value) { shared = value; }\nexport function foo() {\n  return 1;\n}\n"
+  );
+  const manifestPath = writeManifest(dir, {
+    moduleOrder: ['core/foo.js', 'app.js'],
+    declarations: {foo: 'core/foo.js', shared: 'app.js', useShared: 'app.js'}
+  });
+  const {failures} = runCheck({root: dir, baselineSha, manifestPath, gallery: false, allowlist: []});
+  assert.deepEqual(failures, []);
+  fs.rmSync(dir, {recursive: true, force: true});
+});
+
+test('the current tree passes with its own real allowlist', () => {
   const manifestPath = path.join(repoRoot, 'scripts', 'check-app-split.manifest.json');
   const {failures} = runCheck({
     root: repoRoot,
     baselineSha: 'main',
     manifestPath,
     gallery: true,
-    allowlist: []
+    allowlist: loadAllowlist(repoRoot)
   });
   assert.deepEqual(failures, []);
 });

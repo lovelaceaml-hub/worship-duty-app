@@ -1,428 +1,29 @@
 'use strict';
 
-/* ================= constants ================= */
-
-const CATEGORIES = [
-  { name: 'Worship',        color: '#4338ca', duties: ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer'] },
-  { name: 'Usher Sisters',  color: '#be185d', duties: ['Usher Door', 'Usher Front', 'Usher Back'] },
-  { name: 'Usher Brothers', color: '#0369a1', duties: ['Usher #1', 'Usher #2', 'Lobby Security'] },
-  { name: 'Lobby',          color: '#b45309', duties: ['Lobby Desk #1', 'Lobby Desk #2'] },
-  { name: 'Translation',    color: '#047857', duties: ['Translation #1', 'Translation #2'] },
-  { name: 'Media',          color: '#6d28d9', duties: ['Media Booth #1', 'Media Booth #2'] },
-  { name: 'Parking Lot',    color: '#3f6212', duties: ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'] },
-  { name: 'Offering',       color: '#a21caf', duties: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'] }
-];
-const SERVICE_LABELS = ['Morning', 'Afternoon', 'Evening', 'Early Morning', 'Commemoration'];
-const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
-
-/* Seed data for state.departments (categoryName -> member names), used only
-   the first time app/departments is missing/empty in Firestore (or local mode). */
-const DEPARTMENTS_SEED = {
-  'Worship': ['B. Anthony', 'B. Brent', 'B. Davidson', 'B. Giomar', 'B. James', 'B. Jason', 'B. Jordan', 'D. Aaron', 'D. Caleb', 'M. Chloe', 'D. Chris', 'D. Danielle', 'D. Kenya', 'D. Roza', 'E. Simon', 'M. Chad', 'S. Adrienne', 'S. Martha', 'S. Paola', 'S. Skye'],
-  'Usher Sisters': ['M. Chloe', 'D. Danielle', 'D. Kenya', 'D. Roza', 'S. Adrienne', 'S. Estefany', 'S. Hana', 'S. Lisa', 'S. Melissa', 'S. Paola', 'S. Skye', 'S. Taylor'],
-  'Usher Brothers': ['B. Alex', 'B. Anthony', 'B. Clyde', 'B. Davidson', 'B. Delvin', 'B. Drew', 'B. Dustin', 'B. Giomar', 'B. Irvin', 'B. James S', 'B. Jordan', 'D. Chris'],
-  'Lobby': ['S. Adrienne', 'S. Anessa', 'S. Bridgette', 'S. Ivonne', 'S. Leslie', 'S. Lupita', 'S. Mercie', 'S. Nichol', 'S. Paola'],
-  'Translation': ['B. Irvin', 'B. Jason', 'D. Roza', 'S. Elena', 'S. Elisa', 'S. Leslie', 'S. Martha', 'S. Monica C', 'S. Monica S', 'S. Paola'],
-  'Media': [],
-  'Parking Lot': [],
-  'Offering': []
-};
-const DATA_KEY = 'wds-data-v2';
-/* Release stamp appended to every lazily-loaded local file. scripts/deploy.sh
-   rewrites the 'DEV' token here, in index.html and in sw.js at release time, so
-   long-lived browser caching can never serve a member a stale mix of files. */
-const ASSET_V = '?v=DEV';
-// Fallback site-passcode hash, used only on a brand-new device before app/
-// settings.sitePinHash is set. The live code is managed in Manage → Features
-// and its plaintext is intentionally not recorded here (see docs).
-const DEFAULT_SITE_HASH = '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b';
-const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi0PRu7yJ9wbRn612zWq7rpInps6vWBcU7O9uHCp9W18sOCCF2U2ALS5EOo8hWrTSYXAfGmqiKYkaF/pub?gid=453135143&single=true&output=csv';
-
-/* Name cleanup after the sheet's Raw Data tab was tidied up, maps old
-   variant spellings to their canonical form. See 'unify-names'. This constant
-   is the seed/fallback for the shared Firestore doc app/nameMap, which both
-   this app and the song app read so canonicalization stays consistent. */
-const NAME_UNIFY_MAP = {
-  'B. Anthony L': 'B. Anthony', 'D. Chris K': 'D. Chris', 'D. Chris Kane': 'D. Chris',
-  'B. James D': 'B. James', 'B. Jason S': 'B. Jason', 'S. Martha B': 'S. Martha',
-  'S. Monica Salazar': 'S. Monica S', 'M.Chad': 'M. Chad', 'B. Gio': 'B. Giomar',
-  'D. Chloe': 'M. Chloe', 'B,James': 'B. James', 'BJason': 'B. Jason',
-  'S. Melisaa': 'S. Melissa', 'S. Monica C.': 'S. Monica C',
-  'S. Monica S.': 'S. Monica S'
-};
-
-/* Live copy of app/nameMap; null until the snapshot arrives (or in local mode). */
-let sharedNameMap = null;
-function unifiedNameMap() { return Object.assign({}, NAME_UNIFY_MAP, sharedNameMap || {}); }
-
-/* Presentation-only cleanup. Stored member IDs and auth claims stay unchanged. */
-function memberLabel(value) {
-  const raw = String(value == null ? '' : value).trim().replace(/\s+/g, ' ');
-  if (!raw) return '';
-  const fixed = {
-    'B,James': 'B. James', 'BJason': 'B. Jason', 'D,Armani': 'D. Armani',
-    'H.Elena': 'H. Elena', 'S. Melisaa': 'S. Melissa'
-  }[raw];
-  const source = fixed || raw;
-  const match = source.match(/^([A-Za-z])(?:\.|,)?\s*(.*)$/);
-  if (!match) return source;
-  const title = match[1].toUpperCase() + '.';
-  const words = match[2].trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return title;
-  const first = words[0].replace(/[.,]+$/g, '');
-  const key = title.toLowerCase() + ' ' + first.toLowerCase();
-  const peers = (state && state.members || []).filter(name => {
-    const parsed = String(name || '').trim().match(/^([A-Za-z])(?:\.|,)?\s*(.*)$/);
-    if (!parsed) return false;
-    const peerFirst = parsed[2].trim().split(/\s+/)[0]?.replace(/[.,]+$/g, '') || '';
-    return parsed[1].toLowerCase() + '. ' + peerFirst.toLowerCase() === key;
-  });
-  if (peers.length < 2 || words.length < 2) return title + ' ' + first;
-  const lastInitial = words[words.length - 1].replace(/[^A-Za-z]/g, '').charAt(0).toUpperCase();
-  return title + ' ' + first + (lastInitial ? ' ' + lastInitial + '.' : '');
-}
-
-/* Feature toggles, managed live in Manage → Features, synced to every device */
-const FEATURES = [
-  { id: 'siteLock',       label: 'Site passcode',             desc: 'Everyone must enter the 4-digit passcode before the app opens on a new device.', def: true },
-  { id: 'editorLock',     label: 'Editor passcode',           desc: 'Require the passcode before anyone can open Manage and edit the schedule.', def: true },
-  { id: 'notifications',  label: 'New-duty alerts',           desc: 'Members are alerted when a duty is added for them.', def: true },
-  { id: 'reminders',      label: 'Day-before reminders',      desc: 'Members are reminded within 24 hours of each duty.', def: true },
-  { id: 'calendarExport', label: 'Add-to-calendar button',    desc: 'Members can download their duties to their phone calendar with built-in reminders.', def: true },
-  { id: 'whoElse',        label: '"Who else is serving?"',    desc: 'My Duties can expand the full lineup for each service.', def: true },
-  { id: 'choirSong',      label: 'Choir song on services',    desc: 'Show the choir song line on each service card.', def: true },
-  { id: 'songPicker',     label: 'Presider song picker',      desc: 'Presiders get a Presider tab and buttons in My Duties to plan the songs for their service.', def: true },
-  { id: 'pastServices',   label: 'Past services',             desc: 'Allow browsing services that already happened.', def: true },
-  { id: 'emptyDuties',    label: 'Show unassigned duties',    desc: 'The schedule shows every duty slot, even ones without a name yet.', def: false },
-  { id: 'conflictWarnings', label: 'Double-duty warnings',    desc: 'Show a notice when one person has two duties in the same service.', def: true },
-  { id: 'sheetSync',      label: 'Google Sheet sync',        desc: 'Pull schedule updates from the published Google Sheet automatically.', def: true },
-  { id: 'changeRequests', label: 'Change requests',          desc: 'Members can request schedule changes from My Duties; the scheduler is notified.', def: true }
-];
-
-function feat(id) {
-  const f = (state.settings && state.settings.features) || {};
-  if (id in f) return !!f[id];
-  const d = FEATURES.find(x => x.id === id);
-  return d ? d.def : true;
-}
-
-async function sha256(s) {
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
-}
-
-function siteHash() { return (state.settings && state.settings.sitePinHash) || DEFAULT_SITE_HASH; }
-function siteUnlocked() { return localStorage.getItem('wds-site-unlock') === siteHash(); }
-
-function sheetUrl() { return (state.settings && state.settings.sheetUrl) || DEFAULT_SHEET_URL; }
-
-/* ================= helpers ================= */
-
-function esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-function pad(n) { return (n < 10 ? '0' : '') + n; }
-function toISO(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
-function todayISO() { return toISO(new Date()); }
-function isoDaysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return toISO(d); }
-function fmtDate(iso) {
-  return new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-}
-function fmtTime(t) {
-  if (!t) return '';
-  const [hs, m] = t.split(':');
-  let h = parseInt(hs, 10);
-  const ap = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  return h + ':' + m + ' ' + ap;
-}
-function dateBadge(iso) {
-  const t = new Date();
-  if (iso === toISO(t)) return 'Today';
-  t.setDate(t.getDate() + 1);
-  if (iso === toISO(t)) return 'Tomorrow';
-  return '';
-}
-function svcId(svc) {
-  return svc.date + '_' + svc.service.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-}
-function slugify(s) {
-  return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-function requestId(svcIdVal, duty, createdAt) {
-  return svcIdVal + '_' + slugify(duty) + '_' + createdAt;
-}
-function svcDateTime(svc) {
-  return new Date(svc.date + 'T' + (svc.time || '12:00') + ':00');
-}
-function dutyCategory(duty) {
-  return CATEGORIES.find(c => c.duties.indexOf(duty) !== -1) || CATEGORIES[0];
-}
-
-/* ================= double-duty conflicts ================= */
-
-const ALL_DUTIES_ORDER = CATEGORIES.reduce((out, cat) => out.concat(cat.duties), []);
-
-function sortDuties(duties) {
-  return duties.slice().sort((a, b) => ALL_DUTIES_ORDER.indexOf(a) - ALL_DUTIES_ORDER.indexOf(b));
-}
-function sameDuties(a, b) {
-  if (!a || !b || a.length !== b.length) return false;
-  return a.every((d, i) => d === b[i]);
-}
-function isPrayerDuty(duty) {
-  return dutyCategory(duty).name === 'Worship' && /prayer/i.test(duty);
-}
-function isUsherDuty(duty) {
-  const category = dutyCategory(duty).name;
-  return category === 'Usher Sisters' || category === 'Usher Brothers';
-}
-/* Prayer + usher is an intentional pairing. Other duplicate pairs remain
-   warnings: two usher duties, two prayer duties, or either with another role. */
-function hasNonExemptPair(duties) {
-  for (let i = 0; i < duties.length; i++) {
-    for (let j = i + 1; j < duties.length; j++) {
-      const prayerUsherPair =
-        (isPrayerDuty(duties[i]) && isUsherDuty(duties[j])) ||
-        (isUsherDuty(duties[i]) && isPrayerDuty(duties[j]));
-      if (!prayerUsherPair) return true;
-    }
-  }
-  return false;
-}
-/* Every member appearing in 2+ duties of this service, with their duty list (stable order).
-   A single prayer + usher pairing is intentionally omitted from the conflicts. */
-function conflictsFor(svc) {
-  const byMember = {};
-  const assignments = svc.assignments || {};
-  Object.keys(assignments).forEach(duty => {
-    const name = assignments[duty];
-    if (!name) return;
-    (byMember[name] || (byMember[name] = [])).push(duty);
-  });
-  return Object.keys(byMember)
-    .filter(name => byMember[name].length >= 2 && hasNonExemptPair(byMember[name]))
-    .map(name => ({ name, duties: sortDuties(byMember[name]) }));
-}
-/* conflictsFor minus ones already acknowledged (conflictOk) with a matching duty list */
-function activeConflicts(svc) {
-  const ok = svc.conflictOk || {};
-  return conflictsFor(svc).filter(c => !sameDuties(ok[c.name], c.duties));
-}
-
-/* Small inline badge shown next to a name that holds 2+ duties in this service.
-   Red = needs review; amber = an editor marked it OK. */
-function conflictBadge(svc, member) {
-  if (!feat('conflictWarnings') || !member) return '';
-  if (activeConflicts(svc).some(c => c.name === member)) {
-    return '<span class="warn-badge" title="Has 2+ duties this service">!</span>';
-  }
-  const ok = svc.conflictOk || {};
-  if (conflictsFor(svc).some(c => c.name === member && sameDuties(ok[c.name], c.duties))) {
-    return '<span class="warn-badge ok" title="Double duty marked OK by an editor">!</span>';
-  }
-  return '';
-}
-
-/* ================= coordinator planning (workload + subs) ================= */
-
-function weeksAgoISO(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n * 7);
-  return toISO(d);
-}
-
-/* Per-member duty counts across the whole schedule: rolling 4/8-week windows,
-   upcoming load, year total, last served and next duty dates. */
-function workloadStats() {
-  const t = todayISO(), w4 = weeksAgoISO(4), w8 = weeksAgoISO(8);
-  const stats = {};
-  const ensure = m => stats[m] || (stats[m] = { past4: 0, past8: 0, upcoming: 0, total: 0, last: '', next: '' });
-  (state.members || []).forEach(ensure);
-  (state.services || []).forEach(svc => {
-    Object.keys(svc.assignments || {}).forEach(duty => {
-      const m = svc.assignments[duty];
-      if (!m) return;
-      const s = ensure(m);
-      s.total++;
-      if (svc.date < t) {
-        if (svc.date >= w8) s.past8++;
-        if (svc.date >= w4) s.past4++;
-        if (svc.date > s.last) s.last = svc.date;
-      } else {
-        s.upcoming++;
-        if (!s.next || svc.date < s.next) s.next = svc.date;
-      }
-    });
-  });
-  return stats;
-}
-
-/* Best substitutes for a duty in a service: same department, not already
-   serving that service, lightest recent+upcoming load first, then longest
-   since last served. */
-function suggestSubs(svc, duty, excludeName, stats) {
-  const cat = dutyCategory(duty);
-  const roster = departmentProfiles(cat.name).filter(profile => departmentProfileAssignable(profile, svc, duty));
-  const busy = {};
-  Object.keys(svc.assignments || {}).forEach(d => { if (svc.assignments[d]) busy[svc.assignments[d]] = true; });
-  return roster
-    .filter(profile => profile.memberName !== excludeName && !busy[profile.memberName])
-    .map(profile => ({ profile, s: stats[profile.memberName] || { past4: 0, upcoming: 0, last: '' } }))
-    .sort((a, b) =>
-      (a.s.upcoming + a.s.past4) - (b.s.upcoming + b.s.past4) ||
-      (a.s.last === b.s.last ? 0 : (a.s.last < b.s.last ? -1 : 1)))
-    .slice(0, 3)
-    .map(x => x.profile);
-}
-
-/* ================= google sheet sync, pure parsers ================= */
-
-/* Minimal RFC-4180-ish CSV parser. Handles quoted fields, embedded commas,
-   escaped quotes (""), and CRLF/LF line endings. Returns array of row arrays. */
-function parseCSV(text) {
-  const rows = [];
-  let row = [];
-  let field = '';
-  let inQuotes = false;
-  const s = String(text == null ? '' : text);
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (s[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else {
-        field += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ',') {
-      row.push(field); field = '';
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && s[i + 1] === '\n') i++;
-      row.push(field); field = '';
-      rows.push(row); row = [];
-    } else {
-      field += c;
-    }
-  }
-  // flush trailing field/row if the file did not end with a newline
-  if (field !== '' || row.length) { row.push(field); rows.push(row); }
-  return rows;
-}
-
-/* Set of every duty name the app knows, built from CATEGORIES. */
-function validDutySet() {
-  const set = {};
-  CATEGORIES.forEach(cat => cat.duties.forEach(duty => { set[duty] = true; }));
-  return set;
-}
-
-const SHEET_MONTHS = {
-  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-};
-
-/* Parse a sheet date like "Sat, May 02" (no year). Returns { month, day } or null. */
-function parseSheetDate(raw) {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/^[a-z]+,?\s*/i, '').trim(); // drop weekday prefix
-  const m = cleaned.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
-  if (!m) return null;
-  const mon = SHEET_MONTHS[m[1].slice(0, 3).toLowerCase()];
-  if (mon == null) return null;
-  const day = parseInt(m[2], 10);
-  if (!(day >= 1 && day <= 31)) return null;
-  return { month: mon, day: day };
-}
-
-/* Infer the year for a month/day so the resulting date is closest to `today`.
-   Tries today's year -1, +0, +1 and picks the smallest absolute distance. */
-function inferYearISO(month, day, today) {
-  const base = today || new Date();
-  const y0 = base.getFullYear();
-  const nowT = base.getTime();
-  let best = null, bestDiff = Infinity;
-  [y0 - 1, y0, y0 + 1].forEach(y => {
-    const d = new Date(y, month, day, 12, 0, 0);
-    const diff = Math.abs(d.getTime() - nowT);
-    if (diff < bestDiff) { bestDiff = diff; best = d; }
-  });
-  return best.getFullYear() + '-' + pad(best.getMonth() + 1) + '-' + pad(best.getDate());
-}
-
-/* Parse a 12-hour time like "9:00 AM" into 24-hour "HH:MM". Returns '' if unparseable. */
-function parseSheetTime(raw) {
-  if (!raw) return '';
-  const m = String(raw).trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp])[Mm]?$/);
-  if (!m) return '';
-  let h = parseInt(m[1], 10);
-  const min = m[2];
-  const pm = m[3].toLowerCase() === 'p';
-  if (h === 12) h = 0;
-  if (pm) h += 12;
-  return pad(h) + ':' + min;
-}
-
-/* Turn parsed CSV rows into service objects.
-   Returns { services, members, warnings }. Pure, no window/document/state. */
-function sheetRowsToServices(rows, today) {
-  const result = { services: [], members: [], warnings: [] };
-  if (!rows || !rows.length) return result;
-  const header = rows[0].map(h => String(h == null ? '' : h).trim().toLowerCase());
-  const col = name => header.indexOf(name);
-  const iDate = col('date'), iService = col('service'), iWorship = col('worship');
-  const iTime = col('time'), iDuty = col('duty'), iMember = col('member');
-  if (iDate < 0 || iService < 0 || iDuty < 0 || iMember < 0) {
-    result.warnings.push('Sheet is missing required columns (Date, Service, Duty, Member).');
-    return result;
-  }
-  const valid = validDutySet();
-  const byKey = {}; // date + '|' + serviceLabel -> service object
-  const membersSeen = {};
-  const unknownDuties = {};
-  for (let r = 1; r < rows.length; r++) {
-    const row = rows[r];
-    const cell = i => (i >= 0 && i < row.length ? String(row[i] == null ? '' : row[i]).trim() : '');
-    const rawDate = cell(iDate), serviceLabel = cell(iService);
-    const duty = cell(iDuty), member = cell(iMember);
-    // A blank Member cell in an otherwise-valid duty row is an explicit
-    // "clear this duty" (mergeSheetServices writes '' over the old name).
-    // Date/Service/Duty are still required; a *deleted* row leaves the slot.
-    if (!rawDate || !serviceLabel || !duty) continue;
-    const md = parseSheetDate(rawDate);
-    if (!md) continue;
-    const iso = inferYearISO(md.month, md.day, today);
-    const isChoirSong = duty === 'Choir Song';
-    if (!isChoirSong && !valid[duty]) {
-      if (!unknownDuties[duty]) { unknownDuties[duty] = true; result.warnings.push('Unknown duty in sheet: "' + duty + '"'); }
-      continue;
-    }
-    const key = iso + '|' + serviceLabel;
-    let svc = byKey[key];
-    if (!svc) {
-      svc = { date: iso, service: serviceLabel, worship: iWorship >= 0 ? cell(iWorship) : '', time: parseSheetTime(cell(iTime)), assignments: {}, choirSong: '', _sheetChoirSongSeen: false };
-      byKey[key] = svc;
-      result.services.push(svc);
-    }
-    if (isChoirSong) {
-      svc._sheetChoirSongSeen = true;
-      svc.choirSong = member; // an explicit blank row clears a stale song
-      continue;
-    }
-    svc.assignments[duty] = member; // '' explicitly clears the slot
-    if (member) membersSeen[member] = true;
-  }
-  result.members = Object.keys(membersSeen).sort();
-  return result;
-}
+import {
+  CATEGORIES, SERVICE_LABELS, WORSHIP_TYPES, DEPARTMENTS_SEED, DATA_KEY, ASSET_V,
+  DEFAULT_SITE_HASH, DEFAULT_SHEET_URL, NAME_UNIFY_MAP, sharedNameMap, setSharedNameMap,
+  unifiedNameMap, memberLabel, FEATURES, feat, sha256, siteHash, siteUnlocked, sheetUrl,
+  setConstantsStateRef
+} from './core/constants.js';
+import {
+  esc, pad, toISO, todayISO, isoDaysAgo, fmtDate, fmtTime, dateBadge, svcId, slugify,
+  requestId, svcDateTime, dutyCategory
+} from './core/format.js';
+import {
+  ALL_DUTIES_ORDER, sortDuties, sameDuties, isPrayerDuty, isUsherDuty, hasNonExemptPair,
+  conflictsFor, activeConflicts, conflictBadge
+} from './core/conflicts.js';
+import {weeksAgoISO, workloadStats, suggestSubs, setPlanningRefs} from './core/planning.js';
+import {
+  parseCSV, validDutySet, SHEET_MONTHS, parseSheetDate, inferYearISO, parseSheetTime,
+  sheetRowsToServices
+} from './core/sheet-parse.js';
 
 /* ================= state ================= */
 
-let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
+export let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };
+setConstantsStateRef(state);
 let fb = null; // { db, auth, functions, setDoc, doc, deleteDoc, writeBatch, collection }
 
 /* Firestore reads remain useful before sign-in, but every write requires a
@@ -626,7 +227,7 @@ function normalizeDepartmentProfile(value, department) {
   });
 }
 
-function departmentProfiles(department) {
+export function departmentProfiles(department) {
   return Array.isArray(departmentRuntime.rosters[department]) ? departmentRuntime.rosters[department] : [];
 }
 
@@ -670,12 +271,13 @@ function departmentAvailability(profile, serviceDate, serviceTime) {
   return recurring[key] || 'unknown';
 }
 
-function departmentProfileAssignable(profile, svc, duty) {
+export function departmentProfileAssignable(profile, svc, duty) {
   if (!profile || profile.status !== 'active' || profile.schedulable !== true) return false;
   if (!Array.isArray(profile.eligibleDuties) || !profile.eligibleDuties.some(item =>
     String(item).trim().toLocaleLowerCase() === String(duty || '').trim().toLocaleLowerCase())) return false;
   return departmentAvailability(profile, svc && svc.date, svc && departmentServiceTimeKey(svc)) === 'available';
 }
+setPlanningRefs(state, departmentProfiles, departmentProfileAssignable);
 
 function departmentDraftProfile(department, memberUid) {
   const profile = departmentProfile(department, memberUid);
@@ -4255,10 +3857,10 @@ async function initFirebase(config) {
     const map = snap.exists() ? (snap.data().map || {}) : null;
     if (!map || !Object.keys(map).length) {
       // brand-new doc: seed it once from the built-in map
-      sharedNameMap = NAME_UNIFY_MAP;
+      setSharedNameMap(NAME_UNIFY_MAP);
       persistNameMap(NAME_UNIFY_MAP);
     } else {
-      sharedNameMap = map;
+      setSharedNameMap(map);
     }
   }, () => { /* connection errors are surfaced by the schedule listener */ });
   // Upcoming setlists only: enough for the My Duties song indicator without
