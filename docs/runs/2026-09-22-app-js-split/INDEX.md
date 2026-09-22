@@ -18,7 +18,7 @@ Coordinator: pending (Opus 5 high, assigned at Section 0)
 |---|---|---|---|---|---|---|
 | S0 | Baseline and boundary | complete | Opus 5 high (controller) | none | none | nothing |
 | L0 | Plan critic | planned | Gemini 3.8 Flash high, read-only | none | none | S0 |
-| S1 | Safety net before any code moves | planned | Sonnet 5 high | worktrees/2026-09-22-app-js-split/S1 | Sonnet 5 high (fresh) | S0 |
+| S1 | Safety net before any code moves | complete, merged to main | Sonnet 5 high | worktrees/2026-09-22-app-js-split/S1 | Sonnet 5 high (fresh), one blocking finding fixed | S0 |
 | S2 | Move the leaf-level modules | planned | Gemini 3.8 Flash high | main checkout, branch split/s2-leaf-modules | Sonnet 5 high (fresh) | S1 merged |
 | S3 | Move state, departments, sync, notifications, calendar and session | planned | Sonnet 5 high | worktrees/2026-09-22-app-js-split/S3 | Sonnet 5 high (fresh) | S2 merged |
 | S4 | Move rendering | planned | Opus 5 high | worktrees/2026-09-22-app-js-split/S4 | Sonnet 5 high x2 (fresh) | S3 merged |
@@ -40,7 +40,7 @@ Coordinator: pending (Opus 5 high, assigned at Section 0)
 
 <!-- lane: S0 state: planned model: pending worktree: pending review: pending updated: 2026-09-22T20:56Z -->
 <!-- lane: L0 state: planned model: pending worktree: pending review: pending updated: 2026-09-22T20:56Z -->
-<!-- lane: S1 state: planned model: pending worktree: pending review: pending updated: 2026-09-22T20:56Z -->
+<!-- lane: S1 state: complete, merged to main model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S1 review: complete updated: 2026-09-22T22:45Z -->
 <!-- lane: S2 state: planned model: pending worktree: pending review: pending updated: 2026-09-22T20:56Z -->
 <!-- lane: S3 state: planned model: pending worktree: pending review: pending updated: 2026-09-22T20:56Z -->
 <!-- lane: S4 state: planned model: pending worktree: pending review: pending updated: 2026-09-22T20:56Z -->

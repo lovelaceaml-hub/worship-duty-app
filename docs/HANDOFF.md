@@ -2,7 +2,7 @@
 
 ## Active plan: the app.js split
 
-The active plan is [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md): split `app.js` (4,314 lines) into modules with zero behavior change. Mode is Steps, one section per fresh chat, starting with Section 0. Record tree: `docs/runs/2026-09-22-app-js-split/`. Not started. Production is unchanged and no deploy happens inside that plan.
+The active plan is [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md): split `app.js` (4,314 lines) into modules with zero behavior change. Mode is Steps, one section per fresh chat. Record tree: `docs/runs/2026-09-22-app-js-split/`. Sections 0 (baseline and boundary) and 1 (safety net) are complete and merged to `main`; Section 2 (the leaf-level modules) is next. Production is unchanged and no deploy happens inside that plan.
 
 ## Retired: the compact-phone refactor (historical)
 
