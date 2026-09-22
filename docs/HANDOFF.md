@@ -1,14 +1,16 @@
-# LV Zion Worship Service — Handoff Document
+# LV Zion Worship Service - Handoff Document
 
-## Active compact-phone refactor
+## Active plan: the app.js split
+
+The active plan is [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md): split `app.js` (4,314 lines) into modules with zero behavior change. Mode is Steps, one section per fresh chat, starting with Section 0. Record tree: `docs/runs/2026-09-22-app-js-split/`. Not started. Production is unchanged and no deploy happens inside that plan.
+
+## Retired: the compact-phone refactor (historical)
+
+Anthony retired it on 2026-09-22: "compact phone refactor is outdated. no longer needed." Its unmerged work is preserved and nothing was deleted: Section 2 on `claude/compact-runtime` (`a1246a6`, `db8f610`), Section 3 on `claude/compact-server`. Neither was deployed and neither changed production. Do not resume it. The paragraph below is the record as it stood at retirement.
 
 The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progress on `codex/compact-phone-refactor`, based on clean commit `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`. Baseline and plan are saved. Anthony selected Weekbook. Four layouts with month navigation below search and verified current service data are complete, with bounded Gemini review and brief phone walkthroughs. See [the design handoff](COMPACT-DESIGN-HANDOFF.md). Anthony directed this task to end with a design handoff, before further runtime implementation or release. Separate Luna High documentation, indexing, and standalone membership work is written; Gemini Low reviewed all four bounded units with final no-material-findings verdicts. Prototype approval still precedes runtime UI changes. Four distinct layouts share behavior. Production is unchanged. Historical notes below describe prior releases.
 
 Last updated: 2026-09-15. Owner: Anthony (alovelace144@gmail.com).
-
-## Queued after the phone refactor: the app.js split
-
-[PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md) is written and deliberately blocked. It splits `app.js` into modules with zero behavior change, and it starts only after the compact phone plan's Section 6 has merged and released, because that plan already rewrites `app.js`, `index.html` and `design-gallery/build.mjs`. Record tree: `docs/runs/2026-09-22-app-js-split/`. Not started; Anthony has not chosen an implementation mode.
 
 
 September 15 shared Schedule default correction: the earlier time-aware fix

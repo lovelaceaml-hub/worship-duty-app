@@ -1,6 +1,12 @@
-# Worship Duty: Complete Phone Refactor
+# Worship Duty: Complete Phone Refactor (HISTORICAL)
 
-Status: Approved for implementation on 2026-09-15. Package 0 active; prototype approval pending.
+> **Retired 2026-09-22 by Anthony: "compact phone refactor is outdated. no longer needed."**
+> Superseded by [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md), which is the active plan.
+> Nothing was deleted. Section 2 (shared runtime foundation) stays unmerged on `claude/compact-runtime` at `a1246a6` and `db8f610`;
+> Section 3 (server workflows) stays unmerged on `claude/compact-server`. Neither was ever deployed and neither changed production.
+> Do not resume this plan or treat its product decisions as requirements. The live app is the visual authority.
+
+Status: historical. Was approved for implementation on 2026-09-15; prototype approval was still pending at retirement.
 Mode: Parallel. Runner: one controller, disjoint worktrees, integration last.
 Baseline: `86a476f6d80b5a7bbbb09f8c0e0c8a5721fff427`, clean working tree on `change/actionable-request-counts`.
 Integration branch: `codex/compact-phone-refactor`.

@@ -10,20 +10,20 @@ Coordinator: pending (Opus 5 high, assigned at Section 0)
 
 | Repo | Path | Branch | Baseline HEAD |
 |---|---|---|---|
-| pending | pending | pending | pending |
+| worship-duty-app | /Users/anthony/Projects/worship-duty-app | codex/compact-phone-refactor | 12481e9 (app.js 4,314 lines) |
 
 ## Lanes
 
 | Lane | Title | State | Model | Worktree | Review | Depends on |
 |---|---|---|---|---|---|---|
-| S0 | Sequencing decision | planned | pending | pending | pending | pending |
-| L0 | Plan critic | planned | pending | pending | pending | pending |
-| S1 | Safety net before any code moves | planned | pending | pending | pending | pending |
-| S2 | Move the leaf-level modules | planned | pending | pending | pending | pending |
-| S3 | Move state, departments, sync, notifications, calendar and session | planned | pending | pending | pending | pending |
-| S4 | Move rendering | planned | pending | pending | pending | pending |
-| S5 | Move the action dispatcher | planned | pending | pending | pending | pending |
-| S6 | Integration, documentation and completion review | planned | pending | pending | pending | pending |
+| S0 | Baseline and boundary | planned | Opus 5 high (controller) | none | none | nothing |
+| L0 | Plan critic | planned | gpt-5.6-sol high read-only | none | none | S0 |
+| S1 | Safety net before any code moves | planned | gpt-5.6-luna high | worktrees/2026-09-22-app-js-split/S1 | Sonnet 5 high | S0 |
+| S2 | Move the leaf-level modules | planned | gpt-5.6-luna high | worktrees/2026-09-22-app-js-split/S2 | Sonnet 5 high | S1 merged |
+| S3 | Move state, departments, sync, notifications, calendar and session | planned | gpt-5.6-luna high | worktrees/2026-09-22-app-js-split/S3 | Sonnet 5 high | S2 merged |
+| S4 | Move rendering | planned | gpt-5.6-luna high | worktrees/2026-09-22-app-js-split/S4 | Sonnet 5 high x2 | S3 merged |
+| S5 | Move the action dispatcher | planned | gpt-5.6-luna high | worktrees/2026-09-22-app-js-split/S5 | Sonnet 5 high x2 | S4 merged |
+| S6 | Integration, documentation and completion review | planned | Opus 5 high (controller) | worktrees/2026-09-22-app-js-split/S6 | Opus 5 high | S5 merged |
 
 ## Folders
 

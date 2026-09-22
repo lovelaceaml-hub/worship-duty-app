@@ -1,6 +1,6 @@
 # Worship Duty app.js split (September 2026)
 
-Plan id: `2026-09-22-app-js-split`. Status: **BLOCKED ON SEQUENCING, waits for the compact phone plan's Section 6.** Written 2026-09-22. Not started. Mode: **Steps** (Anthony, 2026-09-22): one plan unit per fresh chat, starting with Section 0.
+Plan id: `2026-09-22-app-js-split`. Status: **READY TO START.** Written 2026-09-22. Not started. Mode: **Steps** (Anthony, 2026-09-22): one plan unit per fresh chat, starting with Section 0. The original blocking condition was removed when Anthony retired the compact phone refactor on 2026-09-22.
 
 **Goal line (efficiency sweep 2026-09-22, Anthony's refactor list):** split `app.js` into modules with zero behavior change. Every work order in this plan quotes that line before anything else.
 
@@ -12,65 +12,59 @@ Live app and visual authority: https://lv-zion-duties.web.app
 
 ---
 
-## Section 0: Sequencing decision
+## Section 0: Baseline and boundary
 
-**Decision: this plan waits for the compact phone plan's Section 6 to merge and release. It does not take a bounded piece now.** The evidence is below, gathered from the repository on 2026-09-22.
+**The compact phone refactor is retired.** Anthony, 2026-09-22: "compact phone refactor is outdated. no longer needed." This plan's original blocking condition is gone and it can start. The evidence that produced that block is kept under "Retired: the compact phone refactor" below, because it is the only record of why `shared/`, `layouts/` and `styles/` exist on unmerged branches and where that work is preserved.
 
-### What the compact phone plan still owns
+### Code baseline
 
-[PLAN-COMPACT-PHONE-REFACTOR.md](PLAN-COMPACT-PHONE-REFACTOR.md) is approved and mid-flight. Its Build log records Section 2 complete on `claude/compact-runtime` (commits `a1246a6`, `db8f610`, from `515d38e`) and Section 3 reviewed on `claude/compact-server`. Sections 4, 5A, 5B and 6 are not done. The repository is sitting on the integration branch `codex/compact-phone-refactor` at `1e0b6fd`, and **Section 2 is not merged into it**.
+`codex/compact-phone-refactor` at `12481e9`, the current branch, `app.js` at **4,314 lines**. The Interfaces section below was measured at exactly this tree, so it is binding rather than provisional and Section 0 only has to confirm it.
 
-Its own text assigns the exact territory this split needs:
+### The trunk is `origin/main`, and local `main` is stale
 
-- Section 2: "One owner for root browser files, shared browser modules, appearance modules, service worker, and gallery build."
-- Section 4: "Sequential member/leader/admin/presider increments in shared runtime files; no competing writers."
-- Section 6: controller merges in dependency order, presents the preview, deploys named targets.
+Measured 2026-09-22:
 
-### What it has already done to the file this plan targets
+| Ref | `app.js` | `firestore.rules` | Relationship |
+|---|---|---|---|
+| `origin/main` (`8b0c06c`, Sep 14) | 4,217 lines | 1,854 lines | the real trunk; a direct ancestor of this branch |
+| `codex/compact-phone-refactor` (`12481e9`) | 4,314 lines | 1,854 lines | 18 commits ahead of `origin/main`, a clean fast-forward, 0 behind |
+| local `main` (`6ed1ebb`, Sep 13) | 2,476 lines | 30 lines | **stale and diverged**: 4 local commits, 85 behind `origin/main`. Not the trunk. Do not branch from it or merge into it |
 
-`git diff --stat 515d38e claude/compact-runtime` (Section 2, unmerged):
+The 18 commits ahead of `origin/main` are two groups:
 
-| File | Change |
+- **Shipped production fixes, already live**: presider song tracking restored, presider services advanced by time, leader config repair, the read-only maintenance page, the unified Schedule current-or-next default, and its release receipts (`3b4280d` through `86a476f`). `docs/HANDOFF.md` records the matching Hosting stamps. These belong on the trunk.
+- **Compact phone artifacts**: the retired plan's record, design prototypes, the unwired standalone membership module and run records (`c44d021` through `1e0b6fd`), plus this plan (`12481e9`).
+
+Anthony's open decision, carried into Section 0 and recorded there: whether the branch fast-forwards `origin/main` first so the split runs on a fresh trunk, or the split continues on this branch and the trunk catches up at Section 6. The plan assumes the first and Section 6 says so; nothing else in the plan depends on the answer.
+
+### Retired: the compact phone refactor
+
+Kept as the record of what was decided and what is preserved. [PLAN-COMPACT-PHONE-REFACTOR.md](PLAN-COMPACT-PHONE-REFACTOR.md) is superseded by this ruling and is historical.
+
+What it had produced before retirement, all **unmerged** and left on their branches, nothing deleted:
+
+| Branch | Contents |
 |---|---|
-| `app.js` | 814 lines changed |
-| `index.html` | 340 lines removed |
-| `design-gallery/build.mjs` | 303 lines rewritten |
-| `design-gallery/choice.js` | deleted (200 lines) |
-| `shared/` (7 new modules) | 1,540 lines added |
-| `layouts/` (6 new modules) | 244 lines added |
-| `styles/` (6 new files) | 455 lines added |
-| `appearance-boot.js`, `sw.js`, `firebase.json` | new or changed |
+| `claude/compact-runtime` (`a1246a6`, `db8f610`) | Section 2: `app.js` changed by 814 lines to 4,920, 340 lines cut from `index.html`, `design-gallery/build.mjs` rewritten by 303 lines into a directory copier, `design-gallery/choice.js` deleted, and `shared/` (7 modules), `layouts/` (6), `styles/` (6) created |
+| `claude/compact-server` | Section 3: `functions/revision.js`, `functions/song-history.js`, `functions/compact-workflows.js` and the version-aware save and atomic resolution work, reviewed, never deployed |
 
-The compact phone plan is **already a modularization of this app**. It created `shared/`, `layouts/` and `styles/`, and it rewrote the gallery build from a fixed file list into a directory copier (`for (const source of ['appearance-boot.js', 'shared/**', 'layouts/**', 'styles/**'])`). Section 4 then writes role screens into those same files.
+Consequences for this plan, all simplifying:
 
-### Why no bounded piece is safe
+1. `app.js` has one owner again. There is no competing writer and no rebase risk.
+2. The parity baseline is now recordable, because the app's look is no longer scheduled to change. The live appearance at https://lv-zion-duties.web.app is the authority, and it stays the authority for the whole plan.
+3. `design-gallery/build.mjs` has one writer, this plan.
+4. The `shared/`, `layouts/` and `styles/` directory convention that Section 2 introduced is **not** in the baseline tree. This plan therefore creates its own `core/`, `views/` and `actions/` directories and does not inherit that layout. If Anthony later wants the compact phone work revived, it rebases onto the split rather than the other way round, which is the easier direction.
 
-Three independent collisions, any one of which is sufficient:
-
-1. **Same file, same lines.** Every candidate slice of `app.js` sits inside the runtime owner's territory for Sections 2 and 4. A split landing first would force the compact phone lanes to rebase 814 lines of unmerged rendering and startup changes onto a moved file.
-2. **The safety net cannot be recorded yet.** A parity baseline is a recording of what the app looks like and does. Sections 4 and 6 deliberately change what it looks like and does (floating bottom bar, compact tabs, new role start screens, clean startup). A baseline recorded today would be a baseline of an app that will not exist, so the split's central verification would be invalid on the day it ran.
-3. **The build pipeline is mid-rewrite.** `design-gallery/build.mjs` is the release path (AGENTS.md: "Always build and release Hosting through `design-gallery/release.mjs`"). Both plans must change it. Two writers on that file is exactly the situation the shared policy's one-writer-per-shared-file rule forbids.
-
-### The sequencing rule this plan follows
-
-This plan starts when all three are true, verified by the controller and recorded in the Build log:
-
-1. The compact phone plan's Section 6 has merged into `main` and released to https://lv-zion-duties.web.app, with its release stamp recorded in `docs/HANDOFF.md`.
-2. `main` is clean and `git diff main codex/compact-phone-refactor` is empty.
-3. The released look is captured as this plan's visual authority (Section 1), because at that point the live app's appearance is the authority per the shared policy.
-
-Nothing in this plan runs before then. If Anthony wants the split sooner, the honest option is to pause the compact phone plan at a section boundary, not to interleave them.
-
-**Section 0 has no worktree, no writer and no code.** It is the controller confirming the three conditions above and then re-deriving the Interfaces below against the real post-Section-6 `app.js`.
+**Section 0 has no worktree, no writer and no production code.** It is the controller confirming the baseline, settling the trunk question with Anthony, and freezing the Interfaces below.
 
 Setup: frontier · high · Lane: Claude (controller) · Review: none
   Claude: Opus 5 · high
 Worktree: none
-Depends on: compact phone Section 6 merged and released
+Depends on: nothing
 Agents: none
 Reviewers: none
 
-Deliverables: the three conditions confirmed with commands and output in the Build log; the code baseline SHA recorded; the Interfaces section below replaced with the real statement inventory, module manifest and gallery scope contract measured at that SHA; Anthony told in one line if the module shape changed materially from the provisional map.
+Deliverables: the working tree confirmed clean at the code baseline and the baseline SHA recorded in the Build log; the trunk question answered by Anthony and recorded; the Interfaces below re-verified against the baseline with the checker's own inventory pass and marked frozen; `AGENTS.md` updated so this is the named active plan.
 
 ---
 
@@ -89,11 +83,11 @@ These hold at any baseline and do not change when Section 0 re-derives the numbe
 
 ---
 
-## Interfaces (provisional, measured at `codex/compact-phone-refactor@1e0b6fd`; Section 0 replaces this with the real baseline)
+## Interfaces (binding, measured at the code baseline `codex/compact-phone-refactor@12481e9`)
 
-Everything in this section was measured on 2026-09-22 against the 4,314 line `app.js` on the integration branch. It proves the split is feasible and shows its expected shape. It is **not** binding, because the compact phone plan will change this file before this plan starts.
+Everything in this section was measured on 2026-09-22 against the 4,314 line `app.js` at the code baseline. `12481e9` is a docs-only commit on top of `1e0b6fd`, so every line number below is exact for the tree the split starts from. With the compact phone refactor retired, nothing is scheduled to change this file before Section 1 runs, so this section is binding. Section 0 re-verifies it and freezes it.
 
-### What `app.js` is today
+### What `app.js` is at the baseline
 
 - 4,314 lines, 250 top-level declarations, 14 section banners.
 - 20 module-level `let` bindings (mutable shared state): `sharedNameMap`, `state`, `fb`, `authReady`, `authUser`, `verifiedSession`, `authStatus`, `requestUnsub`, `settingsLoaded`, `departmentsLoaded`, `membersLoaded`, `renderQueued`, `sheetSyncTried`, `autoSyncWaits`, `sheetSyncScheduled`, `songApp`, `songAppLoading`, `songAssetsLoading`, `setlistIndex`, plus the `pulseInFlight` set.
@@ -102,9 +96,9 @@ Everything in this section was measured on 2026-09-22 against the 4,314 line `ap
 
 ### Provisional module map
 
-All paths relative to the repository root, extending the `shared/` and `layouts/` convention the compact phone plan introduced. Line ranges are at `1e0b6fd`.
+All paths relative to the repository root. The retired compact phone plan's `shared/` and `layouts/` directories are not in the baseline tree, so this plan creates `core/`, `views/` and `actions/` of its own.
 
-| Module | Holds (line range at 1e0b6fd) |
+| Module | Holds (line range at the baseline) |
 |---|---|
 | `core/constants.js` | categories, service labels, seed roster, storage keys, asset stamp, default site hash, sheet URL, name-unify map, `sharedNameMap` and its setter, `memberLabel`, `feat`, `sha256`, `siteHash`, `siteUnlocked`, `sheetUrl` (3 to 118) |
 | `core/format.js` | `esc`, `pad`, `toISO`, `todayISO`, `isoDaysAgo`, `fmtDate`, `fmtTime`, `dateBadge`, `svcId`, `slugify`, `requestId`, `svcDateTime`, `dutyCategory`, `sortDuties`, `sameDuties` (119 to 163) |
@@ -140,7 +134,7 @@ Provisional result: `app.js` goes from 4,314 lines to roughly 300, in 21 focused
 app = once(baseline, '\ninit();', '\n' + host + '\ninit();', 'host initialization');
 ```
 
-`host` is `design-gallery/host-bridge.js` with nine slots filled from `prototype-prism/*.js`, `prototype/*.js` and `design-gallery/navy-adapter.js`. Those injected sources call `app.js`'s top-level functions directly by lexical scope. Measured on 2026-09-22 by identifier matching against the 250 top-level declarations:
+`host` is `design-gallery/host-bridge.js` with nine slots filled from `prototype-prism/*.js`, `prototype/*.js` and `design-gallery/navy-adapter.js`. Those injected sources call `app.js`'s top-level functions directly by lexical scope. Measured on 2026-09-22 at the baseline by identifier matching against the 250 top-level declarations:
 
 | Injected source | Distinct `app.js` names it reaches |
 |---|---|
@@ -154,7 +148,7 @@ app = once(baseline, '\ninit();', '\n' + host + '\ninit();', 'host initializatio
 | `design-gallery/navy-adapter.js` | 1 |
 | **Union** | **53** |
 
-The 53 at `1e0b6fd`: `ASSET_V`, `CATEGORIES`, `DATA_KEY`, `FEATURES`, `actionableCountsForViewer`, `actionableDepartmentForDuty`, `canManageAnyDepartment`, `categoryHasAssignments`, `conflictsFor`, `downloadICS`, `dutiesFor`, `esc`, `fb`, `feat`, `fmtDate`, `fmtTime`, `init`, `isForcedSession`, `isVerifiedSession`, `loadLocal`, `loadTag`, `manageDepartment`, `manageRequestVisible`, `manageServiceVisible`, `pad`, `pastServices`, `preferredScheduleService`, `render`, `renderCatRows`, `renderCreatePin`, `renderFeatures`, `renderManage`, `renderManageData`, `renderManagePeople`, `renderManagePlanning`, `renderManageRequests`, `renderManageServices`, `renderMy`, `renderSchedule`, `renderServiceCard`, `renderSiteLock`, `renderUnlock`, `requestIsActionable`, `seedState`, `selectedManageDepartment`, `siteUnlocked`, `songCtx`, `state`, `svcId`, `toISO`, `todayISO`, `ui`, `upcomingServices`.
+The 53 at the baseline: `ASSET_V`, `CATEGORIES`, `DATA_KEY`, `FEATURES`, `actionableCountsForViewer`, `actionableDepartmentForDuty`, `canManageAnyDepartment`, `categoryHasAssignments`, `conflictsFor`, `downloadICS`, `dutiesFor`, `esc`, `fb`, `feat`, `fmtDate`, `fmtTime`, `init`, `isForcedSession`, `isVerifiedSession`, `loadLocal`, `loadTag`, `manageDepartment`, `manageRequestVisible`, `manageServiceVisible`, `pad`, `pastServices`, `preferredScheduleService`, `render`, `renderCatRows`, `renderCreatePin`, `renderFeatures`, `renderManage`, `renderManageData`, `renderManagePeople`, `renderManagePlanning`, `renderManageRequests`, `renderManageServices`, `renderMy`, `renderSchedule`, `renderServiceCard`, `renderSiteLock`, `renderUnlock`, `requestIsActionable`, `seedState`, `selectedManageDepartment`, `siteUnlocked`, `songCtx`, `state`, `svcId`, `toISO`, `todayISO`, `ui`, `upcomingServices`.
 
 **Settled rule.** After the split, `app.js` imports every name in that set into its own top-level scope, whether or not `app.js` itself calls it, so the injection point still resolves. A plain `import { esc, render, state } from ...` is enough: an imported binding is in the importing module's top-level scope and is a live binding, so `state` reassigned inside `core/state.js` is seen by the injected bridge exactly as it is today.
 
@@ -167,7 +161,7 @@ Two further build facts the plan must honor:
 
 ### Shared mutable state and setters
 
-A module-level `let` lives in its owner module and is read elsewhere through the ES live binding. Section 0 lists every statement that assigns a `let` owned by a different module; each becomes a setter call with one added setter, and each goes into `scripts/check-app-split.allow.json` in the section that makes it. The allowlist is otherwise empty. Known cases at `1e0b6fd`: `sharedNameMap` (assigned in `initFirebase`, owned by `core/constants.js`) and `setlistIndex` (assigned in the song listener, owned by `views/songs.js`).
+A module-level `let` lives in its owner module and is read elsewhere through the ES live binding. Section 0 confirms the list of statements that assign a `let` owned by a different module; each becomes a setter call with one added setter, and each goes into `scripts/check-app-split.allow.json` in the section that makes it. The allowlist is otherwise empty. Known cases at the baseline: `sharedNameMap` (assigned in `initFirebase`, owned by `core/constants.js`) and `setlistIndex` (assigned in the song listener, owned by `views/songs.js`).
 
 ### Load order
 
@@ -211,11 +205,11 @@ node scripts/check-app-split.mjs <baseline-sha> --manifest scripts/check-app-spl
 ```
 
 ```
-for f in app.js core/*.js views/*.js actions/*.js shared/*.js layouts/*.js; do node --check "$f" || exit 1; done
+for f in app.js core/*.js views/*.js actions/*.js; do node --check "$f" || exit 1; done
 ```
 
 ```
-git diff --stat main -- index.html song-app.css styles/
+git diff --stat <code-baseline-sha> -- index.html song-app.css song-app.js
 ```
 
 Pass conditions: every command exits zero; the `node --test` and `design-gallery/test.mjs` counts never drop below the previous section's; the last command is empty unless that section's manifest says otherwise. `design-gallery/test.mjs` needs Playwright's Chromium and must run outside the macOS sandbox, per AGENTS.md.
@@ -261,7 +255,7 @@ Setup: frontier · high · Lane: Codex · Review: controller
   Codex: executor `gpt-5.6-luna` · high (fallback: `gpt-5.6-terra` · high)
   Claude: Sonnet 5 · high (spill writer if Codex `primary` is at or above 80 percent)
 Worktree: `/Users/anthony/.claude/worktrees/2026-09-22-app-js-split/S1`
-Depends on: Section 0
+Depends on: Section 0 (baseline frozen, trunk question answered)
 Agents: none
 Reviewers: controller=Sonnet 5 · high; independent=none
 Hygiene: Haiku 4.5 · low sweep before review
@@ -353,16 +347,18 @@ Depends on: Section 5 merged
 Agents: none
 Reviewers: completion=Opus 5 · high, fresh, read-only, one round
 
-1. Run the full verification set on merged `main` one more time, cold.
+1. Bring the trunk up to date per Section 0's answer, then run the full verification set on it one more time, cold. "The trunk" means `origin/main`, never the stale local `main`; if the local branch has not been reset to `origin/main` by then, do that first and say so.
 2. Write the shipped module map into `docs/CODE-INDEX.md` and `docs/HANDOFF.md`, and add a README quick link. Update `docs/FEATURE-MAP.json` where it names `app.js`.
 3. Update `/Users/anthony/Projects/README.md`'s worship duty line only if its status text is now wrong. No dated notes in the index.
 4. Record the rollback table: each section's merge commit, and the rule that reverting goes newest first down to the target section, because later sections import earlier modules.
 5. Private GitHub backup of the branch.
 6. Completion review by a fresh Opus 5, read-only. Accepted findings are corrected by the controller and the verification set is rerun; a second Opus round is not launched.
 
-**No deploy.** The plan ends at a merged, verified `main`. Anthony decides separately whether and when to release through `design-gallery/release.mjs`.
+7. Mark the retired compact phone plan historical if Section 0 has not already, and leave `claude/compact-runtime` and `claude/compact-server` in place. No branch is deleted by this plan.
 
-Acceptance: every verification command passes on `main`; the documents above are current with working links; the backup is pushed and verified private; the completion review closes with no blocking-class finding open. Undo: revert the section's merge; the code rollback table covers Sections 2 to 5.
+**No deploy.** The plan ends at a merged, verified trunk. Anthony decides separately whether and when to release through `design-gallery/release.mjs`. The first release after this plan is the one that proves the gallery scope contract in production, so it is worth doing while this work is fresh rather than months later.
+
+Acceptance: every verification command passes on the trunk; the documents above are current with working links; the backup is pushed and verified private; the completion review closes with no blocking-class finding open. Undo: revert the section's merge; the code rollback table covers Sections 2 to 5.
 
 ---
 
@@ -379,7 +375,7 @@ Acceptance: every verification command passes on `main`; the documents above are
 | A new load-time side effect from module evaluation order | the load-effects fixture |
 | The Schedule current-or-next selector regressed | recorded DOM facts at the 7:20 PM and 9:06 PM Pacific boundary |
 | Real member data leaks into a baseline or review packet | fixtures are `design-gallery/test.mjs`'s fictional set; controller greps every baseline for the canonical roster names in Section 1 |
-| The compact phone plan is not actually finished when this starts | Section 0's three conditions, confirmed with command output in the Build log |
+| A stale branch is used as the baseline or merge target | Section 0 records that local `main` is 85 commits behind `origin/main` and must not be used; every section branches from the recorded baseline SHA |
 
 ---
 
@@ -390,5 +386,11 @@ Acceptance: every verification command passes on `main`; the documents above are
 - 2026-09-22: Interfaces measured against `codex/compact-phone-refactor@1e0b6fd`, marked provisional because the compact phone plan will change `app.js` before this plan starts. Measured facts: 4,314 lines, 250 top-level declarations, 20 module-level `let` bindings, zero `export` statements, zero `window.` assignments, `type="module"` entry. Existing safety net found: `design-gallery/test.mjs` runs 103 checks across all four appearances in real Chromium with a mocked Firebase SDK, blocked external requests and fictional member fixtures, and asserts the gallery build does not modify source files. Four test files read `app.js` as source text.
 
 - 2026-09-22: Gallery scope contract discovered and quantified, the plan's distinctive risk. `design-gallery/build.mjs` injects `host-bridge.js` plus nine filled slots into `app.js`'s top-level module scope immediately before `init();`, so the injected code reaches `app.js`'s functions lexically. Identifier matching against the 250 declarations found **53 distinct names** reached by the injected sources across eight files, listed in Interfaces. Settled rule: `app.js` re-imports every name in that union into its own top-level scope, enforced by `scripts/check-app-split.mjs --gallery`, which recomputes the set at run time. Without this, a correct-looking split would pass every unit test and break all four appearances only at release.
+
+- 2026-09-22: **Anthony retired the compact phone refactor** ("compact phone refactor is outdated. no longer needed"), which removes this plan's only blocking condition. Status changed from blocked to ready. Section 0 rewritten from a sequencing wait into a baseline and boundary unit, keeping the retirement evidence as the record of why `shared/`, `layouts/` and `styles/` exist on unmerged branches. Nothing deleted: Section 2 stays on `claude/compact-runtime` (`a1246a6`, `db8f610`) and Section 3 on `claude/compact-server`. `PLAN-COMPACT-PHONE-REFACTOR.md` marked historical and `AGENTS.md` re-pointed at this plan.
+
+- 2026-09-22: Interfaces promoted from provisional to **binding**, because they were measured at `1e0b6fd` and the code baseline is `12481e9`, a docs-only commit on top of it. Every line range, the 250 declaration inventory, the 20 module-level `let` bindings and the 53 name gallery scope contract are exact for the tree Section 1 starts from. The retired plan's `shared/` and `layouts/` directories are not in the baseline, so this plan creates `core/`, `views/` and `actions/` instead of inheriting that layout.
+
+- 2026-09-22: Trunk facts measured and recorded in Section 0 after the retirement, because Section 6 had assumed `main`. `origin/main` is the real trunk at `8b0c06c` with a 4,217 line `app.js`, and is a direct ancestor of this branch, which is 18 commits ahead as a clean fast-forward and 0 behind. **Local `main` is stale and diverged**: `6ed1ebb`, a 2,476 line `app.js`, a 30 line `firestore.rules`, 4 local commits and 85 behind `origin/main`. It must not be used as a baseline or a merge target. Of the 18 commits ahead, `3b4280d` through `86a476f` are shipped production fixes that belong on the trunk and the rest are retired-plan records. Whether the trunk fast-forwards before Section 1 or at Section 6 is Anthony's open decision, carried in Section 0.
 
 - 2026-09-22: Record tree created at `docs/runs/2026-09-22-app-js-split/`. Anthony chose **Steps** mode: one plan unit per fresh chat, Section 0 first, and Section 0 does not open until the compact phone plan's Section 6 has merged and released. Anthony also authorized committing the plan, record tree and document links onto `codex/compact-phone-refactor`. No implementation started and no follow-on chat opened.
