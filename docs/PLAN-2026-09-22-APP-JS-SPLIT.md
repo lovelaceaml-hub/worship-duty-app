@@ -18,11 +18,13 @@ Live app and visual authority: https://lv-zion-duties.web.app
 
 ### Code baseline
 
-`codex/compact-phone-refactor` at `f876565`, the current branch, `app.js` at **4,314 lines** (blob `ab50d2da`, byte-identical to `1e0b6fd` where the Interfaces were measured; the commits in between are docs only). Confirmed frozen by Section 0. The Interfaces section below was measured at exactly this tree, so it is binding rather than provisional and Section 0 only has to confirm it.
+The **code baseline is `app.js` blob `ab50d2dadc91b70bf5f7f1992e34c0d41498bb0e`, 4,314 lines**, unchanged since `1e0b6fd` where the Interfaces were measured. Every commit since has been documentation only, so each section branches from `main` at whatever its tip is and checks that blob rather than a commit SHA. Section 0 confirmed it and froze the Interfaces below; they are binding, not provisional.
+
+Every section's first act is that check: if `app.js` is not 4,314 lines with that blob, stop and report.
 
 ### The trunk, now cleaned up
 
-Anthony fast-forwarded `main` on 2026-09-22. `origin/main`, local `main` and `codex/compact-phone-refactor` are all at the baseline `e3deb1b`, 0 ahead and 0 behind each other. The trunk carries the live code and is safe to branch from.
+Anthony fast-forwarded `main` on 2026-09-22. `origin/main`, local `main` and the working branch are identical, 0 ahead and 0 behind each other. The trunk carries the live code and is safe to branch from.
 
 The state that made the cleanup necessary, measured 2026-09-22 before it:
 
@@ -37,7 +39,7 @@ The 18 commits ahead of `origin/main` are two groups:
 - **Shipped production fixes, already live**: presider song tracking restored, presider services advanced by time, leader config repair, the read-only maintenance page, the unified Schedule current-or-next default, and its release receipts (`3b4280d` through `86a476f`). `docs/HANDOFF.md` records the matching Hosting stamps. These belong on the trunk.
 - **Compact phone artifacts**: the retired plan's record, design prototypes, the unwired standalone membership module and run records (`c44d021` through `1e0b6fd`), plus this plan (`12481e9`).
 
-**Answered and done, 2026-09-22: trunk first.** Section 0 archived the four local-only `main` commits as the pushed tag `archive/local-main-2026-09-13`, then reset local `main` to `origin/main`. Anthony then ran the remote fast-forward himself (`8b0c06c..e3deb1b`, no merge commit, no force); the controller does not push to `main`. Sections branch from `main` at `e3deb1b` from here on.
+**Answered and done, 2026-09-22: trunk first.** Section 0 archived the four local-only `main` commits as the pushed tag `archive/local-main-2026-09-13`, then reset local `main` to `origin/main`. Anthony then ran the remote fast-forward himself (`8b0c06c..e3deb1b`, no merge commit, no force). `origin/main`, local `main` and the working branch have stayed identical since. Sections branch from `main`.
 
 ### Retired: the compact phone refactor
 
@@ -222,20 +224,29 @@ Pass conditions: every command exits zero; the `node --test` and `design-gallery
 
 ## Model, effort, agent and reviewer choices
 
-Utilization is read live from `/Users/anthony/Projects/ai-usage-dashboard/data/status.json` at every dispatch, never from this file. The reading on 2026-09-22 at 20:47Z was: Claude weekly 80 percent, Fable weekly 97 percent, Codex primary 95 percent, Gemini weekly 67 percent. This plan does not start for at least several days, so those numbers are an example, not a routing input.
+**Anthony's routing override, 2026-09-22: Opus 5, Sonnet 5 and Gemini 3.8 Flash only.** Codex is not used in this plan. The assignments below place each model where its strength and its pool make sense, hardest and riskiest to Opus, careful implementation and every review to Sonnet, mechanical and read-only volume to Flash.
 
-| Role | Choice | Why |
+Utilization is read live from `/Users/anthony/Projects/ai-usage-dashboard/data/status.json` at every dispatch, never from this file. Reading at 2026-09-22T21:42Z: Claude 5-hour 12 percent, Claude weekly 82 percent resetting tonight at 11:00 PM, Codex `primary` 95 percent until Saturday, Gemini weekly 77 percent resetting Wednesday 7:30 AM, Gemini 5-hour reset.
+
+| Unit or role | Model | Why |
 |---|---|---|
-| Plan author | Opus 5 · xhigh (this chat) | Routing table: plan authoring |
-| Controller, integration, Section 0 and 6 | Opus 5 · high | Routing table: adjudication and completion boundary; this repository is a church app holding real people's data |
-| Writer, Sections 1 to 5 | `gpt-5.6-luna` · high via `codex-dispatch` | Routing table default implementer. Spill order when Codex `primary` is at or above 80 percent: Sonnet 5 · high as a Claude helper in the same worktree. **Gemini 3.8 Flash is skipped as a writer here**: Antigravity's headless gate cannot read worktree files, and every section of this plan runs in a worktree |
-| Section review, round 1 | Haiku 4.5 · low hygiene sweep, then Sonnet 5 · high read-only | The writer never grades its own work. Codex-written diffs are reviewed Claude-side |
-| Section review, round 2 | Sonnet 5 · high, fresh instance, read-only, on Sections 4 and 5 only | Blast radius: a church app real people use gets two landing rounds. Sections 4 and 5 move rendering and the action dispatcher, where a careless move shows |
-| Completion review | Opus 5 · high, fresh, read-only, one round | Full-plan completion boundary on a production surface holding other people's data |
-| Plan critic (Lane 0) | `gpt-5.6-sol` · high, read-only (fallback Sonnet 5 · high) | Plan-review gate: three or more sections |
+| Plan author, Section 0 | Opus 5 · xhigh, then · high | Plan authoring and the baseline ruling |
+| Lane 0, plan critic | **Gemini 3.8 Flash · high**, read-only | Read-only, needs no worktree, and keeps Claude's weekly for the writing |
+| Section 1, safety net | **Sonnet 5 · high** | Test tooling and a Playwright parity harness: careful work, but not architectural |
+| Section 2, leaf modules | **Gemini 3.8 Flash · high** | The most mechanical section: five leaf modules with no cross-imports. Runs on a branch in the main checkout, not a worktree (see below) |
+| Section 3, state and departments | **Sonnet 5 · high** | Touches every permission guard; needs judgment, not just motion |
+| Section 4, rendering | **Opus 5 · high** | The riskiest section: roughly 30 of the 53 gallery scope names are rendering functions |
+| Section 5, action dispatcher | **Opus 5 · high** | The app's entire event contract, a 925 line switch that must move byte-identical |
+| Section 6, integration | **Opus 5 · high** (controller) | Completion boundary on a production surface holding real people's data |
+| Every section review | **Sonnet 5 · high**, fresh, read-only | The writer never grades its own work. Sonnet writes only Sections 1 and 3, so a fresh Sonnet instance reviews those |
+| Second review round, Sections 4 and 5 | **Sonnet 5 · high**, fresh, read-only | Blast radius: a church app real people use gets two landing rounds |
+| Completion review, Section 6 | **Sonnet 5 · high**, fresh, read-only, one round | **Changed from Opus.** Opus now writes Sections 4 and 5, so it cannot also grade the completed work |
+| Pre-review hygiene sweep | **Gemini 3.8 Flash · low** | The routing table's named alternate to Haiku 4.5; keeps Claude's weekly for substance |
 | Parity baselines and browser walkthroughs | The coordinating Claude chat | Playwright and screenshot glue is coordinator work, not a writer's |
 
-Runner: **sequential, Steps mode** (Anthony's choice, 2026-09-22). Every section edits `app.js`, so there is one writer at a time and one plan unit per fresh chat. Lane 0 is the only concurrent unit, and it is read-only; it launches from the Section 1 chat.
+**Worktrees and Gemini.** Antigravity's headless gate cannot read files in a Git worktree, so a Flash-written section runs on its own branch in the main checkout at `/Users/anthony/Projects/worship-duty-app` instead. That is safe here and is not a weakening of the isolation rule: Steps mode is sequential, exactly one section is ever in flight, and each section still gets its own branch and its own revert point. Sections written by Opus or Sonnet keep their worktrees.
+
+Runner: **sequential, Steps mode** (Anthony's choice, 2026-09-22). Every section edits `app.js`, so there is one writer at a time and one plan unit per fresh chat. Mixed models per section make Steps the only workable mode, since one chat cannot switch between Opus, Sonnet and Flash. Lane 0 is the only concurrent unit, and it is read-only; it launches from the Section 1 chat.
 
 ---
 
@@ -243,10 +254,9 @@ Runner: **sequential, Steps mode** (Anthony's choice, 2026-09-22). Every section
 
 ### Lane 0: Plan critic
 
-Setup: frontier · high · Lane: Codex (read-only) · Review: none
-  Codex: `gpt-5.6-sol` · high (fallback: Claude Sonnet 5 · high)
-  Claude: Sonnet 5 · high (fallback)
-Worktree: none, read-only
+Setup: balanced · high · Lane: Antigravity (read-only) · Review: none
+  Antigravity: Gemini 3.8 Flash · high, read-only (fallback: Claude Sonnet 5 · high)
+Worktree: none, read-only, reads the main checkout
 Depends on: Section 0 complete (launches alongside Section 1)
 Agents: none
 Reviewers: none (this lane is the critic)
@@ -255,10 +265,9 @@ Argue against this plan: missing decisions, unsafe assumptions, untestable accep
 
 ### Section 1: Safety net before any code moves
 
-Setup: frontier · high · Lane: Codex · Review: controller
-  Codex: executor `gpt-5.6-luna` · high (fallback: `gpt-5.6-terra` · high)
-  Claude: Sonnet 5 · high (spill writer if Codex `primary` is at or above 80 percent)
-Worktree: `/Users/anthony/.claude/worktrees/2026-09-22-app-js-split/S1`
+Setup: balanced · high · Lane: Claude · Review: controller
+  Claude: Sonnet 5 · high (fallback: Opus 5 · high if the parity harness stalls)
+Worktree: `.claude/worktrees/2026-09-22-app-js-split/S1`
 Depends on: Section 0 (baseline frozen, trunk question answered)
 Agents: none
 Reviewers: controller=Sonnet 5 · high; independent=none
@@ -276,14 +285,13 @@ Acceptance: every verification command passes on the untouched tree; the checker
 
 ### Section 2: Move the leaf-level modules
 
-Setup: frontier · high · Lane: Codex · Review: controller
-  Codex: executor `gpt-5.6-luna` · high (fallback: `gpt-5.6-terra` · high)
-  Claude: Sonnet 5 · high (spill writer)
-Worktree: `/Users/anthony/.claude/worktrees/2026-09-22-app-js-split/S2`
+Setup: balanced · high · Lane: Antigravity · Review: controller
+  Antigravity: Gemini 3.8 Flash · high (fallback: Sonnet 5 · high)
+Worktree: **none**, branch `split/s2-leaf-modules` in the main checkout at `/Users/anthony/Projects/worship-duty-app`, because Antigravity cannot read worktree files
 Depends on: Section 1 merged
 Agents: none
-Reviewers: controller=Sonnet 5 · high; independent=none
-Hygiene: Haiku 4.5 · low sweep before review
+Reviewers: controller=Sonnet 5 · high, fresh, read-only; independent=none
+Hygiene: Gemini 3.8 Flash · low sweep before review
 
 Create `core/constants.js`, `core/format.js`, `core/conflicts.js`, `core/planning.js` and `core/sheet-parse.js`. These import nothing from other split modules except `core/format.js` and `core/constants.js`, so they are acyclic by rule. `app.js` imports them. The `sharedNameMap` setter is added here if `initFirebase` is the only writer, and goes in the allowlist.
 
@@ -293,14 +301,13 @@ Acceptance: every verification command passes; the manifest check passes with th
 
 ### Section 3: Move state, departments, sync, notifications, calendar and session
 
-Setup: frontier · high · Lane: Codex · Review: controller
-  Codex: executor `gpt-5.6-luna` · high (fallback: `gpt-5.6-terra` · high)
-  Claude: Sonnet 5 · high (spill writer)
-Worktree: `/Users/anthony/.claude/worktrees/2026-09-22-app-js-split/S3`
+Setup: balanced · high · Lane: Claude · Review: controller
+  Claude: Sonnet 5 · high (fallback: Opus 5 · high)
+Worktree: `.claude/worktrees/2026-09-22-app-js-split/S3`
 Depends on: Section 2 merged
 Agents: none
-Reviewers: controller=Sonnet 5 · high; independent=none
-Hygiene: Haiku 4.5 · low sweep before review
+Reviewers: controller=Sonnet 5 · high, **fresh instance**, read-only; independent=none
+Hygiene: Gemini 3.8 Flash · low sweep before review
 
 Create `core/state.js`, `core/auth.js`, `core/departments.js`, `core/schedule.js`, `core/notify.js`, `core/sheet-sync.js`, `core/calendar.js` and `core/session.js`. `state` and the Firebase handle become live bindings exported from `core/state.js`; nothing outside that module may assign them, and Section 0's setter list names any statement that does.
 
@@ -310,14 +317,13 @@ Acceptance: every verification command passes; the manifest check passes with th
 
 ### Section 4: Move rendering
 
-Setup: frontier · high · Lane: Codex · Review: controller plus one independent round
-  Codex: executor `gpt-5.6-luna` · high (fallback: `gpt-5.6-terra` · high)
-  Claude: Sonnet 5 · high (spill writer)
-Worktree: `/Users/anthony/.claude/worktrees/2026-09-22-app-js-split/S4`
+Setup: frontier · high · Lane: Claude · Review: two rounds
+  Claude: Opus 5 · high (fallback: Sonnet 5 · high)
+Worktree: `.claude/worktrees/2026-09-22-app-js-split/S4`
 Depends on: Section 3 merged
 Agents: none
-Reviewers: controller=Sonnet 5 · high; independent=Sonnet 5 · high, fresh instance, read-only
-Hygiene: Haiku 4.5 · low sweep before review
+Reviewers: round 1 = Sonnet 5 · high, fresh, read-only; round 2 = Sonnet 5 · high, a second fresh instance, read-only
+Hygiene: Gemini 3.8 Flash · low sweep before review
 
 Create `views/shell.js`, `views/schedule.js`, `views/songs.js`, `views/requests.js`, `views/manage.js` and `views/departments.js`. Rendering is where a careless move shows, so the 40 screenshots and the DOM facts are the deciding check here, not the unit tests.
 
@@ -327,14 +333,13 @@ Acceptance: every verification command passes; the manifest check passes with th
 
 ### Section 5: Move the action dispatcher
 
-Setup: frontier · high · Lane: Codex · Review: controller plus one independent round
-  Codex: executor `gpt-5.6-luna` · high (fallback: `gpt-5.6-terra` · high)
-  Claude: Sonnet 5 · high (spill writer)
-Worktree: `/Users/anthony/.claude/worktrees/2026-09-22-app-js-split/S5`
+Setup: frontier · high · Lane: Claude · Review: two rounds
+  Claude: Opus 5 · high (fallback: Sonnet 5 · high)
+Worktree: `.claude/worktrees/2026-09-22-app-js-split/S5`
 Depends on: Section 4 merged
 Agents: none
-Reviewers: controller=Sonnet 5 · high; independent=Sonnet 5 · high, fresh instance, read-only
-Hygiene: Haiku 4.5 · low sweep before review
+Reviewers: round 1 = Sonnet 5 · high, fresh, read-only; round 2 = Sonnet 5 · high, a second fresh instance, read-only
+Hygiene: Gemini 3.8 Flash · low sweep before review
 
 Create `actions/dispatch.js` as one module (`canRunAction`, `handleAct`, `handleChg`, `applyNameMap`, `saveRoleConfiguration` and the lookup helpers). `handleAct` is a single large string-keyed switch and moves whole; it is not subdivided. `app.js` is left with the import block, the gallery scope contract, `setSyncPill`, `pulse`, `initFirebase`, `init` and the `init()` call.
 
@@ -344,19 +349,20 @@ Acceptance: every verification command passes; the manifest check passes with ev
 
 ### Section 6: Integration, documentation and completion review
 
-Setup: frontier · high · Lane: Claude (controller) · Review: Opus 5, one round
-  Claude: Opus 5 · high
-Worktree: `/Users/anthony/.claude/worktrees/2026-09-22-app-js-split/S6`
+Setup: frontier · high · Lane: Claude (controller) · Review: Sonnet 5, one round
+  Claude: Opus 5 · high (controller)
+Worktree: `.claude/worktrees/2026-09-22-app-js-split/S6`
 Depends on: Section 5 merged
 Agents: none
-Reviewers: completion=Opus 5 · high, fresh, read-only, one round
+Reviewers: completion=Sonnet 5 · high, fresh, read-only, one round. **Not Opus**, because Opus wrote Sections 4 and 5 and must not grade the completed work
+Hygiene: Gemini 3.8 Flash · low sweep before review
 
 1. Bring the trunk up to date per Section 0's answer, then run the full verification set on it one more time, cold. "The trunk" means `origin/main`, never the stale local `main`; if the local branch has not been reset to `origin/main` by then, do that first and say so.
 2. Write the shipped module map into `docs/CODE-INDEX.md` and `docs/HANDOFF.md`, and add a README quick link. Update `docs/FEATURE-MAP.json` where it names `app.js`.
 3. Update `/Users/anthony/Projects/README.md`'s worship duty line only if its status text is now wrong. No dated notes in the index.
 4. Record the rollback table: each section's merge commit, and the rule that reverting goes newest first down to the target section, because later sections import earlier modules.
 5. Private GitHub backup of the branch.
-6. Completion review by a fresh Opus 5, read-only. Accepted findings are corrected by the controller and the verification set is rerun; a second Opus round is not launched.
+6. Completion review by a fresh Sonnet 5, read-only, which wrote none of Sections 4 or 5. Accepted findings are corrected by the controller and the verification set is rerun; a second round is not launched.
 
 7. Mark the retired compact phone plan historical if Section 0 has not already, and leave `claude/compact-runtime` and `claude/compact-server` in place. No branch is deleted by this plan.
 
@@ -394,6 +400,10 @@ Acceptance: every verification command passes on the trunk; the documents above 
 - 2026-09-22: **Section 0 complete.** Code baseline frozen at `f876565`; `app.js` byte-identical to the measurement commit (blob `ab50d2da`, 4,314 lines), working tree clean. Interfaces re-verified and frozen: 250 top-level declarations, **19** module-level `let` bindings, 0 exports, 0 `window.` assignments, the 53 name gallery scope contract unchanged, and `node design-gallery/build.mjs` green at the baseline so Section 1 has a working "before" state. The module map was checked as a partition: **0 overlapping lines, 0 unassigned declarations, 2 uncovered lines** (1 and 2, which stay in `app.js`). That check found and corrected two errors in the plan's own map: `core/session.js` and `views/shell.js` both claimed 1786 to 1814 (session is now 1548 to 1785, shell 1786 to 1947), and the `let` count was 20 rather than 19 (`pulseInFlight` is a mutated `const`, not a reassignable binding). Record: `docs/runs/2026-09-22-app-js-split/lanes/S0.md`. No production code, no deploy, no production reads or writes.
 
 - 2026-09-22: Anthony was asked how git should work for the rest of this plan and chose "push to both", so section commits go to the section branch and to `main`. Force-pushing, merge commits and deploys stay outside this plan either way.
+
+- 2026-09-22: **Anthony chose the full plan, all six sections, on Opus 5, Sonnet 5 and Gemini 3.8 Flash.** Codex is out of this plan. Every section's setup line was re-routed: Lane 0 critic and Section 2 to Flash, Sections 1 and 3 to Sonnet, Sections 4, 5 and 6 to Opus, every review to a fresh Sonnet, every hygiene sweep to Flash · low. Two consequences worth naming. First, the completion review moved from Opus to a fresh Sonnet 5, because Opus now writes the two riskiest sections and must not grade the finished work. Second, Section 2 runs on the branch `split/s2-leaf-modules` in the main checkout rather than a worktree, because Antigravity's headless gate cannot read worktree files; that is safe because Steps mode runs exactly one section at a time and each section still gets its own branch and revert point. Mixed models per section also confirm Steps as the only workable mode, since one chat cannot switch between three models.
+
+- 2026-09-22: Baseline references in this plan were changed from a commit SHA to the `app.js` blob `ab50d2dadc91b70bf5f7f1992e34c0d41498bb0e` at 4,314 lines, because every commit since `1e0b6fd` has been documentation only and a SHA would go stale on each one. Each section now branches from `main` at its tip and checks the blob.
 
 - 2026-09-22: **Section 1 lane set to Claude, writer Sonnet 5 high.** Pools read live at 21:42Z: Codex `primary` 95 percent and not refilling until Saturday 3:45 AM, Claude weekly 82 percent resetting tonight at 11:00 PM, Claude 5-hour 12 percent, Gemini weekly 77 percent. The routing table's implementation row spills from Luna at 80 percent to Gemini 3.8 Flash, but this plan excludes Gemini as a writer because Antigravity's headless gate cannot read worktree files and every section runs in a worktree, so the spill continues to Sonnet 5 high as a Claude helper. Waiting for Codex would cost 3.5 days. Execution envelope: `docs/runs/2026-09-22-app-js-split/orders/S1.md`.
 
