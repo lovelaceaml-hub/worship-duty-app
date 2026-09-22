@@ -10,13 +10,13 @@ Coordinator: pending (Opus 5 high, assigned at Section 0)
 
 | Repo | Path | Branch | Baseline HEAD |
 |---|---|---|---|
-| worship-duty-app | /Users/anthony/Projects/worship-duty-app | codex/compact-phone-refactor | 12481e9 (app.js 4,314 lines) |
+| worship-duty-app | /Users/anthony/Projects/worship-duty-app | codex/compact-phone-refactor | f876565 (app.js 4,314 lines, blob ab50d2da) |
 
 ## Lanes
 
 | Lane | Title | State | Model | Worktree | Review | Depends on |
 |---|---|---|---|---|---|---|
-| S0 | Baseline and boundary | planned | Opus 5 high (controller) | none | none | nothing |
+| S0 | Baseline and boundary | complete | Opus 5 high (controller) | none | none | nothing |
 | L0 | Plan critic | planned | gpt-5.6-sol high read-only | none | none | S0 |
 | S1 | Safety net before any code moves | planned | gpt-5.6-luna high | worktrees/2026-09-22-app-js-split/S1 | Sonnet 5 high | S0 |
 | S2 | Move the leaf-level modules | planned | gpt-5.6-luna high | worktrees/2026-09-22-app-js-split/S2 | Sonnet 5 high | S1 merged |
