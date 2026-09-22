@@ -6,6 +6,11 @@ The approved [complete phone plan](PLAN-COMPACT-PHONE-REFACTOR.md) is in progres
 
 Last updated: 2026-09-15. Owner: Anthony (alovelace144@gmail.com).
 
+## Queued after the phone refactor: the app.js split
+
+[PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md) is written and deliberately blocked. It splits `app.js` into modules with zero behavior change, and it starts only after the compact phone plan's Section 6 has merged and released, because that plan already rewrites `app.js`, `index.html` and `design-gallery/build.mjs`. Record tree: `docs/runs/2026-09-22-app-js-split/`. Not started; Anthony has not chosen an implementation mode.
+
+
 September 15 shared Schedule default correction: the earlier time-aware fix
 covered Presider but not all four Schedule appearances. Original still put the
 first same-day service first, and alternative appearances kept their own
