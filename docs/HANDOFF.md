@@ -2,7 +2,7 @@
 
 ## Active plan: the app.js split
 
-The active plan is [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md): split `app.js` (4,314 lines) into modules with zero behavior change. Mode is Steps, one section per fresh chat. Record tree: `docs/runs/2026-09-22-app-js-split/`. Sections 0 (baseline and boundary), 1 (safety net), 2 (the leaf-level modules) and 3 (state, departments, sync, notifications, calendar, session, `app.js` 2,598 lines) are complete and merged to `main`. Section 4 (rendering: `views/shell.js`, `views/schedule.js`, `views/songs.js`, `views/requests.js`, `views/manage.js`, `views/departments.js`, `app.js` now 1,304 lines) is complete and verified in worktree `.claude/worktrees/2026-09-22-app-js-split/S4`, pending its two review rounds before merge to `main`; Section 5 (action dispatcher) is next. Production is unchanged and no deploy happens inside that plan.
+The active plan is [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md): split `app.js` (4,314 lines) into modules with zero behavior change. Mode is Steps, one section per fresh chat. Record tree: `docs/runs/2026-09-22-app-js-split/`. Sections 0 (baseline and boundary), 1 (safety net), 2 (the leaf-level modules), 3 (state, departments, sync, notifications, calendar, session) and 4 (rendering: `views/shell.js`, `views/schedule.js`, `views/songs.js`, `views/requests.js`, `views/manage.js`, `views/departments.js`, `app.js` now 1,303 lines) are complete and merged to `main`; Section 5 (action dispatcher) is next. Production is unchanged and no deploy happens inside that plan.
 
 ## Retired: the compact-phone refactor (historical)
 
