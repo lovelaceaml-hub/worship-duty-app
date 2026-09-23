@@ -22,7 +22,7 @@ Coordinator: pending (Opus 5 high, assigned at Section 0)
 | S2 | Move the leaf-level modules | complete, merged to main | Sonnet 5 high (lane switched from Gemini 3.8 Flash by Anthony) | worktrees/2026-09-22-app-js-split/S2 | Sonnet 5 high (fresh), no blocking findings | S1 merged |
 | S3 | Move state, departments, sync, notifications, calendar and session | complete, merged to main | Sonnet 5 high | worktrees/2026-09-22-app-js-split/S3 | Sonnet 5 high (fresh), no blocking findings | S2 merged |
 | S4 | Move rendering | complete, merged to main | Sonnet 5 high (setup line assigns Opus 5 high) | worktrees/2026-09-22-app-js-split/S4 | Sonnet 5 high x2 (fresh), two non-blocking findings fixed | S3 merged |
-| S5 | Move the action dispatcher | planned | Opus 5 high | worktrees/2026-09-22-app-js-split/S5 | Sonnet 5 high x2 (fresh) | S4 merged |
+| S5 | Move the action dispatcher | complete, pending review before merge to main | Sonnet 5 high (setup line assigns Opus 5 high) | worktrees/2026-09-22-app-js-split/S5 | Sonnet 5 high x2 (fresh) | S4 merged |
 | S6 | Integration, documentation and completion review | planned | Opus 5 high (controller) | worktrees/2026-09-22-app-js-split/S6 | Sonnet 5 high (fresh, completion) | S5 merged |
 
 ## Folders
@@ -44,5 +44,5 @@ Coordinator: pending (Opus 5 high, assigned at Section 0)
 <!-- lane: S2 state: complete, merged to main model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S2 review: complete updated: 2026-09-22T23:35Z -->
 <!-- lane: S3 state: complete, merged to main model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S3 review: complete updated: 2026-09-23T00:20Z -->
 <!-- lane: S4 state: complete, merged to main model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S4 review: complete updated: 2026-09-23T01:30Z -->
-<!-- lane: S5 state: planned model: pending worktree: pending review: pending updated: 2026-09-22T20:56Z -->
+<!-- lane: S5 state: complete, pending review model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S5 review: pending updated: 2026-09-23T01:35Z -->
 <!-- lane: S6 state: planned model: pending worktree: pending review: pending updated: 2026-09-22T20:56Z -->

@@ -52,7 +52,7 @@
   {
     "declaration": "init",
     "find": "  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});",
-    "replace": "  setNotifyRenderRefs(render, renderBanners);\n  setSheetSyncRefs(findService, render);\n  setSessionRefs(render, pulse);\n  setSongsRenderRef(render);\n  setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);\n  setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);\n  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});"
+    "replace": "  setNotifyRenderRefs(render, renderBanners);\n  setSheetSyncRefs(findService, render);\n  setSessionRefs(render, pulse);\n  setSongsRenderRef(render);\n  setDispatchRenderRef(render);\n  setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);\n  setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);\n  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});"
   },
   {
     "declaration": "init",
