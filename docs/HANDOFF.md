@@ -1,8 +1,8 @@
 # LV Zion Worship Service - Handoff Document
 
-## Active plan: the app.js split
+## Completed: the app.js split
 
-The active plan is [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md): split `app.js` (4,314 lines) into modules with zero behavior change. Mode is Steps, one section per fresh chat. Record tree: `docs/runs/2026-09-22-app-js-split/`. Sections 0 (baseline and boundary), 1 (safety net), 2 (the leaf-level modules), 3 (state, departments, sync, notifications, calendar, session), 4 (rendering) and 5 (action dispatcher: `actions/dispatch.js`, `app.js` now 384 lines) are complete and merged to `main`; Section 6 (integration and completion review) is next. Production is unchanged and no deploy happens inside that plan.
+[PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md) is **complete**: `app.js` (was 4,314 lines) is split into 21 ES modules under `core/`, `views/` and `actions/dispatch.js` with zero behavior change; `app.js` itself is now 384 lines. All 6 sections are merged to `main`. See [docs/CODE-INDEX.md](CODE-INDEX.md#the-appjs-split-2026-09-22) for the module map and the plan's own Build log and rollback table for the full record. Production is unchanged; no deploy happened inside the plan, and release remains Anthony's separate decision.
 
 ## Retired: the compact-phone refactor (historical)
 

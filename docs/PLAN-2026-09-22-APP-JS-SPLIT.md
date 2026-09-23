@@ -1,6 +1,6 @@
 # Worship Duty app.js split (September 2026)
 
-Plan id: `2026-09-22-app-js-split`. Status: **Sections 0 through 5 complete and merged to `main`, Section 6 next.** Written 2026-09-22. Mode: **Steps** (Anthony, 2026-09-22): one plan unit per fresh chat, starting with Section 0. The original blocking condition was removed when Anthony retired the compact phone refactor on 2026-09-22.
+Plan id: `2026-09-22-app-js-split`. Status: **Complete. All 6 sections merged to `main`. `app.js` went from 4,314 lines to 384, split into 21 ES modules, zero behavior change, no deploy.** Written 2026-09-22. Mode: **Steps** (Anthony, 2026-09-22): one plan unit per fresh chat, starting with Section 0. The original blocking condition was removed when Anthony retired the compact phone refactor on 2026-09-22.
 
 **Goal line (efficiency sweep 2026-09-22, Anthony's refactor list):** split `app.js` into modules with zero behavior change. Every work order in this plan quotes that line before anything else.
 

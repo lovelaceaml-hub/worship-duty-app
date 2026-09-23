@@ -23,7 +23,7 @@ Coordinator: pending (Opus 5 high, assigned at Section 0)
 | S3 | Move state, departments, sync, notifications, calendar and session | complete, merged to main | Sonnet 5 high | worktrees/2026-09-22-app-js-split/S3 | Sonnet 5 high (fresh), no blocking findings | S2 merged |
 | S4 | Move rendering | complete, merged to main | Sonnet 5 high (setup line assigns Opus 5 high) | worktrees/2026-09-22-app-js-split/S4 | Sonnet 5 high x2 (fresh), two non-blocking findings fixed | S3 merged |
 | S5 | Move the action dispatcher | complete, merged to main | Sonnet 5 high (setup line assigns Opus 5 high) | worktrees/2026-09-22-app-js-split/S5 | Sonnet 5 high x2 (fresh), both rounds clean | S4 merged |
-| S6 | Integration, documentation and completion review | complete, pending completion review | Sonnet 5 high (controller; setup line assigns Opus 5 high) | worktrees/2026-09-22-app-js-split/S6 | Sonnet 5 high (fresh, completion) | S5 merged |
+| S6 | Integration, documentation and completion review | complete, merged to main | Sonnet 5 high (controller; setup line assigns Opus 5 high) | worktrees/2026-09-22-app-js-split/S6 | Sonnet 5 high (fresh, completion), one non-blocking finding fixed | S5 merged |
 
 ## Folders
 
@@ -45,4 +45,4 @@ Coordinator: pending (Opus 5 high, assigned at Section 0)
 <!-- lane: S3 state: complete, merged to main model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S3 review: complete updated: 2026-09-23T00:20Z -->
 <!-- lane: S4 state: complete, merged to main model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S4 review: complete updated: 2026-09-23T01:30Z -->
 <!-- lane: S5 state: complete, merged to main model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S5 review: complete updated: 2026-09-23T01:45Z -->
-<!-- lane: S6 state: complete, pending review model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S6 review: pending updated: 2026-09-23T02:00Z -->
+<!-- lane: S6 state: complete, merged to main model: Sonnet 5 high worktree: .claude/worktrees/2026-09-22-app-js-split/S6 review: complete updated: 2026-09-23T02:10Z -->
