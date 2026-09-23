@@ -31,7 +31,7 @@ test('department runtime exposes only secure UID keyed profile and assignment ca
 
 test('assignment picker has no congregation-wide roster fallback', () => {
   const start = app.indexOf('function memberSelect(');
-  const end = app.indexOf('/* Conflict notes', start);
+  const end = app.indexOf('function renderManageConflicts(', start);
   assert.ok(start >= 0 && end > start, 'memberSelect boundary is present');
   const picker = app.slice(start, end);
   assert.doesNotMatch(picker, /state\.members/);

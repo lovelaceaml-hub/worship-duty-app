@@ -186,7 +186,7 @@ export function discoverModuleFiles(root, manifest) {
   return files;
 }
 
-export function buildCurrentDeclarationIndex(root, files) {
+export function buildCurrentDeclarationIndex(root, files, manifest) {
   const byName = new Map();
   for (const relPath of files) {
     const source = fs.readFileSync(path.join(root, relPath), 'utf8');
@@ -198,8 +198,20 @@ export function buildCurrentDeclarationIndex(root, files) {
       // its own file, so it cannot be the current home of a moved baseline
       // declaration and must not collide with one that happens to share its
       // name. app.js itself needs no export to be usable, since it is the
-      // entry script's own top-level scope, so its declarations always count.
+      // entry script's own top-level scope, so its declarations always count
+      // -- except for a `let` binding whose name the manifest assigns to a
+      // module that already exists elsewhere. That is app.js's own mutable
+      // local shadow of a moved, appearance-monkey-patchable function
+      // (design-gallery/build.mjs's gallery sources reassign these by name
+      // right before app.js's own init() call, so app.js keeps its own `let`
+      // seeded from the real import and pushes the live value out to
+      // whichever module needs to call the current, possibly-patched
+      // version). It is infrastructure the same way a private local in
+      // another split module is, not a competing home for that name.
       if (relPath !== 'app.js' && !decl.exported) continue;
+      if (relPath === 'app.js' && decl.kind === 'let' && manifest &&
+          manifest.declarations[decl.name] && manifest.declarations[decl.name] !== 'app.js' &&
+          fs.existsSync(path.join(root, manifest.declarations[decl.name]))) continue;
       const list = byName.get(decl.name) || [];
       list.push({file: relPath, body: decl.body});
       byName.set(decl.name, list);
@@ -240,7 +252,7 @@ export function runCheck({root, baselineSha, manifestPath, gallery, allowlist}) 
 
   const manifest = manifestPath ? loadManifest(manifestPath) : null;
   const files = discoverModuleFiles(root, manifest);
-  const currentIndex = buildCurrentDeclarationIndex(root, files);
+  const currentIndex = buildCurrentDeclarationIndex(root, files, manifest);
   const resolvedAllowlist = allowlist || [];
 
   for (const decl of baselineDecls) {

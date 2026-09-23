@@ -44,23 +44,24 @@ let host=await read('design-gallery/host-bridge.js');
 // anchors out of app.js into their own module. Each anchor below is checked
 // against the file that currently holds it, not always app.js.
 const authSrc=await read('core/auth.js').catch(()=>''),sheetSyncSrc=await read('core/sheet-sync.js').catch(()=>'');
+const shellSrc=await read('views/shell.js').catch(()=>''),songsSrc=await read('views/songs.js').catch(()=>''),manageSrc=await read('views/manage.js').catch(()=>'');
 
 /* The gallery is a compiler for the current app, not a second app. Fail
  * before staging when a released host or song interface changes. */
 for(const [needle,label,source] of [
   ["'use strict';",'app module header',baseline],
-  ['function renderMemberLogin()','secure member login renderer',baseline],
-  ['function renderForcedPinChange()','forced member PIN renderer',baseline],
+  ['function renderMemberLogin()','secure member login renderer',shellSrc||baseline],
+  ['function renderForcedPinChange()','forced member PIN renderer',shellSrc||baseline],
   ['function isVerifiedSession()','verified member session guard',authSrc||baseline],
   ['function isForcedSession()','forced PIN session guard',authSrc||baseline],
   ['function canManageAnyDepartment()','department Manage permission guard',authSrc||baseline],
   ['function selectedManageDepartment()','department Manage selector',authSrc||baseline],
-  ['function songCtx()','Presider host context',baseline],
-  ['data-act="member-login"','member login action',baseline],
-  ['data-act="member-change-pin"','forced PIN action',baseline],
-  ["choirSong: svc.choirSong || ''",'canonical choir song context',baseline],
+  ['function songCtx()','Presider host context',songsSrc||baseline],
+  ['data-act="member-login"','member login action',shellSrc||baseline],
+  ['data-act="member-change-pin"','forced PIN action',shellSrc||baseline],
+  ["choirSong: svc.choirSong || ''",'canonical choir song context',songsSrc||baseline],
   ['const choirSongSeen = sheetSvc._sheetChoirSongSeen === true','canonical choir song merge',sheetSyncSrc||baseline],
-  ['data-field="choirSong"','canonical choir song editor',baseline]
+  ['data-field="choirSong"','canonical choir song editor',manageSrc||baseline]
 ])requireOne(source,needle,label);
 for(const [needle,label] of [
   ["const TAB_ORDER = ['home', 'library', 'services', 'insights'];",'Presider tracking tab order'],

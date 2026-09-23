@@ -537,10 +537,17 @@ try {
   check('Hosting release guard staged', await exists(path.join(stage, 'scripts', 'guard-gallery-deploy.mjs')));
   check('No rules or functions staged', assets.has('firestore.rules') || assets.has('functions'), false);
   const stagedApp = String(assets.get('app.js'));
+  // manageServiceVisible and manageRequestVisible's real declarations moved
+  // to views/manage.js (docs/PLAN-2026-09-22-APP-JS-SPLIT.md Section 4): app.js
+  // now only imports the names, so counting stagedApp alone would undercount
+  // by exactly the declaration (and, for manageRequestVisible, its own
+  // internal call) that used to live inline. Count across both staged files,
+  // the way the split actually ships them, instead of lowering the bar.
+  const stagedManage = String(assets.get('views/manage.js') || '');
   check('Alternative Manage summaries use department-scoped services',
-    stagedApp.split('.filter(manageServiceVisible)').length >= 3);
+    (stagedApp + stagedManage).split('.filter(manageServiceVisible)').length >= 3);
   check('Alternative Manage summaries use authorized requests',
-    stagedApp.split('manageRequestVisible').length >= 4);
+    (stagedApp + stagedManage).split('manageRequestVisible').length >= 5);
 
   current = await make();
   sessions.add(current.context);
