@@ -25,7 +25,7 @@ Last updated: 2026-09-23.
 Live. Features F1 to F14 shipped on `claude/keep-look-f4f5`; the app.js split
 (source reorganization, zero behavior change) merged with them into `main` on
 2026-09-23 and was released from `main` the same day (Hosting release marker
-`gallery1790151118065`). `main` is now the Hosting source branch.
+`gallery1790151129923`). `main` is now the Hosting source branch.
 
 On 2026-09-17 Anthony rejected the integrated new-shell preview because it
 replaced the app's look. The decision since then: keep the live look, add

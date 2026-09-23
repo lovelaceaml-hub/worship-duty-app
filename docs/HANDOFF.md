@@ -12,7 +12,7 @@ reference material. For day-to-day operation and releases see
 
 ## 1. Current state (2026-09-23)
 
-- Features F1 to F14 are live. Current release marker `gallery1790151118065`
+- Features F1 to F14 are live. Current release marker `gallery1790151129923`
   (2026-09-23), released from `main` after the F1-F14 merge into the app.js
   split; members see the same app as the 2026-09-20 release.
 - Approach since 2026-09-17: keep the live look. Anthony rejected the

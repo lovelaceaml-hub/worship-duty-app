@@ -13,7 +13,7 @@ day, or hand a task to an AI coding tool. It assumes no developer background.
 ### Current status
 
 Features F1 to F14 are live at https://lv-zion-duties.web.app (release marker
-`gallery1790151118065`, 2026-09-23, released from `main` with the app.js split). Since 2026-09-17 the rule is: keep the
+`gallery1790151129923`, 2026-09-23, released from `main` with the app.js split). Since 2026-09-17 the rule is: keep the
 live look, add features into the four existing appearances one at a time, show
 each on the preview channel first, release on Anthony's approval. The active plan
 and its Build log are in [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md);
