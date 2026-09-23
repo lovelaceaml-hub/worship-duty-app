@@ -19,10 +19,14 @@ function replaceExactlyOnce(source, before, after, label) {
  * Services with no Choir Song row at all are left alone, so manual-only values
  * are not erased accidentally.
  */
+function choirDateSyncAlreadyApplied(source) {
+  return source.includes('_sheetChoirSongSeen: false') &&
+    source.includes('svc._sheetChoirSongSeen = true') &&
+    source.includes('const choirSongSeen = sheetSvc._sheetChoirSongSeen === true');
+}
+
 export function patchChoirDateSync(source) {
-  if (source.includes('_sheetChoirSongSeen: false') &&
-      source.includes('svc._sheetChoirSongSeen = true') &&
-      source.includes('const choirSongSeen = sheetSvc._sheetChoirSongSeen === true')) {
+  if (choirDateSyncAlreadyApplied(source)) {
     return source;
   }
   source = replaceExactlyOnce(
@@ -52,6 +56,24 @@ export function patchChoirDateSync(source) {
 export async function applyStagedAppFixes(dest) {
   const appPath = path.join(dest, 'app.js');
   const before = await fs.readFile(appPath, 'utf8');
+
+  // docs/PLAN-2026-09-22-APP-JS-SPLIT.md moved sheetRowsToServices and
+  // mergeSheetServices (the functions this fix's three markers live inside)
+  // out of app.js into core/sheet-parse.js and core/sheet-sync.js. The
+  // baseline app.js this fix originally targeted already carried the patch
+  // before the split started, and the split preserved that code verbatim in
+  // its new home, so the already-applied check must also read those two
+  // staged files when they exist, or it will never see the markers and will
+  // try (and fail) to reapply a fix that already landed years earlier.
+  const relocated = await Promise.all(
+    ['core/sheet-parse.js', 'core/sheet-sync.js'].map(rel =>
+      fs.readFile(path.join(dest, rel), 'utf8').catch(() => '')
+    )
+  );
+  if (choirDateSyncAlreadyApplied(before + relocated.join(''))) {
+    return { appPath, changed: false };
+  }
+
   const after = patchChoirDateSync(before);
   await fs.writeFile(appPath, after);
   return { appPath, changed: after !== before };
