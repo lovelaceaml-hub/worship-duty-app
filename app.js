@@ -53,7 +53,8 @@ import {
 } from './core/session.js';
 import {
   render as _render, renderSiteLock as _renderSiteLock, renderUnlock, renderCreatePin,
-  renderLoading, renderBanners, setShellRenderRefs
+  renderLoading, renderBanners, setShellRenderRefs,
+  accountView, ACCOUNT_TITLES, ACCOUNT_NOTES, watchKeyboardForTabBar, watchTopSubnav
 } from './views/shell.js';
 import {
   renderSchedule as _renderSchedule, renderMy as _renderMy,
@@ -73,6 +74,8 @@ import {
   songCtx, loadTag, setSongsRenderRef, setSongsPermissionRefs, setSetlistIndex
 } from './views/songs.js';
 import {findService, canEditSongService, canManagePresiders, setDispatchRenderRef} from './actions/dispatch.js';
+import {syncFeedbackButton} from './views/feedback.js';
+import {setDepartmentsRenderRef} from './views/departments.js';
 
 setConstantsStateRef(state);
 setPlanningRefs(state, departmentProfiles, departmentProfileAssignable);
@@ -116,6 +119,21 @@ let renderManageRequests = _renderManageRequests;
 let renderManagePeople = _renderManagePeople;
 let renderFeatures = _renderFeatures;
 let renderManageData = _renderManageData;
+// accountView, ACCOUNT_TITLES and ACCOUNT_NOTES (views/shell.js) are not
+// monkey-patched, but design-gallery/host-bridge.js's own injected render()
+// wrapper reads all three directly (paintAccountHeading, added by the F1-F14
+// merge, docs/PLAN-2026-09-22-APP-JS-SPLIT.md's Build log), so they must be
+// plain imports in this file's own top-level scope the same way every other
+// gallery-referenced name is.
+
+/* Every render (sign-in, sign-out, lock, maintenance) re-checks whether the
+   feedback button may show (F10). This wraps app.js's own local `render`
+   before host-bridge.js's own injected wrap runs (spliced later, right
+   before init()), matching the original monolith's execution order: the
+   appearance repaint added by host-bridge.js happens after the feedback
+   button sync added here. */
+const renderBeforeFeedback = render;
+render = function () { renderBeforeFeedback(); syncFeedbackButton(); };
 
 /* ================= startup ================= */
 
@@ -123,6 +141,10 @@ function setSyncPill(live) {
   const pill = document.getElementById('sync-pill');
   pill.textContent = live ? 'Live sync on' : 'This device only';
   pill.classList.toggle('live', !!live);
+  // On phones Original and Navy & Cream show the pill as a small dot, so the
+  // state must stay discoverable without the visible words.
+  pill.title = pill.textContent;
+  pill.setAttribute('aria-label', pill.textContent);
 }
 
 /* ---- Pulse: the smallest honest answer to "does anyone open this?" ----
@@ -224,6 +246,8 @@ async function initFirebase(config) {
     arrayUnion: fsMod.arrayUnion,
     arrayRemove: fsMod.arrayRemove,
     increment: fsMod.increment,
+    orderBy: fsMod.orderBy,
+    limit: fsMod.limit,
     knownIds: []
   });
   setAuthStatus('loading');
@@ -343,6 +367,7 @@ function init() {
   setSessionRefs(render, pulse);
   setSongsRenderRef(render);
   setDispatchRenderRef(render);
+  setDepartmentsRenderRef(render);
   setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);
   setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -381,4 +406,6 @@ function init() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
 }
 
+watchKeyboardForTabBar();
+watchTopSubnav();
 init();

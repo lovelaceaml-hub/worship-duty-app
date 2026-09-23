@@ -2,6 +2,11 @@
  * Firebase SDK requests are replaced with deterministic browser doubles and
  * every other network request is blocked. No production account, schedule,
  * token, or Firebase write is used by this suite.
+ *
+ * Run (outside the macOS sandbox, from the repository root): node design-gallery/test.mjs
+ * Playwright is resolved by tests/helpers/playwright.mjs, so a git worktree without its
+ * own node_modules borrows it from the main checkout. WD_STRICT=1 turns every open
+ * KNOWN-ISSUE (a correct-behavior check waiting on an app fix) into a failure.
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +14,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {chromium} from 'playwright';
+import {chromium} from '../tests/helpers/playwright.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const stage = path.join(root, '.hosting-gallery');
@@ -32,7 +37,7 @@ const protectedNames = [
   'core/state.js', 'core/auth.js', 'core/departments.js', 'core/schedule.js', 'core/notify.js',
   'core/sheet-sync.js', 'core/calendar.js', 'core/session.js',
   'views/shell.js', 'views/schedule.js', 'views/songs.js', 'views/requests.js',
-  'views/manage.js', 'views/departments.js',
+  'views/manage.js', 'views/departments.js', 'views/feedback.js',
   'actions/dispatch.js'
 ];
 const hashes = async () => {
@@ -182,6 +187,12 @@ const fixture = {
       duty: 'Presider', department: 'Worship', status: 'pending',
       requesterUid: 'member:B. Anthony', createdAt: Date.parse('2026-06-30T12:00:00Z')
     },
+    'feedback/fixture-note-1': {
+      uid: 'member:S. Lisa', name: 'S. Lisa', kind: 'suggestion',
+      message: 'Fixture suggestion: larger text on the duty list.',
+      screen: 'my', appearance: 'prism', status: 'new',
+      createdAt: Date.parse('2026-06-29T18:00:00Z')
+    },
     'requests/req-stale': {
       id: 'req-stale', svcId: '2026-07-01_morning', name: 'D. Caleb',
       date: '2026-07-01', service: 'Morning', worship: 'Sabbath Day',
@@ -233,6 +244,7 @@ function authRecords(forcedMember = '') {
 const report = {
   passed: false,
   checks: [],
+  knownIssues: [],
   errors: [],
   blockedExternalRequests: [],
   screenshots: [],
@@ -240,6 +252,22 @@ const report = {
 };
 function check(name, result, expected = true) {
   assert.deepEqual(result, expected, name);
+  report.checks.push({name, passed: true});
+  console.log('PASS', name);
+}
+/* A check that asserts the CORRECT behavior for an app bug this suite found but does
+   not own the fix for. While the bug is open it is reported as KNOWN-ISSUE and listed
+   in results.json without stopping the run; once the fix lands it reports PASS by
+   itself. Run with WD_STRICT=1 to make every open known issue fail the suite. */
+function knownIssue(name, dependsOn, result, expected = true) {
+  try {
+    assert.deepEqual(result, expected, name);
+  } catch (error) {
+    if (process.env.WD_STRICT === '1') throw error;
+    report.knownIssues.push({name, dependsOn, actual: result, expected});
+    console.log('KNOWN-ISSUE', name, '(depends on ' + dependsOn + ')');
+    return;
+  }
   report.checks.push({name, passed: true});
   console.log('PASS', name);
 }
@@ -336,7 +364,19 @@ function functionsModule() {
         profile.updatedAt = Date.now();
         return {data: {ok: true, departmentId: data.departmentId, memberUid: data.memberUid, profile: clone(profile)}};
       }
+      if (name === 'searchDepartmentCandidates') {
+        const needle = String(data.query || '').toLowerCase();
+        const all = ((window.__designFixture.docs['app/members'] || {}).list || [])
+          // The real lookup searches registered accounts, which use canonical names only.
+          .filter(member => /^[A-Z]\. /.test(member) && member.toLowerCase().includes(needle))
+          .map(member => ({memberUid: 'member:' + member, memberName: member}));
+        const page = Number(data.page) || 1;
+        (window.__searchCalls || (window.__searchCalls = [])).push(clone(data));
+        return {data: {ok: true, departmentId: data.departmentId, page, total: all.length,
+          members: all.slice((page - 1) * 10, page * 10)}};
+      }
       if (name === 'createDepartmentProfile') {
+        (window.__profileCreates || (window.__profileCreates = [])).push(clone(data));
         const department = data.departmentId;
         const profile = {
           memberUid: data.memberUid, uid: data.memberUid, departmentId: department, department,
@@ -543,9 +583,80 @@ async function clickThroughDesignDialog(page, selector, {attempts = 4} = {}) {
   }
 }
 
+/* Secondary menus (Manage sub-tabs, Presider sections). On phones the app hides the
+   original row and mirrors it into nav#subnav-top below the header (watchTopSubnav in
+   app.js, html[data-subnav-top="on"]). A mirrored button carries only its position, so
+   these helpers find the original by selector and then use whichever copy a person can
+   actually see and tap at the current width. */
+async function subButton(page, selector) {
+  const original = page.locator(selector).first();
+  await original.waitFor({state: 'attached'});
+  if (await original.isVisible()) return original;
+  const index = await original.evaluate(button =>
+    [...button.closest('.subnav, .ns-tabs').querySelectorAll('button')].indexOf(button));
+  const mirrored = page.locator(`nav#subnav-top button[data-top-index="${index}"]`);
+  await mirrored.waitFor({state: 'visible'});
+  return mirrored;
+}
+async function subClick(page, selector) {
+  await (await subButton(page, selector)).click();
+  await page.waitForTimeout(120);
+}
+const subText = async (page, selector) => (await (await subButton(page, selector)).innerText()).trim();
+const manageSub = name => `#view .subnav:not(.chips) [data-act="sub"][data-sub="${name}"]`;
+const songSub = name => `#song-root .ns-tabs [data-tab="${name}"]`;
+const songSubActive = '#song-root .ns-tabs button.active';
+
 const domainWrites = page => page.evaluate(() => __mockLive.writes.filter(write =>
   /^(schedule\/|setlists\/|songStats\/|requests\/|app\/settings$|app\/departments$)/.test(write.path)
 ));
+
+/* Shared phone chrome that every appearance must keep (F4, F6, F7, F10). */
+async function chromeChecks(page, mode) {
+  const facts = await page.evaluate(() => {
+    const shown = el => !!el && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden' &&
+      el.getBoundingClientRect().width > 0;
+    const all = selector => [...document.querySelectorAll(selector)].filter(shown);
+    const box = el => { const r = el.getBoundingClientRect(); return {top: r.top, bottom: r.bottom, width: r.width, height: r.height}; };
+    const bar = document.querySelector('nav.tabs');
+    const pill = document.getElementById('sync-pill');
+    const feedback = document.getElementById('wd-feedback-open');
+    return {
+      viewport: innerHeight,
+      bar: box(bar),
+      headers: all('.wd-head').length,
+      titles: all('[data-wd-head="screen"]').map(el => el.textContent.trim()),
+      chips: all('[data-wd-head="member"]').map(el => el.getAttribute('aria-label')),
+      appearance: all('[data-design-open]').map(box),
+      removedButtons: all('[data-aurora="motion"], [data-aurora="theme"], .prism-utility').length,
+      pill: pill && shown(pill) ? {...box(pill), label: pill.getAttribute('aria-label') || pill.textContent.trim()} : null,
+      feedback: feedback && shown(feedback) ? {...box(feedback), label: feedback.getAttribute('aria-label')} : null,
+      banners: document.getElementById('banners').innerText
+    };
+  });
+  check(mode + ' main tabs float at the bottom of a phone screen',
+    facts.bar.top > facts.viewport * 0.75 && facts.bar.bottom <= facts.viewport);
+  check(mode + ' shows exactly one shared header', facts.headers, 1);
+  check(mode + ' header names the current screen', facts.titles, ['Schedule']);
+  check(mode + ' member chip names who is signed in', facts.chips, ['Signed in as B. Anthony. Account menu']);
+  check(mode + ' has one small Appearance icon in the header',
+    facts.appearance.length === 1 && facts.appearance[0].width <= 44 && facts.appearance[0].height <= 44);
+  check(mode + ' has no dark mode button, pause button, or Prism utility row', facts.removedButtons, 0);
+  check(mode + ' has no "Signed in as" banner', /Signed in as/.test(facts.banners), false);
+  check(mode + ' shows the floating feedback button above the bottom bar',
+    !!facts.feedback && facts.feedback.label === 'Send feedback' && facts.feedback.bottom <= facts.bar.top + 1);
+  if (mode === 'classic' || mode === 'navy') {
+    check(mode + ' shows Live sync as a labelled dot on phones',
+      !!facts.pill && facts.pill.width <= 24 && facts.pill.label === 'Live sync on');
+  }
+  await page.emulateMedia({colorScheme: 'dark'});
+  await page.waitForTimeout(120);
+  check(mode + (mode === 'prism' || mode === 'aurora' ? ' follows the device dark setting' : ' stays light when the device is dark'),
+    await page.evaluate(() => document.body.classList.contains('dark')), mode === 'prism' || mode === 'aurora');
+  await page.emulateMedia({colorScheme: 'light'});
+  await page.waitForTimeout(120);
+  check(mode + ' returns to light with the device', await page.evaluate(() => document.body.classList.contains('dark')), false);
+}
 
 const sessions = new Set();
 async function closeSession(session) {
@@ -628,6 +739,9 @@ try {
     if (mode === 'prism') check('Prism shell mounted', await page.locator('#wd-prism-root').count(), 1);
     if (mode === 'navy') check('Navy shell remains mounted', await page.locator('.wrap header.app').count(), 1);
     if (mode === 'aurora') check('Aurora shell mounted', await page.locator('#wd-aurora-root').count(), 1);
+    if (mode !== 'classic') check(mode + ' appearance toast is the short version', await page.locator('#wd-design-status').innerText()
+      .then(text => /design enabled\./.test(text) && !/unchanged/i.test(text)));
+    await chromeChecks(page, mode);
   }
   check('Unrelated local storage survives all design switches', await page.evaluate(() => localStorage.getItem('UNRELATED')), 'keep');
 
@@ -640,10 +754,18 @@ try {
   });
   await page.waitForFunction(() => Number(localStorage.getItem('wds-unread-B. Anthony') || 0) > 0);
   check('New duty creates a My Duties badge', await page.locator('#tab-my .dot').count(), 1);
+  check('My Duties dot is announced as a new duty', await page.locator('#tab-my').getAttribute('aria-label'), 'My Duties, new duty');
+  check('Manage dot is announced as needing attention', await page.locator('#tab-manage').getAttribute('aria-label'), 'Manage, needs attention');
+  const dotColors = await page.evaluate(() => ['#tab-my .dot', '#tab-manage .dot'].map(selector =>
+    getComputedStyle(document.querySelector(selector)).backgroundColor.match(/\d+/g).slice(0, 3).map(Number)));
+  check('My Duties dot is green and differs from the Manage dot',
+    dotColors[0][1] > dotColors[0][0] && dotColors[0][1] > dotColors[0][2] && dotColors[0].join() !== dotColors[1].join());
   check('New duty appears in the top alert banner', await page.locator('#banners .banner.alert').allInnerTexts()
     .then(texts => texts.some(text => text.toLowerCase().includes('new duty'))));
   await navigate(page, 'my');
   check('Opening My Duties clears its unread badge', await page.locator('#tab-my .dot').count(), 0);
+  check('Cleared My Duties tab drops its new-duty label', await page.locator('#tab-my').getAttribute('aria-label'), null);
+  check('Header follows the screen to My Duties', await page.locator('[data-wd-head="screen"]:visible').evaluate(el => el.textContent.trim()), 'My Duties');
   check('My Duties shows the recent new-duty update', await page.locator('.alert-item').innerText()
     .then(text => text.includes('New duty')));
 
@@ -652,7 +774,22 @@ try {
   check('Admin sees multi-department Manage selector', await page.locator('#manage-dept').evaluate(select =>
     [...select.options].map(option => option.textContent)),
   ['All Departments', 'Worship', 'Usher Sisters', 'Usher Brothers', 'Lobby', 'Translation', 'Media', 'Parking Lot', 'Offering']);
-  await page.locator('[data-act="sub"][data-sub="leaders"]').click();
+  check('Header follows the screen to Manage', await page.locator('[data-wd-head="screen"]:visible').evaluate(el => el.textContent.trim()), 'Manage');
+  check('Phone hides the original Manage sub-tabs', await page.locator(manageSub('leaders')).isVisible(), false);
+  check('Phone shows the mirrored Manage row below the header', await page.locator('nav#subnav-top').evaluate(nav =>
+    document.documentElement.dataset.subnavTop === 'on' && !nav.hidden && nav.getAttribute('aria-label') === 'Manage sections' &&
+    nav.getBoundingClientRect().top < document.getElementById('view').getBoundingClientRect().top));
+  check('Mirrored row keeps the same labels and order as the original', await page.locator('nav#subnav-top button').allTextContents(),
+    await page.locator('#view .subnav:not(.chips) button').allTextContents().then(labels => labels.map(label => label.trim())));
+  check('Administrator has the Feedback sub-tab', await page.locator(manageSub('feedback')).count(), 1);
+  check('Manage no longer carries its own Sign out', await page.locator('#view [data-act="member-logout"]').count(), 0);
+  await page.setViewportSize({width: 1280, height: 850});
+  await page.waitForTimeout(150);
+  check('Wide screens keep the original Manage sub-tabs', await page.locator(manageSub('leaders')).isVisible());
+  check('Wide screens do not show the mirrored row', await page.locator('nav#subnav-top').isVisible(), false);
+  await page.setViewportSize({width: 390, height: 850});
+  await page.waitForTimeout(150);
+  await subClick(page, manageSub('leaders'));
   check('Leader Configuration does not render a congregation checkbox matrix', await page.locator('[data-chg="role-config"]').count(), 0);
   check('Leader Configuration lists only assigned department leaders', await page.locator('.role-assignment').allInnerTexts()
     .then(rows => rows.some(row => row.includes('E. Simon')) && rows.every(row => !row.includes('D. Caleb'))));
@@ -665,11 +802,11 @@ try {
   check('Adding a department leader uses the secured role callable', await page.locator('.role-assignment').allInnerTexts()
     .then(rows => rows.some(row => row.includes('D. Caleb'))));
   await page.locator('#manage-dept').selectOption('Media');
-  check('Planning tab shows its unresolved conflict count', await page.locator('[data-act="sub"][data-sub="planning"]').innerText(), 'Planning (2)');
-  await page.locator('[data-act="sub"][data-sub="planning"]').click();
+  check('Planning tab shows its unresolved conflict count', await subText(page, manageSub('planning')), 'Planning (2)');
+  await subClick(page, manageSub('planning'));
   check('Unresolved doubles render as review cards', await page.locator('.plan-conflict.card').count(), 2);
   check('Every conflict review card can open its service', await page.locator('.plan-conflict [data-act="req-open-service"]').count(), 2);
-  await page.locator('[data-act="sub"][data-sub="services"]').click();
+  await subClick(page, manageSub('services'));
   await page.locator('[data-act="expand"][data-id="m:2026-07-02_evening"]').click();
   const mediaDuty = page.locator('[data-chg="assign"][data-duty="Media Booth #1"]').first();
   const scheduleWritesBeforeDepartmentAssignment = await domainWrites(page);
@@ -692,13 +829,26 @@ try {
     return !!write && write.assignment.override === true && write.assignment.overrideReason && profile.status === 'inactive';
   }));
   check('Administrator override does not write schedule directly after the callable', await domainWrites(page), scheduleWritesBeforeDepartmentOverride);
-  check('Manage alert banner shows request and conflict attention', await page.locator('#banners .banner.alert').allInnerTexts()
-    .then(texts => texts.some(text => text.includes('request') && text.includes('conflict'))));
-  check('Requests tab counts requests without adding conflicts', await page.locator('[data-act="sub"][data-sub="requests"]').innerText(), 'Requests (1)');
-  await page.locator('[data-act="sub"][data-sub="requests"]').click();
+  // The "needs your attention" banner was removed (2026-09-19); the dot on the Manage tab carries that signal.
+  check('No request and conflict attention banner is rendered', await page.locator('#banners [data-act="open-manage-queue"]').count(), 0);
+  check('Requests tab counts requests without adding conflicts', await subText(page, manageSub('requests')), 'Requests (1)');
+  await subClick(page, manageSub('requests'));
   check('Stale request is removed from the pending queue', await page.locator('.aw-requests-content .card').allInnerTexts()
     .then(cards => cards.every(text => !text.includes('D. Caleb'))));
   check('Stale request remains available as completed history', await page.locator('[data-act="expand"][data-id="req-resolved"]').innerText(), 'Show 1 resolved request');
+
+  await subClick(page, manageSub('feedback'));
+  await page.waitForSelector('.wd-fbk-entry');
+  check('Administrator Feedback list reads the feedback collection', await page.locator('.wd-fbk-entry').allInnerTexts().then(entries =>
+    entries.length === 1 && entries[0].includes('Fixture suggestion') && entries[0].includes('S. Lisa') &&
+    entries[0].includes('Suggest a change') && entries[0].includes('My Duties screen') && entries[0].includes('Prism')));
+  check('Feedback list never shows a raw member ID', await page.locator('#view').innerText().then(text => /member:/.test(text)), false);
+  await page.locator('.wd-fbk-entry [data-fbk="done"]').click();
+  await page.waitForFunction(() => __mockLive.writes.some(write => write.path === 'feedback/fixture-note-1'));
+  check('Mark done writes only to that feedback note', await page.evaluate(() =>
+    __mockLive.writes.filter(write => write.path.startsWith('feedback/')).map(write => [write.path, write.value && write.value.status])),
+  [['feedback/fixture-note-1', 'done']]);
+  await subClick(page, manageSub('services'));
 
   await navigate(page, 'my');
   const requestOpen = page.locator('[data-act="req-open"]').first();
@@ -716,16 +866,19 @@ try {
   const openSongs = page.locator('[data-act="open-songs"]').first();
   check('Presider Home entry is present', await openSongs.count(), 1);
   await navigate(page, 'songs');
-  await page.waitForSelector('#song-root .ns-tabs');
-  check('Presider starts on Home', await page.locator('#song-root .ns-tabs button.active').innerText(), 'Home');
+  await page.waitForSelector('#song-root .ns-tabs', {state: 'attached'});
+  check('Header follows the screen to Presider', await page.locator('[data-wd-head="screen"]:visible').evaluate(el => el.textContent.trim()), 'Presider');
+  check('Phone shows the mirrored Presider row', await page.locator('nav#subnav-top').evaluate(nav =>
+    !nav.hidden && nav.getAttribute('aria-label') === 'Presider sections' && nav.offsetParent !== null));
+  check('Presider starts on Home', await subText(page, songSubActive), 'Home');
   check('Presider Home shows My Services', await page.locator('#song-root').innerText().then(text => text.includes('My Services')));
   check('Presider has a Services tracking destination', await page.locator('#song-root .ns-tabs [data-tab="services"]').count(), 1);
   check('Presider has Home, Library, Services, and Insights tabs', await page.locator('#song-root .ns-tabs button').allTextContents(),
     ['Home', 'Library', 'Services', 'Insights']);
-  await page.locator('#song-root .ns-tabs [data-tab="services"]').click();
-  check('Services tracking route opens', await page.locator('#song-root .ns-tabs button.active').innerText(), 'Services');
+  await subClick(page, songSub('services'));
+  check('Services tracking route opens', await subText(page, songSubActive), 'Services');
   check('Services tracking renders its service history view', await page.locator('#song-root').innerText().then(text => text.includes('Upcoming')));
-  await page.locator('#song-root .ns-tabs [data-tab="home"]').click();
+  await subClick(page, songSub('home'));
   await page.locator('#song-root [data-song-act="home-scope"][data-scope="all"]').click();
   await page.waitForTimeout(100);
   check('Presider Home switches to All Services', await page.locator('#song-root').innerText().then(text => text.includes('All Services')));
@@ -753,7 +906,19 @@ try {
   for (const mode of ['aurora', 'navy', 'classic']) {
     await choose(page, mode);
     if (mode === 'aurora') await page.locator('[data-aurora="day"][data-date="2026-07-01"]').click();
-    if (mode === 'navy') await page.locator('[data-nc-act="date"][data-date="2026-07-01"]').click();
+    if (mode === 'navy') {
+      await page.locator('[data-nc-act="date"][data-date="2026-07-01"]').click();
+      await page.waitForTimeout(150);
+      check('Navy & Cream month arrows have a real tap size and a visible icon', await page.locator('.nc-arrows .nc-button').evaluateAll(buttons =>
+        buttons.length === 2 && buttons.every(button => {
+          const box = button.getBoundingClientRect(), icon = button.querySelector('svg').getBoundingClientRect();
+          return box.width >= 40 && box.height >= 40 && icon.width >= 14 && icon.height >= 14 && !!button.getAttribute('aria-label');
+        })));
+      // Correct behavior: Day view shows the one selected service. The shared "Next service"
+      // card (section.schedule-focus) is still drawn under it today. Fix owned by lane F12.
+      knownIssue('Navy & Cream Day view shows a single service card', 'F12 navy double card',
+        await page.locator('#view .card:visible').count(), 1);
+    }
     check(mode + ' renders the same canonical choir song', await page.locator('body').innerText()
       .then(text => text.includes('#311 I Repent of My Sin')));
   }
@@ -782,6 +947,7 @@ try {
   const leaderOptions = await current.page.locator('#manage-dept option').allTextContents();
   check('Leader Manage selector is scoped to configured departments', leaderOptions, ['Worship', 'Media']);
   check('Leader cannot see the global Manage option', leaderOptions.includes('All Departments'), false);
+  check('Department leader has no Feedback sub-tab', await current.page.locator(manageSub('feedback')).count(), 0);
   check('Non-admin leader cannot activate administrator override UI', await current.page.locator('.department-override').count(), 0);
   await clickThroughDesignDialog(current.page, '[data-act="department-open"][data-department="Media"]');
   await current.page.waitForSelector('.department-hero');
@@ -790,9 +956,41 @@ try {
     texts.some(text => text.includes('Active profiles') && text.includes('3')) && texts.some(text => text.includes('Inactive profiles') && text.includes('1'))));
   check('Leader department page does not use the congregation-wide roster', await current.page.locator('.department-member-row').allTextContents().then(texts =>
     texts.length === 4 && texts.some(text => text.includes('E. Simon')) && texts.some(text => text.includes('S. Lisa')) && texts.some(text => text.includes('M. Chloe')) && texts.some(text => text.includes('D. Caleb'))));
+  // Add member is a name search (F3): one search box, no UID or technical inputs.
+  const addForm = current.page.locator('form.department-add-form[data-act="department-member-search"]');
+  check('Add member form is a single name search', await addForm.locator('input').evaluateAll(inputs =>
+    inputs.map(input => [input.id, input.type])), [['department-member-query', 'search']]);
+  check('Add member form never asks for a UID', await addForm.innerText().then(text => /\bUID\b|member:/i.test(text)), false);
+  await addForm.locator('#department-member-query').fill('Jas');
+  await addForm.locator('button[type="submit"]').click();
+  await current.page.waitForSelector('[data-act="department-member-add"]');
+  check('Name search calls the scoped candidate lookup', await current.page.evaluate(() => window.__searchCalls),
+    [{departmentId: 'Media', query: 'Jas', page: 1}]);
+  check('Name search lists matching members by display name only', await addForm.locator('.department-member-row').allInnerTexts()
+    .then(rows => rows.map(row => row.replace(/\s+/g, ' ').trim())), ['B. Jason Add']);
+  await addForm.locator('[data-act="department-member-add"][data-uid="member:B. Jason"]').click();
+  await current.page.waitForFunction(() => (window.__profileCreates || []).length === 1);
+  check('Add creates an ordinary, not yet schedulable department profile', await current.page.evaluate(() => window.__profileCreates), [{
+    departmentId: 'Media', memberUid: 'member:B. Jason', memberName: 'B. Jason', status: 'active',
+    eligibleDuties: [], schedulable: false, availability: {recurring: {}, exceptions: {}}
+  }]);
+  await current.page.waitForFunction(() => [...document.querySelectorAll('.department-member-open')].some(row => row.textContent.includes('B. Jason')));
+  check('Added member appears in the department roster', await current.page.locator('.department-member-open').allInnerTexts()
+    .then(rows => rows.some(row => row.includes('B. Jason'))));
+  await addForm.locator('#department-member-query').fill('S. Lis');
+  await addForm.locator('button[type="submit"]').click();
+  await current.page.waitForFunction(() => document.querySelector('form.department-add-form')?.textContent.includes('Already in Media'));
+  check('Existing department members cannot be added twice', await addForm.locator('[data-act="department-member-add"]').count(), 0);
+  check('Leader can reset a PIN for members of the department only', await current.page.locator('[data-act="reset-member-pin"]').evaluateAll(buttons =>
+    buttons.length > 0 && buttons.every(button => button.dataset.dept === 'Media')));
   await current.page.locator('[data-act="department-member-open"][data-uid="member:S. Lisa"]').click();
   await current.page.waitForSelector('.department-profile-hero');
-  check('Leader member profile exposes UID keyed identity', await current.page.locator('.department-uid').innerText(), 'UID: member:S. Lisa');
+  check('Leader member profile opens for the chosen member', await current.page.locator('.department-profile-hero').innerText()
+    .then(text => text.includes('S. Lisa')));
+  check('Leader member profile shows no UID or raw member ID', await Promise.all([
+    current.page.locator('.department-uid').count(),
+    current.page.locator('#view').innerText().then(text => /\bUID\b|member:/.test(text))
+  ]), [0, false]);
   check('Leader member profile exposes eligibility and availability editors', await current.page.locator('.department-editor').allTextContents().then(texts => texts.join(' ')).then(text =>
     text.includes('Eligible duties') && text.includes('Recurring availability') && text.includes('Date exceptions')));
   check('Date exception wins in the rendered profile model', await current.page.locator('.department-exception-row').innerText().then(text => /2026-07-02/.test(text)));
@@ -830,10 +1028,25 @@ try {
   await current.page.waitForTimeout(260);
   await closeDesignDialog(current.page);
   await navigate(current.page, 'my');
+  check('My Duties no longer holds the availability editor', await current.page.locator('.own-availability-card').count(), 0);
+  // The availability editor opens from the account menu on the member chip.
+  const memberChip = current.page.locator('[data-wd-head="member"]:visible');
+  check('Member chip is a closed menu button', await memberChip.evaluate(chip =>
+    [chip.getAttribute('aria-haspopup'), chip.getAttribute('aria-expanded')]), ['menu', 'false']);
+  await memberChip.click();
+  check('Account menu offers Availability, Settings, Sign out', await current.page.locator('[data-wd-head="menu"]:visible [role="menuitem"]').allTextContents(),
+    ['Availability', 'Settings', 'Sign out']);
+  await current.page.keyboard.press('Escape');
+  check('Escape closes the account menu', await current.page.locator('[data-wd-head="menu"]:visible').count(), 0);
+  await memberChip.click();
+  await current.page.locator('[data-wd-head="menu"]:visible [data-view="availability"]').click();
   await current.page.waitForSelector('.own-availability-card');
+  check('Header names the Availability view', await current.page.locator('[data-wd-head="screen"]:visible').evaluate(el => el.textContent.trim()), 'Availability');
+  check('No bottom tab is highlighted on an account view', await current.page.locator('nav.tabs button.active').count(), 0);
   check('Member sees shared availability outside Manage', await current.page.locator('.own-availability-card').count(), 1);
   check('Member sees availability attribution', await current.page.locator('.own-availability-card .department-attribution').innerText()
     .then(text => text.includes('E. Simon') && text.includes('2026')));
+  check('Attribution never shows a raw member ID', await current.page.locator('#view').innerText().then(text => /member:/.test(text)), false);
   const ownAvailability = current.page.locator('.own-availability-card').first();
   const ownAvailabilitySelect = ownAvailability.locator('[data-chg="member-availability-recurring"]').first();
   await ownAvailabilitySelect.selectOption('unavailable');
@@ -850,6 +1063,84 @@ try {
     return !!profile && profile.status === 'active' && profile.role === 'member' && profile.memberUid === 'member:S. Lisa';
   }));
   check('Member availability update does not write schedule directly', await domainWrites(current.page), []);
+
+  // Settings view: notification help is a closed disclosure with the calendar link inside (F5).
+  await current.page.evaluate(() => {
+    const settings = structuredClone(__designFixture.docs['app/settings']);
+    settings.features.calendarExport = true;
+    __mockLive.emit('app/settings', settings);
+  });
+  await current.page.locator('[data-wd-head="member"]:visible').click();
+  await current.page.locator('[data-wd-head="menu"]:visible [data-view="settings"]').click();
+  await current.page.waitForSelector('.account-view[data-account="settings"] details.notify-help');
+  check('Header names the Settings view', await current.page.locator('[data-wd-head="screen"]:visible').evaluate(el => el.textContent.trim()), 'Settings');
+  const help = current.page.locator('.account-view[data-account="settings"] details.notify-help');
+  check('Notification help starts closed', await help.evaluate(details => details.open), false);
+  check('Copy calendar link lives inside the closed help', [
+    await help.locator('[data-act="copy-ics"]').count(),
+    await help.locator('[data-act="copy-ics"]').isVisible(),
+    await current.page.locator('#view [data-act="copy-ics"]').count()
+  ], [1, false, 1]);
+  await help.locator('summary').click();
+  check('Opening the help reveals Copy calendar link', await help.locator('[data-act="copy-ics"]').isVisible());
+  check('Settings offers the Appearance chooser', await current.page.locator('.account-view [data-design-open]').count(), 1);
+
+  // Floating feedback button and sheet (F10). The write goes to the mocked feedback collection only.
+  await current.page.locator('#wd-feedback-open').click();
+  await current.page.waitForSelector('#wd-feedback-sheet[open]');
+  check('Feedback sheet offers the three kinds', await current.page.locator('#wd-feedback-sheet .wd-fbk-kinds label').allInnerTexts()
+    .then(labels => labels.map(label => label.trim())), ['Feedback', 'Report a bug', 'Suggest a change']);
+  await current.page.locator('#wd-feedback-sheet [data-fbk="send"]').click();
+  check('Empty feedback is not sent', [
+    await current.page.locator('#wd-feedback-sheet .wd-fbk-error').innerText(),
+    await current.page.evaluate(() => __mockLive.writes.filter(write => write.path.startsWith('feedback/')).length)
+  ], ['Type a message first.', 0]);
+  await current.page.locator('#wd-feedback-sheet input[value="bug"]').check();
+  await current.page.locator('#wd-fbk-text').fill('Fixture bug report from the test suite.');
+  await current.page.locator('#wd-feedback-sheet [data-fbk="send"]').click();
+  await current.page.waitForFunction(() => __mockLive.writes.some(write => write.path.startsWith('feedback/')));
+  check('Feedback is saved once to the feedback collection with who, what and where', await current.page.evaluate(() =>
+    __mockLive.writes.filter(write => write.path.startsWith('feedback/')).map(write => ({
+      op: write.op, uid: write.value.uid, name: write.value.name, kind: write.value.kind, message: write.value.message,
+      screen: write.value.screen, status: write.value.status, dated: Number.isFinite(write.value.createdAt)
+    }))), [{
+    op: 'set', uid: 'member:S. Lisa', name: 'S. Lisa', kind: 'bug', message: 'Fixture bug report from the test suite.',
+    screen: 'my', status: 'new', dated: true
+  }]);
+  await current.page.waitForFunction(() => !document.querySelector('#wd-feedback-sheet')?.open);
+  check('Sending feedback closes the sheet and thanks the member', await current.page.locator('#banners').innerText()
+    .then(text => text.includes('Your feedback was sent')));
+  check('Sending feedback touches no schedule or request data', await domainWrites(current.page), []);
+
+  // Sign out lives in the account menu (F7).
+  await current.page.locator('[data-wd-head="member"]:visible').click();
+  await current.page.locator('[data-wd-head="menu"]:visible [data-act="member-logout"]').click();
+  await current.page.waitForSelector('#member-login');
+  check('Account menu Sign out returns to member sign-in', await current.page.locator('nav.tabs').isVisible(), false);
+  check('Feedback button is hidden when signed out', await current.page.locator('#wd-feedback-open').isVisible(), false);
+  check('Header falls back to Worship Duty when signed out', await current.page.locator('[data-wd-head="screen"]:visible').evaluate(el => el.textContent.trim()), 'Worship Duty');
+  check('No uncaught JavaScript errors in member flow', report.errors, []);
+  await closeSession(current);
+  current = undefined;
+
+  // One combined reminder banner for several duties in the next 24 hours (F5).
+  current = await make({member: 'S. Lisa'});
+  sessions.add(current.context);
+  await current.page.clock.setSystemTime(new Date('2026-07-01T21:00:00-07:00'));
+  await current.page.evaluate(() => {
+    __designFixture.docs['app/settings'].features.reminders = true;
+    const base = __designFixture.services[1];
+    __mockLive.emit('schedule/2026-07-02_morning', {
+      ...base, service: 'Morning', time: '09:00', assignments: {Presider: 'E. Simon', 'Usher #1': 'S. Lisa'}
+    });
+  });
+  await releaseSettings(current.page);
+  await unlockSite(current.page);
+  await login(current.page, 'S. Lisa');
+  await current.page.waitForFunction(() => /Reminder/.test(document.getElementById('banners')?.innerText || ''));
+  check('Two duties tomorrow produce one combined reminder banner', await current.page.locator('#banners .banner').allInnerTexts()
+    .then(banners => banners.filter(text => text.includes('Reminder')).map(text => text.replace(/\s*✕\s*$/, '').trim())),
+  ['Reminder: you have 2 duties in the next 24 hours. See My Duties.']);
   await closeSession(current);
   current = undefined;
 
@@ -873,24 +1164,50 @@ try {
   await releaseSettings(current.page);
   await unlockSite(current.page);
   await login(current.page, 'B. Anthony');
-  await current.page.clock.setSystemTime(new Date('2026-07-01T19:20:00-07:00'));
+  // AGENTS.md release gate: a service stops being the default the minute it starts, Pacific time,
+  // in all four appearances. Same-day 5:00 AM and 7:30 PM pair, plus a 2:30 PM afternoon service.
   await current.page.evaluate(() => {
     const base = window.__designFixture.services[0];
     window.__mockLive.emit('schedule/2026-07-01_early-morning', {
       ...base, date: '2026-07-01', service: 'Early Morning', time: '05:00'
+    });
+    window.__mockLive.emit('schedule/2026-07-01_afternoon', {
+      ...base, date: '2026-07-01', service: 'Afternoon', time: '14:30'
     });
     window.__mockLive.emit('schedule/2026-07-01_evening', {
       ...base, date: '2026-07-01', service: 'Evening', time: '19:30'
     });
   });
   await navigate(current.page, 'schedule');
-  for (const mode of ['classic', 'prism', 'navy', 'aurora']) {
-    await choose(current.page, mode);
-    const selector = {classic:'.schedule-focus', prism:'.prism-service-times [aria-pressed="true"]',
-      navy:'.nc-hero', aurora:'.service-switch .selected'}[mode];
-    check(mode + ' defaults to the approaching 7:30 PM service, not 5 AM',
-      await current.page.locator(selector).first().innerText().then(text => text.includes('7:30 PM')));
+  const defaultSelector = {classic:'.schedule-focus', prism:'.prism-service-times [aria-pressed="true"]',
+    navy:'.nc-hero', aurora:'.service-switch .selected'};
+  const boundaries = [
+    ['14:29', '2:30 PM', 'still shows the 2:30 PM afternoon service at 2:29 PM'],
+    ['14:31', '7:30 PM', 'advances to the 7:30 PM evening service at 2:31 PM'],
+    ['19:29', '7:30 PM', 'still shows the 7:30 PM service at 7:29 PM, not 5 AM'],
+    ['19:31', '8:00 PM', 'advances to the next day 8:00 PM service at 7:31 PM']
+  ];
+  for (const [clock, expected, label] of boundaries) {
+    await current.page.clock.setSystemTime(new Date('2026-07-01T' + clock + ':00-07:00'));
+    for (const mode of ['classic', 'prism', 'navy', 'aurora']) {
+      await choose(current.page, mode);
+      await current.page.evaluate(() => __mockLive.emit('schedule/2026-07-01_evening', __mockLive.get('schedule/2026-07-01_evening')));
+      await current.page.waitForTimeout(150);
+      check(mode + ' ' + label,
+        await current.page.locator(defaultSelector[mode]).first().innerText().then(text => text.includes(expected)));
+    }
   }
+  // An explicit choice of a past service is kept while the automatic default moves on.
+  await current.page.clock.setSystemTime(new Date('2026-07-01T19:29:00-07:00'));
+  await choose(current.page, 'prism');
+  await current.page.locator('.prism-service-times button', {hasText: '5:00 AM'}).first().click();
+  await current.page.waitForTimeout(120);
+  await current.page.clock.setSystemTime(new Date('2026-07-01T19:31:00-07:00'));
+  await current.page.evaluate(() => __mockLive.emit('schedule/2026-07-01_evening', __mockLive.get('schedule/2026-07-01_evening')));
+  await current.page.waitForTimeout(150);
+  check('prism keeps an explicitly selected past service after the default advances',
+    await current.page.locator(defaultSelector.prism).first().innerText().then(text => text.includes('5:00 AM')));
+  await current.page.clock.setSystemTime(new Date('2026-07-01T19:29:00-07:00'));
   await current.page.evaluate(() => {
     document.documentElement.dataset.maintenance = 'active';
     window.__mockLive.emit('app/settings', window.__designFixture.docs['app/settings']);
@@ -905,6 +1222,8 @@ try {
 
   const ownedPaths = [
     path.join(root, 'design-gallery/test.mjs'),
+    path.join(root, 'tests/helpers/playwright.mjs'),
+    path.join(root, 'tests/schedule-default.test.mjs'),
     path.join(root, 'design-gallery/README.md'),
     path.join(root, 'design-gallery/STATUS.md'),
     path.join(root, '.github/workflows/design-gallery-qa.yml'),

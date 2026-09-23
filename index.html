@@ -76,11 +76,37 @@
     outline: 3px solid rgba(35, 131, 198, 0.34); outline-offset: 2px;
   }
 
-  header.app { display: grid; grid-template-columns: 1fr auto; gap: 8px 24px; align-items: center; padding: 38px 2px 24px; border-bottom: 1px solid var(--line); }
-  .header-home { grid-column: 1; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
-  header.app .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--brand-blue-deep); }
-  .header-home .app-title { display: block; margin: 0; font-weight: 650; font-size: clamp(28px, 5vw, 38px); letter-spacing: -0.025em; line-height: 1.12; color: var(--brand-blue-dark); }
-  header.app .sub { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  /* One shared header structure for every appearance: round brand badge, brand
+     name, a second line naming the current screen, and the signed-in member
+     chip on the right. These rules are the structure plus Original's own look;
+     Prism, Navy & Cream, and Aurora restyle it in design-gallery/header.css. */
+  header.app { display: flex; align-items: center; gap: 10px 14px; padding: 26px 2px 18px; border-bottom: 1px solid var(--line); }
+  .wd-head-brand { display: flex; align-items: center; gap: 12px; flex: 0 1 auto; min-width: 0; margin-right: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .wd-head-mark { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--accent-grad); color: #fff; font-size: 15px; font-weight: 750; letter-spacing: -0.03em; }
+  .wd-head-text { display: block; min-width: 0; }
+  .wd-head-name { display: block; color: var(--brand-blue-dark); font-size: 17px; font-weight: 750; letter-spacing: 0.04em; line-height: 1.15; white-space: nowrap; }
+  .wd-head-screen { display: block; margin-top: 3px; overflow: hidden; color: var(--brand-blue-deep); font-size: 11.5px; font-weight: 700; letter-spacing: 0.15em; line-height: 1.3; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+  .wd-head-tools { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: 0 1 auto; min-width: 0; }
+  .wd-head-member { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; min-height: 40px; padding: 3px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+  .wd-head-member[hidden] { display: none; }
+  .wd-head-initials { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); color: var(--brand-blue-deep); font-size: 12px; font-weight: 750; }
+  .wd-head-person { min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wd-head-caret { flex: none; color: var(--muted); }
+  /* Account menu: opens from the member chip (Availability, Settings, Sign out).
+     Structure plus Original's look; Prism, Navy & Cream, and Aurora restyle it
+     in design-gallery/header.css. It sits above the floating bottom bar (50 to
+     90) and the appearance toast (110). */
+  .wd-head-tools { position: relative; }
+  .wd-head-member[aria-expanded="true"] .wd-head-caret { transform: rotate(180deg); }
+  .wd-account-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 120; display: grid; gap: 2px; width: max-content; min-width: 196px; max-width: calc(100vw - 24px); padding: 6px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: 0 14px 34px rgba(23, 74, 107, 0.16); }
+  .wd-account-menu[hidden] { display: none; }
+  .wd-account-menu button { display: flex; align-items: center; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 9px; background: none; box-shadow: none; color: var(--ink); font: inherit; font-size: 14px; font-weight: 650; text-align: left; white-space: nowrap; cursor: pointer; }
+  .wd-account-menu button:hover, .wd-account-menu button:focus-visible { background: var(--accent-soft); color: var(--brand-blue-deep); }
+  .wd-account-menu .wd-account-out { margin-top: 4px; border-top: 1px solid var(--hairline); border-radius: 0 0 9px 9px; color: var(--danger); }
+  .wd-account-who { display: none; padding: 8px 12px 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
+  .account-view .account-title { margin: 2px 2px 4px; font-size: 19px; }
+  .account-view .account-title:focus { outline: none; }
+  .account-view .card > :last-child { margin-bottom: 0; }
   .sync-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 650; box-shadow: var(--shadow-soft); }
   .sync-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
   .sync-pill.live { color: var(--ok); }
@@ -90,6 +116,8 @@
   nav.tabs button { flex: 1; position: relative; min-height: 54px; padding: 15px 8px 12px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font-size: 14px; font-weight: 650; cursor: pointer; }
   nav.tabs button.active { color: var(--brand-blue-deep); border-bottom-color: var(--brand-blue); background: var(--surface); }
   nav.tabs button .dot { position: absolute; top: 11px; right: max(10px, calc(50% - 42px)); width: 7px; height: 7px; border-radius: 50%; background: var(--brand-rose); }
+  /* Green dot on My Duties: a new duty. Red dot on Manage: requests or conflicts. Each appearance supplies its own --ok green. */
+  nav.tabs button#tab-my .dot { background: var(--ok); }
   nav.tabs.hidden, nav.tabs button.hidden { display: none; }
 
   .card { margin-bottom: 14px; padding: 19px 21px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
@@ -126,6 +154,8 @@
   .me-picker { margin: 18px 0 16px; }
   .me-picker label { display: block; margin-bottom: 8px; color: var(--brand-blue-dark); font-size: 16px; font-weight: 700; }
   .notify-box, .req-actions-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .notify-help summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+  .notify-help p { margin: 0 0 8px; }
   button.primary, button.ghost { min-height: 44px; padding: 10px 17px; border-radius: 7px; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .12s, background .15s; }
   button.primary { border: 1px solid var(--brand-blue-deep); background: var(--brand-blue-deep); color: #fff; box-shadow: 0 5px 12px rgba(7,95,150,0.17); }
   button.ghost { border: 1px solid #a9c7d9; background: var(--surface); color: var(--brand-blue-deep); }
@@ -166,6 +196,8 @@
   .subnav button { min-height: 44px; padding: 8px 13px; border: 1px solid #b8c7d0; border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; cursor: pointer; }
   .subnav button.active { border-color: var(--brand-blue-deep); background: var(--brand-blue-deep); color: #fff; }
   .subnav .lock-btn { margin-left: auto; }
+  /* Phone copy of a screen's secondary menu, placed below the header by watchTopSubnav() in app.js. */
+  nav#subnav-top, nav#subnav-top[hidden] { display: none; }
   form.add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   form.add-row input, form.add-row select { flex: 1; min-width: 105px; }
   .edit-grid { display: grid; grid-template-columns: 132px 1fr; gap: 8px 12px; align-items: center; margin: 8px 0; }
@@ -294,28 +326,108 @@
     .department-exception-form { grid-template-columns: 1fr 1fr; }
     .department-exception-form button { grid-column: 1 / -1; }
   }
+  /* F10 feedback: a small round button above the floating bottom bar, the
+     sheet it opens, and the administrator list in Manage. These are Original's
+     styles, built from Original's own tokens; Prism, Navy & Cream and Aurora
+     restyle them in design-gallery/feedback.css. The button and sheet sit on
+     <body>, below toasts (110+) and above page content and the bar (50). */
+  .wd-fbk-btn { position: fixed; right: max(20px, env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 60; display: grid; place-items: center; width: 46px; height: 46px; padding: 0; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; background: var(--accent-grad); color: #fff; box-shadow: 0 8px 20px rgba(7,95,150,0.30); cursor: pointer; transition: transform .18s, box-shadow .18s; }
+  .wd-fbk-btn[hidden], html[data-keyboard="open"] .wd-fbk-btn { display: none; }
+  .wd-fbk-btn svg { display: block; }
+  .wd-fbk-btn:hover { transform: translateY(-2px); }
+  .wd-fbk-btn:active { transform: scale(0.94); }
+  .wd-fbk-btn:focus-visible { outline: 3px solid rgba(35,131,198,0.45); outline-offset: 3px; }
+  .wd-fbk-sheet { position: fixed; inset: 0; width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--ink); box-shadow: 0 24px 70px rgba(16,42,58,0.28); font-family: var(--sans); }
+  .wd-fbk-sheet:not([open]) { display: none; }
+  .wd-fbk-sheet::backdrop { background: rgba(16,42,58,0.45); }
+  .wd-fbk-form { margin: 0; padding: 20px; }
+  .wd-fbk-form h2 { margin: 0 0 4px; color: var(--brand-blue-dark); font-size: 19px; line-height: 1.25; }
+  .wd-fbk-lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .wd-fbk-kinds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 0 0 14px; }
+  .wd-fbk-kinds label { position: relative; display: grid; }
+  .wd-fbk-kinds input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .wd-fbk-kinds span { display: flex; align-items: center; justify-content: center; min-height: 46px; padding: 6px 6px; border: 1px solid #b8c7d0; border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; line-height: 1.2; text-align: center; }
+  .wd-fbk-kinds input:checked + span { border-color: var(--brand-blue-deep); background: var(--brand-blue-deep); color: #fff; }
+  .wd-fbk-kinds input:focus-visible + span { outline: 3px solid rgba(35,131,198,0.45); outline-offset: 2px; }
+  .wd-fbk-label { display: block; margin: 0 0 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+  .wd-fbk-form textarea { display: block; width: 100%; min-height: 124px; padding: 10px 12px; resize: vertical; border: 1px solid #b8c7d0; border-radius: 8px; background: var(--surface); color: var(--ink); font-family: inherit; font-size: 16px; line-height: 1.5; outline: none; }
+  .wd-fbk-form textarea:focus { border-color: var(--brand-blue); box-shadow: 0 0 0 3px rgba(35,131,198,0.16); }
+  .wd-fbk-error { margin: 10px 0 0; padding: 9px 12px; border-left: 3px solid var(--brand-blue); border-radius: 6px; background: var(--accent-soft); color: var(--ink); font-size: 13px; }
+  .wd-fbk-error[hidden] { display: none; }
+  .wd-fbk-actions { display: flex; gap: 8px; margin: 14px 0 0; }
+  .wd-fbk-actions .primary { flex: 1 1 auto; }
+  .wd-fbk-group { margin: 4px 2px 10px; color: var(--brand-blue-dark); font-size: 15px; }
+  .wd-fbk-entry .req-item { padding: 0; font-size: 13px; }
+  .wd-fbk-message { margin: 8px 0 6px; color: var(--ink); font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .wd-fbk-entry .req-actions-row { margin: 12px 0 0; align-items: center; }
+  @media (max-width: 640px) {
+    /* Phones: just above the floating bar (bar top is about 76px from the edge). The sheet hugs the top so the keyboard never covers it. */
+    .wd-fbk-btn { right: 14px; bottom: calc(86px + env(safe-area-inset-bottom)); }
+    .wd-fbk-sheet { margin: 12px auto auto; }
+    .wd-fbk-form { padding: 16px; }
+    /* Original only (Navy & Cream sets data-nc-scheme and already leaves room): let the last card scroll clear of the button. */
+    html:not([data-nc-scheme]) div.wrap { padding-bottom: calc(142px + env(safe-area-inset-bottom)); }
+  }
+  @media print { .wd-fbk-btn, .wd-fbk-sheet { display: none !important; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
   @media (max-width: 640px) {
     :root { --gutter: 16px; }
     .wrap { padding: 0 var(--gutter) calc(28px + env(safe-area-inset-bottom)); }
     /* Compact header: the title and the sync pill share one line, so the tab
        bar sits near the top of the screen instead of a third of the way down. */
-    header.app { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 2px 12px; }
-    header.app .eyebrow { font-size: 10.5px; letter-spacing: 0.13em; }
-    .header-home .app-title { margin-top: 0; font-size: 22px; }
-    header.app .sub { margin-top: 0; }
+    header.app { flex-wrap: nowrap; gap: 6px 8px; padding: 14px 2px 10px; }
+    .wd-head-brand { gap: 10px; flex: none; }
+    .wd-head-mark { width: 38px; height: 38px; font-size: 14px; }
+    .wd-head-name { font-size: 15px; }
+    .wd-head-screen { font-size: 10.5px; letter-spacing: 0.13em; }
+    .wd-head-member { gap: 6px; font-size: 12px; }
+    .wd-head-initials { width: 30px; height: 30px; font-size: 11px; }
+    .wd-head-person { max-width: 84px; }
+    /* Original's sync status stays in the header row as a small dot: green when
+       live, grey for "This device only". The words stay in the element for
+       screen readers (zero-size text, not display: none) and in its title. */
+    header.app .sub { flex: none; display: flex; align-items: center; margin-top: 0; }
+    header.app .sync-pill { gap: 0; min-height: 0; width: 20px; height: 20px; padding: 0; justify-content: center; overflow: hidden; border: 0; border-radius: 50%; background: none; box-shadow: none; font-size: 0; line-height: 0; color: transparent; white-space: nowrap; }
+    header.app .sync-pill::before { flex: none; width: 9px; height: 9px; }
+    @media (max-width: 359px) { .wd-head-person { display: none; } }
+    /* The chip shows initials only at this width, so the account menu names the member. */
+    @media (max-width: 359px) { .wd-account-who { display: block; } }
     .sync-pill { min-height: 28px; padding: 4px 9px; font-size: 11px; }
-    /* Tabs live at the top on phones too, pinned so they are always reachable. */
-    nav.tabs { margin-inline: calc(var(--gutter) * -1); margin-bottom: 16px; padding-inline: var(--gutter); background: var(--canvas); box-shadow: var(--shadow-soft); }
-    nav.tabs button { min-height: 50px; padding: 14px 3px 11px; font-size: 13px; }
-    nav.tabs button .dot { top: 9px; right: max(8px, calc(50% - 38px)); }
+    /* On phones the main tabs float at the bottom of the screen, always in
+       thumb reach. Same buttons, labels, dots, and click handling as the top
+       tabs on wider screens; the page reserves room so nothing sits behind them. */
+    .wrap { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+    /* F4b: the bar is made easier to notice with Original's own colors: a
+       blue-tinted outline and a deeper lifted shadow, a solid blue selected tab
+       with a white label (the same fill as the selected "All" chip), a small
+       icon over every label, a slight lift on the selected tab, press feedback,
+       and one short slide-up when the bar first appears. The reduced-motion
+       rule above switches every animation and transition off. */
+    nav.tabs { position: fixed; top: auto; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 50; gap: 4px; margin: 0; padding: 5px; background: var(--surface); border: 1px solid var(--line); border-color: color-mix(in srgb, var(--brand-blue) 45%, var(--surface)); border-radius: calc(var(--r-lg) + 5px); box-shadow: 0 14px 34px rgba(23, 74, 107, 0.26), 0 3px 10px rgba(23, 74, 107, 0.14); animation: wd-bar-in 0.22s ease-out; }
+    @keyframes wd-bar-in { from { opacity: 0; transform: translateY(18px); } }
+    nav.tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 54px; min-width: 0; padding: 7px 3px 6px; border: 0; border-radius: var(--r-lg); color: var(--brand-blue-dark); font-size: 12.5px; transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; }
+    body:not(.aurora) nav.tabs button::before { content: ""; flex: none; width: 20px; height: 20px; background: currentColor; -webkit-mask: var(--tab-icon) center / contain no-repeat; mask: var(--tab-icon) center / contain no-repeat; }
+    nav.tabs button[data-tab="schedule"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='3'/%3E%3Cpath d='M7 3v4m10-4v4M3 11h18m-13 4h2m4 0h2'/%3E%3C/svg%3E"); }
+    nav.tabs button[data-tab="my"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='4' width='14' height='17' rx='2'/%3E%3Cpath d='M9 4V2h6v2m-7 9 2 2 5-5'/%3E%3C/svg%3E"); }
+    nav.tabs button[data-tab="songs"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-3v13M9 9l12-3'/%3E%3Cellipse cx='6' cy='18' rx='3' ry='2'/%3E%3Cellipse cx='18' cy='15' rx='3' ry='2'/%3E%3C/svg%3E"); }
+    nav.tabs button[data-tab="manage"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h5m4 0h9M3 12h11m4 0h3M3 18h2m4 0h12'/%3E%3Ccircle cx='10' cy='6' r='2'/%3E%3Ccircle cx='16' cy='12' r='2'/%3E%3Ccircle cx='7' cy='18' r='2'/%3E%3C/svg%3E"); }
+    nav.tabs button.active { background: linear-gradient(135deg, var(--brand-blue-deep), var(--brand-blue-dark)); color: #fff; box-shadow: 0 6px 14px rgba(7, 95, 150, 0.34); transform: translateY(-2px); }
+    nav.tabs button:active { transform: scale(0.96); }
+    nav.tabs button .dot { top: 6px; right: calc(50% - 19px); width: 8px; height: 8px; box-shadow: 0 0 0 2px var(--surface); }
+    nav.tabs.nav-loading, html[data-keyboard="open"] nav.tabs { display: none; }
     .card { padding: 17px 16px; }
     .duty-row .dname { flex-basis: 104px; }
     .edit-grid { grid-template-columns: 1fr; }
     .edit-grid .lab { text-align: left; }
     .subnav .lock-btn { margin-left: 0; }
+    /* Secondary menus sit at the top on phones: one compact row that scrolls
+       sideways and never wraps. The in-page copy is hidden while this one shows. */
+    html[data-subnav-top="on"] nav#subnav-top:not([hidden]) { display: flex; flex-wrap: nowrap; align-items: center; margin: 12px 0 14px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    nav#subnav-top::-webkit-scrollbar { display: none; }
+    nav#subnav-top button { flex: 1 0 auto; white-space: nowrap; }
+    html[data-subnav-top="on"] #view .subnav:not(.chips), html[data-subnav-top="on"] #view #song-root .ns-tabs { display: none; }
   }
-  @media (max-width: 379px) { :root { --gutter: 12px; } nav.tabs button { font-size: 12px; } }
+  @media (max-width: 379px) { :root { --gutter: 12px; } nav.tabs button { font-size: 12px; } nav#subnav-top button { padding-left: 9px; padding-right: 9px; } }
 </style>
 </head>
 <body>
@@ -329,13 +441,11 @@
   </section>
 </main>
 <div class="wrap">
-  <header class="app">
-    <button class="header-home" data-act="home" aria-label="Return to schedule">
-      <span class="eyebrow">Las Vegas Zion</span>
-      <span class="app-title">Worship Service</span>
-    </button>
+  <header class="app wd-head">
+    <button class="header-home wd-head-brand" data-act="home" aria-label="Return to schedule"><span class="wd-head-mark" aria-hidden="true">LV</span><span class="wd-head-text"><span class="wd-head-name" data-wd-head="name">LV ZION</span><span class="wd-head-screen" data-wd-head="screen">Worship Duty</span></span></button>
     <h1 class="sr-only">LV Zion Worship Service</h1>
-    <div class="sub"><span id="sync-pill" class="sync-pill">This device only</span></div>
+    <div class="sub"><span id="sync-pill" class="sync-pill" role="img" aria-label="This device only" title="This device only">This device only</span></div>
+    <div class="wd-head-tools"><button type="button" class="wd-head-member" data-wd-head="member" aria-haspopup="menu" aria-expanded="false" hidden><span class="wd-head-initials" data-wd-head="initials" aria-hidden="true"></span><span class="wd-head-person" data-wd-head="person"></span><span class="wd-head-caret" aria-hidden="true">&#8964;</span></button><div class="wd-account-menu" data-wd-head="menu" role="menu" aria-label="Your account" hidden><div class="wd-account-who" data-wd-head="who" aria-hidden="true"></div><button type="button" role="menuitem" data-act="account" data-view="availability">Availability</button><button type="button" role="menuitem" data-act="account" data-view="settings">Settings</button><button type="button" role="menuitem" class="wd-account-out" data-act="member-logout">Sign out</button></div></div>
   </header>
 
   <nav class="tabs">

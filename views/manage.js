@@ -10,6 +10,7 @@ import {getJSON} from '../core/notify.js';
 import {actionableCountsForViewer, actionableDepartmentForDuty, requestIsActionable, effectiveRequestStatus, statusChip} from './requests.js';
 import {renderDepartmentWorkspace} from './departments.js';
 import {renderCatRows} from './schedule.js';
+import {renderManageFeedback} from './feedback.js';
 
 // The five appearance-dispatchable renderManage* siblings this module itself
 // owns (renderManageServices, renderManagePlanning, renderManageRequests,
@@ -58,11 +59,11 @@ export function renderManage() {
     ['requests', 'Requests' + (pendingCount > 0 ? ' (' + pendingCount + ')' : '')]];
   if (canPermission('canManageLeaders', authActor())) subs.push(['leaders', 'Leader config']);
   if (isAdministrator) subs.push(['features', 'Features'], ['data', 'Data & Sync']);
+  if (isAdministrator) subs.push(['feedback', 'Feedback']);
   let html = '<div class="me-picker"><label for="manage-dept">Manage department</label>' +
     '<select id="manage-dept" data-chg="manage-dept">' + departmentOptions + '</select></div>' +
     '<div class="subnav">' + subs.map(s =>
     '<button data-act="sub" data-sub="' + s[0] + '"' + (ui.sub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>').join('') +
-    '<button class="lock-btn" data-act="member-logout">Sign out</button>' +
     '</div>';
   if (ui.sub === 'departments') html += renderDepartmentWorkspace();
   else if (ui.sub === 'services') html += activeRenderManageServices();
@@ -72,6 +73,7 @@ export function renderManage() {
   else if (ui.sub === 'leaders' && canPermission('canManageLeaders', authActor())) html += renderLeaderConfig();
   else if (ui.sub === 'features' && canPermission('isAdmin', authActor())) html += activeRenderFeatures();
   else if (ui.sub === 'data' && canPermission('isAdmin', authActor())) html += activeRenderManageData();
+  else if (ui.sub === 'feedback' && canPermission('isAdmin', authActor())) html += renderManageFeedback();
   else html += activeRenderManageServices();
   return html;
 }

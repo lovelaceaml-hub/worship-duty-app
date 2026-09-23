@@ -1,18 +1,43 @@
 import {esc, fmtDate} from '../core/format.js';
 import {CATEGORIES, SERVICE_LABELS, memberLabel} from '../core/constants.js';
-import {departmentDraftProfile, departmentProfileIsLeader, departmentProfiles, departmentRuntimeKey, departmentServiceTimeKey, departmentServiceTimeLabel, loadOwnDepartmentProfiles, ownDepartmentProfiles} from '../core/departments.js';
-import {authorizedDepartments, canManageSelectedDepartment, selectedManageDepartment} from '../core/auth.js';
-import {departmentRuntime, state, ui} from '../core/state.js';
+import {currentMemberUid, departmentDraftProfile, departmentErrorMessage, departmentProfile, departmentProfileIsLeader, departmentProfiles, departmentRuntimeKey, departmentServiceTimeKey, departmentServiceTimeLabel, loadOwnDepartmentProfiles, ownDepartmentProfiles} from '../core/departments.js';
+import {authActor, authorizedDepartments, canManageSelectedDepartment, canPermission, selectedManageDepartment} from '../core/auth.js';
+import {fb, departmentRuntime, state, ui, verifiedSession} from '../core/state.js';
+import {authCall} from '../core/session.js';
+
+// render (views/shell.js) is not imported directly: same host-bridge
+// evaluation-order reasoning as core/session.js. app.js pushes the live
+// (possibly patched) reference in once init() runs.
+let render;
+export function setDepartmentsRenderRef(renderFn) { render = renderFn; }
+
+/* Presentation only: an account ID is never shown. It resolves to a member name
+   from data already loaded (department profiles, the signed-in account, the member
+   list), otherwise the caller falls back to neutral wording. Stored data is unchanged. */
+export function attributionName(value, isId) {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  const loaded = Object.keys(departmentRuntime.rosters).reduce((all, department) =>
+    all.concat(departmentProfiles(department)), []).concat(ownDepartmentProfiles());
+  const match = loaded.find(profile => profile && profile.memberName && (profile.memberUid === raw || profile.uid === raw));
+  if (match) return memberLabel(match.memberName);
+  if (raw === currentMemberUid() && verifiedSession && verifiedSession.memberName) return memberLabel(verifiedSession.memberName);
+  const listed = /^member:/.test(raw) && (state && state.members || []).indexOf(raw.slice(7)) !== -1;
+  if (listed) return memberLabel(raw.slice(7));
+  if (isId || /^member:/.test(raw) || /^[A-Za-z0-9_-]{20,}$/.test(raw)) return '';
+  return raw;
+}
 
 export function departmentAttribution(profile) {
   const attribution = profile && profile.attribution || {};
-  const by = profile && (profile.updatedBy || attribution.updatedBy || profile.updatedByUid);
+  const recorded = profile && (profile.updatedBy || attribution.updatedBy || profile.updatedByUid);
+  const by = profile && (attributionName(profile.updatedBy) || attributionName(attribution.updatedBy) || attributionName(profile.updatedByUid, true));
   const at = profile && (profile.updatedAt || attribution.updatedAt);
-  if (!by && !at) return 'No change attribution returned yet.';
+  if (!recorded && !at) return 'No change attribution returned yet.';
   const when = Number.isFinite(Number(at)) ? new Date(Number(at)).toLocaleString(undefined, {
     month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
   }) : 'time unavailable';
-  return 'Last changed by ' + (by ? esc(by) : 'account unavailable') + ' on ' + esc(when) + '.';
+  return 'Last changed by ' + (by ? esc(by) : 'a department leader or administrator') + ' on ' + esc(when) + '.';
 }
 export function departmentStatusBadge(profile) {
   const active = profile && profile.status === 'active';
@@ -28,10 +53,67 @@ export function departmentProfileSummary(profile) {
     ' · ' + recurring.length + ' recurring time' + (recurring.length === 1 ? '' : 's') +
     (exceptionCount ? ' · ' + exceptionCount + ' date exception' + (exceptionCount === 1 ? '' : 's') : '');
 }
+export function departmentSearchState(department) {
+  const state = ui.departmentSearch;
+  return state && state.department === department ? state : null;
+}
+export function renderDepartmentMemberSearch(department) {
+  const state = departmentSearchState(department) || {};
+  const members = Array.isArray(state.members) ? state.members : [];
+  const pages = Math.max(1, Math.ceil((Number(state.total) || 0) / 10));
+  let results = '';
+  if (state.busy) results = '<p class="department-empty-note">Searching...</p>';
+  else if (state.error) results = '<p class="department-empty-note">' + esc(state.error) + '</p>';
+  else if (state.searched && !members.length) results = '<p class="department-empty-note">No registered member matches that name. Check the spelling, or ask an administrator if the member has no account yet.</p>';
+  else if (members.length) {
+    results = members.map(member => {
+      const existing = departmentProfile(department, member.memberUid);
+      return '<div class="department-member-row"><span class="department-member-name">' + esc(memberLabel(member.memberName)) + '</span>' +
+        (existing
+          ? '<span class="department-member-meta"><span>Already in ' + esc(department) + '</span></span>'
+          : '<button class="ghost mini" type="button" data-act="department-member-add" data-dept="' + esc(department) + '" data-uid="' + esc(member.memberUid) + '" data-name="' + esc(member.memberName) + '"' + (state.adding ? ' disabled' : '') + '>Add</button>') +
+        '</div>';
+    }).join('');
+    if (pages > 1) {
+      results += '<div class="department-save-bar"><button class="ghost mini" type="button" data-act="department-member-search-page" data-dept="' + esc(department) + '" data-page="' + (state.page - 1) + '"' + (state.page <= 1 ? ' disabled' : '') + '>Previous</button>' +
+        '<span class="department-attribution">Page ' + state.page + ' of ' + pages + '</span>' +
+        '<button class="ghost mini" type="button" data-act="department-member-search-page" data-dept="' + esc(department) + '" data-page="' + (state.page + 1) + '"' + (state.page >= pages ? ' disabled' : '') + '>Next</button></div>';
+    }
+  }
+  return '<form class="card department-add-form" data-act="department-member-search" data-dept="' + esc(department) + '"><div class="department-eyebrow">Add a department member</div><h3>Find a member by name</h3>' +
+    '<p class="hint">Search registered members by name, then choose Add. Adding a profile does not grant a leadership role.</p>' +
+    '<div class="department-form-grid"><label>Member name<input id="department-member-query" type="search" required minlength="2" maxlength="160" autocomplete="off" placeholder="Type at least two letters" value="' + esc(ui.departmentSearchDraft != null ? ui.departmentSearchDraft : (state.query || '')) + '"></label></div>' +
+    '<button class="primary" type="submit"' + (state.busy ? ' disabled' : '') + '>Search</button>' +
+    (results ? '<div class="department-roster-groups">' + results + '</div>' : '') + '</form>';
+}
+export function searchDepartmentMembers(department, query, page) {
+  ui.departmentSearchDraft = null;
+  const state = ui.departmentSearch = { department, query, page, members: [], total: 0, busy: true, error: '', searched: false };
+  render();
+  const lookup = fb ? authCall('searchDepartmentCandidates', { departmentId: department, query, page })
+    : Promise.resolve({ ok: true, departmentId: department, members: [], page, total: 0 });
+  return lookup.then(result => {
+    if (ui.departmentSearch !== state) return;
+    if (!result || result.departmentId !== department || !Array.isArray(result.members)) throw new Error('The member search response was not valid.');
+    state.members = result.members.filter(member => member && member.memberUid && member.memberName);
+    state.total = Number(result.total) || state.members.length;
+    state.page = Number(result.page) || page;
+  }).catch(error => {
+    if (ui.departmentSearch !== state) return;
+    state.error = 'The search did not finish: ' + departmentErrorMessage(error);
+  }).then(() => {
+    if (ui.departmentSearch !== state) return;
+    state.busy = false;
+    state.searched = true;
+    render();
+  });
+}
 export function renderDepartmentProfileRow(profile, options = {}) {
   const memberUid = profile.memberUid;
   const isLeader = departmentProfileIsLeader(profile);
   const canEdit = options.canEdit === true;
+  const department = options.department || '';
+  const canReset = canPermission('canResetPin', authActor(), { name: profile.memberName, departments: [department] });
   return '<div class="department-member-row ' + (profile.status === 'inactive' ? 'is-inactive' : '') + '">' +
     '<button class="department-member-open" data-act="department-member-open" data-uid="' + esc(memberUid) + '" aria-label="Open ' + esc(memberLabel(profile.memberName)) + ' profile">' +
     '<span class="department-member-name">' + esc(memberLabel(profile.memberName)) + '</span>' +
@@ -39,6 +121,7 @@ export function renderDepartmentProfileRow(profile, options = {}) {
     '</button>' +
     '<span class="department-member-meta">' + departmentStatusBadge(profile) + '<span>' + esc(departmentProfileSummary(profile)) + '</span></span>' +
     (canEdit ? '<button class="ghost mini" data-act="department-status" data-uid="' + esc(memberUid) + '" data-status="' + (profile.status === 'active' ? 'inactive' : 'active') + '">' + (profile.status === 'active' ? 'Archive' : 'Restore') + '</button>' : '') +
+    (canReset ? '<button class="ghost mini" data-act="reset-member-pin" data-name="' + esc(profile.memberName) + '" data-dept="' + esc(department) + '">Reset PIN</button>' : '') +
     '</div>';
 }
 export function renderManageDepartments() {
@@ -46,7 +129,7 @@ export function renderManageDepartments() {
   if (!departments.length) return '<div class="empty">No department leadership scope is attached to this account.</div>';
   let html = '<div class="department-scope card"><div class="department-eyebrow">Leader-scoped workspace</div>' +
     '<h2>Departments</h2><p class="hint">Only departments returned by your verified account are shown. Each card opens a department-scoped roster.</p>' +
-    '<p class="department-security-note">Roster profiles are loaded by department and UID. No congregation-wide member list is used here.</p></div>';
+    '<p class="department-security-note">Roster profiles are loaded by department. No congregation-wide member list is shown here.</p></div>';
   html += '<div class="department-card-grid">' + departments.map(department => {
     const profiles = departmentProfiles(department);
     const leaders = profiles.filter(departmentProfileIsLeader);
@@ -74,10 +157,10 @@ export function renderDepartmentLoading(department) {
   }
   return '';
 }
-export function renderDepartmentRosterGroup(label, profiles, canEdit) {
+export function renderDepartmentRosterGroup(label, profiles, canEdit, department) {
   if (!profiles.length) return '<section class="department-group"><h3>' + esc(label) + '</h3><p class="department-empty-note">No profiles in this group.</p></section>';
   return '<section class="department-group"><div class="department-group-heading"><h3>' + esc(label) + '</h3><span>' + profiles.length + '</span></div>' +
-    profiles.map(profile => renderDepartmentProfileRow(profile, { canEdit })).join('') + '</section>';
+    profiles.map(profile => renderDepartmentProfileRow(profile, { canEdit, department })).join('') + '</section>';
 }
 export function renderManageDepartment() {
   const department = selectedManageDepartment();
@@ -94,17 +177,13 @@ export function renderManageDepartment() {
     '<section class="department-hero card"><div class="department-eyebrow">Department roster</div><h2>' + esc(department) + '</h2>' +
     '<p class="hint">This page shows the leaders and active or inactive profiles returned for ' + esc(department) + '.</p>' +
     '<div class="department-leader-strip"><strong>Leaders</strong><span>' + (leaders.length ? leaders.map(profile => esc(memberLabel(profile.memberName))).join(', ') : 'No leader record returned by the secure roster') + '</span></div>' +
-    '<p class="department-attribution">Roster read is scoped to <code>' + esc(department) + '</code>. Profile changes carry UID and timestamp attribution.</p></section>';
+    '<p class="department-attribution">Roster read is scoped to <code>' + esc(department) + '</code>. Profile changes record who made them and when.</p></section>';
   if (canEdit) {
-    html += '<form class="card department-add-form" data-act="department-member-add"><div class="department-eyebrow">Add a department member</div><h3>Add by verified member UID</h3>' +
-      '<p class="hint">A UID is the member identity used by the secure callable. Adding a profile does not grant a leadership role.</p>' +
-      '<div class="department-form-grid"><label>Member UID<input id="department-member-uid" type="text" required maxlength="128" autocomplete="off" placeholder="Firebase member UID"></label>' +
-      '<label>Display name<input id="department-member-name" type="text" required maxlength="160" autocomplete="off" placeholder="Name shown to leaders"></label></div>' +
-      '<button class="primary" type="submit">Add member profile</button></form>';
+    html += renderDepartmentMemberSearch(department);
   }
   html += '<div class="department-roster-groups">' +
-    renderDepartmentRosterGroup('Active profiles', profiles.filter(profile => profile.status === 'active'), canEdit) +
-    renderDepartmentRosterGroup('Inactive profiles', profiles.filter(profile => profile.status !== 'active'), canEdit) +
+    renderDepartmentRosterGroup('Active profiles', profiles.filter(profile => profile.status === 'active'), canEdit, department) +
+    renderDepartmentRosterGroup('Inactive profiles', profiles.filter(profile => profile.status !== 'active'), canEdit, department) +
     '</div>';
   return html;
 }
@@ -188,7 +267,7 @@ export function renderDepartmentMember() {
   const fieldAttribution = profile.fieldAttribution && typeof profile.fieldAttribution === 'object' ? profile.fieldAttribution : {};
   const draftExists = !!departmentRuntime.drafts[departmentRuntimeKey(department, memberUid)];
   let html = '<button class="linkish department-back" data-act="department-back-member">Back to ' + esc(department) + '</button>' +
-    '<section class="department-profile-hero card"><div class="department-eyebrow">Member profile</div><div class="department-profile-title"><div><h2>' + esc(memberLabel(profile.memberName)) + '</h2><p class="department-uid">UID: ' + esc(profile.memberUid) + '</p></div>' + departmentStatusBadge(profile) + '</div>' +
+    '<section class="department-profile-hero card"><div class="department-eyebrow">Member profile</div><div class="department-profile-title"><div><h2>' + esc(memberLabel(profile.memberName)) + '</h2></div>' + departmentStatusBadge(profile) + '</div>' +
     '<p class="department-attribution">' + departmentAttribution(profile) + '</p>' +
     '<p class="department-profile-note">Identity and role are immutable here. This editor changes only status, eligible duties, schedulability, and availability.</p>' +
     (canEdit ? '<div class="department-profile-actions"><button class="ghost" data-act="department-status" data-uid="' + esc(memberUid) + '" data-status="' + (profile.status === 'active' ? 'inactive' : 'active') + '">' + (profile.status === 'active' ? 'Move to inactive' : 'Restore to active') + '</button></div>' : '') +
@@ -216,7 +295,8 @@ export function renderDepartmentMember() {
   html += renderDepartmentHistory(profile);
   const fieldRows = ['status', 'eligibleDuties', 'schedulable', 'availability'].filter(field => fieldAttribution[field]).map(field => {
     const decision = fieldAttribution[field];
-    return '<li><strong>' + esc(field) + '</strong>: ' + esc(decision.authority || decision.source || 'recorded') + ' by ' + esc(decision.by || 'account') + '</li>';
+    const decidedBy = attributionName(decision.by);
+    return '<li><strong>' + esc(field) + '</strong>: ' + esc(decision.authority || decision.source || 'recorded') + (decidedBy ? ' by ' + esc(decidedBy) : ', name not available') + '</li>';
   }).join('');
   html += '<section class="card department-attribution-card"><div class="department-eyebrow">Change attribution</div><h3>Who changed the profile</h3><p class="department-attribution">' + departmentAttribution(profile) + '</p>' + (fieldRows ? '<ul>' + fieldRows + '</ul>' : '<p class="department-empty-note">Field-level attribution was not included in this roster response.</p>') + '</section>';
   if (canEdit) {

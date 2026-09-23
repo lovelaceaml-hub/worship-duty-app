@@ -1,0 +1,74 @@
+/* F10 feedback button, sheet and administrator list, styled per appearance.
+ *
+ * The structure and Original's look live in index.html (the ".wd-fbk-" rules).
+ * This file holds the other three looks. build.mjs appends each marked section
+ * to that appearance's compiled stylesheet only (prism-live.css, navy-live.css,
+ * aurora-live.css), the same way design-gallery/header.css works, so every
+ * appearance keeps its own colors, corner radii and selected-state language.
+ * Do not put bottom navigation (nav.tabs) or header rules in this file.
+ */
+
+/* @prism */
+/* Prism: solid Prism accent circle with the accent glow the selected tab uses; 9px controls; selected choice is the solid accent, as in Prism's sub-tabs. */
+.prism .wd-fbk-btn{border:1px solid #ffffff8c;background:var(--accent-grad);box-shadow:0 8px 22px #3153ed47}
+.prism .wd-fbk-btn:focus-visible{outline:3px solid #8ba5ff;outline-offset:3px}
+.prism .wd-fbk-sheet{border-radius:16px;box-shadow:0 26px 80px #18254f38;font-size:14px}
+.prism .wd-fbk-sheet::backdrop{background:#17254473}
+.prism .wd-fbk-form h2{color:var(--ink);font-size:18px;font-weight:760;letter-spacing:-.02em}
+.prism .wd-fbk-lead{font-size:12px}
+.prism .wd-fbk-kinds span{min-height:40px;border-color:var(--line);border-radius:9px;font-size:12px;font-weight:600}
+.prism .wd-fbk-kinds input:checked+span{border-color:var(--accent);background:var(--accent);color:#fff}
+.prism .wd-fbk-kinds input:focus-visible+span{outline:3px solid #8ba5ff}
+.prism .wd-fbk-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.prism .wd-fbk-form textarea{border-color:var(--line);border-radius:10px;line-height:1.6}
+.prism .wd-fbk-form textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px #3153ed24}
+.prism .wd-fbk-error{border-left-color:var(--accent);border-radius:9px;font-size:12px}
+.prism .wd-fbk-group{color:var(--ink);font-size:13px;font-weight:720}
+.prism.dark .wd-fbk-btn{background:#4467ef;border-color:#ffffff33;box-shadow:0 8px 24px #00000066}
+.prism.dark .wd-fbk-sheet{box-shadow:0 26px 80px #00000080}
+.prism.dark .wd-fbk-sheet::backdrop{background:#080d1a99}
+.prism.dark .wd-fbk-kinds input:checked+span{border-color:#4467ef;background:#4467ef}
+@media(max-width:600px){.prism .wd-fbk-btn{right:16px;bottom:calc(85px + env(safe-area-inset-bottom))}}
+@media(min-width:601px){.prism .wd-fbk-btn{right:24px;bottom:calc(24px + env(safe-area-inset-bottom))}.prism .wd-fbk-sheet{margin:auto}}
+/* @end-prism */
+
+/* @navy */
+/* Navy & Cream: the header's navy with a gold icon and gold hairline, cream sheet, burgundy selected choice, Navy's 10 to 18px corners. */
+.wd-fbk-btn{border:1px solid #b9a46b99;background:var(--navy);color:#e5c68c;box-shadow:0 8px 22px #271d2140}
+.wd-fbk-btn:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+.wd-fbk-sheet{border-radius:18px;box-shadow:0 26px 70px #271d2140}
+.wd-fbk-sheet::backdrop{background:#25394380}
+.wd-fbk-form h2{color:var(--navy);font:600 21px/1.25 Georgia,serif;letter-spacing:0}
+.wd-fbk-kinds span{min-height:42px;border-color:var(--line);border-radius:10px;font-size:12px}
+.wd-fbk-kinds input:checked+span{border-color:var(--action);background:var(--action);color:#fff}
+.wd-fbk-kinds input:focus-visible+span{outline:3px solid var(--gold)}
+.wd-fbk-label{letter-spacing:.08em;text-transform:uppercase;font-size:10px;color:var(--gold)}
+.wd-fbk-form textarea{border-color:var(--line);border-radius:10px}
+.wd-fbk-form textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px #aa7c3e18}
+.wd-fbk-error{border-left-color:var(--gold);border-radius:10px}
+.wd-fbk-group{color:var(--navy);font:600 17px/1.3 Georgia,serif}
+@media(max-width:800px){.wd-fbk-btn{right:18px;bottom:calc(84px + env(safe-area-inset-bottom))}.wd-fbk-sheet{margin:12px auto auto}}
+/* @end-navy */
+
+/* @aurora */
+/* Aurora: the badge's indigo gradient on a rounded circle that matches the navy rail's glow; soft segmented choices like Aurora's sub-tabs. */
+body.aurora .wd-fbk-btn{border:1px solid #ffffff59;background:linear-gradient(140deg,#7784f2,#4a59d9);box-shadow:0 10px 26px #2b399b59}
+body.aurora .wd-fbk-btn:focus-visible{outline:3px solid #8b8ff4;outline-offset:3px}
+body.aurora .wd-fbk-sheet{border-radius:18px;box-shadow:0 28px 80px #121a3b40}
+body.aurora .wd-fbk-sheet::backdrop{background:#151d3980}
+body.aurora .wd-fbk-form h2{color:var(--ink);font-size:19px;font-weight:720;letter-spacing:-.02em}
+body.aurora .wd-fbk-kinds{gap:2px;padding:4px;border:1px solid var(--line);border-radius:12px;background:#eaeef7}
+body.aurora .wd-fbk-kinds span{min-height:40px;padding:8px 6px;border:0;border-radius:8px;background:none;font-size:12.5px;font-weight:640}
+body.aurora .wd-fbk-kinds input:checked+span{background:var(--surface);color:var(--accent);box-shadow:0 2px 5px #15295214}
+body.aurora .wd-fbk-kinds input:focus-visible+span{outline:3px solid #8b8ff4}
+body.aurora .wd-fbk-form textarea{border-color:var(--line);border-radius:12px;background:var(--canvas)}
+body.aurora .wd-fbk-form textarea:focus{border-color:#8b8ff4;box-shadow:0 0 0 3px #8b8ff433}
+body.aurora .wd-fbk-error{border-left-color:#7784f2;border-radius:10px}
+body.aurora .wd-fbk-group{color:var(--ink);font-size:14px;font-weight:700}
+body.aurora.dark .wd-fbk-kinds{background:#202a42}
+body.aurora.dark .wd-fbk-kinds input:checked+span{background:#4a59d9;color:#fff;box-shadow:none}
+body.aurora.dark .wd-fbk-sheet{box-shadow:0 28px 80px #00000080}
+body.aurora.dark .wd-fbk-sheet::backdrop{background:#070b1799}
+@media(max-width:600px){body.aurora .wd-fbk-btn{right:16px;bottom:calc(97px + env(safe-area-inset-bottom))}}
+@media(min-width:601px){body.aurora .wd-fbk-btn{right:24px;bottom:calc(24px + env(safe-area-inset-bottom))}body.aurora .wd-fbk-sheet{margin:auto}}
+/* @end-aurora */

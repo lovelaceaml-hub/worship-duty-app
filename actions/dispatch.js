@@ -23,7 +23,8 @@ import {
   addBanner, afterDataChange, getJSON, registerPush, renderSoon, sysNotify, unregisterPush
 } from '../core/notify.js';
 import {authCall, memberChangePin, memberLogin, memberLogout, safeAuthMessage} from '../core/session.js';
-import {renderBanners} from '../views/shell.js';
+import {renderBanners, ACCOUNT_TITLES} from '../views/shell.js';
+import {departmentSearchState, searchDepartmentMembers} from '../views/departments.js';
 import {memberLabel, sha256, sheetUrl, siteHash, unifiedNameMap} from '../core/constants.js';
 import {syncFromSheet} from '../core/sheet-sync.js';
 import {copyICSLink, subscribeICS} from '../core/calendar.js';
@@ -105,6 +106,7 @@ export function canRunAction(act, el) {
   if (act === 'member-logout') return isVerifiedSession();
   if (act === 'home') return true;
   if (!isVerifiedSession() || isForcedSession()) return false;
+  if (act === 'account') return !!ACCOUNT_TITLES[el.dataset.view];
   if (act === 'tab') {
     if (el.dataset.tab === 'manage') return canManageAnyDepartment();
     if (el.dataset.tab === 'songs') return canEditSongService(findService(ui.songSvc)) ||
@@ -125,7 +127,7 @@ export function canRunAction(act, el) {
     const department = dutyCategory(el.dataset.duty).name;
     return canPermission('isAdmin', actor) && canPermission('canManageDepartment', actor, department);
   }
-  if (['department-member-add', 'department-status', 'department-profile-save', 'department-profile-reset',
+  if (['department-member-add', 'department-member-search', 'department-member-search-page', 'department-status', 'department-profile-save', 'department-profile-reset',
     'department-exception-add', 'department-exception-remove'].indexOf(act) !== -1) {
     const department = el.dataset.dept || selectedManageDepartment();
     return canManageSelectedDepartment(department);
@@ -243,8 +245,18 @@ export function handleAct(act, el) {
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+  else if (act === 'account') {
+    ui.tab = 'my';
+    ui.account = el.dataset.view;
+    ui.songSvc = null;
+    render();
+    window.scrollTo({ top: 0 });
+    const heading = document.querySelector('#view .account-title');
+    if (heading) heading.focus({ preventScroll: true });
+  }
   else if (act === 'tab') {
     ui.tab = el.dataset.tab;
+    ui.account = '';
     if (ui.tab === 'my') localStorage.setItem('wds-unread-' + ui.me, '0');
     // The Presider tab always opens the song planner on its Home view,
     // never a setlist left over from an earlier "Pick songs" deep link.
@@ -339,13 +351,28 @@ export function handleAct(act, el) {
     }
     departmentPatch(department, memberUid, { availability });
   }
+  else if (act === 'department-member-search') {
+    const department = el.dataset.dept || selectedManageDepartment();
+    const input = document.getElementById('department-member-query');
+    const query = String(input && input.value || '').trim();
+    if (!department || department === 'All') return;
+    if (query.length < 2) { addBanner('Type at least two letters of the member name.', true); render(); return; }
+    searchDepartmentMembers(department, query, 1);
+  }
+  else if (act === 'department-member-search-page') {
+    const department = el.dataset.dept || selectedManageDepartment();
+    const state = departmentSearchState(department);
+    const page = Number(el.dataset.page);
+    if (!state || state.busy || !Number.isInteger(page) || page < 1) return;
+    searchDepartmentMembers(department, state.query, page);
+  }
   else if (act === 'department-member-add') {
-    const department = selectedManageDepartment();
-    const uidInput = document.getElementById('department-member-uid');
-    const nameInput = document.getElementById('department-member-name');
-    const memberUid = String(uidInput && uidInput.value || '').trim();
-    const memberName = String(nameInput && nameInput.value || '').trim();
-    if (!department || department === 'All' || !memberUid || !memberName) return;
+    const department = el.dataset.dept || selectedManageDepartment();
+    const state = departmentSearchState(department);
+    const chosen = state && state.members.find(member => member.memberUid === el.dataset.uid);
+    if (!department || department === 'All' || !chosen || state.adding) return;
+    const memberUid = chosen.memberUid;
+    const memberName = chosen.memberName;
     const data = {
       departmentId: department,
       memberUid,
@@ -355,15 +382,18 @@ export function handleAct(act, el) {
       schedulable: false,
       availability: { recurring: {}, exceptions: {} }
     };
+    state.adding = true;
+    render();
     const save = fb ? authCall('createDepartmentProfile', data) : Promise.resolve({ ok: true, profile: Object.assign({}, data, {
       uid: memberUid, role: 'member', updatedAt: Date.now(), updatedByUid: authActor() && authActor().uid
     }) });
     save.then(result => {
       if (!result || !result.profile || !replaceDepartmentProfile(result.profile)) throw new Error('The new department profile response was not valid.');
       addBanner(memberLabel(memberName) + ' was added to ' + department + '.');
-      render();
     }).catch(error => {
       addBanner('The department member was not added: ' + departmentErrorMessage(error), true);
+    }).then(() => {
+      state.adding = false;
       render();
     });
   }
@@ -937,4 +967,5 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-chg="req-note"]');
   if (el) handleChg('req-note', el);
+  if (e.target.id === 'department-member-query') ui.departmentSearchDraft = e.target.value;
 });

@@ -1,5 +1,7 @@
 # Product Brief
 
+> Note added 2026-09-20. Written in July 2026. Members now sign in with their name and a member PIN instead of choosing a name, and the app has four appearances. Current behavior: [USER-GUIDE.md](USER-GUIDE.md).
+
 ## Product
 
 - **Name:** LV Zion Worship Service

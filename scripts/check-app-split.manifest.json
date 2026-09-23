@@ -1,7 +1,12 @@
 {
   "baseline": {
-    "blob": "ab50d2dadc91b70bf5f7f1992e34c0d41498bb0e",
-    "lines": 4314
+    "blob": "6173da412170970a8136338bf1bf81c1b066b17f",
+    "lines": 4874,
+    "source": "claude/keep-look-f4f5:app.js (F1-F14), merged 2026-09-23",
+    "previous": {
+      "blob": "ab50d2dadc91b70bf5f7f1992e34c0d41498bb0e",
+      "lines": 4314
+    }
   },
   "moduleOrder": [
     "core/constants.js",
@@ -23,6 +28,7 @@
     "views/requests.js",
     "views/manage.js",
     "views/departments.js",
+    "views/feedback.js",
     "actions/dispatch.js",
     "app.js"
   ],
@@ -276,6 +282,38 @@
     "pulseInFlight": "app.js",
     "pulse": "app.js",
     "initFirebase": "app.js",
-    "init": "app.js"
+    "init": "app.js",
+    "pacificWallNow": "core/schedule.js",
+    "SCREEN_TITLES": "views/shell.js",
+    "ACCOUNT_TITLES": "views/shell.js",
+    "ACCOUNT_NOTES": "views/shell.js",
+    "paintHeader": "views/shell.js",
+    "accountView": "views/shell.js",
+    "accountMenuOpen": "views/shell.js",
+    "setAccountMenu": "views/shell.js",
+    "watchKeyboardForTabBar": "views/shell.js",
+    "watchTopSubnav": "views/shell.js",
+    "renderNotifyControls": "views/schedule.js",
+    "renderAccount": "views/schedule.js",
+    "attributionName": "views/departments.js",
+    "departmentSearchState": "views/departments.js",
+    "renderDepartmentMemberSearch": "views/departments.js",
+    "searchDepartmentMembers": "views/departments.js",
+    "FEEDBACK_KINDS": "views/feedback.js",
+    "FEEDBACK_ICON": "views/feedback.js",
+    "feedbackUi": "views/feedback.js",
+    "feedbackLocal": "views/feedback.js",
+    "feedbackReady": "views/feedback.js",
+    "feedbackSheet": "views/feedback.js",
+    "syncFeedbackButton": "views/feedback.js",
+    "paintFeedbackSheet": "views/feedback.js",
+    "openFeedbackSheet": "views/feedback.js",
+    "feedbackFailed": "views/feedback.js",
+    "sendFeedback": "views/feedback.js",
+    "loadFeedbackList": "views/feedback.js",
+    "renderFeedbackEntry": "views/feedback.js",
+    "renderManageFeedback": "views/feedback.js",
+    "changeFeedbackEntry": "views/feedback.js",
+    "renderBeforeFeedback": "app.js"
   }
 }

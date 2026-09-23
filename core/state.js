@@ -45,6 +45,7 @@ export const ui = {
   manageDept: 'All',
   departmentView: 'list',
   departmentMember: '',
+  departmentSearch: null,
   deptFilter: (function () {
     const v = localStorage.getItem('wds-dept') || 'All';
     return v === 'All' || CATEGORIES.some(c => c.name === v) ? v : 'All';

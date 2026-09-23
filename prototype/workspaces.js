@@ -89,7 +89,8 @@ const awManageCopy = {
  requests:['Change requests','Review requests, then make the assignment change in Services.'],
  people:['People & departments','Manage names and the departments available in assignment pickers.'],
  features:['Your app preferences','All switches here affect the local prototype only.'],
- data:['Data & Sync','Keep a backup, restore reference data and review local-only connections.']
+ data:['Data & Sync','Keep a backup, restore reference data and review local-only connections.'],
+ feedback:['Member feedback','Read what members sent, mark each note done, or delete it.']
 };
 function awForm(form, type) {
   form.classList.add('aw-create-form');

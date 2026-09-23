@@ -26,8 +26,8 @@
   },
   {
     "declaration": "initFirebase",
-    "find": "    increment: fsMod.increment,\n    knownIds: []\n  };\n  authStatus = 'loading';\n  authReady = Promise.resolve(null);",
-    "replace": "    increment: fsMod.increment,\n    knownIds: []\n  });\n  setAuthStatus('loading');\n  setAuthReady(Promise.resolve(null));"
+    "find": "    increment: fsMod.increment,\n    orderBy: fsMod.orderBy,\n    limit: fsMod.limit,\n    knownIds: []\n  };\n  authStatus = 'loading';\n  authReady = Promise.resolve(null);",
+    "replace": "    increment: fsMod.increment,\n    orderBy: fsMod.orderBy,\n    limit: fsMod.limit,\n    knownIds: []\n  });\n  setAuthStatus('loading');\n  setAuthReady(Promise.resolve(null));"
   },
   {
     "declaration": "initFirebase",
@@ -52,7 +52,7 @@
   {
     "declaration": "init",
     "find": "  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});",
-    "replace": "  setNotifyRenderRefs(render, renderBanners);\n  setSheetSyncRefs(findService, render);\n  setSessionRefs(render, pulse);\n  setSongsRenderRef(render);\n  setDispatchRenderRef(render);\n  setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);\n  setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);\n  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});"
+    "replace": "  setNotifyRenderRefs(render, renderBanners);\n  setSheetSyncRefs(findService, render);\n  setSessionRefs(render, pulse);\n  setSongsRenderRef(render);\n  setDispatchRenderRef(render);\n  setDepartmentsRenderRef(render);\n  setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);\n  setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);\n  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});"
   },
   {
     "declaration": "init",
@@ -133,5 +133,20 @@
     "declaration": "loadSongApp",
     "find": "import('./song-app.js' + ASSET_V)",
     "replace": "import('../song-app.js' + ASSET_V)"
+  },
+  {
+    "declaration": "init",
+    "find": "  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });\n}",
+    "replace": "  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });\n}\n\nwatchKeyboardForTabBar();\nwatchTopSubnav();\ninit();"
+  },
+  {
+    "declaration": "watchKeyboardForTabBar",
+    "find": "}\nwatchKeyboardForTabBar();",
+    "replace": "}"
+  },
+  {
+    "declaration": "watchTopSubnav",
+    "find": "}\nwatchTopSubnav();\n\ninit();",
+    "replace": "}"
   }
 ]

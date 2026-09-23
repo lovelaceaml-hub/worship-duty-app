@@ -11,8 +11,6 @@ if (window.WorshipDesign) {
     /* PRISM_HELPERS */
     function decorate(){
       document.body.dataset.screen=ui.tab;
-      document.getElementById('rail-person').textContent=ui.me||'Choose your name';
-      document.getElementById('rail-initials').textContent=selectedInitials(ui.me);
       document.querySelectorAll('nav.tabs button').forEach(b=>{
         const key=b.dataset.tab,dot=b.querySelector('.dot')?'<span class="dot"></span>':'';
         b.innerHTML=ai(key)+'<span>'+({schedule:'Schedule',my:'My Duties',songs:'Presider',manage:'Manage'}[key])+'</span>'+dot;
@@ -39,8 +37,6 @@ if (window.WorshipDesign) {
       if(act==='clear-filters'){aui.query='';ui.deptFilter='All';render();}
       if(act==='jump-service')prismJump(b.dataset.id);
       if(act==='edit'&&isVerifiedSession()&&!isForcedSession()&&canManageAnyDepartment()){ui.tab='manage';ui.sub='services';ui.expanded['m:'+b.dataset.id]=true;render();}
-      if(act==='theme'){document.body.classList.toggle('dark');try{localStorage.setItem('wds-prism-palette',document.body.classList.contains('dark')?'dark':'light');}catch{}}
-      if(act==='motion'){document.body.classList.toggle('still');const off=document.body.classList.contains('still');b.textContent=off?'▷':'Ⅱ';b.setAttribute('aria-label',off?'Enable animation':'Pause animation');try{localStorage.setItem('wds-prism-motion',off?'off':'on');}catch{}}
     });
     document.addEventListener('change',e=>{
       if(!design.isPrism())return;
@@ -86,8 +82,6 @@ if (window.WorshipDesign) {
       if(act==='clear-filters'){aui.query='';ui.deptFilter='All';render();}
       if(act==='jump-service')auroraJump(b.dataset.id);
       if(act==='edit'&&isVerifiedSession()&&!isForcedSession()&&canManageAnyDepartment()){ui.tab='manage';ui.sub='services';ui.expanded['m:'+b.dataset.id]=true;render();requestAnimationFrame(()=>document.querySelector('[data-id="m:'+b.dataset.id+'"]')?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}));}
-      if(act==='theme'){document.body.classList.toggle('dark');try{localStorage.setItem('wds-aurora-palette',document.body.classList.contains('dark')?'dark':'light');}catch{}}
-      if(act==='motion'){document.body.classList.toggle('still');const off=document.body.classList.contains('still');b.textContent=off?'▷':'Ⅱ';b.setAttribute('aria-label',off?'Enable animation':'Pause animation');try{localStorage.setItem('wds-aurora-motion',off?'off':'on');}catch{}}
     });
     document.addEventListener('change',e=>{
       if(!design.isAurora())return;
@@ -169,12 +163,38 @@ if (window.WorshipDesign) {
     return {ready:isAccessible(),tab:ui.tab,sub:ui.sub,today:todayISO(),member:ui.me,entries:entries.map(toView),canEdit,nextDuty:next?{duty:next.duty,svc:toView(next.svc)}:null,stats:{services:manageable?managed.length:up.length,assignments:assigned.length,people:new Set(assigned).size}};
   }
 
+  /* Dark mode follows the device (prefers-color-scheme) and updates live. Only
+   * Prism and Aurora have a reviewed dark variant, so only they receive the
+   * `dark` class. Motion follows prefers-reduced-motion inside each stylesheet.
+   * The old manual dark and pause buttons are gone; their saved choices are
+   * cleared here so nothing can hold a member in a forced mode. */
+  const systemDark=window.matchMedia('(prefers-color-scheme: dark)');
+  function syncSystemScheme(){
+    const themed=design.isPrism()||design.isAurora();
+    document.body.classList.toggle('dark',themed&&systemDark.matches);
+    document.body.classList.remove('still');
+  }
+  try{['wds-prism-palette','wds-prism-motion','wds-aurora-palette','wds-aurora-motion'].forEach(key=>localStorage.removeItem(key));}catch{}
+  if(systemDark.addEventListener)systemDark.addEventListener('change',syncSystemScheme);else systemDark.addListener?.(syncSystemScheme);
+
+  /* The account menu's Availability and Settings views live inside My Duties.
+   * Prism and Aurora name the open one in their own page heading (Navy & Cream
+   * does it in its adapter, Original shows the view's own title). */
+  function paintAccountHeading(){
+    const view=isAccessible()&&(design.isPrism()||design.isAurora())?accountView():'';
+    if(!view)return;
+    const set=(id,text)=>{const el=document.getElementById(id);if(el)el.textContent=text;};
+    set('page-kicker','YOUR ACCOUNT');set('page-title',ACCOUNT_TITLES[view]);set('page-description',ACCOUNT_NOTES[view]);
+    const action=document.getElementById('heading-action');if(action)action.innerHTML='';
+  }
+
   const coreRender=render;
   render=function(){
     coreRender();
     if(design.isPrism())prismPaint();
     else if(design.isAurora())auroraPaint();
-    else if(design.isNavy())NavyDesign.paint(isAccessible()?liveContext():{ready:false,tab:ui.tab,sub:ui.sub});
+    else if(design.isNavy())NavyDesign.paint(isAccessible()?Object.assign(liveContext(),{account:ACCOUNT_TITLES[accountView()]||''}):{ready:false,tab:ui.tab,sub:ui.sub});
+    paintAccountHeading();
     design.afterRender();
   };
 
@@ -184,12 +204,10 @@ if (window.WorshipDesign) {
       const fields=saveFields();
       if(old==='navy')NavyDesign.leave();
       if(next==='prism'){
-        mount('prism');document.body.className=classicClass+' aurora prism';
-        try{document.body.classList.toggle('dark',localStorage.getItem('wds-prism-palette')==='dark');document.body.classList.toggle('still',localStorage.getItem('wds-prism-motion')==='off');}catch{}
+        mount('prism');document.body.className=classicClass+' aurora prism';syncSystemScheme();
       } else if(next==='aurora'){
         await ensureAuroraCatalog();
-        mount('aurora');document.body.className=classicClass+' aurora';
-        try{document.body.classList.toggle('dark',localStorage.getItem('wds-aurora-palette')==='dark');document.body.classList.toggle('still',localStorage.getItem('wds-aurora-motion')==='off');}catch{}
+        mount('aurora');document.body.className=classicClass+' aurora';syncSystemScheme();
       } else {
         mount(next==='navy'?'navy':'classic');restoreClassicChrome();
         if(next==='navy'){

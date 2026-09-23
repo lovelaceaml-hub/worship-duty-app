@@ -1,4 +1,6 @@
-# PRISM — a second working design direction
+# PRISM, a second working design direction
+
+> Note added 2026-09-20. The standalone Prism prototype described here is historical. Its source files in this folder are still live inputs: `design-gallery/build.mjs` compiles `prism.js`, `all-pages.js`, `song-pages.js`, `shell.html`, and the CSS into the Prism appearance of the live app, so edits here reach production. The prototype's utility row, dark mode button, and pause button no longer exist in the live app. See [design-gallery/README.md](../design-gallery/README.md).
 
 Prism is an alternate design review, not an update that overwrites Aurora. It is on `prototype/prism-calendar` and adds files in `prototype-prism/` only, plus a non-deploying QA workflow. The existing Aurora prototype and production app remain intact.
 
@@ -31,7 +33,7 @@ This inherits the tested offline runtime assembly from `prototype/`. The Prism b
 
 Prism uses **`lv-prism-preview-v1:`** storage, separate from both Aurora's namespace and the production app. Reset affects only Prism. No live Firebase configuration loads, service worker registers, Google Sheet sync runs, or messages/notifications are sent. The existing CSP blocks external connections. Calendar download is an explicitly labeled reference snapshot, not a live subscription. Blocked local storage falls back to memory with a visible notice.
 
-The repository's **74 services, 45 members and 509-song catalog** are retained. Their real reference schedule is May–July 2026; the internal preview clock is **July 1, 2026**. This is not the current live schedule. Production authorization, synchronization and deployment remain a separate integration task after design approval.
+The repository's **74 services, 45 members and 509-song catalog** are retained. Their real reference schedule is May to July 2026; the internal preview clock is **July 1, 2026**. This is not the current live schedule. Production authorization, synchronization and deployment remain a separate integration task after design approval.
 
 ## Verification
 

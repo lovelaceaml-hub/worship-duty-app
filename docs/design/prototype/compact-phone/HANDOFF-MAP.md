@@ -1,5 +1,7 @@
 # Weekbook design placement and source map
 
+> Historical as of 2026-09-17. The new shell built from this placement map was rejected. Kept as design evidence only. Current state: [docs/HANDOFF.md](../../../HANDOFF.md).
+
 This map is the design-worker handoff within the owned artifact directory. The controller owns the repository-level handoff, review disposition, integration, and backup. Anthony selected Weekbook; runtime implementation and release are outside this final design task.
 
 ## Entry and state

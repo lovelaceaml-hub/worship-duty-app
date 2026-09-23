@@ -1,4 +1,6 @@
-# Design Direction — WATV Service Coordination
+# Design Direction, WATV Service Coordination
+
+> Note added 2026-09-20. This design system describes the Original appearance only. Prism, Navy & Cream, and Aurora have their own styles (see [design-gallery/README.md](../design-gallery/README.md)). The shared header, bottom bar, name menu, and feedback button use these tokens in Original.
 
 ## Approved direction
 
@@ -9,9 +11,9 @@
 
 ## Directions considered
 
-1. **Official, orderly, calm — Service record.** White records, WATV blue rules, restrained corners, strong information hierarchy. Selected because it feels institutional while remaining easy on a phone.
-2. **Warm, editorial, reflective — Weekly bulletin.** Warm paper surfaces, larger serif headings, and section dividers. Not selected because dense editing and song-library screens became less efficient.
-3. **Focused, compact, operational — Control board.** Denser tables, dark navy navigation, and dashboard metrics. Not selected because it favored coordinators over ordinary members.
+1. **Official, orderly, calm, Service record.** White records, WATV blue rules, restrained corners, strong information hierarchy. Selected because it feels institutional while remaining easy on a phone.
+2. **Warm, editorial, reflective, Weekly bulletin.** Warm paper surfaces, larger serif headings, and section dividers. Not selected because dense editing and song-library screens became less efficient.
+3. **Focused, compact, operational, Control board.** Denser tables, dark navy navigation, and dashboard metrics. Not selected because it favored coordinators over ordinary members.
 
 ## Hierarchy and content
 
@@ -30,7 +32,7 @@
 | Color | WATV-observed blue `#2383C6`; accessible derived deep blue `#075F96`; derived heading blue `#174A6B`; WATV-site rose `#DA0F47` only for alerts; canvas `#F3F6F8`; white surfaces |
 | Typography | Avenir Next when available, then Segoe UI/Roboto/system sans; compact labels and clear service headings |
 | Spacing | 4/8/12/16/20/28 rhythm; 44px minimum interactive controls |
-| Radius | 14px cards, 7–10px controls; no capsule-heavy styling |
+| Radius | 14px cards, 7 to 10px controls; no capsule-heavy styling |
 | Elevation | subtle cool-blue shadows; borders carry most structure |
 | Motion | 220ms entrance; reduced-motion override |
 

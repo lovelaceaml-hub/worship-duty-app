@@ -1,5 +1,7 @@
 # Live design choice: Current + Prism
 
+> Historical as of 2026-09-20. This two-choice (Current plus Prism) candidate was replaced by the four-appearance gallery in [design-gallery/README.md](../design-gallery/README.md). `design-gallery/release.mjs` still runs `live-design/build.mjs` for one purpose only: recognizing an old unmarked Prism release. Do not release from here.
+
 This is a production-integration candidate, not the offline demo. The build stages the original live app and its existing Firebase configuration together with both renderers. It never runs `prototype/build.mjs` or `prototype-prism/build.mjs`. No fake clock, sample member selection, disabled locks, demo storage namespace, or blocked synchronization is used in the release.
 
 ## Member experience
@@ -7,7 +9,7 @@ This is a production-integration candidate, not the offline demo. The build stag
 Current design remains the default. Once the **shared access settings have arrived** and the member has passed the existing site-passcode gate, a one-time modal asks:
 
 > Would you like to try our new design?
-> The same schedules, duties and song plans—with a new look. You can switch back at any time using the Design button.
+> The same schedules, duties and song plans, with a new look. You can switch back at any time using the Design button.
 
 Buttons: **Keep current design** / **Try the new design**. Escape or Close keeps the current choice. A persistent **Design** button appears in both layouts. Preference is saved on this browser/device under `wds-design-choice-v1`. It is deliberately not presented as an account-wide preference: the current app has a site passcode + member-name picker and background anonymous Firebase authentication, not individual email/password accounts.
 

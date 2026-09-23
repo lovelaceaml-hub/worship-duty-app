@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {chromium} from 'playwright';
+import {chromium} from '../../tests/helpers/playwright.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const out=path.join(root,'preview-artifacts');
 await fs.mkdir(path.join(out,'screenshots'),{recursive:true});

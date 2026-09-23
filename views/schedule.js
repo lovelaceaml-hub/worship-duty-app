@@ -1,12 +1,13 @@
 import {CATEGORIES, feat, memberLabel} from '../core/constants.js';
 import {dateBadge, esc, fmtDate, fmtTime, svcId} from '../core/format.js';
-import {ui} from '../core/state.js';
+import {state, ui} from '../core/state.js';
 import {conflictBadge} from '../core/conflicts.js';
 import {dutiesFor, pastServices, preferredScheduleService, upcomingServices} from '../core/schedule.js';
 import {getJSON, notifyOn} from '../core/notify.js';
 import {requestChangeTrigger, requestChangeForm, renderYourRequests} from './requests.js';
 import {renderOwnAvailability} from './departments.js';
 import {songStateFor, songStateTag} from './songs.js';
+import {accountView, ACCOUNT_TITLES, ACCOUNT_NOTES} from './shell.js';
 
 export function pillFor(member) {
   const mine = ui.me && member === ui.me;
@@ -72,9 +73,9 @@ export function renderSchedule() {
   let html = renderDeptChips();
   const filter = ui.deptFilter;
   const up = upcomingServices();
-  const focus = preferredScheduleService(up);
+  const focus = preferredScheduleService(state.services);
   if (focus && (filter === 'All' || categoryHasAssignments(focus, filter))) {
-    html += '<section class="schedule-focus"><div class="date-head"><span class="day">Current or next service</span></div>' +
+    html += '<section class="schedule-focus"><div class="date-head"><span class="day">Next service</span></div>' +
       renderServiceCard(focus, filter) + '</section><div class="date-head"><span class="day">Full schedule</span></div>';
   }
   if (!up.length) html += '<div class="empty">No upcoming services yet.<br>Add them in the <b>Manage</b> tab.</div>';
@@ -87,11 +88,11 @@ export function renderSchedule() {
   }
   return html;
 }
-export function renderMy() {
-  let html = '';
-  if (!ui.me) return '<div class="empty">Sign in to see your duties.</div>';
 
-  // notifications + calendar controls (feature-gated)
+/* Notifications and calendar controls (feature-gated). Shown at the top of My
+   Duties and again in the account menu's Settings view, from this one source. */
+export function renderNotifyControls() {
+  let html = '';
   let controls = '';
   if (('Notification' in window) && (feat('notifications') || feat('reminders'))) {
     controls += notifyOn()
@@ -99,14 +100,55 @@ export function renderMy() {
       : '<button class="primary" data-act="notify-on">Turn on notifications</button>';
   }
   if (feat('calendarExport')) {
-    controls += '<button class="ghost" data-act="subscribe-ics">Add my duties to my calendar</button>' +
-      '<button class="ghost" data-act="copy-ics">Copy calendar link</button>';
+    controls += '<button class="ghost" data-act="subscribe-ics">Add my duties to my calendar</button>';
   }
   if (controls) {
+    // The explanation (and the Android-only copy button) stays one tap away inside a
+    // closed disclosure, so the duty list is not pushed down by a paragraph every visit.
+    // It keeps the .hint class and its place right after .notify-box: Prism and Aurora
+    // move that pair into their own panels.
     html += '<div class="notify-box">' + controls + '</div>' +
-      '<p class="hint">You\'ll be alerted when a new duty is added for you, and reminded the day before each duty. ' +
-      'Adding your duties to your calendar subscribes it to the live schedule, so the times stay correct by themselves if a service ever moves. On Android, tap Copy calendar link and add it in Google Calendar under Other calendars \u2192 From URL.</p>';
+      '<details class="hint notify-help"><summary>How it works' + (feat('calendarExport') ? ' and Android steps' : '') + '</summary>' +
+      '<p>You\'ll be alerted when a new duty is added for you, and reminded the day before each duty.' +
+      (feat('calendarExport')
+        ? ' Adding your duties to your calendar subscribes it to the live schedule, so the times stay correct by themselves if a service ever moves. On Android, tap Copy calendar link and add it in Google Calendar under Other calendars \u2192 From URL.</p>' +
+          '<button class="ghost mini" data-act="copy-ics">Copy calendar link</button>'
+        : '</p>') +
+      '</details>';
   }
+  return html;
+}
+
+/* The account menu's two personal views (see accountView()). Availability is
+   the same shared-availability editor that used to sit on My Duties; Settings
+   gathers what a member can set for themselves. Administrator settings stay in
+   Manage. */
+export function renderAccount() {
+  const view = accountView();
+  const title = '<h2 class="account-title" tabindex="-1">' + esc(ACCOUNT_TITLES[view]) + '</h2>' +
+    '<p class="hint account-note">' + esc(ACCOUNT_NOTES[view]) + '</p>';
+  if (view === 'availability') {
+    return '<div class="account-view" data-account="availability">' + title +
+      (renderOwnAvailability() || '<div class="card"><p class="hint" style="margin:0">You are not on a department roster yet, so there is no availability to set. Your department leader adds you to the roster.</p></div>') +
+      '</div>';
+  }
+  const notify = renderNotifyControls();
+  return '<div class="account-view" data-account="settings">' + title +
+    '<section class="card"><h3 style="margin:0 0 10px">Notifications and calendar</h3>' +
+    (notify || '<p class="hint" style="margin:0">Notifications and the calendar link are turned off for this app right now.</p>') + '</section>' +
+    (window.WorshipDesign
+      ? '<section class="card"><h3 style="margin:0 0 6px">Appearance</h3><p class="hint" style="margin:0 0 12px">Choose how the app looks on this device. Your schedule stays the same.</p>' +
+        '<div class="notify-box" style="margin:0"><button type="button" class="ghost" data-design-open>Appearance</button></div></section>'
+      : '') +
+    '<section class="card"><h3 style="margin:0 0 6px">Member PIN</h3><p class="hint" style="margin:0">To change your PIN, ask your department leader or an administrator to reset it. You will choose a new PIN the next time you sign in.</p></section>' +
+    '</div>';
+}
+
+export function renderMy() {
+  let html = '';
+  if (!ui.me) return '<div class="empty">Sign in to see your duties.</div>';
+
+  html += renderNotifyControls();
 
   // recent alerts
   const alerts = getJSON('wds-alerts-' + ui.me, []);
@@ -119,7 +161,7 @@ export function renderMy() {
       '</div>';
   }
 
-  html += renderOwnAvailability();
+  // "Your availability" moved to the account menu (member chip, Availability).
 
   const duties = dutiesFor(ui.me);
   if (!duties.length) {

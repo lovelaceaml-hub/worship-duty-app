@@ -108,6 +108,7 @@ export function checkReminders() {
   const now = Date.now();
   const reminded = getJSON('wds-reminded', {});
   let changed = false;
+  const due = [];
   dutiesFor(ui.me).forEach(d => {
     const when = svcDateTime(d.svc).getTime();
     const key = ui.me + '|' + svcId(d.svc) + '|' + d.duty;
@@ -115,9 +116,13 @@ export function checkReminders() {
       reminded[key] = now;
       changed = true;
       if (!serverPushActive()) sysNotify('Duty reminder', dutyLabel(d));
-      addBanner('Reminder: ' + dutyLabel(d), false);
+      due.push(d);
     }
   });
+  // One in-app banner per check, not one per duty: several duties on the same day
+  // used to stack a banner each above My Duties, which already lists them.
+  if (due.length === 1) addBanner('Reminder: ' + dutyLabel(due[0]), false);
+  else if (due.length > 1) addBanner('Reminder: you have ' + due.length + ' duties in the next 24 hours. See My Duties.', false);
   if (changed) {
     Object.keys(reminded).forEach(k => { if (now - reminded[k] > 7 * 24 * 3600 * 1000) delete reminded[k]; });
     localStorage.setItem('wds-reminded', JSON.stringify(reminded));

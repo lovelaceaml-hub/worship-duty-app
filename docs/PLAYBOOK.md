@@ -1,6 +1,6 @@
 # Playbook
 
-Last updated: 2026-09-15.
+Last updated: 2026-09-20.
 
 This is the one document to follow if you (Anthony) need to run the app day to
 day, or hand a task to an AI coding tool. It assumes no developer background.
@@ -12,13 +12,25 @@ day, or hand a task to an AI coding tool. It assumes no developer background.
 
 ### Current status
 
-The approved [complete phone refactor plan](PLAN-COMPACT-PHONE-REFACTOR.md) is
-in progress. Prototype approval and the integrated preview are still pending,
-so the production app remains on its current live behavior. Use the guidance
-below for the released app; planned phone navigation or other plan features
-are not instructions for the current live app.
+Features F1 to F14 are live at https://lv-zion-duties.web.app (release marker
+`gallery1789952310145`, 2026-09-20; F13 and F14 were tests and docs only). Since 2026-09-17 the rule is: keep the
+live look, add features into the four existing appearances one at a time, show
+each on the preview channel first, release on Anthony's approval. The active plan
+and its Build log are in [PLAN-2026-09-22-APP-JS-SPLIT.md](PLAN-2026-09-22-APP-JS-SPLIT.md);
+`main` holds F1 to F14 in the split module layout since 2026-09-23.
+Open items and branch details are in [HANDOFF.md](HANDOFF.md).
 
-For what each screen does day-to-day, see the main [README](../README.md).
+Two facts to keep in mind before any release (details in section 8):
+
+- Hosting releases come from the main checkout
+  `/Users/anthony/Projects/worship-duty-app` (branch `main`).
+- Firestore rules and Cloud Functions come from the worktree
+  `/Users/anthony/Projects/worship-duty-app-worktrees/compact-integration`.
+  The `firestore.rules` file and `functions/` folder on `main` are older than
+  what is live and must never be deployed.
+
+For what each screen does, see the [User Guide](USER-GUIDE.md) (members) and
+the [User Manual](USER-MANUAL.md) (leaders and administrators).
 For architecture detail, see [HANDOFF.md](HANDOFF.md). For the visual design
 system, see [DESIGN.md](DESIGN.md). For the full toggle list, see
 [FEATURES.md](FEATURES.md).
@@ -91,7 +103,9 @@ The site passcode only hides the app on that device. It is not the database
 security boundary. Select the member account and enter its 4 to 6 digit PIN to
 sign in. The authentication service checks the account, issues a Firebase
 custom-token session, and restores it when the browser reloads. Firestore rules
-require a current verified session for writes.
+require a current verified session for writes. The one exception is the song
+plan and song history data, which stays open because the Signal ingest service
+writes it without a member session.
 
 Manage visibility and write permissions come from the signed-in account's
 administrator, leader, department, or song-editor role and department scope.
@@ -109,7 +123,8 @@ current site setting and will ask for the new code after the setting changes.
 
 If the site passcode is lost, use the [Firebase Firestore console](https://console.firebase.google.com/project/lv-zion-duties/firestore)
 with the project owner or administrator responsible for this app. Account
-PINs are separate and must be reset through the authorized account workflow.
+PINs are separate: reset one with the **Reset PIN** button on the department
+roster (section 3).
 
 ### 3. Department rosters and assignments
 
@@ -117,16 +132,28 @@ Manage is available only to a verified account with administrator or department
 leader scope. Select the department in the Manage department picker, then open
 **Departments** for its secure roster or **Services** for assignments.
 
-Department profiles are keyed by the exact Firebase Auth UID of an existing
-member account. To add one, open the department roster, choose **Add a
-department member**, enter the exact UID and display name, and save. The server
-checks the UID against the account and uses the verified account name. Adding a
-profile does not grant leadership or administrator access.
+To add a member to a department:
+
+1. Open Manage, choose the department, open **Departments**, then **Open
+   department**.
+2. Under **Add a department member**, type at least two letters of the name
+   and tap **Search**.
+3. Tap **Add** beside the right person. People already in the department are
+   labeled instead of offered again.
+
+Only registered, active accounts appear. No account ID is typed or shown.
+Adding a profile does not grant leadership or administrator access.
 
 For a roster profile, authorized leaders can change active status, eligible
 duties, schedulability, recurring availability, and date exceptions. Members
-can change only their own availability from My Duties. Archiving a profile
-removes it from the active roster and preserves its assignment history.
+change only their own availability: they tap their name in the header, then
+**Availability**. Archiving a profile removes it from the active roster and
+preserves its assignment history.
+
+To reset a member's PIN, tap **Reset PIN** on that member's roster row and
+confirm. The member must choose a new PIN the next time they sign in. The
+button appears only for administrators and for leaders of that member's
+department.
 
 Assignment pickers show active, eligible, schedulable, and available members
 from the selected department. An administrator can use the labeled override
@@ -160,12 +187,12 @@ warning again"** next to the muted note.
 
 ### 5. Notifications
 
-Members opt in per device, on **My Duties**:
+Members opt in per device:
 
-1. Pick your name from the dropdown (first time only).
-2. Tap **Turn on notifications** and allow the browser prompt.
-3. If you also pick your name after enabling, the device registers itself
-   to receive real push notifications for that name (see below).
+1. Sign in.
+2. On **My Duties** (or under your name, then **Settings**), tap **Turn on
+   notifications** and allow the browser prompt.
+3. The device registers itself for push under the signed-in member.
 
 Two kinds of alerts:
 
@@ -185,10 +212,16 @@ duties starting soon.
 Home Screen will not get push notifications while the tab is closed.
 Android and desktop browsers don't have this restriction.
 
-**Belt-and-suspenders option, still available:** "Add my duties to my
-calendar" downloads an .ics file with 1-day and 2-hour alarms built in;
-works with zero app/internet dependency once added to the phone's own
-calendar app.
+**Works with the app closed and no push:** "Add my duties to my calendar"
+subscribes the phone's calendar to the member's live duty feed, with 1-day and
+2-hour reminders. Because it is a subscription, it follows reassignments and
+time changes by itself. Android members use **How it works and Android steps**,
+then **Copy calendar link**, and add it in Google Calendar under Other
+calendars, From URL.
+
+Inside the app, a green dot on the **My Duties** tab means a new duty was added
+for the signed-in member. A red dot on **Manage** means a request or a conflict
+needs attention.
 
 ### 6. Feature toggles
 
@@ -202,6 +235,10 @@ no deploy needed. Full list, defaults, and descriptions live in
 | Double-duty warnings (`conflictWarnings`) | ON |
 | Google Sheet sync (`sheetSync`) | ON |
 
+The **Editor passcode** switch and the **Change the editor passcode** card are
+still on that screen, but they control nothing now. Manage access comes from
+the signed-in account's role.
+
 ### 7. Backups, import, and reset
 
 Manage → Data & Sync:
@@ -212,45 +249,122 @@ Manage → Data & Sync:
 - **Import backup file**: restores from a previously exported JSON file.
   This overwrites the shared database for everyone. Use with care.
 - **Reset to spreadsheet data**: wipes everything and reloads the original
-  May-July 2026 schedule baked into `seed-data.js`. Only useful for
-  starting over from scratch; a season rollover (Brief 4) is a better fit
-  for "the sheet has a new season now."
+  May to July 2026 schedule baked into `seed-data.js`. Do NOT use this on the
+  live app: it would replace the current schedule for everyone. Wiping or
+  reseeding production needs a dry run and Anthony's explicit approval.
 
 ### 8. Deploying app changes
 
-Only needed when the app's code changes (not for schedule edits: those sync
-live through Firestore with no deploy). From the repository folder:
+Only needed when the app's code changes. Schedule edits sync live and need no
+release.
+
+**Who runs it:** Anthony. The Claude Code auto mode classifier denies
+production deploys to Claude, so Claude prepares the change and the preview, and
+Anthony pastes the commands below into Terminal. Every path is absolute.
+
+**Rules-source warning. Read this first.**
+
+- Hosting (what members see) is released from the main checkout
+  `/Users/anthony/Projects/worship-duty-app` (branch `main`). Since
+  2026-09-23 `main` holds the F1 to F14 features merged into the split
+  module layout; `claude/keep-look-f4f5` is kept as history only.
+- The LIVE Firestore rules and the LIVE Cloud Functions were deployed from
+  `/Users/anthony/Projects/worship-duty-app-worktrees/compact-integration`
+  (branch `claude/compact-integration`, deployed 2026-09-17, `feedback` rule
+  added 2026-09-20, commit `a5068d9`).
+- The `firestore.rules` and `functions/` in `main` (and in `keep-look-f4f5`)
+  are OLDER than what is live. Never deploy rules or functions from the main
+  checkout. Doing so would remove the `feedback` and `departmentInvitations`
+  rules and break the feedback button.
+- Run `git pull` in the main checkout first if it is behind `origin/main`;
+  the release script builds whatever is checked out there.
+
+**The three-command release pattern (Hosting only):**
+
+Command 1, preview. Publishes to the private preview channel
+https://lv-zion-duties--design-gallery-review-rtm2fa8h.web.app (real records,
+expires after seven days). Review it before going further.
 
 ```
-bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh
+cd /Users/anthony/Projects/worship-duty-app && npm_config_cache=/tmp/npm-cache node /Users/anthony/Projects/worship-duty-app/design-gallery/release.mjs --preview
 ```
 
-**Always use this script for app-file changes.** It is a compatibility wrapper
-for the guarded gallery publisher, which builds and verifies Original, Prism,
-Navy & Cream, and Aurora in a stamped staging folder before deploying Hosting.
-The root Firebase configuration blocks direct Hosting uploads, so an older or
-bare deploy command cannot replace the gallery with the single-design source
-app. It deploys **hosting only**.
-
-If `/Users/anthony/Projects/worship-duty-app/firestore.rules` or anything in
-`/Users/anthony/Projects/worship-duty-app/functions/` genuinely changed and
-was reviewed, deploy those separately and deliberately:
+Command 2, publish with the maintenance message on (section 8a explains the
+line it inserts). Members see "Schedule maintenance in progress" with a
+read-only list of the next eight services.
 
 ```
-npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --project lv-zion-duties --only firestore:rules
-npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --project lv-zion-duties --only functions
+cd /Users/anthony/Projects/worship-duty-app && sed -i '' 's|<html lang="en">|<html lang="en"><script>document.documentElement.dataset.maintenance = '"'"'active'"'"';</script>|' /Users/anthony/Projects/worship-duty-app/index.html && npm_config_cache=/tmp/npm-cache node /Users/anthony/Projects/worship-duty-app/design-gallery/release.mjs --publish
 ```
 
-Never run a bare `firebase deploy` here. The Hosting predeploy guard will stop
-it before upload.
+Command 3, remove the maintenance line and publish the full app.
+
+```
+cd /Users/anthony/Projects/worship-duty-app && git checkout -- index.html && npm_config_cache=/tmp/npm-cache node /Users/anthony/Projects/worship-duty-app/design-gallery/release.mjs --publish
+```
+
+After command 3, open https://lv-zion-duties.web.app and
+https://lv-zion-duties.web.app/design-gallery-release.json (the `release` value
+is the new marker). Run `git status` in the main checkout: it must be clean, which
+proves the maintenance line is in no commit.
+
+The release script builds and checks Original, Prism, Navy & Cream, and Aurora
+in a stamped staging folder, confirms the live app is a known release, and
+deploys **Hosting only**. The root Firebase configuration blocks a direct
+Hosting upload, so a bare deploy cannot replace the four appearances with the
+single-design source. `bash scripts/deploy.sh` is only a wrapper for
+`release.mjs --publish`; prefer the commands above.
+
+**Rules only (rare).** When a rule genuinely changed and was reviewed, commit it
+on `claude/compact-integration` and deploy from that worktree:
+
+```
+cd /Users/anthony/Projects/worship-duty-app-worktrees/compact-integration && npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --project lv-zion-duties --only firestore:rules --config /Users/anthony/Projects/worship-duty-app-worktrees/compact-integration/firebase.json
+```
+
+If a release needs both, deploy the rules first, then Hosting (the F10 feedback
+release on 2026-09-20 did it in that order).
+
+**Functions (rare).** Also from the `compact-integration` worktree, and always
+with every function named, for example
+`--only functions:onScheduleWrite,functions:dutyReminders`. The Firebase
+project is shared with another app, so never run a bare `firebase deploy` or a
+bare `--only functions`: the tool would offer to delete functions that are not
+in this repository.
+
+Rollback: Hosting console
+https://console.firebase.google.com/project/lv-zion-duties/hosting/sites/lv-zion-duties
+then the release row's menu, Rollback. There is no command-line Hosting
+rollback.
 
 Note: the presider song-picker files (`song-app.js`, `song-lib.js`,
-`song-seed.js`, `song-app.css`) deploy with hosting automatically. If you edit
-`song-lib.js`, also restart or relink nothing. The Signal ingest daemon in
-`~/tools/song-ingest` reads it directly from this folder on its next run.
+`song-seed.js`, `song-app.css`) deploy with Hosting automatically. The Signal
+ingest service in `~/tools/song-ingest` reads `song-lib.js` directly from its
+configured folder on its next run; nothing needs restarting.
 
-Always use the `/tmp/npm-cache` prefix on Anthony's Mac. The CLI is already
-authenticated.
+Always use the `npm_config_cache=/tmp/npm-cache` prefix on Anthony's Mac. The
+CLI is already authenticated.
+
+### 8a. Showing the maintenance message during a repair
+
+When members should see "Schedule maintenance in progress" instead of the app
+while you change the live site, add one line to
+`/Users/anthony/Projects/worship-duty-app/index.html`,
+directly after `<html lang="en">` and before `<head>`:
+
+```
+<script>document.documentElement.dataset.maintenance = 'active';</script>
+```
+
+Command 2 in section 8 inserts this line for you and releases. The maintenance
+panel and its read-only upcoming-service list are already built into
+`index.html` and `app.js`; the line just switches them on. The bottom bar, the
+header menu, and the feedback button are hidden while it is on. To restore the
+full app, remove the line (`git checkout -- index.html`, which command 3 does)
+and release again. Never commit the line. There is no database flag for this,
+and none is needed. Used this way on 2026-09-14 (commits `54fee56` and
+`c057c3e`), 2026-09-17 (F1 and F2), 2026-09-19 (F3, then F4 to F6), and
+2026-09-20 (F7 to F11).
 
 ### 9. The Firebase console map
 
@@ -258,8 +372,8 @@ Project console: https://console.firebase.google.com/project/lv-zion-duties
 
 | Where | What you'll find |
 |---|---|
-| **Firestore Database → Data** | Live look at `schedule/*` (one doc per service), `app/members`, `app/settings` (the site passcode setting and sheet URL live here), `accounts/*` (member account auth and roles), `tokens/*` (one per device registered for push), `sent/*` (internal reminder de-dupe markers, safe to ignore). Song picker adds `setlists/*` (one per planned or sung service), `songStats/*` (per-song sung history), and `app/presiders`. |
-| **Functions** | The Cloud Functions (`onScheduleWrite`, `dutyReminders`, and account or department callables), with logs here if a push or authorized action fails. |
+| **Firestore Database → Data** | Live look at `schedule/*` (one doc per service), `app/members`, `app/settings` (the site passcode setting and sheet URL live here), `accounts/*` (member account auth and roles), `tokens/*` (one per device registered for push), `sent/*` (internal reminder de-dupe markers, safe to ignore), `feedback/*` (notes members send with the feedback button; read them in the app under Manage, Feedback). Song picker adds `setlists/*` (one per planned or sung service), `songStats/*` (per-song sung history), and `app/presiders`. |
+| **Functions** | The Cloud Functions (`onScheduleWrite`, `dutyReminders`, `songHistoryRecorder`, and the account and department callables), with logs here if a push or authorized action fails. Two functions in the list (`onVercelScheduleWrite`, `worshipVercelReconcile`) belong to another app that shares this project; leave them alone. |
 | **Project settings → Cloud Messaging** | The Web Push (VAPID) key pasted into `firebase-config.js` |
 | **Usage and billing** | Confirm the project is on the Blaze (pay-as-you-go) plan, required for Cloud Functions. Effectively $0/month at this congregation's scale, but see the to-do below. |
 
@@ -274,9 +388,12 @@ spikes unexpectedly. Recommended now that the project is on Blaze.
 |---|---|
 | Sheet changes aren't showing up | Manage → Data & Sync: is the "Google Sheet sync" toggle on? Is the published-CSV link still correct (sheet's File → Share → Publish to web → CSV link, re-copy if the sheet was recreated)? Try "Sync now" and read any warning messages shown. |
 | A duty from the sheet never appears | The Duty column text probably doesn't match one of the app's known duty names exactly. Check the warnings list on the Data & Sync card, which names the skipped duty. |
-| Push notifications not arriving | Did the member turn on notifications in My Duties and pick their name? On iPhone, is the site added to the Home Screen (Share → Add to Home Screen), iOS 16.4+? Check Functions logs in the Firebase console for errors on `onScheduleWrite` / `dutyReminders`. |
+| Push notifications not arriving | Is the member signed in, and did they turn on notifications in My Duties or under their name, Settings? On iPhone, is the site added to the Home Screen (Share → Add to Home Screen), iOS 16.4+? Check Functions logs in the Firebase console for errors on `onScheduleWrite` / `dutyReminders`. |
 | Locked out of the site | Use the site passcode recovery in section 2. |
 | Member sign-in or Manage is denied | Confirm the selected account, PIN, active status, and current role or department scope. Ask the administrator to reset the account PIN or role when needed. |
+| A member cannot find Sign out or Availability | They are under the member's name at the top right of every screen. |
+| The feedback button is missing | It shows only after sign-in, and hides while the keyboard is open or the maintenance page is on. |
+| Manage, Feedback says "The feedback list is not available yet." | The live Firestore rules are missing the `feedback` rule. Someone deployed rules from the wrong branch. Redeploy rules from the `compact-integration` worktree (section 8). |
 | Double-duty warning won't go away | Someone needs to click "Mark as OK" in Manage on that service; if it keeps reappearing, that person's duties in that service are still changing between visits. |
 
 ---
@@ -286,9 +403,21 @@ spikes unexpectedly. Recommended now that the project is on Blaze.
 This section is how Anthony hands future work to an AI coding tool (Claude
 Code or similar) without needing to read or write code personally.
 
+Note added 2026-09-20: the five briefs below were written in July 2026, before
+member sign-in, the four appearances, and the keep-the-live-look rule. Their
+section numbers are kept because other documents cite them. Before using one:
+the agent works in a new branch made from `main`, reads
+[AGENTS.md](../AGENTS.md) first, makes the change in all four appearances
+without changing their look, publishes the preview channel only, and never
+deploys. Anthony releases with section 8. Brief 1 is done, Brief 3 is largely
+covered by the live change-request flow, and Brief 5 is done for Prism and
+Aurora (they follow the system dark setting; Original and Navy & Cream stay
+light by choice).
+
 ### How to start a task
 
-1. Open a terminal in this project folder and start Claude Code (or your AI
+1. Open a terminal in
+   `/Users/anthony/Projects/worship-duty-app` and start Claude Code (or your AI
    coding tool of choice).
 2. **Always start the conversation with:** "Read the docs in docs/ first."
    This makes sure the model sees this playbook, the architecture, the
@@ -296,22 +425,19 @@ Code or similar) without needing to read or write code personally.
 3. Paste one of the five briefs below, whole and unedited. They are
    self-contained.
 4. Tell the model to update the relevant docs in `docs/` as part of the
-   change. Deploy only when the task authorizes it. For Hosting, use the
-   guarded command in section 8, then verify the change on the live site.
-5. Once it reports done, open https://lv-zion-duties.web.app yourself and
+   change and to publish the preview channel (section 8, command 1). The model
+   does not deploy to production.
+5. Review the preview link. When you approve, run section 8 commands 2 and 3
+   yourself.
+6. After the release, open https://lv-zion-duties.web.app yourself and
    click through the change to confirm it looks and works right.
 
 ### Which model to use
 
-- **Opus** : for anything that touches the architecture: authentication,
-  the data model, or Cloud Functions. These are the highest-stakes changes
-  (get them wrong and the whole app breaks, or security regresses).
-- **Sonnet** : for contained work: a self-contained UI feature, a data/sync
-  change that doesn't touch security, or documentation-only work.
-- Either way, **delegate the actual implementation to an Opus/Sonnet
-  subagent** rather than running it on a premium/frontier model directly.
-  Reserve the expensive model for planning and review, not for typing out
-  the diff.
+Model, effort, lane, and reviewer choices come from the approved plan and
+Anthony's shared operating policy
+(`/Users/anthony/.claude/policy/SHARED-INSTRUCTIONS.md`), not from this
+playbook. Every plan states them in a labeled block.
 
 ### Brief 1: Authentication and authorization are released
 
@@ -323,7 +449,7 @@ device gate. Do not paste the old brief or reopen it as a new implementation
 task. Read [AUTH-DEPARTMENT-UPGRADE-RELEASE.md](AUTH-DEPARTMENT-UPGRADE-RELEASE.md)
 for the recorded production evidence and known limitations.
 
-### Brief 2 : Month view / print view (use Sonnet)
+### Brief 2: Month view / print view
 
 ```
 Context: This is a static web app (no build step) for a congregation's
@@ -362,14 +488,14 @@ reachable from the existing Schedule tab (e.g. a view toggle at the top
 Update docs/FEATURES.md (if a new toggle was added) and docs/HANDOFF.md's
 file map / architecture notes if relevant.
 
-Verification: deploy with `bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh`,
-then open https://lv-zion-duties.web.app and confirm the month view
+Verification: do not deploy to production. Publish the preview channel
+(docs/PLAYBOOK.md section 8, command 1) and confirm there that the month view
 renders correctly with real data, the print view looks correct via the
 browser's print preview, and the existing list view is unaffected.
 Report what you tested.
 ```
 
-### Brief 3 : Duty-swap requests between members (use Opus)
+### Brief 3: Duty-swap requests between members
 
 ```
 Context: This is a static web app (no build step) for a congregation's
@@ -415,15 +541,16 @@ Update docs/FEATURES.md (new toggle), docs/HANDOFF.md (architecture:
 new collection, new/extended function), and docs/PLAYBOOK.md (a "how
 members request a swap" step, and a troubleshooting row if relevant).
 
-Verification: deploy with `npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --project lv-zion-duties --only firestore:rules,functions` (this touches
-functions and rules, not just hosting), then test on the live site with
+Verification: do not deploy. Rules and functions live on branch
+claude/compact-integration (docs/PLAYBOOK.md section 8); prepare the change
+there for Anthony to deploy with named targets, then test with
 two different member names (two browser profiles or devices) that a
 swap request from one is visible to and actionable by the other, and
 that acceptance actually updates the schedule for everyone. Report what
 you tested, including whether you verified the push notification fired.
 ```
 
-### Brief 4 : New-season import (use Sonnet)
+### Brief 4: New-season import
 
 ```
 Context: This is a static web app (no build step) for a congregation's
@@ -434,7 +561,7 @@ first. The app currently syncs from a published Google Sheet (see
 The published-CSV link is stored in `app/settings.sheetUrl` (editable in
 Manage → Data & Sync) with a hardcoded default `DEFAULT_SHEET_URL` at the
 top of app.js. There's also a static `seed-data.js` with the original
-May-July 2026 schedule baked in, used only for first-run seeding and the
+May to July 2026 schedule baked in, used only for first-run seeding and the
 "Reset to spreadsheet data" button in Manage.
 
 The sheet-column contract the parser expects (see `sheetRowsToServices`):
@@ -482,7 +609,7 @@ on a non-production copy or after taking a backup export first). Report
 what you tested.
 ```
 
-### Brief 5 : Automatic dark mode (use Sonnet)
+### Brief 5: Automatic dark mode
 
 ```
 Context: This is a static web app (no build step) for a congregation's
@@ -521,7 +648,7 @@ existing light-theme table, following its existing structure (add a
 Verification: use the browser preview tools to emulate
 prefers-color-scheme: dark (or your OS dark mode) against the deployed
 or local app, screenshot both the Schedule and My Duties tabs, and
-confirm text contrast and service-record legibility hold up. Deploy with
-`bash /Users/anthony/Projects/worship-duty-app/scripts/deploy.sh` and re-verify on the live
-site. Report what you tested.
+confirm text contrast and service-record legibility hold up. Do not deploy to
+production; publish the preview channel (docs/PLAYBOOK.md section 8, command 1).
+Report what you tested.
 ```

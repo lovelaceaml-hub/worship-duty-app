@@ -41,7 +41,8 @@ const NavyDesign = (() => {
       html+=rail+times;
       html+=svc?hero(svc,date(svc.date,{weekday:'long',month:'short',day:'numeric'}),svc.worship||'Selected service'):'<p class="nc-empty">No services match this month and department. Use Full schedule or choose another month.</p>';
       html+=svc?'<div class="nc-section-label">Service team <span>All assigned departments</span></div>':'';
-      if(cards.length===entries.length){cards.forEach((c,i)=>{if(entries[i].id!==selected)c.dataset.ncHidden='';else c.dataset.ncSelected='';});view.querySelectorAll(':scope > .date-head').forEach(n=>n.dataset.ncHidden='');}
+      /* F12: the host's "Next service" block (.schedule-focus) carries a second copy of a service card. Day view already shows the chosen service once, so the block is hidden here. Full schedule keeps it, labelled, as Original does. */
+      if(cards.length===entries.length){cards.forEach((c,i)=>{if(entries[i].id!==selected)c.dataset.ncHidden='';else c.dataset.ncSelected='';});view.querySelectorAll(':scope > .date-head, :scope > .schedule-focus').forEach(n=>n.dataset.ncHidden='');}
     }
     insert(view,html);
     if(svc&&!full&&entries.length>1){const i=entries.findIndex(x=>x.id===selected),next=entries[i+1];if(next){const n=document.createElement('div');n.className='nc-generated nc-next';n.innerHTML=btn('service',`<span><small>Next service</small>${date(next.date,{weekday:'short',month:'short',day:'numeric'})} · ${escape(time(next.time))}</span>${icon('right')}`,`data-id="${escape(next.id)}"`);const card=view.querySelector('[data-nc-selected]');(card||view.lastElementChild).after(n);}}
@@ -49,19 +50,19 @@ const NavyDesign = (() => {
   function paint(s){
     context=s;const view=document.getElementById('view');if(!view)return;clear(view);
     document.documentElement.dataset.ncScreen=s.tab;
-    document.querySelectorAll('header.app .eyebrow,header.app .app-title').forEach(el=>{el.dataset.ncOriginal||=el.textContent;el.textContent=el.classList.contains('eyebrow')?'LV ZION · WORSHIP DUTY':'Service Timeline';});
     const tabs={schedule:['calendar','Schedule'],my:['duties','My Duties'],songs:['songs','Presider'],manage:['manage','Manage']};
     document.querySelectorAll('nav.tabs button[data-tab]').forEach(b=>{const t=tabs[b.dataset.tab];if(!t)return;const dot=b.querySelector('.dot')?.outerHTML||'';b.innerHTML=icon(t[0])+`<span>${t[1]}</span>`+dot;if(b.classList.contains('active'))b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
     if(!s.ready)return;
     if(s.tab==='schedule')schedule(view,s);
-    if(s.tab==='my'){const member=s.member?`<span class="nc-member" title="${escape(s.member)}">${escape(initials(s.member))}</span>`:'';const n=insert(view,panel('Your service, at a glance','My duties',member));if(s.nextDuty)n.insertAdjacentHTML('beforeend',hero(s.nextDuty.svc,s.nextDuty.duty,'Your next duty'));}
+    if(s.tab==='my'&&s.account)insert(view,panel('Your account',s.account));
+    else if(s.tab==='my'){const member=s.member?`<span class="nc-member" title="${escape(s.member)}">${escape(initials(s.member))}</span>`:'';const n=insert(view,panel('Your service, at a glance','My duties',member));if(s.nextDuty)n.insertAdjacentHTML('beforeend',hero(s.nextDuty.svc,s.nextDuty.duty,'Your next duty'));}
     if(s.tab==='manage'){const labels={services:['Manage schedule','Assign and coordinate'],planning:['Planning','Balance the work'],requests:['Change requests','Review and respond'],people:['People & departments','Keep your team organized'],features:['Features','Congregation-wide settings'],data:['Data & sync','Keep schedules connected']};const [title,kicker]=labels[s.sub]||labels.services;let html=panel(kicker,title);if(s.canEdit)html+=`<div class="nc-stats"><div><small>Upcoming services</small><strong>${s.stats.services}</strong></div><div><small>Assigned duties</small><strong>${s.stats.assignments}</strong></div><div><small>People serving</small><strong>${s.stats.people}</strong></div></div>`;insert(view,html);}
     if(s.tab==='songs')insert(view,panel('Prepare your service','Presider',`<span class="nc-tag">${icon('songs')} Song planner</span>`));
     view.querySelectorAll('.edit-grid input,.edit-grid select').forEach(field=>{const label=field.previousElementSibling;if(label?.classList.contains('lab')&&!field.hasAttribute('aria-label'))field.setAttribute('aria-label',label.textContent.trim());});
     const active=view.querySelector('.nc-date-rail [aria-pressed="true"]');if(active)active.parentElement.scrollLeft=Math.max(0,active.offsetLeft-active.parentElement.offsetLeft-active.parentElement.clientWidth/2+active.clientWidth/2);
     const route=s.tab+':'+s.sub;if(route!==lastRoute&&!reduce.matches){view.animate?.([{opacity:.65,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:220,easing:'ease-out'});}lastRoute=route;
   }
-  function leave(){const view=document.getElementById('view');clear(view);delete document.documentElement.dataset.ncScreen;document.querySelectorAll('header.app .eyebrow,header.app .app-title').forEach(el=>{if(el.dataset.ncOriginal)el.textContent=el.dataset.ncOriginal;});}
+  function leave(){const view=document.getElementById('view');clear(view);delete document.documentElement.dataset.ncScreen;}
   document.addEventListener('click',e=>{
     if(!window.WorshipDesign?.isNavy())return;const b=e.target.closest('[data-nc-act]');if(!b||!context)return;const act=b.dataset.ncAct;
     if(act==='month'){const d=new Date(month+'-01T12:00:00');d.setMonth(d.getMonth()+Number(b.dataset.delta));month=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');selected='';manualSelection=true;}

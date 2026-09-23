@@ -122,7 +122,6 @@ const auroraDecorate=`function decorate(){
  const l=labels[ui.tab]||labels.schedule;
  document.body.dataset.screen=ui.tab;
  document.getElementById('page-title').textContent=l[0];document.getElementById('page-kicker').textContent=l[1];document.getElementById('page-description').textContent=l[2];
- document.getElementById('crumb').textContent={schedule:'Schedule',my:'My Duties',songs:'Presider',manage:'Manage'}[ui.tab];
  document.getElementById('rail-person').textContent=ui.me||'Choose your name';document.getElementById('rail-initials').textContent=selectedInitials(ui.me);
  document.getElementById('heading-action').innerHTML=ui.tab==='schedule'?'<button class="primary" data-act="tab" data-tab="my">'+ai('my')+' My duties</button>':'';
  document.querySelectorAll('nav.tabs button').forEach(b=>{const key=b.dataset.tab,dot=b.querySelector('.dot')?'<span class="dot"></span>':'';b.innerHTML=ai(key)+'<span>'+({schedule:'Schedule',my:'My Duties',songs:'Presider',manage:'Manage'}[key])+'</span>'+dot;if(b.classList.contains('active'))b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
@@ -148,6 +147,20 @@ auroraPresider=optionalRegexOnce(auroraPresider,/const awOriginalSongServices = 
 host=host.replace('/* AURORA_CORE */',auroraCore).replace('/* AURORA_DECORATE */',auroraDecorate).replace('/* AURORA_WORKSPACES */',workspaceJS).replace('/* NAVY_ADAPTER */',await read('design-gallery/navy-adapter.js'));
 
 /* ---------- Shells ---------- */
+/* One header for all four appearances. index.html owns the markup (brand badge,
+ * brand name, current-screen line, member chip); the gallery adds the discreet
+ * Appearance control to it and reuses the same markup inside the Prism and
+ * Aurora shells. app.js paintHeader() fills it; each appearance styles it. */
+const appearanceIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2.1-1 2.1-2 0-.6-.3-1.1-.6-1.5-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.9-1.8H17a4 4 0 0 0 4-4c0-4.1-4-7.4-9-7.4Z"/><circle cx="7.6" cy="11.4" r="1"/><circle cx="10.4" cy="7.6" r="1"/><circle cx="15" cy="7.8" r="1"/></svg>';
+const appearanceButton='<button type="button" class="wd-design-button wd-head-appearance" data-design-open data-design-label="icon-only" aria-label="Appearance" title="Appearance" hidden>'+appearanceIcon+'</button>';
+const sharedIndex=await read('index.html');
+const headBrand=sharedIndex.match(/<button class="header-home wd-head-brand"[\s\S]*?<\/button>/)?.[0];
+/* The tools block ends with the account menu, so the match runs to the menu's closing tag plus the block's own. */
+const headTools=sharedIndex.match(/<div class="wd-head-tools">[\s\S]*?<\/button><\/div><\/div>/)?.[0];
+if(headTools&&!headTools.includes('data-wd-head="menu"'))throw Error('Design gallery source-interface drift: shared header account menu');
+if(!headBrand||!headTools)throw Error('Design gallery source-interface drift: shared header markup');
+requireOne(headTools,'<div class="wd-head-tools">','shared header tools');
+const headToolsLive=headTools.replace('<div class="wd-head-tools">','<div class="wd-head-tools">'+appearanceButton);
 function prismShell(){
  let shell='';
  return read('prototype-prism/shell.html').then(s=>{
@@ -155,7 +168,12 @@ function prismShell(){
    shell=once(shell,shell.match(/<nav class="tabs"[\s\S]*?<\/nav>/)[0],'<span data-design-slot="nav"></span>','Prism nav slot');
    shell=once(shell,'<div id="banners" aria-live="polite"></div><main id="view" tabindex="-1"></main>','<span data-design-slot="banners"></span><span data-design-slot="view"></span>','Prism view slots');
    shell=once(shell,'<span id="sync-pill">Local preview</span>','<span data-design-slot="sync"></span>','Prism sync slot');
-   shell=shell.replace('DESIGN 02','PRISM').replace('<span class="preview-tag">LOCAL PREVIEW</span>','<button class="wd-design-button" data-design-open>Appearance</button>').replace('<button class="reset-button" data-aurora="reset">Reset</button>','').replace('Repository reference data · July 1, 2026 preview clock · Not the live schedule','One shared schedule · Prism is your personal appearance choice');
+   shell=regexOnce(shell,/<button class="prism-brand"[\s\S]*?<\/button>/,()=>headBrand,'Prism brand becomes the shared header brand');
+   shell=regexOnce(shell,/<button class="prism-member"[\s\S]*?<\/button>/,()=>headToolsLive,'Prism member chip becomes the shared header tools');
+   shell=once(shell,'<header class="prism-header">','<header class="prism-header wd-head">','Prism shared header marker');
+   /* The whole utility row goes: Appearance moved into the header, pause and dark mode were removed, and Anthony asked for the leftover "PRISM" label row to be removed too. */
+   shell=regexOnce(shell,/<div class="prism-utility">[\s\S]*?<\/div><\/div>/,'','Prism utility row removed');
+   shell=shell.replace('DESIGN 02','PRISM').replace('<span class="preview-tag">LOCAL PREVIEW</span>','').replace('<button class="reset-button" data-aurora="reset">Reset</button>','').replace('Repository reference data · July 1, 2026 preview clock · Not the live schedule','One shared schedule · Prism is your personal appearance choice');
    return '<div id="wd-prism-root">'+shell+'<span id="crumb" hidden></span></div>';
  });
 }
@@ -167,7 +185,8 @@ function auroraShell(){
    body=once(body,'<div id="banners" aria-live="polite"></div>','<span data-design-slot="banners"></span>','Aurora banners slot');
    body=once(body,'<main id="view" tabindex="-1"></main>','<span data-design-slot="view"></span>','Aurora view slot');
    body=once(body,'<span id="sync-pill" class="sync-pill">Local preview</span>','<span data-design-slot="sync"></span>','Aurora sync slot');
-   body=body.replace('<span class="preview-tag">LOCAL PROTOTYPE</span>','<button class="wd-design-button" data-design-open>Appearance</button>').replace('<button class="reset-button" data-aurora="reset">Reset preview</button>','')
+   body=regexOnce(body,/<header class="topbar">[\s\S]*?<\/header>/,()=>'<header class="topbar wd-head">'+headBrand+headToolsLive+'</header>','Aurora top bar becomes the shared header');
+   body=body
     .replace('<div class="sandbox-note"><span class="sandbox-dot"></span> A space to try things<p>Changes stay in this preview.<br>Your live schedule is untouched.</p></div>','<div class="sandbox-note"><span class="sandbox-dot"></span> Aurora workspace<p>Same shared schedule.<br>Your view can change anytime.</p></div>')
     .replace('AURORA <span>DESIGN PROTOTYPE / 01</span>','AURORA <span>LIVE APPEARANCE</span>')
     .replace('<div class="preview-disclosure" role="note">Repository reference data · Preview date July 1, 2026 · Not the live schedule<span id="storage-note"></span></div>','<div class="preview-disclosure" role="note">One shared schedule · Aurora is your personal appearance choice</div>');
@@ -198,12 +217,17 @@ const songs=baseSongs+songBridge;
 let index=await read('index.html');
 index=once(index,'<html lang="en">','<html lang="en" data-design-gallery="on">','gallery marker');
 index=once(index,'</head>','<link rel="stylesheet" href="design-choice.css?v=DEV">\n<link id="wd-prism-css" rel="stylesheet" href="prism-live.css?v=DEV" media="not all">\n<link id="wd-navy-css" rel="stylesheet" href="navy-live.css?v=DEV" media="not all">\n<link id="wd-aurora-css" rel="stylesheet" href="aurora-live.css?v=DEV" media="not all">\n<script defer src="design-choice.js?v=DEV"></script>\n</head>','gallery assets');
-index=once(index,'    <div class="sub"><span id="sync-pill" class="sync-pill">This device only</span></div>','    <div class="sub"><button class="wd-design-button nc-appearance" data-design-open hidden>Appearance</button><span id="sync-pill" class="sync-pill">This device only</span></div>','Navy Appearance button');
-index=once(index,'  <nav class="tabs">','  <div class="wd-classic-choice"><button class="wd-design-button" data-design-open hidden>Appearance</button></div>\n  <nav class="tabs">','classic Appearance button');
-const prismCSS=(await Promise.all(['prototype/aurora.css','prototype-prism/prism.css','prototype-prism/all-pages.css','prototype-prism/safety.css'].map(read))).join('\n')+'\n.wd-prism-sentinel{--ready:1}\n';
-const navyCSS=(await read('design-gallery/navy.css'))+'\n.wd-navy-sentinel{--ready:1}\n';
-const auroraCSS=(await Promise.all(['prototype/aurora.css','prototype/workspaces.css'].map(read))).join('\n')+'\n.wd-aurora-sentinel{--ready:1}\n';
+index=once(index,headTools,headToolsLive,'Original and Navy Appearance button');
+/* design-gallery/header.css holds each appearance's styling of the shared header, one marked section per stylesheet. */
+const headerCSS=await read('design-gallery/header.css');
+const headerSection=name=>between(headerCSS,'/* @'+name+' */','/* @end-'+name+' */','shared header styles for '+name);
+const prismCSS=(await Promise.all(['prototype/aurora.css','prototype-prism/prism.css','prototype-prism/all-pages.css','prototype-prism/safety.css'].map(read))).join('\n')+'\n'+headerSection('prism')+'\n.wd-prism-sentinel{--ready:1}\n';
+const navyCSS=(await read('design-gallery/navy.css'))+'\n'+headerSection('navy')+'\n.wd-navy-sentinel{--ready:1}\n';
+const auroraCSS=(await Promise.all(['prototype/aurora.css','prototype/workspaces.css'].map(read))).join('\n')+'\n'+headerSection('aurora')+'\n.wd-aurora-sentinel{--ready:1}\n';
 const files={'app.js':app,'song-app.js':songs,'index.html':index,'design-choice.js':choiceSource,'design-choice.css':await read('design-gallery/choice.css'),'prism-live.css':prismCSS,'navy-live.css':navyCSS,'aurora-live.css':auroraCSS};
+/* F10: design-gallery/feedback.css holds each appearance's look for the feedback button, sheet and list, one marked section per stylesheet (Original's lives in index.html). */
+const feedbackCSS=await read('design-gallery/feedback.css');
+for(const [file,name] of [['prism-live.css','prism'],['navy-live.css','navy'],['aurora-live.css','aurora']])files[file]+='\n'+between(feedbackCSS,'/* @'+name+' */','/* @end-'+name+' */','feedback styles for '+name)+'\n';
 for(const [token,label] of [['/* PRISM_HELPERS */','Prism helper slot'],['/* PRISM_VIEWS */','Prism view slot'],['/* PRISM_ALL_PAGES */','Prism page slot'],['/* AURORA_CORE */','Aurora core slot'],['/* AURORA_DECORATE */','Aurora decorator slot'],['/* AURORA_WORKSPACES */','Aurora workspace slot'],['/* NAVY_ADAPTER */','Navy adapter slot'],['/* PRISM_SHELL */','Prism shell slot'],['/* AURORA_SHELL */','Aurora shell slot']])if(host.includes(token))throw Error('Design gallery source-interface drift: unresolved '+label);
 assertSyntax(app,'gallery-app.js');
 assertSyntax(songs,'gallery-song-app.js');
