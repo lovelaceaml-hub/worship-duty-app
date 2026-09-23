@@ -6,7 +6,7 @@ All data was imported from "LV Zion Worship Duty Schedule.xlsx" (May–July 2026
 
 ## Quick links
 
-- **Active refactor:** [app.js split plan](docs/PLAN-2026-09-22-APP-JS-SPLIT.md), ready to start in Steps mode; production unchanged, no deploy inside the plan.
+- **App.js split:** [plan](docs/PLAN-2026-09-22-APP-JS-SPLIT.md) and its shipped [module map](docs/CODE-INDEX.md#the-appjs-split-2026-09-22); `app.js` is now 384 lines importing 20 new modules under `core/`, `views/`, `actions/`. Production unchanged, no deploy inside the plan.
 - **Retired:** [Complete phone plan](docs/PLAN-COMPACT-PHONE-REFACTOR.md), historical since 2026-09-22; unmerged work preserved on `claude/compact-runtime` and `claude/compact-server`.
 
 - **Website:** https://lv-zion-duties.web.app — share this link with members
@@ -131,7 +131,7 @@ the app's code.)
 ## Files
 
 - `index.html` — the app shell and styles
-- `app.js` — all app logic
+- `app.js`: entry script, imports `core/`, `views/`, `actions/dispatch.js` (see [docs/CODE-INDEX.md](docs/CODE-INDEX.md#the-appjs-split-2026-09-22) for the module map)
 - `seed-data.js` — the schedule imported from the Excel file
 - `firebase-config.js` — Firebase config + Web Push (VAPID) key for live sync
   and push notifications

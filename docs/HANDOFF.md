@@ -103,7 +103,12 @@ Functions, Firestore rules, account settings, or schedule records.
 ## Architecture
 
 - **No framework, no build step.** `index.html` (all styles inline) +
-  `app.js` (all logic) + `seed-data.js` (spreadsheet import). Static files.
+  `app.js` (entry script, 384 lines) + `seed-data.js` (spreadsheet import).
+  Static files, served as ES modules. `app.js` imports 20 modules under
+  `core/`, `views/` and `actions/dispatch.js` (the
+  [2026-09-22 app.js split](PLAN-2026-09-22-APP-JS-SPLIT.md), zero behavior
+  change; see [docs/CODE-INDEX.md](CODE-INDEX.md#the-appjs-split-2026-09-22)
+  for the full module map).
 - **Backend:** Firebase project `LV Zion Duties` (`lv-zion-duties`), Blaze
   (pay-as-you-go) plan — upgraded 2026-07-03 to run Cloud Functions;
   effectively $0/month at this scale.

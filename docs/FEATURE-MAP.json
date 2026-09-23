@@ -8,7 +8,7 @@
     "boundary": "This map describes existing source behavior and planned interfaces. It does not describe a shipped compact-phone runtime."
   },
   "entrypoints": {
-    "browser_shell": ["index.html", "app.js", "permissions.js", "firebase-config.js", "seed-data.js"],
+    "browser_shell": ["index.html", "app.js (core/, views/, actions/dispatch.js: docs/PLAN-2026-09-22-APP-JS-SPLIT.md)", "permissions.js", "firebase-config.js", "seed-data.js"],
     "lazy_presider": ["song-app.js", "song-app.css", "song-lib.js", "song-seed.js"],
     "service_worker": "sw.js",
     "backend": ["functions/index.js", "functions/member-auth.js", "functions/department-auth.js", "functions/department-handlers.js", "firestore.rules"]
@@ -18,7 +18,10 @@
       "id": "auth-and-startup",
       "user_surfaces": ["site passcode", "member sign in", "forced PIN change", "editor access"],
       "existing_sources": [
-        {"path": "app.js", "symbols": ["render", "renderLoading", "renderSiteLock", "renderMemberLogin", "renderForcedPinChange", "memberLogin", "memberChangePin", "memberLogout", "isVerifiedSession", "init", "initFirebase"]},
+        {"path": "views/shell.js", "symbols": ["render", "renderLoading", "renderSiteLock", "renderMemberLogin", "renderForcedPinChange"]},
+        {"path": "core/session.js", "symbols": ["memberLogin", "memberChangePin", "memberLogout"]},
+        {"path": "core/auth.js", "symbols": ["isVerifiedSession"]},
+        {"path": "app.js", "symbols": ["init", "initFirebase"], "note": "app.js's kept tail (docs/PLAN-2026-09-22-APP-JS-SPLIT.md); everything else here moved to the modules above"},
         {"path": "functions/index.js", "symbols": ["verifyMemberPin", "changeMemberPin", "resetMemberPin", "callableActor", "readCurrentAccount"]},
         {"path": "functions/member-auth.js", "symbols": ["createMemberAuthCallables", "verifyMemberPin", "changeMemberPin", "resetMemberPin"]},
         {"path": "permissions.js", "symbols": ["createPermissions", "canManageDepartment", "canEditSongs"]}
@@ -47,7 +50,9 @@
       "id": "schedule-and-defaults",
       "user_surfaces": ["Schedule", "service detail", "department filter", "past services", "maintenance read-only schedule"],
       "existing_sources": [
-        {"path": "app.js", "symbols": ["sortedServices", "upcomingServices", "pastServices", "preferredScheduleService", "renderSchedule", "renderServiceCard", "renderServiceList", "renderDeptChips", "renderMaintenanceSchedule"]},
+        {"path": "core/schedule.js", "symbols": ["sortedServices", "upcomingServices", "pastServices", "preferredScheduleService"]},
+        {"path": "views/schedule.js", "symbols": ["renderSchedule", "renderServiceCard", "renderServiceList", "renderDeptChips"]},
+        {"path": "views/shell.js", "symbols": ["renderMaintenanceSchedule"]},
         {"path": "functions/sheet-lib.js", "symbols": ["sheetRowsToServices", "parseCSV", "parseSheetDate", "parseSheetTime"]},
         {"path": "functions/index.js", "symbols": ["scheduledSheetSync", "publicSchedule"]}
       ],
@@ -60,7 +65,11 @@
       "id": "own-duties-and-availability",
       "user_surfaces": ["My Duties", "next duty", "full lineup", "change request entry", "own department availability"],
       "existing_sources": [
-        {"path": "app.js", "symbols": ["dutiesFor", "renderMy", "renderYourRequests", "requestChangeTrigger", "requestChangeForm", "loadOwnDepartmentProfiles", "saveOwnDepartmentAvailability", "checkNewDuties", "checkReminders"]},
+        {"path": "core/schedule.js", "symbols": ["dutiesFor"]},
+        {"path": "views/schedule.js", "symbols": ["renderMy"]},
+        {"path": "views/requests.js", "symbols": ["renderYourRequests", "requestChangeTrigger", "requestChangeForm"]},
+        {"path": "core/departments.js", "symbols": ["loadOwnDepartmentProfiles", "saveOwnDepartmentAvailability"]},
+        {"path": "core/notify.js", "symbols": ["checkNewDuties", "checkReminders"]},
         {"path": "department-profile.js", "symbols": ["normalizeDepartmentProfile", "normalizeAvailability", "isAvailable", "isCurrentlySchedulable"]},
         {"path": "functions/department-handlers.js", "symbols": ["updateMemberAvailability"]}
       ],
@@ -73,7 +82,8 @@
       "id": "department-roster-and-assignment",
       "user_surfaces": ["Manage departments", "roster", "member profile", "eligibility", "schedulability", "assignment picker", "administrator override"],
       "existing_sources": [
-        {"path": "app.js", "symbols": ["loadDepartmentRoster", "loadOwnDepartmentProfiles", "departmentProfileAssignable", "saveDepartmentProfile", "assignDepartmentDutyForService", "unassignDepartmentDutyForService", "handleAct", "handleChg"]},
+        {"path": "core/departments.js", "symbols": ["loadDepartmentRoster", "loadOwnDepartmentProfiles", "departmentProfileAssignable", "saveDepartmentProfile", "assignDepartmentDutyForService", "unassignDepartmentDutyForService"]},
+        {"path": "actions/dispatch.js", "symbols": ["handleAct", "handleChg"]},
         {"path": "department-workflows.js", "symbols": ["membersForDepartment", "setDepartmentMembershipStatus", "departmentForDuty", "routeRequest", "actionableCounts"]},
         {"path": "department-profile.js", "symbols": ["createDepartmentProfile", "updateDepartmentProfile", "mergeHistorySeed", "isDutyEligible", "isSchedulable", "effectiveAvailability"]},
         {"path": "functions/department-auth.js", "symbols": ["authorizeProfileRead", "authorizeProfileUpdate", "authorizeAssignment", "authorizeAssignmentOverride"]},
@@ -89,7 +99,10 @@
       "id": "requests-conflicts-and-attention",
       "user_surfaces": ["Request change", "Manage Requests", "Planning conflicts", "attention badges and banner"],
       "existing_sources": [
-        {"path": "app.js", "symbols": ["conflictsFor", "activeConflicts", "findPendingRequest", "requestIsActionable", "effectiveRequestStatus", "pendingRequestsCount", "actionableCountsForViewer", "renderManageRequests", "renderManageConflicts", "resolveRequest"]},
+        {"path": "core/conflicts.js", "symbols": ["conflictsFor", "activeConflicts"]},
+        {"path": "views/requests.js", "symbols": ["findPendingRequest", "requestIsActionable", "effectiveRequestStatus", "pendingRequestsCount", "actionableCountsForViewer"]},
+        {"path": "views/manage.js", "symbols": ["renderManageRequests", "renderManageConflicts"]},
+        {"path": "core/state.js", "symbols": ["resolveRequest"]},
         {"path": "department-workflows.js", "symbols": ["createChangeRequest", "transitionRequestStatus", "resolveRequest", "composeConflicts", "activeConflicts", "actionableCounts", "aggregateAuthorizedOutstanding"]},
         {"path": "functions/index.js", "symbols": ["onRequestCreated", "onRequestResolved"]},
         {"path": "firestore.rules", "symbols": ["match /requests/{requestId}", "match /conflicts/{conflictId}", "match /audit/{auditId}"]}
@@ -103,7 +116,8 @@
       "id": "songs-planning-and-history",
       "user_surfaces": ["Presider Home", "Library", "Services", "Insights", "setlist editor", "history correction"],
       "existing_sources": [
-        {"path": "app.js", "symbols": ["loadSongAssets", "loadSongApp", "songCtx", "renderSongs", "canEditSongService", "canManagePresiders"]},
+        {"path": "views/songs.js", "symbols": ["loadSongAssets", "loadSongApp", "songCtx", "renderSongs"]},
+        {"path": "actions/dispatch.js", "symbols": ["canEditSongService", "canManagePresiders"]},
         {"path": "song-app.js", "symbols": ["mount", "renderHome", "renderLibrary", "renderServices", "renderInsights", "updateSetlist", "confirmSetlist", "markSetlistSung", "undoSetlistSung", "ensureSetlist", "syncPresiderSchedule"]},
         {"path": "song-lib.js", "symbols": ["serviceIdFor", "applySung", "applyUndo", "applyBackfill", "removeHistoryEntry", "totalDuration"]},
         {"path": "song-seed.js", "symbols": ["SONG_SEED"]}
@@ -117,7 +131,8 @@
       "id": "notifications-and-routing",
       "user_surfaces": ["new-duty alerts", "day-before reminders", "request notifications", "notification click destination", "calendar subscription"],
       "existing_sources": [
-        {"path": "app.js", "symbols": ["notifyGranted", "notifyOn", "sysNotify", "registerPush", "unregisterPush", "checkNewDuties", "checkReminders", "downloadICS", "subscribeICS", "copyICSLink"]},
+        {"path": "core/notify.js", "symbols": ["notifyGranted", "notifyOn", "sysNotify", "registerPush", "unregisterPush", "checkNewDuties", "checkReminders"]},
+        {"path": "core/calendar.js", "symbols": ["downloadICS", "subscribeICS", "copyICSLink"]},
         {"path": "functions/index.js", "symbols": ["onScheduleWrite", "dutyReminders", "onRequestCreated", "onRequestResolved", "ics", "loadTokenTargets", "sendToTargets"]},
         {"path": "functions/ics-lib.js", "symbols": ["dutiesForMember", "buildIcsForMember"]},
         {"path": "sw.js", "symbols": ["notificationclick", "fetch", "cacheFirst", "networkFirst"]}
@@ -131,7 +146,9 @@
       "id": "persistence-and-release",
       "user_surfaces": ["Saved feedback", "connection status", "backup and restore", "Google Sheet sync", "PWA cache", "Hosting release"],
       "existing_sources": [
-        {"path": "app.js", "symbols": ["saveLocal", "loadLocal", "persistService", "persistMembers", "persistSettings", "persistDepartments", "persistRequest", "persistAll", "fbWrite", "afterDataChange", "setSyncPill"]},
+        {"path": "core/state.js", "symbols": ["saveLocal", "loadLocal", "persistService", "persistMembers", "persistSettings", "persistDepartments", "persistRequest", "persistAll", "fbWrite"]},
+        {"path": "core/notify.js", "symbols": ["afterDataChange"]},
+        {"path": "app.js", "symbols": ["setSyncPill"], "note": "app.js's kept tail (docs/PLAN-2026-09-22-APP-JS-SPLIT.md)"},
         {"path": "design-gallery/build.mjs", "symbols": ["upstream", "requireOne", "assertSyntax", "manifest", "dest"]},
         {"path": "design-gallery/release.mjs", "symbols": ["git", "compatibleLive", "--publish", "--preview"]},
         {"path": "scripts/guard-gallery-deploy.mjs", "symbols": ["Four-design gallery release guard"]},
@@ -174,11 +191,11 @@
     "integration_handoff": "The integrated handoff document is docs/COMPACT-DESIGN-HANDOFF.md when present in the integration checkout."
   },
   "known_drift_points": [
-    {"id": "attention-counts", "evidence": ["app.js:2309 pendingRequestsCount", "app.js:2339 actionableCountsForViewer", "department-workflows.js:1098 actionableCounts", "department-workflows.js:1185 aggregateAuthorizedOutstanding"], "risk": "Badges, Planning, Requests, and banners can use different scopes or status rules.", "planned_fix": "One shared attention information builder supplies categories, authorized items, and counts."},
-    {"id": "schedule-selection", "evidence": ["app.js:1121 preferredScheduleService", "prototype-prism/prism.js:4-40 aui and selection handlers", "prototype/aurora.js:6-44 aui and ensureSelection", "design-gallery/navy-adapter.js:4-47 month, selected, full, manualSelection"], "risk": "Four views can select different same-day services or lose explicit selection on rerender.", "planned_fix": "Shared route and selection state with one Pacific-time default and explicit-selection preservation."},
+    {"id": "attention-counts", "evidence": ["views/requests.js:59 pendingRequestsCount", "views/requests.js:83 actionableCountsForViewer", "department-workflows.js:1098 actionableCounts", "department-workflows.js:1185 aggregateAuthorizedOutstanding"], "risk": "Badges, Planning, Requests, and banners can use different scopes or status rules.", "planned_fix": "One shared attention information builder supplies categories, authorized items, and counts."},
+    {"id": "schedule-selection", "evidence": ["core/schedule.js:10 preferredScheduleService", "prototype-prism/prism.js:4-40 aui and selection handlers", "prototype/aurora.js:6-44 aui and ensureSelection", "design-gallery/navy-adapter.js:4-47 month, selected, full, manualSelection"], "risk": "Four views can select different same-day services or lose explicit selection on rerender.", "planned_fix": "Shared route and selection state with one Pacific-time default and explicit-selection preservation."},
     {"id": "layout-transforms", "evidence": ["design-gallery/host-bridge.js:84-111 slot swapping and field restoration", "prototype-prism/all-pages.js and song-pages.js renderer wrappers", "prototype/workspaces.js and presider-workspace.js renderer wrappers", "design-gallery/navy-adapter.js:23-64 generated DOM insertion"], "risk": "Markup-specific adapters can drift in placement, labels, controls, and accessibility while still sharing domain handlers.", "planned_fix": "Explicit four renderers consume shared information and reusable controls."},
-    {"id": "song-state-boundary", "evidence": ["app.js:2195 songCtx", "app.js:2223 renderSongs", "song-app.js:mount", "design-gallery/build.mjs:167-178 song bridge"], "risk": "The lazy Presider module has its own render and state contract while the host owns identity, schedule, and permissions.", "planned_fix": "Keep the named mount and permission contract, then expose shared presider information to each layout."},
-    {"id": "legacy-and-secure-rosters", "evidence": ["app.js:727 localDepartmentRoster", "app.js:747 loadDepartmentRoster", "functions/department-handlers.js:listDepartmentRoster", "firestore.rules:departments and departmentAssignments matches"], "risk": "Local fallback names and secure UID-backed profiles have different fields and authorization guarantees.", "planned_fix": "Shared roster interface marks source, loading, error, and permitted actions without treating local fallback as secure production evidence."}
+    {"id": "song-state-boundary", "evidence": ["views/songs.js:51 songCtx", "views/songs.js:78 renderSongs", "song-app.js:mount", "design-gallery/build.mjs:167-178 song bridge"], "risk": "The lazy Presider module has its own render and state contract while the host owns identity, schedule, and permissions.", "planned_fix": "Keep the named mount and permission contract, then expose shared presider information to each layout."},
+    {"id": "legacy-and-secure-rosters", "evidence": ["core/departments.js:172 localDepartmentRoster", "core/departments.js:191 loadDepartmentRoster", "functions/department-handlers.js:listDepartmentRoster", "firestore.rules:departments and departmentAssignments matches"], "risk": "Local fallback names and secure UID-backed profiles have different fields and authorization guarantees.", "planned_fix": "Shared roster interface marks source, loading, error, and permitted actions without treating local fallback as secure production evidence."}
   ],
   "documentation": [
     {"path": "docs/PLAN-COMPACT-PHONE-REFACTOR.md", "use": "approved product decisions, interfaces, ownership, verification, and Build log"},
