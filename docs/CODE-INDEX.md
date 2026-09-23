@@ -1,6 +1,6 @@
 # Worship Duty code index
 
-This is a navigation aid for the approved compact-phone refactor. It records current source boundaries and symbols. The compact runtime interfaces described in the plan are planned work, not existing modules.
+This is a navigation aid for the codebase. It records current source boundaries and symbols. The compact-phone refactor referenced later in this document is historical (retired 2026-09-22, see `docs/HANDOFF.md`); its compact runtime interfaces were planned work and were never built. The current, shipped source structure is the [app.js split](#the-appjs-split-2026-09-22) below.
 
 ## Start here
 
