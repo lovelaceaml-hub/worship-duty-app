@@ -15,14 +15,6 @@ export function setSongsPermissionRefs(canEditSongServiceFn, canManagePresidersF
 }
 export function setSetlistIndex(map) { setlistIndex = map; }
 
-// songCtx is also monkey-patched by design-gallery/build.mjs's gallery
-// sources (prototype/aurora.js reassigns it). app.js keeps its own live copy
-// and pushes it back in here under a different local name, so this module's
-// own internal caller (renderSongs) sees the current, possibly-patched
-// version instead of shadowing app.js's copy with the real implementation.
-let activeSongCtx;
-export function setSongsActiveRenderRefs(songCtxFn) { activeSongCtx = songCtxFn; }
-
 export let songApp = null;      // the imported module, once loaded
 export let songAppLoading = null; // in-flight import promise
 export let songAssetsLoading = null; // in-flight <link>/<script> loads
@@ -91,7 +83,7 @@ export function renderSongs(view) {
   }
   loadSongApp().then(m => {
     const root = document.getElementById('song-root');
-    if (root && ui.tab === 'songs') m.mount(root, activeSongCtx());
+    if (root && ui.tab === 'songs') m.mount(root, songCtx());
   }).catch(e => {
     console.warn('song-app failed to load:', e);
     const root = document.getElementById('song-root');

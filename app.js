@@ -52,8 +52,8 @@ import {
   setSessionRefs
 } from './core/session.js';
 import {
-  render as _render, renderSiteLock as _renderSiteLock, renderUnlock as _renderUnlock,
-  renderCreatePin as _renderCreatePin, renderLoading, renderBanners, setShellRenderRefs
+  render as _render, renderSiteLock as _renderSiteLock, renderUnlock, renderCreatePin,
+  renderLoading, renderBanners, setShellRenderRefs
 } from './views/shell.js';
 import {
   renderSchedule as _renderSchedule, renderMy as _renderMy,
@@ -70,43 +70,42 @@ import {
   actionableDepartmentForDuty, actionableCountsForViewer, requestIsActionable
 } from './views/requests.js';
 import {
-  songCtx as _songCtx, loadTag, setSongsRenderRef, setSongsPermissionRefs,
-  setSongsActiveRenderRefs, setSetlistIndex
+  songCtx, loadTag, setSongsRenderRef, setSongsPermissionRefs, setSetlistIndex
 } from './views/songs.js';
 
 setConstantsStateRef(state);
 setPlanningRefs(state, departmentProfiles, departmentProfileAssignable);
 setSongsPermissionRefs(canEditSongService, canManagePresiders);
 setManagePermissionRefs(canEditSongService);
-// The 14 names below (render, songCtx, and the appearance-dispatch targets
-// for the classic, Prism, Navy and Aurora presentations) are each declared as
-// a plain mutable local here, seeded from the real implementation each module
-// exports. design-gallery/build.mjs splices host-bridge.js and the Prism/
-// Aurora prototype sources as literal text right before this file's closing
-// init(); call, and between them they REASSIGN every one of these 14 local
-// bindings in place with a version that also paints the active appearance
-// (see host-bridge.js's own `originals` capture and its reassignments, plus
-// prototype-prism/all-pages.js and prototype/aurora.js). Capturing the
-// module's real function as a `const` or importing it directly (instead of
-// shadowing it with a local `let`) would make this reassignment impossible:
-// an ES import binding is read-only from the importing module's side. Every
-// OTHER module that needs to call one of these 14 by name (so it sees the
-// live, possibly-patched version, exactly as it would if this were still one
-// file) receives the current value via a setter, called from init() below so
-// the push happens after the injected gallery code has already run.
-// renderManagePeople, renderUnlock and renderCreatePin are reassigned the
-// same way but never called by name anywhere in this app; they still need
-// the local shadow below so the reassignment itself has somewhere to land.
-// renderServiceCard is NOT one of these 14: prototype-prism/song-pages.js and
-// prototype/presider-workspace.js each reassign a same-named function too,
-// but that reassignment is appended only to song-app.js's own separate
-// output (see design-gallery/build.mjs's songBridge/baseSongs assembly), so
-// it never reaches this file's scope. renderServiceCard below is an ordinary
-// import.
+// The 11 names below are each declared as a plain mutable local here, seeded
+// from the real implementation each module exports. design-gallery/
+// build.mjs splices host-bridge.js as literal text right before this file's
+// closing init(); call, and host-bridge.js REASSIGNS every one of these 11
+// local bindings in place with a version that also paints the active
+// appearance (see its own `originals` capture and its reassignments).
+// Capturing the module's real function as a `const` or importing it
+// directly (instead of shadowing it with a local `let`) would make this
+// reassignment impossible: an ES import binding is read-only from the
+// importing module's side. Every OTHER module that needs to call one of
+// these 11 by name (so it sees the live, possibly-patched version, exactly
+// as it would if this were still one file) receives the current value via a
+// setter, called from init() below so the push happens after the injected
+// gallery code has already run. renderManagePeople is reassigned the same
+// way but never called by name anywhere in this app; it still needs the
+// local shadow below so the reassignment itself has somewhere to land.
+// renderUnlock, renderCreatePin, renderServiceCard and songCtx are NOT
+// monkey-patched, despite each having a same-named reassignment somewhere in
+// design-gallery/build.mjs's raw source inputs: build.mjs's own transforms
+// strip the renderUnlock/renderCreatePin reassignment out of
+// prototype-prism/all-pages.js before splicing (see its
+// `retiredPrismAuth`/`optionalOnce` step), the songCtx reassignment in
+// prototype/aurora.js sits before the `between('const paths=', ...)` extract
+// boundary and is never captured into the spliced text, and
+// renderServiceCard's reassignments in prototype-prism/song-pages.js and
+// prototype/presider-workspace.js are appended only to song-app.js's own
+// separate build output. All four below are ordinary imports.
 let render = _render;
 let renderSiteLock = _renderSiteLock;
-let renderUnlock = _renderUnlock;
-let renderCreatePin = _renderCreatePin;
 let renderSchedule = _renderSchedule;
 let renderMy = _renderMy;
 let renderManage = _renderManage;
@@ -116,7 +115,6 @@ let renderManageRequests = _renderManageRequests;
 let renderManagePeople = _renderManagePeople;
 let renderFeatures = _renderFeatures;
 let renderManageData = _renderManageData;
-let songCtx = _songCtx;
 
 /* ================= actions ================= */
 
@@ -1264,7 +1262,6 @@ function init() {
   setSheetSyncRefs(findService, render);
   setSessionRefs(render, pulse);
   setSongsRenderRef(render);
-  setSongsActiveRenderRefs(songCtx);
   setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);
   setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
