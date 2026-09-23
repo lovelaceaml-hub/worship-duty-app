@@ -514,7 +514,33 @@ async function navigate(page, tab) {
   await page.evaluate(() => delete document.documentElement.dataset.maintenance);
   await page.locator(`nav.tabs [data-tab="${tab}"]`).click();
   await page.waitForTimeout(180);
+  await closeDesignDialog(page);
+}
+
+// The one-time appearance-invitation dialog can open on its own delayed timer
+// (an internal setTimeout fired after the first post-login render), so calling
+// dialog.close() only clears whatever is open right now: it does not stop a
+// dialog that is still mid-flight from opening moments later and intercepting
+// the next click via its full-viewport ::backdrop. closeDesignDialog() waits
+// for the element to be fully removed from the DOM (not just missing its
+// `open` attribute) before returning, and clickThroughDesignDialog() retries a
+// click that gets intercepted by a dialog that (re)appeared in that window.
+async function closeDesignDialog(page) {
+  await page.keyboard.press('Escape');
   await page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
+  await page.waitForFunction(() => !document.querySelector('.wd-design-dialog'));
+}
+
+async function clickThroughDesignDialog(page, selector, {attempts = 4} = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await page.locator(selector).click({timeout: 3000});
+      return;
+    } catch (error) {
+      if (attempt === attempts || !(await page.locator('.wd-design-dialog').count())) throw error;
+      await closeDesignDialog(page);
+    }
+  }
 }
 
 const domainWrites = page => page.evaluate(() => __mockLive.writes.filter(write =>
@@ -752,13 +778,12 @@ try {
   await login(current.page, 'E. Simon');
   check('Leader sees Manage', await current.page.locator('#tab-manage').isVisible());
   await navigate(current.page, 'manage');
-  await current.page.keyboard.press('Escape');
-  await current.page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
+  await closeDesignDialog(current.page);
   const leaderOptions = await current.page.locator('#manage-dept option').allTextContents();
   check('Leader Manage selector is scoped to configured departments', leaderOptions, ['Worship', 'Media']);
   check('Leader cannot see the global Manage option', leaderOptions.includes('All Departments'), false);
   check('Non-admin leader cannot activate administrator override UI', await current.page.locator('.department-override').count(), 0);
-  await current.page.locator('[data-act="department-open"][data-department="Media"]').click();
+  await clickThroughDesignDialog(current.page, '[data-act="department-open"][data-department="Media"]');
   await current.page.waitForSelector('.department-hero');
   check('Leader department page shows returned leader records', await current.page.locator('.department-leader-strip').innerText().then(text => /E\. Simon/.test(text)));
   check('Leader department page shows active and inactive profile groups', await current.page.locator('.department-group-heading').allTextContents().then(texts =>
@@ -803,8 +828,7 @@ try {
   await unlockSite(current.page);
   await login(current.page, 'S. Lisa');
   await current.page.waitForTimeout(260);
-  await current.page.keyboard.press('Escape');
-  await current.page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
+  await closeDesignDialog(current.page);
   await navigate(current.page, 'my');
   await current.page.waitForSelector('.own-availability-card');
   check('Member sees shared availability outside Manage', await current.page.locator('.own-availability-card').count(), 1);
