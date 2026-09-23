@@ -52,7 +52,7 @@
   {
     "declaration": "init",
     "find": "  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});",
-    "replace": "  setNotifyRenderRefs(render, renderBanners);\n  setSheetSyncRefs(findService, render);\n  setSessionRefs(render, pulse);\n  setSongsRenderRef(render);\n  setSongsActiveRenderRefs(songCtx);\n  setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);\n  setScheduleActiveRenderRefs(renderServiceCard);\n  setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);\n  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});"
+    "replace": "  setNotifyRenderRefs(render, renderBanners);\n  setSheetSyncRefs(findService, render);\n  setSessionRefs(render, pulse);\n  setSongsRenderRef(render);\n  setSongsActiveRenderRefs(songCtx);\n  setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);\n  setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);\n  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});"
   },
   {
     "declaration": "init",
@@ -128,16 +128,6 @@
     "declaration": "renderManage",
     "find": "else html += renderManageServices();",
     "replace": "else html += activeRenderManageServices();"
-  },
-  {
-    "declaration": "renderServiceList",
-    "find": "html += renderServiceCard(svc, deptFilter);",
-    "replace": "html += activeRenderServiceCard(svc, deptFilter);"
-  },
-  {
-    "declaration": "renderSchedule",
-    "find": "renderServiceCard(focus, filter) + '</section><div class=\"date-head\"><span class=\"day\">Full schedule</span></div>';",
-    "replace": "activeRenderServiceCard(focus, filter) + '</section><div class=\"date-head\"><span class=\"day\">Full schedule</span></div>';"
   },
   {
     "declaration": "renderSongs",

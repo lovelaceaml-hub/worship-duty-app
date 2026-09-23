@@ -57,8 +57,7 @@ import {
 } from './views/shell.js';
 import {
   renderSchedule as _renderSchedule, renderMy as _renderMy,
-  renderServiceCard as _renderServiceCard, categoryHasAssignments, renderCatRows,
-  setScheduleActiveRenderRefs
+  renderServiceCard, categoryHasAssignments, renderCatRows
 } from './views/schedule.js';
 import {
   renderManage as _renderManage, renderManageServices as _renderManageServices,
@@ -79,33 +78,37 @@ setConstantsStateRef(state);
 setPlanningRefs(state, departmentProfiles, departmentProfileAssignable);
 setSongsPermissionRefs(canEditSongService, canManagePresiders);
 setManagePermissionRefs(canEditSongService);
-// The 15 names below (render, songCtx, and the appearance-dispatch targets
+// The 14 names below (render, songCtx, and the appearance-dispatch targets
 // for the classic, Prism, Navy and Aurora presentations) are each declared as
 // a plain mutable local here, seeded from the real implementation each module
 // exports. design-gallery/build.mjs splices host-bridge.js and the Prism/
 // Aurora prototype sources as literal text right before this file's closing
-// init(); call, and between them they REASSIGN every one of these 15 local
+// init(); call, and between them they REASSIGN every one of these 14 local
 // bindings in place with a version that also paints the active appearance
 // (see host-bridge.js's own `originals` capture and its reassignments, plus
-// prototype-prism/all-pages.js, prototype-prism/song-pages.js,
-// prototype/aurora.js and prototype/presider-workspace.js). Capturing the
+// prototype-prism/all-pages.js and prototype/aurora.js). Capturing the
 // module's real function as a `const` or importing it directly (instead of
 // shadowing it with a local `let`) would make this reassignment impossible:
 // an ES import binding is read-only from the importing module's side. Every
-// OTHER module that needs to call one of these 15 by name (so it sees the
+// OTHER module that needs to call one of these 14 by name (so it sees the
 // live, possibly-patched version, exactly as it would if this were still one
 // file) receives the current value via a setter, called from init() below so
 // the push happens after the injected gallery code has already run.
 // renderManagePeople, renderUnlock and renderCreatePin are reassigned the
 // same way but never called by name anywhere in this app; they still need
 // the local shadow below so the reassignment itself has somewhere to land.
+// renderServiceCard is NOT one of these 14: prototype-prism/song-pages.js and
+// prototype/presider-workspace.js each reassign a same-named function too,
+// but that reassignment is appended only to song-app.js's own separate
+// output (see design-gallery/build.mjs's songBridge/baseSongs assembly), so
+// it never reaches this file's scope. renderServiceCard below is an ordinary
+// import.
 let render = _render;
 let renderSiteLock = _renderSiteLock;
 let renderUnlock = _renderUnlock;
 let renderCreatePin = _renderCreatePin;
 let renderSchedule = _renderSchedule;
 let renderMy = _renderMy;
-let renderServiceCard = _renderServiceCard;
 let renderManage = _renderManage;
 let renderManageServices = _renderManageServices;
 let renderManagePlanning = _renderManagePlanning;
@@ -1263,7 +1266,6 @@ function init() {
   setSongsRenderRef(render);
   setSongsActiveRenderRefs(songCtx);
   setShellRenderRefs(pulse, renderSchedule, renderMy, renderManage, renderSiteLock);
-  setScheduleActiveRenderRefs(renderServiceCard);
   setManageActiveRenderRefs(renderManageServices, renderManagePlanning, renderManageRequests, renderFeatures, renderManageData);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (window.FIREBASE_CONFIG) {

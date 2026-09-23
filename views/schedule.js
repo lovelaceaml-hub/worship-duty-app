@@ -8,17 +8,6 @@ import {requestChangeTrigger, requestChangeForm, renderYourRequests} from './req
 import {renderOwnAvailability} from './departments.js';
 import {songStateFor, songStateTag} from './songs.js';
 
-// renderServiceCard is monkey-patched by design-gallery/build.mjs's gallery
-// sources (prototype-prism/song-pages.js and prototype/presider-workspace.js
-// both reassign it, exactly the way host-bridge.js reassigns render and its
-// appearance-dispatch siblings). app.js keeps its own live copy and pushes it
-// back in here, under a different local name, so this module's own internal
-// callers (renderServiceList, renderSchedule) see the current, possibly-
-// patched version instead of shadowing app.js's copy with their own real
-// implementation's name.
-let activeRenderServiceCard;
-export function setScheduleActiveRenderRefs(serviceCardFn) { activeRenderServiceCard = serviceCardFn; }
-
 export function pillFor(member) {
   const mine = ui.me && member === ui.me;
   return '<span class="pill' + (mine ? ' me' : '') + '">' + esc(memberLabel(member)) + (mine ? ' (You)' : '') + '</span>';
@@ -67,7 +56,7 @@ export function renderServiceList(list, deptFilter) {
     }
     if (deptFilter && deptFilter !== 'All' && !categoryHasAssignments(svc, deptFilter)) return;
     if (pendingHead) { html += pendingHead; pendingHead = ''; }
-    html += activeRenderServiceCard(svc, deptFilter);
+    html += renderServiceCard(svc, deptFilter);
   });
   return html;
 }
@@ -86,7 +75,7 @@ export function renderSchedule() {
   const focus = preferredScheduleService(up);
   if (focus && (filter === 'All' || categoryHasAssignments(focus, filter))) {
     html += '<section class="schedule-focus"><div class="date-head"><span class="day">Current or next service</span></div>' +
-      activeRenderServiceCard(focus, filter) + '</section><div class="date-head"><span class="day">Full schedule</span></div>';
+      renderServiceCard(focus, filter) + '</section><div class="date-head"><span class="day">Full schedule</span></div>';
   }
   if (!up.length) html += '<div class="empty">No upcoming services yet.<br>Add them in the <b>Manage</b> tab.</div>';
   else html += renderServiceList(up, filter);
