@@ -8,8 +8,17 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const readModule = name => { try { return readFileSync(path.join(root, name), 'utf8'); } catch { return ''; } };
 const manifest = JSON.parse(readFileSync(path.join(root, 'scripts/check-app-split.manifest.json'), 'utf8'));
 const source = manifest.moduleOrder.map(readModule).join('\n');
+// indexOf finds 'function preferredScheduleService(' whether or not it is
+// preceded by 'export ' (that prefix appears once the declaration lands in
+// its own module; see docs/PLAN-2026-09-22-APP-JS-SPLIT.md's Build log), so
+// `start` always lands exactly on 'function', never on 'export', which
+// matters since the extracted snippet below is run outside a module scope.
+// The end boundary needs its own tolerance: a literal '\nfunction dutiesFor('
+// no longer matches once 'export ' is inserted between the newline and
+// 'function'.
 const start = source.indexOf('function preferredScheduleService(');
-const end = source.indexOf('\nfunction dutiesFor(', start);
+const dutiesForMatch = source.slice(start).match(/\n(?:export\s+)?function dutiesFor\(/);
+const end = dutiesForMatch ? start + dutiesForMatch.index : -1;
 assert.ok(start !== -1 && end > start, 'shared Schedule selector exists');
 const preferred = runInNewContext(source.slice(start, end) + '\npreferredScheduleService;', {Intl, Date});
 const services = [

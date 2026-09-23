@@ -10,13 +10,83 @@
     "replace": "setSharedNameMap(map);"
   },
   {
-    "declaration": "state",
-    "find": "let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };",
-    "replace": "let state = { members: [], services: [], settings: { features: {}, pinHash: '' }, departments: {}, requests: [] };\nsetConstantsStateRef(state);"
+    "declaration": "handleAct",
+    "find": "state = seedState();",
+    "replace": "setState(seedState());"
   },
   {
-    "declaration": "departmentProfileAssignable",
-    "find": "  return departmentAvailability(profile, svc && svc.date, svc && departmentServiceTimeKey(svc)) === 'available';\n}",
-    "replace": "  return departmentAvailability(profile, svc && svc.date, svc && departmentServiceTimeKey(svc)) === 'available';\n}\nsetPlanningRefs(state, departmentProfiles, departmentProfileAssignable);"
+    "declaration": "handleChg",
+    "find": "state = obj;",
+    "replace": "setState(obj);"
+  },
+  {
+    "declaration": "initFirebase",
+    "find": "  fb = {\n    db,",
+    "replace": "  setFb({\n    db,"
+  },
+  {
+    "declaration": "initFirebase",
+    "find": "    increment: fsMod.increment,\n    knownIds: []\n  };\n  authStatus = 'loading';\n  authReady = Promise.resolve(null);",
+    "replace": "    increment: fsMod.increment,\n    knownIds: []\n  });\n  setAuthStatus('loading');\n  setAuthReady(Promise.resolve(null));"
+  },
+  {
+    "declaration": "initFirebase",
+    "find": "canonicalizeStateNames();\n    membersLoaded = true;\n    renderSoon();",
+    "replace": "canonicalizeStateNames();\n    setMembersLoaded(true);\n    renderSoon();"
+  },
+  {
+    "declaration": "initFirebase",
+    "find": "canonicalizeStateNames();\n    departmentsLoaded = true;\n    renderSoon();",
+    "replace": "canonicalizeStateNames();\n    setDepartmentsLoaded(true);\n    renderSoon();"
+  },
+  {
+    "declaration": "initFirebase",
+    "find": "      // brand-new database: upload the spreadsheet schedule once\n      state = loadLocal() || seedState();",
+    "replace": "      // brand-new database: upload the spreadsheet schedule once\n      setState(loadLocal() || seedState());"
+  },
+  {
+    "declaration": "initFirebase",
+    "find": "if (!state.services.length) { state = loadLocal() || seedState(); render(); }",
+    "replace": "if (!state.services.length) { setState(loadLocal() || seedState()); render(); }"
+  },
+  {
+    "declaration": "init",
+    "find": "  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});",
+    "replace": "  setNotifyRenderRefs(render, renderBanners);\n  setSheetSyncRefs(findService, render);\n  setSessionRefs(render, pulse);\n  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});"
+  },
+  {
+    "declaration": "init",
+    "find": "state = cached;",
+    "replace": "setState(cached);"
+  },
+  {
+    "declaration": "init",
+    "find": "      addBanner('Firebase config is invalid - running on this device only.', true);\n      state = loadLocal() || seedState();\n      departmentsLoaded = true;\n      membersLoaded = true;\n      authStatus = 'local';",
+    "replace": "      addBanner('Firebase config is invalid - running on this device only.', true);\n      setState(loadLocal() || seedState());\n      setDepartmentsLoaded(true);\n      setMembersLoaded(true);\n      setAuthStatus('local');"
+  },
+  {
+    "declaration": "init",
+    "find": "  } else {\n    state = loadLocal() || seedState();\n    departmentsLoaded = true;\n    membersLoaded = true;\n    authStatus = 'local';\n    saveLocal();",
+    "replace": "  } else {\n    setState(loadLocal() || seedState());\n    setDepartmentsLoaded(true);\n    setMembersLoaded(true);\n    setAuthStatus('local');\n    saveLocal();"
+  },
+  {
+    "declaration": "setVerifiedSession",
+    "find": "  verifiedSession = session;\n  authUser = user || authUser;\n  if (!session) {\n    authStatus = fb ? 'signedOut' : 'local';\n    ui.me = '';\n    ui.loginMember = '';\n    clearDepartmentRuntime();\n    authReady = Promise.resolve(null);\n    return;\n  }\n  authStatus = session.mustChangePin ? 'forced' : 'verified';\n  ui.me = session.mustChangePin ? '' : session.memberName;\n  ui.loginMember = session.memberName;\n  if (session.mustChangePin) {\n    localStorage.removeItem('wds-me');\n  } else {\n    localStorage.setItem('wds-me', session.memberName);\n  }\n  authReady = Promise.resolve(user || null);",
+    "replace": "  setVerifiedSessionRef(session);\n  setAuthUser(user || authUser);\n  if (!session) {\n    setAuthStatus(fb ? 'signedOut' : 'local');\n    ui.me = '';\n    ui.loginMember = '';\n    clearDepartmentRuntime();\n    setAuthReady(Promise.resolve(null));\n    return;\n  }\n  setAuthStatus(session.mustChangePin ? 'forced' : 'verified');\n  ui.me = session.mustChangePin ? '' : session.memberName;\n  ui.loginMember = session.memberName;\n  if (session.mustChangePin) {\n    localStorage.removeItem('wds-me');\n  } else {\n    localStorage.setItem('wds-me', session.memberName);\n  }\n  setAuthReady(Promise.resolve(user || null));"
+  },
+  {
+    "declaration": "startRequestListener",
+    "find": "    requestUnsub();\n    requestUnsub = null;",
+    "replace": "    requestUnsub();\n    setRequestUnsub(null);"
+  },
+  {
+    "declaration": "startRequestListener",
+    "find": "  requestUnsub = fb.onSnapshot(source, snap => {\n    state.requests = snap.docs.map(d => d.data());\n    canonicalizeStateNames();\n    renderSoon();\n  }, () => { /* request access is scoped by the signed-in member claims */ });",
+    "replace": "  setRequestUnsub(fb.onSnapshot(source, snap => {\n    state.requests = snap.docs.map(d => d.data());\n    canonicalizeStateNames();\n    renderSoon();\n  }, () => { /* request access is scoped by the signed-in member claims */ }));"
+  },
+  {
+    "declaration": "syncAuthUser",
+    "find": "  authUser = user || null;",
+    "replace": "  setAuthUser(user || null);"
   }
 ]

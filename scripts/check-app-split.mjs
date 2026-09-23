@@ -57,7 +57,11 @@ function trimTrailingNoise(lines) {
     if (BLOCK_CLOSE_RE.test(line)) {
       let openIndex = -1;
       for (let i = end - 2; i >= 0; i--) {
-        if (lines[i].includes('/*')) { openIndex = i; break; }
+        // The opener must start the line (after indentation): every real block
+        // comment in this codebase is formatted that way. A bare `.includes('/*')`
+        // false-positives on ordinary prose that happens to contain those two
+        // characters in sequence, e.g. "firebase.json's /ics/** rewrite)".
+        if (/^\s*\/\*/.test(lines[i])) { openIndex = i; break; }
         if (lines[i].includes('*/')) break; // an unrelated, already-closed comment: stop rather than misattribute
       }
       if (openIndex !== -1) { end = openIndex; continue; }
@@ -143,7 +147,22 @@ export function applyAllowlist(name, body, allowlist) {
   return out;
 }
 
+// `main` only equals the true pristine baseline until the first section whose
+// allowlist substitution actually lands there. From that point on it drifts:
+// its app.js already contains earlier sections' setter calls, so re-applying
+// the SAME allowlist entries against it (as every later --manifest run does,
+// since entries accumulate and are never pruned) double-applies them and
+// produces false `edited`/`allowlist` failures. A git blob hash is immune to
+// this: it names an exact, content-addressed snapshot that never drifts.
+// Accept either: a commit-ish (existing `<ref>:app.js>` form) or a bare
+// 40-hex blob hash (the frozen baseline app.js is `git show <blob>` on its
+// own, no path suffix). Verify commands should pass the manifest's own
+// recorded `baseline.blob`, not "main", once any allowlist entry exists.
 export function readBaselineSource(root, baselineSha) {
+  if (/^[0-9a-f]{40}$/.test(baselineSha)) {
+    const type = execFileSync('git', ['cat-file', '-t', baselineSha], {cwd: root, encoding: 'utf8'}).trim();
+    if (type === 'blob') return execFileSync('git', ['show', baselineSha], {cwd: root, encoding: 'utf8'});
+  }
   return execFileSync('git', ['show', `${baselineSha}:app.js`], {cwd: root, encoding: 'utf8'});
 }
 

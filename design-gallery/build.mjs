@@ -40,24 +40,28 @@ await fs.rm(dest,{recursive:true,force:true});await fs.mkdir(dest,{recursive:tru
 const baseline=await read('app.js'),baseSongs=await read('song-app.js');
 const upstream={app:hash(baseline),songs:hash(baseSongs),index:hash(await read('index.html'))};
 let host=await read('design-gallery/host-bridge.js');
+// The app.js split (docs/PLAN-2026-09-22-APP-JS-SPLIT.md) moves some of these
+// anchors out of app.js into their own module. Each anchor below is checked
+// against the file that currently holds it, not always app.js.
+const authSrc=await read('core/auth.js').catch(()=>''),sheetSyncSrc=await read('core/sheet-sync.js').catch(()=>'');
 
 /* The gallery is a compiler for the current app, not a second app. Fail
  * before staging when a released host or song interface changes. */
-for(const [needle,label] of [
-  ["'use strict';",'app module header'],
-  ['function renderMemberLogin()','secure member login renderer'],
-  ['function renderForcedPinChange()','forced member PIN renderer'],
-  ['function isVerifiedSession()','verified member session guard'],
-  ['function isForcedSession()','forced PIN session guard'],
-  ['function canManageAnyDepartment()','department Manage permission guard'],
-  ['function selectedManageDepartment()','department Manage selector'],
-  ['function songCtx()','Presider host context'],
-  ['data-act="member-login"','member login action'],
-  ['data-act="member-change-pin"','forced PIN action'],
-  ["choirSong: svc.choirSong || ''",'canonical choir song context'],
-  ['const choirSongSeen = sheetSvc._sheetChoirSongSeen === true','canonical choir song merge'],
-  ['data-field="choirSong"','canonical choir song editor']
-])requireOne(baseline,needle,label);
+for(const [needle,label,source] of [
+  ["'use strict';",'app module header',baseline],
+  ['function renderMemberLogin()','secure member login renderer',baseline],
+  ['function renderForcedPinChange()','forced member PIN renderer',baseline],
+  ['function isVerifiedSession()','verified member session guard',authSrc||baseline],
+  ['function isForcedSession()','forced PIN session guard',authSrc||baseline],
+  ['function canManageAnyDepartment()','department Manage permission guard',authSrc||baseline],
+  ['function selectedManageDepartment()','department Manage selector',authSrc||baseline],
+  ['function songCtx()','Presider host context',baseline],
+  ['data-act="member-login"','member login action',baseline],
+  ['data-act="member-change-pin"','forced PIN action',baseline],
+  ["choirSong: svc.choirSong || ''",'canonical choir song context',baseline],
+  ['const choirSongSeen = sheetSvc._sheetChoirSongSeen === true','canonical choir song merge',sheetSyncSrc||baseline],
+  ['data-field="choirSong"','canonical choir song editor',baseline]
+])requireOne(source,needle,label);
 for(const [needle,label] of [
   ["const TAB_ORDER = ['home', 'library', 'services', 'insights'];",'Presider tracking tab order'],
   ['function renderHomeScopeToggle()','Presider My Services and All Services toggle'],

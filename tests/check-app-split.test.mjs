@@ -205,11 +205,47 @@ test('a private non-exported local with the same name as a baseline declaration 
   fs.rmSync(dir, {recursive: true, force: true});
 });
 
+test('a commit-ish baseline whose own content already has an allowlisted substitution does not double-apply it', () => {
+  // This is exactly what happens once a section merges to main: main's own
+  // app.js already contains the setter call an earlier section's allowlist
+  // entry describes. Using a commit-ish (not a blob hash) as the baseline
+  // re-runs applyAllowlist against text that already has the substitution,
+  // which must not corrupt the comparison for a file untouched since.
+  const app = "'use strict';\n\nfunction useIt() {\n  shared = 1;\n}\n";
+  const {dir, baselineSha} = makeFixture({'app.js': app});
+  // Simulate "main already merged the substitution": the working tree (and,
+  // since this is the same commit, `git show <sha>:app.js` too) already
+  // reads `setShared(1);`, not the raw assignment the allowlist's `find` names.
+  fs.writeFileSync(path.join(dir, 'app.js'), "'use strict';\n\nfunction useIt() {\n  setShared(1);\n}\n");
+  git(dir, ['add', '-A']);
+  git(dir, ['commit', '--quiet', '-m', 'already substituted']);
+  const mergedSha = execFileSync('git', ['rev-parse', 'HEAD'], {cwd: dir, encoding: 'utf8'}).trim();
+  const manifestPath = writeManifest(dir, {moduleOrder: ['app.js'], declarations: {useIt: 'app.js'}});
+  const allowlist = [{declaration: 'useIt', find: 'shared = 1;', replace: 'setShared(1);'}];
+
+  const byBlob = execFileSync('git', ['rev-parse', `${baselineSha}:app.js`], {cwd: dir, encoding: 'utf8'}).trim();
+  const viaBlob = runCheck({root: dir, baselineSha: byBlob, manifestPath, gallery: false, allowlist});
+  assert.deepEqual(viaBlob.failures, [], 'the true original blob applies the substitution once, cleanly');
+
+  const viaCommit = runCheck({root: dir, baselineSha: mergedSha, manifestPath, gallery: false, allowlist});
+  assert.ok(
+    viaCommit.failures.length > 0,
+    'a commit whose own content already has the substitution baked in must not silently pass by double-applying it'
+  );
+  fs.rmSync(dir, {recursive: true, force: true});
+});
+
 test('the current tree passes with its own real allowlist', () => {
   const manifestPath = path.join(repoRoot, 'scripts', 'check-app-split.manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  // Not 'main': once any section's allowlist substitution has actually
+  // landed on main, main's own app.js already contains it, and re-applying
+  // the same allowlist entry against that as a "baseline" double-applies it.
+  // The manifest's own recorded blob is the frozen, content-addressed
+  // original that never drifts; see readBaselineSource's comment.
   const {failures} = runCheck({
     root: repoRoot,
-    baselineSha: 'main',
+    baselineSha: manifest.baseline.blob,
     manifestPath,
     gallery: true,
     allowlist: loadAllowlist(repoRoot)
