@@ -3,14 +3,13 @@
 The web app the LV Zion congregation uses to see worship duty assignments, get
 reminders, plan songs, and manage department rosters.
 
-Last updated: 2026-09-23.
+Last updated: 2026-09-24.
 
 ## Quick links
 
 - **Live app:** https://lv-zion-duties.web.app (share this link with members)
 - **Preview channel (private review before a release):** https://lv-zion-duties--design-gallery-review-rtm2fa8h.web.app (it reads and writes real records, and expires seven days after the last preview publish)
 - **GitHub repo (private):** https://github.com/lovelaceaml-hub/worship-duty-app
-- **Firebase console:** https://console.firebase.google.com/project/lv-zion-duties
 - **App.js split:** [plan](docs/PLAN-2026-09-22-APP-JS-SPLIT.md) and its shipped [module map](docs/CODE-INDEX.md#the-appjs-split-2026-09-22); `app.js` is now an entry script importing modules under `core/`, `views/`, `actions/`, merged with F1-F14's feature work on 2026-09-23.
 - **Handoff (current state, branches, open items):** [docs/HANDOFF.md](docs/HANDOFF.md)
 - **Playbook (run and release the app):** [docs/PLAYBOOK.md](docs/PLAYBOOK.md)
@@ -67,6 +66,18 @@ Warning: the `firestore.rules` file on `main` is older than the live rules
 and must never be deployed. Rules deploy only from the `compact-integration`
 worktree.
 
+## Run the tests
+
+None of these need a passcode, a PIN, or a network connection to live data.
+
+- Unit and contract tests: `node --test tests/*.test.mjs`
+- Identity migration (run for any member identity change): `node --test tests/member-migration.test.mjs`
+- Build the four appearances into one Hosting copy: `node design-gallery/build.mjs`
+- Browser suite for all four appearances (needs `npm ci` for Playwright; on a Mac run it outside the sandbox): `node design-gallery/test.mjs`
+- App.js split check: `node scripts/check-app-split.mjs <baseline-sha>` (see the [split plan](docs/PLAN-2026-09-22-APP-JS-SPLIT.md))
+
+The GitHub workflows in `.github/workflows/` run the gallery build, the permission tests, and the browser checks.
+
 ## How to release (three commands, Anthony runs them)
 
 1. Preview: `node design-gallery/release.mjs --preview` from `main`, then
@@ -94,6 +105,10 @@ Google Sheet import.
 ## Files
 
 - `index.html`: the app shell, the shared header markup, and the Original styles
+- `core/`, `views/`, `actions/`: the app modules that `app.js` loads
+- `member-access.js`, `department-*.js`: member identity, department-leader access, and department workflow helpers used by the browser
+- `live-design/`: the earlier two-choice design candidate, kept frozen as history (the [design gallery README](design-gallery/README.md) is current)
+- `tests/`, `scripts/`: tests and build or release helpers (not deployed)
 - `app.js`: entry script, imports `core/`, `views/`, `actions/dispatch.js` (see [docs/CODE-INDEX.md](docs/CODE-INDEX.md#the-appjs-split-2026-09-22) for the module map)
 - `permissions.js`: who may do what, used by the browser
 - `song-app.js`, `song-lib.js`, `song-seed.js`, `song-app.css`: the Presider song planner, loaded only when opened

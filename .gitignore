@@ -8,3 +8,20 @@ docs/evidence/
 .hosting-gallery/
 .hosting-live/
 design-gallery-results/
+
+# Test and preview output
+live-design-results/
+preview-artifacts/
+coverage/
+test-results/
+playwright-report/
+
+# OS, editor and Python junk
+Thumbs.db
+*~
+*.swp
+*.bak
+*.orig
+__pycache__/
+*.pyc
+.pytest_cache/
