@@ -41,11 +41,13 @@ jobs:
       - name: Apply live app correctness fixes
         run: node design-gallery/app-fixes.mjs
       - name: Verify choir-song date/service sync correction
+        # Since the app.js split, the fix lives in the staged core/ modules
+        # (design-gallery/app-fixes.mjs reads the same two files).
         run: |
-          grep -q "_sheetChoirSongSeen: false" .hosting-gallery/app.js
-          grep -q "svc._sheetChoirSongSeen = true" .hosting-gallery/app.js
-          grep -q "const choirSongSeen = sheetSvc._sheetChoirSongSeen === true" .hosting-gallery/app.js
-          ! grep -q "if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong)" .hosting-gallery/app.js
+          grep -q "_sheetChoirSongSeen: false" .hosting-gallery/core/sheet-parse.js
+          grep -q "svc._sheetChoirSongSeen = true" .hosting-gallery/core/sheet-parse.js
+          grep -q "const choirSongSeen = sheetSvc._sheetChoirSongSeen === true" .hosting-gallery/core/sheet-sync.js
+          ! grep -q "if (sheetSvc.choirSong && existing.choirSong !== sheetSvc.choirSong)" .hosting-gallery/app.js .hosting-gallery/core/sheet-sync.js
       - name: Parse generated JavaScript
         run: |
           node --check .hosting-gallery/app.js
