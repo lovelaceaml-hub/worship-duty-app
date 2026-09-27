@@ -40,7 +40,6 @@
 .aw-my .duty-card .dc-time{font-weight:700;letter-spacing:-.02em}
 .aw-my .duty-card .role .rname{font-size:15px;font-weight:650}
 .aw-my .duty-card .role .req-change{font-weight:600;color:var(--accent)}
-.aw-my .duty-card .who-else .linkish{font-weight:560;text-align:left}
 .aw-my .duty-expand{margin:4px -7px 12px;padding:16px 12px;background:var(--canvas);border:1px solid var(--line);border-radius:12px}
 .aw-my .req-form{background:var(--canvas);padding:15px;border:1px solid var(--line);border-radius:12px;margin:0 0 12px}
 .aw-my .req-form textarea{background:var(--surface);border-color:var(--line);font-size:14px;line-height:1.6}

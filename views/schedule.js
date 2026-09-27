@@ -209,9 +209,9 @@ export function renderMy() {
   }
 
   // Slim day card: a date tile on the left, then two lines per service (time +
-  // worship, then the duty with Request change on the right). Tapping the card
-  // opens its extras (Presider songs, "Who else is serving?"); the full date
-  // stays in `.when` for screen readers and the tile repeats it visually.
+  // worship, then the duty with a Request change icon on the right). Tapping
+  // the card opens its extras (Presider songs and everyone else serving); the
+  // full date stays in `.when` for screen readers and the tile repeats it.
   days.forEach(day => {
     const badge = dateBadge(day.date);
     const dayDate = new Date(day.date + 'T12:00:00');
@@ -243,10 +243,7 @@ export function renderMy() {
           requestChangeForm(d, key);
       });
       if (open && feat('whoElse')) {
-        const wkey = se.id + ':who';
-        html += '<div class="who-else"><button class="linkish" data-act="expand" data-id="' + wkey + '">' +
-          (ui.expanded[wkey] ? 'Hide the others serving' : 'Who else is serving?') + '</button></div>' +
-          (ui.expanded[wkey] ? '<div class="duty-expand">' + renderCatRows(svc, false) + '</div>' : '');
+        html += '<div class="duty-expand">' + renderCatRows(svc, false) + '</div>';
       }
     });
     html += '</div></div>';
