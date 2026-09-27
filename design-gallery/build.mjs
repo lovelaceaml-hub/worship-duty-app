@@ -244,7 +244,11 @@ for(const moduleDir of ['core','views','actions']){
   await fs.mkdir(path.join(dest,moduleDir),{recursive:true});
   for(const entry of entries){
     if(!entry.endsWith('.js'))continue;
-    await fs.copyFile(path.join(root,moduleDir,entry),path.join(dest,moduleDir,entry));
+    // Stamp the module like every other staged file: core/constants.js holds
+    // ASSET_V, the version tag song-app.js and song-app.css load with, and an
+    // unstamped '?v=DEV' there made browsers keep an old immutable song-app.js.
+    const text=await read(path.join(moduleDir,entry));
+    await fs.writeFile(path.join(dest,moduleDir,entry),text.replaceAll('?v=DEV','?v='+stamp));
   }
 }
 await fs.mkdir(path.join(dest,'scripts'),{recursive:true});
@@ -252,7 +256,17 @@ await fs.copyFile(path.join(root,'scripts','guard-gallery-deploy.mjs'),path.join
 let sw=await read('sw.js');sw=once(sw,"const RELEASE = 'DEV';",`const RELEASE = '${stamp}';`,'service-worker stamp');await fs.writeFile(path.join(dest,'sw.js'),sw);
 const config=JSON.parse(await read('firebase.json'));config.hosting.public='.';config.hosting.ignore=['firebase.gallery.json','scripts/**'];
 for(const name of ['design-choice.js','design-choice.css','prism-live.css','navy-live.css','aurora-live.css'])config.hosting.headers.push({source:name,headers:[{key:'Cache-Control',value:'no-cache'}]});
+// The split modules keep their plain URLs (app.js imports './core/format.js'), so browsers must re-check them on every load or a phone can run an old module next to a new app.js.
+for(const moduleDir of ['core','views','actions'])config.hosting.headers.push({source:moduleDir+'/**',headers:[{key:'Cache-Control',value:'no-cache'}]});
 await fs.writeFile(path.join(dest,'firebase.gallery.json'),JSON.stringify(config,null,2));
+// Every staged file must carry this release's stamp; a leftover '?v=DEV' is served under an immutable cache header and never refreshes.
+for(const dir of ['.','core','views','actions']){
+  let entries;try{entries=await fs.readdir(path.join(dest,dir));}catch(error){if(error.code==='ENOENT')continue;throw error;}
+  for(const entry of entries){
+    if(!/\.(js|css|html)$/.test(entry))continue;
+    if((await fs.readFile(path.join(dest,dir,entry),'utf8')).includes('?v=DEV'))throw new Error('Unstamped ?v=DEV left in staged '+path.join(dir,entry));
+  }
+}
 const manifest={release:stamp,design:'appearance-gallery-v1',choices:['classic','prism','navy','aurora'],upstream,builtAt:new Date().toISOString()};
 await fs.writeFile(path.join(dest,'design-gallery-release.json'),JSON.stringify(manifest,null,2));
 console.log('Built '+path.relative(root,dest)+' for Original + Prism + Navy & Cream + Aurora. Not deployed.');
