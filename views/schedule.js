@@ -208,25 +208,33 @@ export function renderMy() {
       '<p class="hint">' + esc(note) + ' Each Presider duty below also has its own button.</p>';
   }
 
+  // Slim day card: a date tile on the left, then one compact line per service
+  // (time + worship) with its duties under it. The full date stays in `.when`
+  // for screen readers; the tile repeats it visually.
   days.forEach(day => {
     const badge = dateBadge(day.date);
+    const dayDate = new Date(day.date + 'T12:00:00');
     html += '<div class="card duty-card" style="--edge:' + day.edge + '">' +
-      '<div class="when">' + esc(fmtDate(day.date)) +
-      (badge ? ' · <b style="color:var(--accent)">' + badge + '</b>' : '') + '</div>';
+      '<div class="dc-date" aria-hidden="true"><b>' + dayDate.getDate() + '</b>' +
+      '<small>' + esc(dayDate.toLocaleDateString(undefined, { weekday: 'short' })) + '</small></div>' +
+      '<div class="dc-body">' +
+      '<div class="when sr-only">' + esc(fmtDate(day.date)) + (badge ? ' · ' + badge : '') + '</div>';
     day.services.forEach((se, si) => {
       const svc = se.svc;
       if (si > 0) html += '<div class="svc-sep"></div>'; // divider between services on the same day
-      html += '<div class="what">' + fmtTime(svc.time) + ' · ' + esc(svc.worship) + ' · ' + esc(svc.service) + '</div>';
+      html += '<div class="what"><span class="dc-time">' + fmtTime(svc.time) + '</span>' +
+        '<span class="dc-worship">' + esc(svc.worship) + '</span>' +
+        (si === 0 && badge ? '<span class="dc-badge" aria-hidden="true">' + badge + '</span>' : '') + '</div>';
       se.duties.forEach(d => {
         const key = se.id + ':' + d.duty;
         html += '<div class="role"><span class="dot-c" style="background:' + d.cat.color + '"></span>' +
           '<span class="rname">' + esc(d.duty) + '</span>' +
-          (feat('songPicker') && d.duty === 'Presider'
-            ? songStateTag(se.id) +
-              '<button class="linkish" data-act="open-songs" data-svc="' + esc(se.id) + '">' +
-              (songStateFor(se.id) && songStateFor(se.id).count ? 'Open songs' : 'Pick songs') + '</button>'
-            : '') +
           requestChangeTrigger(d, key) + '</div>' +
+          (feat('songPicker') && d.duty === 'Presider'
+            ? '<div class="dc-extra">' + songStateTag(se.id) +
+              '<button class="linkish" data-act="open-songs" data-svc="' + esc(se.id) + '">' +
+              (songStateFor(se.id) && songStateFor(se.id).count ? 'Open songs' : 'Pick songs') + '</button></div>'
+            : '') +
           requestChangeForm(d, key);
       });
       if (feat('whoElse')) {
@@ -236,7 +244,7 @@ export function renderMy() {
           (ui.expanded[wkey] ? '<div class="duty-expand">' + renderCatRows(svc, false) + '</div>' : '');
       }
     });
-    html += '</div>';
+    html += '</div></div>';
   });
   html += renderYourRequests();
   return html;
