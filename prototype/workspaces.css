@@ -34,16 +34,13 @@
 .aw-my .me-picker{border:0;box-shadow:none;border-radius:0;background:none;display:block;padding:0;margin:0}
 .aw-my .me-picker label{font-size:12px;color:var(--muted);margin:0 0 7px;font-weight:520}
 .aw-my .me-picker select{max-width:none;min-height:46px;font-size:14px;background:var(--canvas)}
-.aw-my .duty-card{padding:0 24px 14px;overflow:hidden;border-radius:17px;margin:0 0 20px}
-.aw-my .duty-card::before{width:4px}
-.aw-my .duty-card .when{margin:0 -24px 15px;padding:14px 24px;background:var(--canvas);border-bottom:1px solid var(--line);font-size:13px;font-weight:650;letter-spacing:.01em;color:var(--ink)}
-.aw-my .duty-card .what{font-size:17px;font-weight:650;letter-spacing:-.025em;line-height:1.5;margin-bottom:10px}
-.aw-my .duty-card .role{padding:12px 0;gap:8px 12px;border-top:1px solid var(--hairline);font-size:14px;margin:0}
+.aw-my .duty-card{border-radius:17px;margin:0 0 12px}
+.aw-my .duty-card .dc-date{border-radius:14px}
+.aw-my .duty-card .dc-body{border-left-color:var(--line)}
+.aw-my .duty-card .dc-time{font-weight:700;letter-spacing:-.02em}
 .aw-my .duty-card .role .rname{font-size:15px;font-weight:650}
-.aw-my .duty-card .role .linkish{font-size:13px;min-height:36px}
-.aw-my .duty-card .who-else{border-top:1px solid var(--hairline);padding-top:4px;margin-top:2px}
-.aw-my .duty-card .who-else .linkish{font-size:12px;font-weight:560;min-height:40px;text-align:left}
-.aw-my .svc-sep{margin:12px -24px 16px;padding:0;height:5px;background:var(--canvas);border:0}
+.aw-my .duty-card .role .req-change{font-weight:600;color:var(--accent)}
+.aw-my .duty-card .who-else .linkish{font-weight:560;text-align:left}
 .aw-my .duty-expand{margin:4px -7px 12px;padding:16px 12px;background:var(--canvas);border:1px solid var(--line);border-radius:12px}
 .aw-my .req-form{background:var(--canvas);padding:15px;border:1px solid var(--line);border-radius:12px;margin:0 0 12px}
 .aw-my .req-form textarea{background:var(--surface);border-color:var(--line);font-size:14px;line-height:1.6}
@@ -299,7 +296,6 @@ body.dark .aw-stat:nth-child(3) .aw-stat-icon{background:#423d37;color:#e6c29b}
 body.dark .aw-song-cta{background:linear-gradient(132deg,#353653,#292c43);border-color:#504d6c}
 body.dark .aw-song-cta h3,body.dark #song-root .aw-song-cta h3{color:#ebe5ff}
 body.dark .aw-song-cta .overline{color:#cbc0e8}
-body.dark .aw-my .duty-card .when{background:#29324c}
 body.dark .aw-manage .aw-editor-open,body.dark .aw-dept-option:has(input:checked){border-color:#626fa6}
 body.dark .aw-manage .data-actions>.aw-connection{border-color:#53628b}
 body.dark #song-root .aw-hero-action{background:#eef0ff;color:#263057}
@@ -355,10 +351,8 @@ body.dark #song-root .status-pill.sung{background:#28483e;color:#b0e2cc}
  .aw-personal-grid{gap:20px}.aw-personal-aside,.aw-presider-aside{display:flex;flex-direction:column;gap:17px}.aw-personal-aside>*{width:100%}
  .aw-my .aw-identity{display:block}.aw-my .aw-identity .aw-panel-title{margin-bottom:17px}.aw-my .aw-identity .me-picker{min-width:0}
  .aw-my .me-picker select{font-size:16px}
- .aw-my .duty-card{padding:0 18px 12px;border-radius:15px}.aw-my .duty-card .when{padding:13px 18px;margin:0 -18px 14px;font-size:12px}
- .aw-my .duty-card .what{font-size:16px;line-height:1.65}.aw-my .duty-card .role{gap:7px 10px}.aw-my .duty-card .role .rname{flex:1 1 calc(100% - 23px);font-size:15px}
- .aw-my .duty-card .role .linkish{font-size:12px;min-height:44px}.aw-my .duty-card .who-else .linkish{min-height:44px}
- .aw-my .svc-sep{margin:12px -18px 14px}.aw-my .req-form{padding:13px}.aw-my .req-form textarea{font-size:16px}
+ .aw-my .duty-card{border-radius:15px}.aw-my .duty-card .dc-date{border-radius:12px}
+ .aw-my .req-form{padding:13px}.aw-my .req-form textarea{font-size:16px}
  .aw-my .notify-box button{font-size:13px}.aw-my .aw-song-cta h3{font-size:24px}.aw-my .notify-box+.hint{font-size:12px}
  .aw-manage-stats{margin-bottom:19px}.aw-manage .aw-manage-tabs{margin-bottom:21px;border-radius:11px;gap:3px}.aw-manage .aw-manage-tabs button{font-size:12px;padding:10px 13px;min-height:44px}
  .aw-manage .aw-create{padding:18px}.aw-create .aw-panel-title{flex-wrap:wrap;gap:8px}.aw-panel-title .aw-chip{font-size:9px}

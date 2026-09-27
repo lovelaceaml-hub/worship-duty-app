@@ -208,35 +208,48 @@ export function renderMy() {
       '<p class="hint">' + esc(note) + ' Each Presider duty below also has its own button.</p>';
   }
 
+  // Slim day card: a date tile on the left, then two lines per service (time +
+  // worship, then the duty with Request change on the right). Tapping the card
+  // opens its extras (Presider songs, "Who else is serving?"); the full date
+  // stays in `.when` for screen readers and the tile repeats it visually.
   days.forEach(day => {
     const badge = dateBadge(day.date);
-    html += '<div class="card duty-card" style="--edge:' + day.edge + '">' +
-      '<div class="when">' + esc(fmtDate(day.date)) +
-      (badge ? ' · <b style="color:var(--accent)">' + badge + '</b>' : '') + '</div>';
+    const dayDate = new Date(day.date + 'T12:00:00');
+    const dkey = 'day:' + day.date;
+    const open = !!ui.expanded[dkey];
+    html += '<div class="card duty-card' + (open ? ' open' : '') + '" style="--edge:' + day.edge + '">' +
+      '<button type="button" class="dc-toggle" data-act="expand" data-id="' + esc(dkey) + '" aria-expanded="' + open + '">' +
+      '<span class="sr-only">' + (open ? 'Hide details for ' : 'Show details for ') + esc(fmtDate(day.date)) + '</span></button>' +
+      '<div class="dc-date" aria-hidden="true"><b>' + dayDate.getDate() + '</b>' +
+      '<small>' + esc(dayDate.toLocaleDateString(undefined, { weekday: 'short' })) + '</small></div>' +
+      '<div class="dc-body">' +
+      '<div class="when sr-only">' + esc(fmtDate(day.date)) + (badge ? ' · ' + badge : '') + '</div>';
     day.services.forEach((se, si) => {
       const svc = se.svc;
       if (si > 0) html += '<div class="svc-sep"></div>'; // divider between services on the same day
-      html += '<div class="what">' + fmtTime(svc.time) + ' · ' + esc(svc.worship) + ' · ' + esc(svc.service) + '</div>';
+      html += '<div class="what"><span class="dc-time">' + fmtTime(svc.time) + '</span>' +
+        '<span class="dc-worship">' + esc(svc.worship) + '</span>' +
+        (si === 0 && badge ? '<span class="dc-badge" aria-hidden="true">' + badge + '</span>' : '') + '</div>';
       se.duties.forEach(d => {
         const key = se.id + ':' + d.duty;
         html += '<div class="role"><span class="dot-c" style="background:' + d.cat.color + '"></span>' +
           '<span class="rname">' + esc(d.duty) + '</span>' +
-          (feat('songPicker') && d.duty === 'Presider'
-            ? songStateTag(se.id) +
-              '<button class="linkish" data-act="open-songs" data-svc="' + esc(se.id) + '">' +
-              (songStateFor(se.id) && songStateFor(se.id).count ? 'Open songs' : 'Pick songs') + '</button>'
-            : '') +
           requestChangeTrigger(d, key) + '</div>' +
+          (open && feat('songPicker') && d.duty === 'Presider'
+            ? '<div class="dc-extra">' + songStateTag(se.id) +
+              '<button class="linkish" data-act="open-songs" data-svc="' + esc(se.id) + '">' +
+              (songStateFor(se.id) && songStateFor(se.id).count ? 'Open songs' : 'Pick songs') + '</button></div>'
+            : '') +
           requestChangeForm(d, key);
       });
-      if (feat('whoElse')) {
+      if (open && feat('whoElse')) {
         const wkey = se.id + ':who';
         html += '<div class="who-else"><button class="linkish" data-act="expand" data-id="' + wkey + '">' +
           (ui.expanded[wkey] ? 'Hide the others serving' : 'Who else is serving?') + '</button></div>' +
           (ui.expanded[wkey] ? '<div class="duty-expand">' + renderCatRows(svc, false) + '</div>' : '');
       }
     });
-    html += '</div>';
+    html += '</div></div>';
   });
   html += renderYourRequests();
   return html;
