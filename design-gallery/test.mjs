@@ -567,8 +567,13 @@ async function navigate(page, tab) {
 // click that gets intercepted by a dialog that (re)appeared in that window.
 async function closeDesignDialog(page) {
   await page.keyboard.press('Escape');
-  await page.locator('.wd-design-dialog[open]').evaluateAll(dialogs => dialogs.forEach(dialog => dialog.close()));
-  await page.waitForFunction(() => !document.querySelector('.wd-design-dialog'));
+  // Close on every poll, not just once: on a slow runner the invitation's
+  // delayed timer can open a fresh dialog after the first close, and nothing
+  // else would ever close it.
+  await page.waitForFunction(() => {
+    document.querySelectorAll('.wd-design-dialog[open]').forEach(dialog => dialog.close());
+    return !document.querySelector('.wd-design-dialog');
+  });
 }
 
 async function clickThroughDesignDialog(page, selector, {attempts = 4} = {}) {
