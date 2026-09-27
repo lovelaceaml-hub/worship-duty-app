@@ -189,6 +189,11 @@
 #song-root .status-pill.sung { color: #fff; background: var(--ok); }
 #song-root .status-pill.confirmed { color: #fff; background: var(--ok); }
 #song-root .status-pill.none { color: var(--muted); background: var(--hairline); }
+#song-root .presider-chip { flex: 0 0 auto; max-width: 11em; overflow: hidden; text-overflow: ellipsis; padding: 3px 11px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+#song-root .song-state { font-weight: 650; }
+#song-root .song-state.planned { color: var(--accent); }
+#song-root .song-state.confirmed, #song-root .song-state.sung { color: var(--ok); }
+#song-root .song-state.none { color: var(--muted); font-weight: 500; }
 
 /* ---- "these are my songs" confirmation ---- */
 #song-root .confirm-box {
@@ -257,9 +262,9 @@
   background: rgba(245, 247, 249, 0.78); border-color: rgba(140, 154, 164, 0.34);
 }
 #song-root .svc-card.other-presider .svc-title,
-#song-root .svc-card.other-presider .presider-meta,
 #song-root .svc-card.other-presider .svc-roles,
 #song-root .svc-card.other-presider .svc-meta { color: var(--muted); }
+#song-root .svc-card.other-presider .presider-chip { background: var(--hairline); color: var(--muted); }
 #song-root .svc-card.other-presider .duty-row .pill,
 #song-root .svc-card.other-presider .svc-song .s-title { color: var(--muted); }
 #song-root .readonly-note { color: var(--muted); font-size: 13px; font-weight: 600; }

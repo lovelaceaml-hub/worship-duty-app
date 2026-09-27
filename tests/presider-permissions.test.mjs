@@ -145,7 +145,7 @@ assert.equal(countActions(mineRoot.innerHTML, 'undo-sung'), 0, 'planned service 
 
 click(mineRoot, 'home-scope', { scope: 'all' });
 assert.match(mineRoot.innerHTML, /Evening/);
-assert.match(mineRoot.innerHTML, /Presider: D\. Chris/);
+assert.match(mineRoot.innerHTML, /class="presider-chip"><span class="sr-only">Presider: <\/span>D\. Chris</);
 assert.match(mineRoot.innerHTML, /other-presider/);
 assert.doesNotMatch(mineRoot.innerHTML, /Not your service/i);
 assert.equal(countActions(mineRoot.innerHTML, 'build-for'), 3, 'choir-song editor can edit all services');
@@ -182,7 +182,7 @@ assert.equal(countActions(leaderRoot.innerHTML, 'build-for'), 0, 'Worship permis
 assert.equal(countActions(leaderRoot.innerHTML, 'mark-sung'), 0, 'Worship permission alone does not grant mark-sung');
 assert.equal(countActions(leaderRoot.innerHTML, 'delete-setlist'), 0, 'Worship permission alone does not grant delete');
 assert.match(leaderRoot.innerHTML, /other-presider/);
-assert.match(leaderRoot.innerHTML, /Presider: B\. Brent/);
+assert.match(leaderRoot.innerHTML, /class="presider-chip"><span class="sr-only">Presider: <\/span>B\. Brent</);
 
 const injectedRoot = new FakeRoot();
 await mount(injectedRoot, {

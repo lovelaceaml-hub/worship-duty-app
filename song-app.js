@@ -458,6 +458,15 @@ function statusPill(sl) {
   const st = songStatus(sl);
   return '<span class="status-pill ' + st.cls + '">' + st.label + '</span>';
 }
+/* Home and Services cards show who presides in the top-right corner and move
+   the song status down beside the song count as a small word. */
+function presiderChip(pres) {
+  return pres ? '<span class="presider-chip"><span class="sr-only">Presider: </span>' + esc(pres) + '</span>' : '';
+}
+function songStateNote(sl) {
+  const st = songStatus(sl);
+  return '<span class="song-state ' + st.cls + '">' + st.label + '</span>';
+}
 
 /* ================= builder helpers ================= */
 
@@ -1538,10 +1547,10 @@ function renderScheduleCard(entry, opts) {
   return '<div class="card svc-card' + (mine ? '' : ' other-presider') + '">' +
     '<div class="card-head">' +
       '<span class="svc-title">' + esc(entry.worship || WORSHIP_TYPES[0]) + ' <small>· ' + esc(entry.service) + '</small></span>' +
-      statusPill(state.setlists[id]) +
+      presiderChip(pres) +
     '</div>' +
     '<div class="svc-meta"><span>' + esc(fmtDate(entry.date)) + (badge ? ' · ' + badge : '') + '</span>' +
-      (pres ? '<span class="presider-meta">Presider: ' + esc(pres) + '</span>' : '') + '</div>' +
+      songStateNote(state.setlists[id]) + '</div>' +
     renderRoles(entry) +
     '<div class="svc-actions">' +
     (today ? '<button class="primary sm" data-song-act="runsheet" data-id="' + esc(id) + '">Runsheet</button>' : '') +
@@ -1613,13 +1622,12 @@ function renderServiceCard(sl, opts) {
       '<span class="svc-title">' + esc(sl.worshipType) + ' <small>· ' + esc(sl.serviceLabel) + '</small></span>' +
       '<span style="display:flex;align-items:center;gap:6px">' +
         (sl.source === 'signal' ? '<span class="src-chip">from Signal</span>' : '') +
-        statusPill(sl) +
+        presiderChip(pres) +
       '</span>' +
     '</div>' +
     '<div class="svc-meta">' +
       '<span>' + esc(fmtDate(sl.date)) + (badge ? ' · ' + badge : '') + '</span>' +
-      (pres ? '<span class="presider-meta">Presider: ' + esc(pres) + '</span>' : '') +
-      '<span class="tnum">' + songs.length + ' song' + (songs.length === 1 ? '' : 's') + '</span>' +
+      '<span class="tnum">' + (songs.length ? songs.length + ' song' + (songs.length === 1 ? '' : 's') + ' · ' : '') + songStateNote(sl) + '</span>' +
       '<span class="tnum">' + fmtDur(total) + '</span>' +
     '</div>';
   if (sched) html += renderRoles(sched);
