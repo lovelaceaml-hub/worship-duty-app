@@ -1,12 +1,13 @@
 import {CATEGORIES} from './constants.js';
-import {todayISO} from './format.js';
 import {state} from './state.js';
 
 export function sortedServices() {
   return state.services.slice().sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
 }
-export function upcomingServices() { const t = todayISO(); return sortedServices().filter(s => s.date >= t); }
-export function pastServices() { const t = todayISO(); return sortedServices().filter(s => s.date < t); }
+/* A service stops being upcoming at its Pacific start minute, not at midnight,
+   and moves to the past list then (servicesNotStarted, below). */
+export function upcomingServices() { return servicesNotStarted(); }
+export function pastServices() { const up = new Set(upcomingServices()); return sortedServices().filter(s => !up.has(s)); }
 export function pacificWallNow(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -37,7 +38,7 @@ export function servicesNotStarted(services, now = new Date()) {
 }
 export function dutiesFor(member, list) {
   const out = [];
-  (list || servicesNotStarted()).forEach(svc => {
+  (list || upcomingServices()).forEach(svc => {
     CATEGORIES.forEach(cat => cat.duties.forEach(duty => {
       if ((svc.assignments || {})[duty] === member) out.push({ svc, duty, cat });
     }));

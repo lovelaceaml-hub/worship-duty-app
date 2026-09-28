@@ -160,8 +160,13 @@
     "replace": "  const ordered = (services || []).filter(service => Number.isFinite(serviceStartWall(service)))\n    .sort((left, right) => serviceStartWall(left) - serviceStartWall(right));\n  return ordered.find(service => serviceStartWall(service) > wallNow) || ordered.at(-1) || null;"
   },
   {
-    "declaration": "dutiesFor",
-    "find": "(list || upcomingServices()).forEach",
-    "replace": "(list || servicesNotStarted()).forEach"
+    "declaration": "upcomingServices",
+    "find": "{ const t = todayISO(); return sortedServices().filter(s => s.date >= t); }",
+    "replace": "{ return servicesNotStarted(); }"
+  },
+  {
+    "declaration": "pastServices",
+    "find": "{ const t = todayISO(); return sortedServices().filter(s => s.date < t); }",
+    "replace": "{ const up = new Set(upcomingServices()); return sortedServices().filter(s => !up.has(s)); }"
   }
 ]
