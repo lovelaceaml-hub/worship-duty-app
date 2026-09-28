@@ -477,7 +477,9 @@ async function make({member = '', forcedMember = '', retainMaintenance = false} 
   const page = await context.newPage();
   page.setDefaultTimeout(12000);
   page.on('pageerror', error => report.errors.push(String(error)));
-  await page.clock.setSystemTime(new Date('2026-07-01T12:00:00-07:00'));
+  // 8:00 AM Pacific, before the fixture's 9:00 AM service, so B. Anthony's duties
+  // there are still upcoming (a duty stops being upcoming at its start minute).
+  await page.clock.setSystemTime(new Date('2026-07-01T08:00:00-07:00'));
   await page.goto(origin);
   await page.waitForFunction(() => !!window.__mockLive);
   await page.evaluate(() => {
