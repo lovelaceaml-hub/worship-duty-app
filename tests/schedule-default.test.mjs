@@ -33,6 +33,8 @@ assert.ok(start !== -1 && end > start, 'shared Schedule selector exists next to 
 const slice = source.slice(start, end).replace(/^export\s+/gm, '');
 assert.ok(slice.includes('function preferredScheduleService('), 'selector lives between pacificWallNow and dutiesFor');
 const preferred = runInNewContext(slice + '\npreferredScheduleService;', {Intl, Date});
+assert.ok(slice.includes('function servicesNotStarted('), 'My Duties filter lives next to the selector');
+const notStarted = runInNewContext(slice + '\nservicesNotStarted;', {Intl, Date});
 
 // 2026-09-14 is in Pacific Daylight Time (UTC minus 7).
 const pacific = (date, time) => new Date(date + 'T' + time + ':00-07:00');
@@ -97,4 +99,18 @@ test('a service without a time falls back to its label default, and bad rows are
   ];
   assert.equal(preferred(list, pacific('2026-09-14', '19:59')).service, 'Evening');
   assert.equal(preferred([], pacific('2026-09-14', '19:59')), null);
+});
+
+// My Duties, the "next duty" cards and reminders read dutiesFor(), whose default list
+// is servicesNotStarted(). A duty stops being upcoming at its start minute, not at midnight.
+test('9:00 PM Pacific: the finished 5:00 AM and 7:30 PM duties are no longer upcoming', () => {
+  const left = notStarted(earlyAndEvening, pacific('2026-09-14', '21:00'));
+  assert.deepEqual(left.map(s => s.date + ' ' + s.time), ['2026-09-15 09:00']);
+});
+
+test('upcoming duties use the same start-minute boundary as the Schedule selector', () => {
+  assert.deepEqual(notStarted(earlyAndEvening, pacific('2026-09-14', '04:59')).length, 3);
+  assert.deepEqual(notStarted(earlyAndEvening, pacific('2026-09-14', '05:00')).map(s => s.service), ['Evening', 'Morning']);
+  assert.deepEqual(notStarted(earlyAndEvening, pacific('2026-09-14', '19:29')).map(s => s.service), ['Evening', 'Morning']);
+  assert.deepEqual(notStarted(earlyAndEvening, pacific('2026-09-14', '19:31')).map(s => s.service), ['Morning']);
 });
