@@ -92,9 +92,18 @@ jobs:
         env:
           DEPLOY_GUARD_MODE: release
         run: |
+          set -o pipefail
           export REAL_NPX="$(command -v npx)"
           chmod +x .github/scripts/npx-guard/npx
-          PATH="$GITHUB_WORKSPACE/.github/scripts/npx-guard:$PATH" node design-gallery/release.mjs --publish
+          # Keep the output: firebase-tools only warns if it cannot resolve the
+          # ics function, and would then publish a broken /ics/** rewrite.
+          rc=0
+          PATH="$GITHUB_WORKSPACE/.github/scripts/npx-guard:$PATH" \
+            node design-gallery/release.mjs --publish 2>&1 | tee "$RUNNER_TEMP/deploy.log" || rc=$?
+          bash .github/scripts/deploy-guard.sh release-result "$rc" "$RUNNER_TEMP/deploy.log"
+
+      - name: Read-only check, the live calendar feed still answers
+        run: bash .github/scripts/deploy-guard.sh ics-live
 
       - name: Remove deploy credentials
         if: always()

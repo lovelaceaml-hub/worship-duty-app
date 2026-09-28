@@ -21,7 +21,15 @@
 #       Print the preview channel id for a branch.
 #   deploy-guard.sh config <path to firebase.gallery.json>
 #       Check the generated Hosting config names exactly one site,
-#       lv-zion-duties.
+#       lv-zion-duties, keeps the one reviewed predeploy hook, and has no
+#       postdeploy, pinTag, source or frameworksBackend (hooks run outside
+#       the npx guard, and the other keys change what a Hosting deploy does).
+#   deploy-guard.sh release-result <exit code> <release log>
+#       After release.mjs --publish: fail loudly, with the rollback steps, if
+#       firebase-tools could not resolve the ics function for /ics/**.
+#   deploy-guard.sh ics-live
+#       Read-only GET of the documented calendar feed on the live site after a
+#       release; fails unless it answers 200 with a calendar.
 #
 # Exit 0 means allowed. Anything else prints BLOCKED and exits 1.
 set -euo pipefail
@@ -31,6 +39,13 @@ PROJECT="lv-zion-duties"
 # release.mjs through WDS_FIREBASE_TOOLS.
 FIREBASE_TOOLS="firebase-tools@15"
 SITE="lv-zion-duties"
+# The one reviewed Hosting predeploy hook (firebase.json on main, 2026-09-28).
+PREDEPLOY="node scripts/guard-gallery-deploy.mjs"
+LIVE_URL="https://lv-zion-duties.web.app"
+# The example feed the ics function documents in its own usage message
+# (functions/index.js: "e.g. /ics/B.%20Anthony"). Public by design.
+ICS_CHECK_PATH="/ics/B.%20Anthony"
+ROLLBACK="Roll back now: open https://console.firebase.google.com/project/lv-zion-duties/hosting/sites/lv-zion-duties , find Release history, and choose Rollback on the release before this one."
 ROOT="${GUARD_REPO_ROOT:-$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)}"
 CONFIG="$ROOT/.hosting-gallery/firebase.gallery.json"
 CHANNEL_RE='^[a-z0-9]([a-z0-9-]{0,34}[a-z0-9])?$'
@@ -124,12 +139,16 @@ check_config() {
   node -e '
     const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
     const h = c.hosting;
-    if (!h || Array.isArray(h) || h.site !== process.argv[2]) {
-      console.error("BLOCKED: the generated Hosting config must name exactly one site, " + process.argv[2] + ".");
-      process.exit(1);
+    const fail = m => { console.error("BLOCKED: " + m); process.exit(1); };
+    if (!h || Array.isArray(h) || h.site !== process.argv[2]) fail("the generated Hosting config must name exactly one site, " + process.argv[2] + ".");
+    // Hooks run as plain shell commands outside the npx guard, so only the
+    // one reviewed predeploy hook may be present, exactly as it is on main.
+    if (h.predeploy !== process.argv[3]) fail("hosting.predeploy must be exactly " + JSON.stringify(process.argv[3]) + " (found " + JSON.stringify(h.predeploy) + "). Review the change, then update PREDEPLOY in .github/scripts/deploy-guard.sh.");
+    for (const k of ["postdeploy", "pinTag", "source", "frameworksBackend"]) {
+      if (Object.prototype.hasOwnProperty.call(h, k)) fail("the generated Hosting config must not set hosting." + k + " (hooks and framework or pinned-Functions options change what a Hosting deploy does).");
     }
-    console.log("Guard: generated Hosting config targets only site " + h.site + ".");
-  ' "$f" "$SITE"
+    console.log("Guard: generated Hosting config targets only site " + h.site + ", with only the reviewed predeploy hook.");
+  ' "$f" "$SITE" "$PREDEPLOY"
 }
 
 # Before any deploy: the deploy account must be able to list this project's
@@ -146,6 +165,58 @@ ics_preflight() {
       if (!ics) { console.error("BLOCKED: the 2nd gen ics function was not found in the function list, so the /ics/** rewrite would break. Nothing deployed."); process.exit(1); }
       console.log("Guard: ics function visible (" + ics.platform + ", " + ics.region + ").");
     });'
+}
+
+# After release.mjs --publish. firebase-tools only WARNS when it cannot find
+# the function behind a rewrite and then publishes a 1st gen style /ics/**
+# rewrite that does not reach the 2nd gen ics service (deploy/hosting/
+# convertConfig.js), so a green run could ship broken calendar links.
+release_result() {
+  local rc="${1:-}" log="${2:-}" summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
+  [[ "$rc" =~ ^[0-9]+$ ]] || block "release-result needs the release exit code (got '$rc')."
+  [ -n "$log" ] && [ -f "$log" ] || block "release log '$log' not found."
+  local plain
+  # firebase-tools colours its output in CI; strip the colour codes first.
+  plain="$(perl -pe 's/\e\[[0-9;]*m//g' "$log")"
+  if grep -qF "Unable to find a valid endpoint for function" <<<"$plain"; then
+    {
+      echo "### Release result: the live site's calendar links may be broken"
+      echo ""
+      echo "firebase-tools could not find the \`ics\` function while publishing, so the live /ics/** rewrite may no longer reach it and members' calendar feeds may fail."
+      echo ""
+      echo "$ROLLBACK"
+      echo ""
+      echo "Then check that the deploy account can list Cloud Functions in lv-zion-duties before releasing again."
+    } | tee -a "$summary"
+    echo "::error::firebase-tools could not resolve the ics function, so the live /ics/** rewrite may be broken. $ROLLBACK"
+    exit 1
+  fi
+  if [ "$rc" -ne 0 ]; then
+    echo "::error::release.mjs --publish failed (exit $rc). Read this step's log; if the live site changed and looks wrong: $ROLLBACK"
+    exit "$rc"
+  fi
+  echo "Guard: the release log shows the /ics/** rewrite resolved to the ics function."
+}
+
+# Read-only: the documented calendar feed on the live site must answer 200
+# with a calendar. The body is discarded (never printed or kept).
+ics_live() {
+  local url="$LIVE_URL$ICS_CHECK_PATH?release-check=${GITHUB_RUN_ID:-local}" out code type
+  out="$(curl -s -o /dev/null --max-time 30 -w '%{http_code} %{content_type}' "$url" || true)"
+  code="${out%% *}"; type="${out#* }"
+  if [ "$code" != "200" ] || [[ "$type" != text/calendar* ]]; then
+    local summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
+    {
+      echo "### Release check: the live calendar feed did not answer"
+      echo ""
+      echo "GET $LIVE_URL$ICS_CHECK_PATH returned HTTP $code ($type) instead of 200 with a calendar."
+      echo ""
+      echo "$ROLLBACK"
+    } | tee -a "$summary"
+    echo "::error::The live calendar feed $LIVE_URL$ICS_CHECK_PATH returned HTTP $code ($type). $ROLLBACK"
+    exit 1
+  fi
+  echo "Guard: live calendar feed $LIVE_URL$ICS_CHECK_PATH answered HTTP 200 ($type)."
 }
 
 # Preview channel id for a branch: sanitized name (at most 20 characters) plus
@@ -166,5 +237,7 @@ case "${1:-}" in
   ics-preflight) ics_preflight ;;
   command) shift; check_command "$@" ;;
   config) shift; check_config "$@" ;;
-  *) block "usage: deploy-guard.sh source | ics-preflight | channel <branch> | command <preview|release> <args...> | config <file>" ;;
+  release-result) shift; release_result "$@" ;;
+  ics-live) ics_live ;;
+  *) block "usage: deploy-guard.sh source | ics-preflight | channel <branch> | command <preview|release> <args...> | config <file> | release-result <exit code> <log> | ics-live" ;;
 esac
