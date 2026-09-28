@@ -8,7 +8,19 @@ import {applyStagedAppFixes} from './app-fixes.mjs';
 await applyStagedAppFixes(dest);
 
 const args=process.argv.slice(2),allowed=new Set(['--publish','--preview']);
-if(args.some(a=>!allowed.has(a))||args.length>1)throw Error('Use no argument to build, --preview for a temporary Firebase channel, or --publish for the existing live site.');
+// Optional "--preview --channel <id>": GitHub Actions gives each pushed branch its
+// own preview channel so a branch push never replaces the design-gallery-review
+// channel Anthony approves features on. Without --channel, --preview behaves
+// exactly as before.
+let previewChannel='design-gallery-review';
+const channelAt=args.indexOf('--channel');
+if(channelAt!==-1){
+  previewChannel=String(args[channelAt+1]||'');
+  args.splice(channelAt,2);
+  if(!args.includes('--preview'))throw Error('--channel is only allowed together with --preview. Nothing deployed.');
+  if(!/^[a-z0-9](?:[a-z0-9-]{0,34}[a-z0-9])?$/.test(previewChannel)||previewChannel==='live'||previewChannel==='design-gallery-review')throw Error('--channel needs a lowercase preview channel id (letters, digits and hyphens, at most 36 characters) that is not "live" or "design-gallery-review". Nothing deployed.');
+}
+if(args.some(a=>!allowed.has(a))||args.length>1)throw Error('Use no argument to build, --preview (optionally with --channel <id>) for a temporary Firebase channel, or --publish for the existing live site.');
 if(!args.length){console.log('Built with choir date/service sync fix. Not deployed. Re-run with --preview or --publish from an authenticated Firebase environment.');process.exit(0);}
 const origin='https://lv-zion-duties.web.app';
 const normalizeApp=s=>String(s).replace(/\?v=[A-Za-z0-9]+/g,'?v=DEV');
@@ -125,8 +137,12 @@ if(args.includes('--publish')){
   console.log('Compatible current live release:',c.kind+(c.commit?' @ '+c.commit.slice(0,12):''));
 }
 const command=process.platform==='win32'?'npx.cmd':'npx';
-const firebase=['--yes','firebase-tools'];
-const releaseArgs=args.includes('--publish')?['deploy','--only','hosting']:['hosting:channel:deploy','design-gallery-review','--expires','7d'];
+// Optional WDS_FIREBASE_TOOLS pins the Firebase CLI version (GitHub Actions sets
+// firebase-tools@15). Unset, the command is exactly as before.
+const firebaseTools=process.env.WDS_FIREBASE_TOOLS||'firebase-tools';
+if(!/^firebase-tools(@\d+(\.\d+){0,2})?$/.test(firebaseTools))throw Error('WDS_FIREBASE_TOOLS must be firebase-tools or firebase-tools@<version>. Nothing deployed.');
+const firebase=['--yes',firebaseTools];
+const releaseArgs=args.includes('--publish')?['deploy','--only','hosting']:['hosting:channel:deploy',previewChannel,'--expires','7d'];
 console.log('Deploying hosting assets only. No functions, security rules, account settings or schedule records are deployed.');
 const result=spawnSync(command,[...firebase,...releaseArgs,'--config',path.join(dest,'firebase.gallery.json'),'--project','lv-zion-duties'],{
   cwd:root,
