@@ -57,6 +57,27 @@ reference material. For day-to-day operation and releases see
 6. Write a record in `docs/runs/keep-look-features/`. The coordinator adds the
    Build log entry.
 
+### Releasing from a cloud session (added 2026-09-28, PR #20)
+
+PR #20 (https://github.com/lovelaceaml-hub/worship-duty-app/pull/20) adds two GitHub
+Actions workflows, both through `design-gallery/release.mjs`:
+
+- Pushing any branch except `main` publishes that branch to its own 7-day preview
+  channel and prints the link in the Actions run summary. It never touches
+  `design-gallery-review`, which stays Anthony's manual approval channel. Real
+  records: look, do not tap.
+- Production runs only when Anthony says to release Worship Duty, or when he
+  presses Run workflow at
+  https://github.com/lovelaceaml-hub/worship-duty-app/actions/workflows/firebase-release.yml
+  on `main`. It runs the node tests and `design-gallery/test.mjs`, then
+  `release.mjs --publish` (Hosting only). It skips `--preview` and the PLAYBOOK
+  8a maintenance flow; rules and Functions stay manual from `compact-integration`.
+- Rollback: Release history at
+  https://console.firebase.google.com/project/lv-zion-duties/hosting/sites/lv-zion-duties .
+
+Full rules: "Releasing from a cloud session" in [AGENTS.md](../AGENTS.md). The
+deploy key rotates by 2027-09-29.
+
 ## 3. Branches and worktrees
 
 All worktrees live under `/Users/anthony/Projects/worship-duty-app-worktrees/`
@@ -147,6 +168,10 @@ This is the one list. Other documents point here.
 | Multi-department availability in one save | Yes: `saveMemberAvailability` | None. The live Availability view saves one department at a time through `updateMemberAvailability` |
 | Member search by name | Yes: `searchDepartmentCandidates` | Yes (F3) |
 | Clean startup in the saved appearance, role start screens, pagination, Save states, notification deep links | No server part | None |
+
+9. Close PR #3 (https://github.com/lovelaceaml-hub/worship-duty-app/pull/3):
+   it auto-deploys Hosting with a raw `firebase deploy` on every push to
+   `main` and is superseded by PR #20. Do not merge it.
 
 ## 6. Standing warnings
 
