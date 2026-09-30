@@ -84,3 +84,37 @@ test('a change request is open while pending and the member still holds the duty
   assert.equal(shownStatus(Object.assign({}, request, { status: 'declined' }), services), 'declined');
   assert.equal(requestId('2026-09-12_morning', 'Usher #1', 5), '2026-09-12_morning_usher-1_5');
 });
+
+test('Fill gives each empty duty to the least-served member who can take it, never twice in one service', async () => {
+  const { fill } = await import('../../app/lib/fill.js');
+  const person = (name, extra = {}) => normalizeProfile(Object.assign({
+    memberUid: 'member:' + name, departmentId: 'Usher Sisters', memberName: name, status: 'active', schedulable: true,
+    eligibleDuties: ['Usher Door', 'Usher Front'], availability: { recurring: { morning: 'available' }, exceptions: {} }
+  }, extra), 'Usher Sisters');
+  const roster = [
+    person('S. Leah', { availability: { recurring: { morning: 'available' }, exceptions: { '2026-09-19': { '*': 'unavailable' } } } }),
+    person('S. Naomi'), person('S. Esther'), person('S. Grace', { eligibleDuties: ['Usher Front'] })
+  ];
+  const services = [
+    { date: '2026-09-26', service: 'Morning', time: '10:00', assignments: { 'Usher Door': 'S. Esther' } },
+    { date: '2026-09-12', service: 'Morning', time: '10:00', assignments: {} },
+    { date: '2026-09-19', service: 'Morning', time: '10:00', assignments: {} }
+  ];
+  const stats = {
+    'S. Leah': { past8: 1, upcoming: 0, last: '2026-08-29' },
+    'S. Naomi': { past8: 1, upcoming: 0, last: '2026-08-01' },
+    'S. Esther': { past8: 2, upcoming: 1, last: '2026-08-22' }
+  };
+  const { proposals, unfilled } = fill(services, ['Usher Door', 'Usher Front'], () => roster, stats);
+  assert.deepEqual(proposals.map(item => [item.serviceId, item.duty, item.memberName]), [
+    ['2026-09-12_morning', 'Usher Door', 'S. Naomi'],   // Leah and Naomi tie; Naomi served longer ago. Grace cannot take the door.
+    ['2026-09-12_morning', 'Usher Front', 'S. Grace'],  // Grace has served least of all
+    ['2026-09-19_morning', 'Usher Door', 'S. Naomi'],   // Leah is away; Naomi (2) still under Esther (3)
+    ['2026-09-19_morning', 'Usher Front', 'S. Grace'],  // Naomi is serving there already
+    ['2026-09-26_morning', 'Usher Front', 'S. Leah']    // the door was already filled; Esther serves there
+  ]);
+  assert.equal(proposals[0].memberUid, 'member:S. Naomi');
+  assert.deepEqual(unfilled, []);
+  const none = fill([{ date: '2026-09-19', service: 'Morning', assignments: {} }], ['Usher Door'], () => roster.slice(0, 1), {});
+  assert.deepEqual([none.proposals.length, none.unfilled], [0, [{ serviceId: '2026-09-19_morning', duty: 'Usher Door' }]]);
+});

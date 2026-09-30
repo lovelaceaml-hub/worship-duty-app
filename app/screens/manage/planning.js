@@ -4,7 +4,6 @@
 import { html } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, nameOf } from '../../store.js';
-import { goTo } from '../../render.js';
 import { empty } from '../../ui/components.js';
 import { departmentOf } from '../../config/duties.js';
 import { upcoming, serviceId } from '../../lib/services.js';
@@ -14,8 +13,7 @@ import { byTitle } from '../../lib/names.js';
 import { roster, profileOf, loadRoster, assign, legacyRoster } from '../../services/departments.js';
 import { openConflicts } from '../../services/attention.js';
 import { canEditDuty } from '../../services/access.js';
-import { ui } from '../../store.js';
-import { shownFor, departmentsShown } from './services.js';
+import { shownFor, departmentsShown, openService } from './services.js';
 import { managedDepartment } from './index.js';
 
 function conflicts(stats) {
@@ -94,10 +92,5 @@ defineActions({
       if (service && profile) assign(service, el.dataset.duty, profile);
     }
   },
-  'planning-open': el => {
-    ui.manage = 'services';
-    ui.expanded['service:' + el.dataset.service] = true;
-    ui.scrollToService = true;
-    goTo('manage');
-  }
+  'planning-open': el => openService(el.dataset.service)
 });

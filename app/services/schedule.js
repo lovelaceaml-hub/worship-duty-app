@@ -8,8 +8,12 @@ import { notice } from '../ui/banners.js';
 import { serviceId } from '../lib/services.js';
 import { doubleDuties } from '../lib/conflicts.js';
 
+/* A whole service record, as a new document. The server's bookkeeping from
+   the old document (it came from the Sheet, it was saved by the planner) does
+   not carry over, so the server writes the new one to the Sheet. */
 function save(service) {
-  return write(() => fb.setDoc(fb.doc(fb.db, 'schedule', serviceId(service)), service));
+  const { sheetSyncedAt, planBatch, ...record } = service;
+  return write(() => fb.setDoc(fb.doc(fb.db, 'schedule', serviceId(service)), record));
 }
 
 /* Change only the given fields, so the rules see exactly what changed (a

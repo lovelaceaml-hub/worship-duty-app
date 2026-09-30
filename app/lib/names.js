@@ -3,7 +3,7 @@
    P. Pastor. The shared document app/nameMap maps old spellings to the
    current one; BUILT_IN_NAME_MAP covers devices that have not loaded it. */
 
-const BUILT_IN_NAME_MAP = {
+export const BUILT_IN_NAME_MAP = {
   'B. Anthony L': 'B. Anthony', 'D. Chris K': 'D. Chris', 'D. Chris Kane': 'D. Chris',
   'B. James D': 'B. James', 'B. Jason S': 'B. Jason', 'S. Martha B': 'S. Martha',
   'S. Monica Salazar': 'S. Monica S', 'M.Chad': 'M. Chad', 'B. Gio': 'B. Giomar',

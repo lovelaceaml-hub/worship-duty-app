@@ -12,6 +12,7 @@ export const FEATURES = [
   { id: 'emptyDuties', label: 'Unfilled duties', description: 'Show every duty on the schedule, even ones with no one assigned.', on: false },
   { id: 'conflictWarnings', label: 'Double duty warnings', description: 'Flag a person who has two duties in the same service.', on: true },
   { id: 'sheetSync', label: 'Google Sheet import', description: 'Bring schedule changes in from the Google Sheet every 2 hours.', on: true },
+  { id: 'sheetWrite', label: 'Write changes to the Sheet', description: 'Duty changes made in the app go into the Sheet\'s Entry grid, and the import reads that grid. Needs the Sheet\'s link in Manage, Data.', on: false },
   { id: 'changeRequests', label: 'Change requests', description: 'Members can ask for a change to a duty from My Duties.', on: true }
 ];
 

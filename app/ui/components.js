@@ -38,7 +38,7 @@ export function dutyGroups(service, { only = '', showEmpty = feature('emptyDutie
   });
 }
 
-export function choirLine(service, only = 'All') {
+function choirLine(service, only = 'All') {
   if (!feature('choirSong') || !service.choirSong || (only !== 'All' && only !== 'Worship')) return '';
   return html`<p class="choir-song">Choir · ${service.choirSong}</p>`;
 }
@@ -58,7 +58,7 @@ export function serviceCard(service, { only = 'All' } = {}) {
   </article>`;
 }
 
-export function dateHeading(iso) {
+function dateHeading(iso) {
   const badge = dayBadge(iso);
   return html`<h2 class="date-heading">${longDate(iso)}${badge ? html` <span class="day-badge">${badge}</span>` : ''}</h2>`;
 }

@@ -9,11 +9,12 @@
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';
-import { render as redraw, goTo } from '../../render.js';
+import { render as redraw } from '../../render.js';
 import { DEPARTMENTS } from '../../config/duties.js';
 import { upcoming, past, nextService, serviceId, byStart, isUpcoming, departmentHasAssignments, assignedCount } from '../../lib/services.js';
 import { addMonths, monthName, clockTime, longDate, dayOfMonth, monthShort, weekdayShort, todayISO } from '../../lib/dates.js';
 import { canManageAnyDepartment } from '../../services/access.js';
+import { openService } from '../manage/services.js';
 import { layoutFor, currentAppearance } from '../../appearance/picker.js';
 import * as list from './list.js';
 import * as calendar from './calendar.js';
@@ -211,12 +212,7 @@ defineActions({
   'toggle-past': { public: true, run: () => { ui.showPast = !ui.showPast; redraw(); } },
   'schedule-edit': {
     allowed: () => canManageAnyDepartment(),
-    run: el => {
-      ui.manage = 'services';
-      ui.expanded['service:' + el.dataset.service] = true;
-      ui.scrollToService = true;
-      goTo('manage');
-    }
+    run: el => openService(el.dataset.service)
   }
 });
 

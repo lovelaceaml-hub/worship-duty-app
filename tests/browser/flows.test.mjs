@@ -35,6 +35,23 @@ const requestCard = (page, name) => page.locator('.request', { has: page.locator
 const banner = (page, text) => page.locator('#banners .banner', { hasText: text }).waitFor();
 const fakeDoc = (page, docPath) => page.evaluate(docPath => window.__fake.get(docPath), docPath);
 const fakeDocs = (page, prefix) => page.evaluate(prefix => window.__fake.paths(prefix).map(docPath => window.__fake.get(docPath)), prefix);
+/* Manage, Services: open a service's details in the month planner. */
+async function openPlanned(page, id) {
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'services');
+  const want = id.slice(0, 7);
+  for (let step = 0; step < 12; step++) {
+    const shown = await page.locator('#view .plan-toolbar .month-title').innerText();
+    const [name, year] = shown.split(' ');
+    const month = year + '-' + String(new Date(name + ' 1, 2000').getMonth() + 1).padStart(2, '0');
+    if (month === want) break;
+    await page.locator('#view [data-act="plan-month"][data-step="' + (month < want ? 1 : -1) + '"]').click();
+  }
+  await page.locator(`#view [data-act="plan-open"][data-service="${id}"]`).click();
+  const details = page.locator(`#view .plan-detail[data-service="${id}"]`);
+  await details.waitFor();
+  return details;
+}
 const calls = (page, name) => page.evaluate(name => window.__fakeCalls.filter(call => call.name === name).map(call => call.payload), name);
 
 /* The member's first upcoming duty in the fake schedule. */
@@ -139,11 +156,8 @@ test('a leader approves a request and gives the duty to someone else in one step
 test('an administrator fills a duty, and overrides with a reason for someone who cannot take it', async () => {
   const fixture = { patch: { 'departments/Usher Brothers/members/member:B. Levi': { schedulable: false } } };
   const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, fixture });
-  await tab(page, 'manage');
-  await section(page, 'manage-section', 'services');
-  const card = page.locator('#view article.service-card').first();
-  await card.locator('button.service-head').click();
-  const id = await card.getAttribute('data-service');
+  const id = '2026-07-07_evening';
+  const card = await openPlanned(page, id);
   const service = await fakeDoc(page, 'schedule/' + id);
 
   const usherBack = card.locator('select[data-change="assign"][data-duty="Usher Back"]');
@@ -173,10 +187,7 @@ test('a leader marks a double duty OK; only that person\'s mark is written', asy
   const id = '2026-07-11_morning';
   const fixture = { patch: { ['schedule/' + id]: { conflictOk: { 'S. Leah': ['Usher Door', 'Usher Front'] } } } };
   const { context, page, errors } = await as('E. Joseph', { viewport: DESKTOP, fixture });
-  await tab(page, 'manage');
-  await section(page, 'manage-section', 'services');
-  const card = page.locator(`#view article.service-card[data-service="${id}"]`);
-  await card.locator('button.service-head').click();
+  const card = await openPlanned(page, id);
   await card.locator('[data-act="double-duty"][data-name="B. Adam"][data-ok="true"]').click();
   await card.locator('.card-note', { hasText: 'marked OK' }).waitFor();
   const written = await page.evaluate(docPath => window.__fake.writes.filter(item => item.path === docPath).pop().value, 'schedule/' + id);
@@ -200,10 +211,7 @@ test('a member marks a day off; the duty that day is flagged and their leader fi
 
   await signOut(page);
   await signIn(page, 'S. Grace');
-  await tab(page, 'manage');
-  await section(page, 'manage-section', 'services');
-  const card = page.locator(`#view article.service-card[data-service="${duty.id}"]`);
-  await card.locator('button.service-head').click();
+  const card = await openPlanned(page, duty.id);
   const replace = card.locator('form[data-act="replace-duty"]');
   await replace.locator('option:nth-child(2)').waitFor({ state: 'attached' });
   const uid = await replace.locator('option:nth-child(2)').getAttribute('value');
@@ -415,4 +423,123 @@ test('a build works with its stamped files; the maintenance build shows only the
   } finally {
     await fs.rm(out, { recursive: true, force: true });
   }
+});
+
+test('a leader plans the month in a grid; a changed duty saves at once', async () => {
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'services');
+  const grid = page.locator('#view .plan-grid');
+  await grid.waitFor();
+  assert.deepEqual(await grid.locator('tbody th[scope="row"]').allInnerTexts(), ['Usher Door', 'Usher Front', 'Usher Back']);
+  assert.equal(await grid.locator('.plan-head.is-past').count(), 0, 'only the services still to come');
+  assert.match(await grid.locator('.plan-head').first().innerText(), /^Tue 7/);
+
+  const id = '2026-07-11_morning';
+  const cell = grid.locator(`select[data-service="${id}"][data-duty="Usher Back"]`);
+  await cell.locator('option:nth-child(2)').waitFor({ state: 'attached' });
+  const uid = await cell.locator('option:nth-child(2)').getAttribute('value');
+  await cell.selectOption(uid);
+  await page.waitForFunction(([docPath, name]) => window.__fake.get(docPath).assignments['Usher Back'] === name, ['schedule/' + id, uid.replace('member:', '')]);
+  const [payload] = await calls(page, 'saveDepartmentAssignments');
+  assert.deepEqual(payload, { departmentId: 'Usher Sisters', changes: [{ serviceId: id, duty: 'Usher Back', memberUid: uid, expectedMemberName: '' }] });
+
+  // A month that is over shows what happened, and nothing can be changed there.
+  await page.locator('#view [data-act="plan-month"][data-step="-1"]').click();
+  await page.locator('#view .plan-toolbar .month-title', { hasText: 'June 2026' }).waitFor();
+  assert.ok(await grid.locator('.plan-head.is-past').count() > 0);
+  assert.equal(await grid.locator('select').count(), 0);
+  assert.equal(await page.locator('#view [data-act="plan-fill"]').count(), 0);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('Fill proposes members for the usual empty duties; the leader saves them together', async () => {
+  const empty = { assignments: {} };
+  const fixture = { patch: { 'schedule/2026-07-18_morning': empty, 'schedule/2026-07-25_morning': empty } };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'services');
+  await page.locator('#view .plan-grid').waitFor();
+  await page.locator('#view [data-act="plan-fill"]').click();
+  const proposed = page.locator('#view .plan-cell.is-proposed');
+  await proposed.first().waitFor();
+  const cells = await proposed.locator('select').evaluateAll(selects => selects.map(select => [select.dataset.service, select.dataset.duty, select.value]));
+  // Usher Door and Usher Front, the duties these services usually have; not Usher Back.
+  assert.deepEqual(cells.map(([id, duty]) => id + ' ' + duty).sort(), ['2026-07-18_morning Usher Door', '2026-07-18_morning Usher Front', '2026-07-25_morning Usher Door', '2026-07-25_morning Usher Front']);
+  for (const id of ['2026-07-18_morning', '2026-07-25_morning']) {
+    const names = cells.filter(([service]) => service === id).map(([, , value]) => value);
+    assert.equal(new Set(names).size, names.length, 'no one twice in one service');
+  }
+  await page.locator('#view .plan-actions', { hasText: 'Fill picked 4 members' }).waitFor();
+
+  await page.locator('#view [data-act="plan-save"]').click();
+  await banner(page, 'Saved 4 duties.');
+  const saved = await fakeDoc(page, 'schedule/2026-07-18_morning');
+  assert.ok(saved.assignments['Usher Door'] && saved.assignments['Usher Front'] && saved.planBatch);
+  await page.locator('#view .plan-cell.is-proposed').first().waitFor({ state: 'detached' });
+  assert.equal((await calls(page, 'saveDepartmentAssignments')).length, 1, 'one call for the whole fill');
+
+  await page.locator('#view [data-act="plan-fill"]').click();
+  await banner(page, 'The usual duties this month are all filled.');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('on a phone the month is one list, and a service opens in place', async () => {
+  const { context, page, errors } = await as('S. Grace');
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'services');
+  await page.locator('#view .plan-days .plan-day').first().waitFor();
+  assert.equal(await page.locator('#view .plan-grid').count(), 0);
+  const id = '2026-07-14_evening';
+  await page.locator(`#view .plan-day [data-act="plan-open"][data-service="${id}"]`).click();
+  await page.locator(`#view .plan-day .plan-detail[data-service="${id}"]`).waitFor();
+  await page.locator('#view .plan-detail [data-act="plan-close"]').click();
+  await page.locator('#view .plan-detail').waitFor({ state: 'detached' });
+  await page.locator('#view [data-act="plan-month"][data-step="1"]').click();
+  await page.locator('#view .plan-toolbar .month-title', { hasText: 'August 2026' }).waitFor();
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('an administrator links the Sheet, checks it, and adds a year of services', async () => {
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'features');
+  const toggle = page.locator('#view input[data-feature="sheetWrite"], #view [data-change="feature"][data-id="sheetWrite"]');
+  if (await toggle.count()) assert.equal(await toggle.first().isChecked(), false, 'writing to the Sheet starts off');
+  await section(page, 'manage-section', 'data');
+  const link = page.locator('#view [data-change="sheet-edit-link"]');
+  await link.fill('https://docs.google.com/spreadsheets/d/ABCDEFGHIJKLMNOPQRSTUVWXYZ0123/edit#gid=0');
+  await link.press('Tab');
+  await banner(page, 'Sheet link saved. Check the Sheet next.');
+  assert.equal((await fakeDoc(page, 'app/settings')).sheetId, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123');
+  await page.locator('#view [data-act="sheet-check"]').click();
+  await page.locator('#view .sheet-check', { hasText: 'Read 40 services from 2026 Entry.' }).waitFor();
+  await page.locator('#view .sheet-check li', { hasText: 'Usher Door' }).waitFor();
+
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#view form[data-act="year-add"] button[type="submit"]').click();
+  await banner(page, 'Added 225 services.');
+  assert.equal((await fakeDoc(page, 'schedule/2027-01-02_morning')).worship, 'Sabbath Day');
+
+  await section(page, 'manage-section', 'services');
+  const reminder = page.locator('#view .card-note', { hasText: 'Add that year\'s feast services.' });
+  await reminder.waitFor();
+  await reminder.locator('[data-act="feast-done"]').click();
+  await reminder.waitFor({ state: 'detached' });
+  assert.equal((await fakeDoc(page, 'app/settings')).feastNotice, null);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('Edit assignments on the Schedule opens that service in the planner', async () => {
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, appearance: 'prism' });
+  await page.locator('#view [data-act="schedule-date"][data-date="2026-07-18"]').click();
+  await page.locator('#view [data-act="schedule-edit"]').click();
+  await page.locator('#view .plan-detail[data-service^="2026-07-18"]').waitFor();
+  assert.equal(await page.locator('#view .plan-toolbar .month-title').innerText(), 'July 2026');
+  assert.deepEqual(errors, []);
+  await context.close();
 });

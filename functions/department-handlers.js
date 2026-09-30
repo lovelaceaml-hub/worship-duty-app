@@ -750,7 +750,136 @@ function createDepartmentHandlers(options = {}) {
     };
   }
 
+  /* The month planner's save: many duties of one department at once. Each
+     change is checked like assignDepartmentDuty (or clears like
+     unassignDepartmentDuty); a change that fails a check, or whose duty
+     changed since the planner showed it, is skipped and reported, and the
+     rest are saved together. The schedule writes carry planBatch, so the
+     server sends one notification per member instead of one per service. */
+  async function saveDepartmentAssignments(request) {
+    const actor = requestActor(request);
+    const data = inputData(request);
+    const unknown = Object.keys(data).find(key => !['departmentId', 'changes'].includes(key));
+    if (unknown) throw errorWithCode('invalid-argument', `Field is not allowed: ${unknown}.`);
+    const department = departmentInput({ departmentId: data.departmentId });
+    if (!authz.isAdministrator(actor) && !authz.managesDepartment(actor, department)) {
+      throw errorWithCode('permission-denied', 'Department authorization denied: cross-department.');
+    }
+    if (!Array.isArray(data.changes) || data.changes.length < 1 || data.changes.length > 200) {
+      throw errorWithCode('invalid-argument', 'changes must hold 1 to 200 entries.');
+    }
+    const changes = data.changes.map(change => {
+      if (!plainObject(change)) throw errorWithCode('invalid-argument', 'Each change must be an object.');
+      const extra = Object.keys(change).find(key => !['serviceId', 'duty', 'memberUid', 'expectedMemberName'].includes(key));
+      if (extra) throw errorWithCode('invalid-argument', `Change field is not allowed: ${extra}.`);
+      const serviceId = String(change.serviceId || '').trim();
+      const duty = String(change.duty || '').trim();
+      if (!serviceId || !duty) throw errorWithCode('invalid-argument', 'Each change needs a serviceId and a duty.');
+      if (authz.departmentForDuty(duty) !== department) {
+        throw errorWithCode('failed-precondition', 'Department authorization denied: duty-department-mismatch.');
+      }
+      return {
+        serviceId,
+        duty,
+        memberUid: change.memberUid == null ? '' : String(change.memberUid).trim(),
+        expectedMemberName: change.expectedMemberName == null ? null : String(change.expectedMemberName)
+      };
+    });
+    const serviceIds = Array.from(new Set(changes.map(change => change.serviceId)));
+    const memberUids = Array.from(new Set(changes.map(change => change.memberUid).filter(Boolean)));
+    const planBatch = `plan-${now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let saved = [];
+    let skipped = [];
+    await db.runTransaction(async transaction => {
+      saved = [];
+      skipped = [];
+      const scheduleRefs = serviceIds.map(id => db.collection('schedule').doc(id));
+      const profileRefs = memberUids.map(memberUid => profileRef(db, department, memberUid));
+      const scheduleSnaps = await transaction.getAll(...scheduleRefs);
+      const profileSnaps = profileRefs.length ? await transaction.getAll(...profileRefs) : [];
+      const services = new Map();
+      scheduleSnaps.forEach((snapshot, index) => {
+        if (!snapshot.exists) return;
+        const value = snapshot.data() || {};
+        services.set(serviceIds[index], {
+          value,
+          assignments: Object.assign({}, value.assignments),
+          revisions: Object.assign({}, value.assignmentRevisions),
+          changed: {},
+          changedRevisions: {}
+        });
+      });
+      const profiles = new Map();
+      profileSnaps.forEach((snapshot, index) => { if (snapshot.exists) profiles.set(memberUids[index], snapshot.data() || {}); });
+      const at = now();
+      for (const change of changes) {
+        const where = { serviceId: change.serviceId, duty: change.duty };
+        const service = services.get(change.serviceId);
+        if (!service) { skipped.push({ ...where, reason: 'no-service' }); continue; }
+        const current = String(service.assignments[change.duty] || '');
+        if (change.expectedMemberName != null && change.expectedMemberName !== current) {
+          skipped.push({ ...where, reason: 'changed', memberName: current });
+          continue;
+        }
+        let assignment;
+        try {
+          assignment = assignmentForSchedule(authz.normalizeAssignment({
+            departmentId: department,
+            memberUid: change.memberUid || actor.uid,
+            duty: change.duty,
+            serviceId: change.serviceId,
+            serviceDate: String(service.value.date || ''),
+            serviceTime: slugify(service.value.serviceTime || service.value.service || service.value.time || '')
+          }), service.value);
+        } catch (error) {
+          skipped.push({ ...where, reason: 'invalid-service' });
+          continue;
+        }
+        let name = '';
+        let record = null;
+        if (change.memberUid) {
+          const profile = profiles.get(change.memberUid);
+          if (!profile) { skipped.push({ ...where, reason: 'no-profile' }); continue; }
+          const decision = authz.authorizeAssignment(actor, assignment, profile);
+          if (!decision.allowed) { skipped.push({ ...where, reason: decision.reason }); continue; }
+          name = String(profile.memberName || profile.member || '');
+          if (Object.keys(service.assignments).some(duty => duty !== change.duty && service.assignments[duty] === name)) {
+            skipped.push({ ...where, reason: 'already-serving' });
+            continue;
+          }
+          assignment = decision.assignment;
+          record = { profile };
+        }
+        if (name === current) continue;
+        const revision = nextRevision({ revision: service.revisions[change.duty] });
+        service.assignments[change.duty] = name;
+        service.revisions[change.duty] = revision;
+        service.changed[change.duty] = name;
+        service.changedRevisions[change.duty] = revision;
+        const reference = db.collection('departmentAssignments').doc(assignmentIdFor(assignment));
+        if (record) {
+          transaction.set(reference, assignmentRecord(assignment, record.profile, actor, at, {
+            override: false, authorization: 'normal-eligible-assignment', revision, planBatch
+          }), { merge: false });
+        } else {
+          transaction.delete(reference);
+        }
+        saved.push({ ...where, memberName: name, previous: current, date: String(service.value.date || ''), service: String(service.value.service || '') });
+      }
+      services.forEach((service, id) => {
+        if (!Object.keys(service.changed).length) return;
+        transaction.set(db.collection('schedule').doc(id), {
+          assignments: service.changed,
+          assignmentRevisions: service.changedRevisions,
+          planBatch
+        }, { merge: true });
+      });
+    });
+    return { ok: true, departmentId: department, planBatch, saved, skipped };
+  }
+
   return Object.freeze({
+    saveDepartmentAssignments,
     listDepartmentRoster,
     updateDepartmentProfile,
     updateMemberAvailability,

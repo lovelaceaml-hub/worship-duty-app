@@ -1,5 +1,6 @@
-/* Manage, Data: a backup file of the shared schedule, and bringing the
-   Google Sheet in now instead of waiting for the next import. */
+/* Manage, Data: a backup file of the shared schedule, bringing the Google
+   Sheet in now instead of waiting for the next import, checking the Sheet
+   the app writes to, and adding a year of regular services. */
 import { call, problem } from '../firebase.js';
 import { plural } from '../html.js';
 import { data, readJSON, writeJSON } from '../store.js';
@@ -23,7 +24,7 @@ export function downloadBackup() {
   URL.revokeObjectURL(link.href);
 }
 
-export const sheet = { busy: false };
+export const sheet = { busy: false, checking: false, check: null, addingYear: false };
 
 export function lastSheetImport() { return readJSON('wds-sheet-import', null); }
 
@@ -44,5 +45,35 @@ export async function importSheetNow() {
     notice('The sheet was not imported: ' + problem(error), true);
   }
   sheet.busy = false;
+  renderSoon();
+}
+
+/* Reads the Sheet's Entry grid and compares it with the app. Changes nothing. */
+export async function checkSheet() {
+  sheet.checking = true;
+  sheet.check = null;
+  renderSoon();
+  try {
+    sheet.check = await call('checkSheet', {});
+  } catch (error) {
+    sheet.check = { error: problem(error) };
+  }
+  sheet.checking = false;
+  renderSoon();
+}
+
+/* Every Saturday and Tuesday service from December 1 of `year` through the
+   next December. Services already there are kept. */
+export async function addServiceYear(year) {
+  sheet.addingYear = true;
+  renderSoon();
+  try {
+    const result = await call('addServiceYear', { year });
+    notice(result.added ? 'Added ' + plural(result.added, 'service') + (result.sheetRows ? ', and ' + plural(result.sheetRows, 'row') + ' in the Sheet' : '') + '.'
+      : 'Every regular service from December ' + year + ' through December ' + (year + 1) + ' was already there.');
+  } catch (error) {
+    notice('The services were not added: ' + problem(error), true);
+  }
+  sheet.addingYear = false;
   renderSoon();
 }

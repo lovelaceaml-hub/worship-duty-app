@@ -31,12 +31,13 @@ function loadExports() {
 
 test('exports exactly the functions the app and the public site use', () => {
   assert.deepEqual(Object.keys(loadExports()).sort(), [
-    'acceptDepartmentInvitation', 'assignDepartmentDuty', 'changeMemberPin', 'createDepartmentInvitation',
-    'createDepartmentProfile', 'dutyReminders', 'ics', 'listDepartmentRoster', 'onRequestCreated',
-    'onRequestResolved', 'onScheduleWrite', 'overrideDepartmentAssignment', 'publicSchedule', 'resetMemberPin',
-    'resolveDutyAttention', 'revokeDepartmentInvitation', 'saveMemberAvailability', 'scheduledSheetSync',
-    'searchDepartmentCandidates', 'songHistoryRecorder', 'syncSheetNow', 'unassignDepartmentDuty',
-    'updateDepartmentProfile', 'updateMemberAvailability', 'updateRoleConfiguration', 'verifyMemberPin'
+    'acceptDepartmentInvitation', 'addServiceYear', 'assignDepartmentDuty', 'changeMemberPin', 'checkSheet',
+    'createDepartmentInvitation', 'createDepartmentProfile', 'dutyReminders', 'ics', 'listDepartmentRoster',
+    'onRequestCreated', 'onRequestResolved', 'onScheduleWrite', 'overrideDepartmentAssignment', 'publicSchedule',
+    'resetMemberPin', 'resolveDutyAttention', 'revokeDepartmentInvitation', 'saveDepartmentAssignments',
+    'saveMemberAvailability', 'scheduledSheetSync', 'searchDepartmentCandidates', 'songHistoryRecorder',
+    'syncSheetNow', 'unassignDepartmentDuty', 'updateDepartmentProfile', 'updateMemberAvailability',
+    'updateRoleConfiguration', 'verifyMemberPin', 'yearlyServices'
   ]);
 });
 

@@ -23,6 +23,9 @@ const { createDepartmentHandlers, assignmentIdFor } = require('./department-hand
 const { currentRevision, nextRevision } = require('./revision');
 const { createWorkflowHandlers } = require('./workflows');
 const { createMembershipHandlers } = require('./membership');
+const { createSheets, accountEmail } = require('./sheets');
+const sheetSync = require('./sheet-sync');
+const { serviceYear } = require('./service-year');
 
 initializeApp();
 const db = getFirestore();
@@ -407,6 +410,18 @@ exports.resolveDutyAttention = exposeDepartmentCallable(
   workflowHandlers.resolveDutyAttention
 );
 
+/* The month planner's save. Members hear about their new duties in one
+   notification each, however many services the save touched. */
+exports.saveDepartmentAssignments = exposeDepartmentCallable(async request => {
+  const result = await departmentHandlers.saveDepartmentAssignments(request);
+  try {
+    await alertPlanned(result.saved);
+  } catch (error) {
+    logger.error('Planner alerts failed', { error: String(error && error.message || error) });
+  }
+  return result;
+});
+
 /* Adding members by name search or invite link. exposeDepartmentCallable
    only establishes the verified, active, current-role, no-forced-PIN actor;
    each handler checks rights on top. Search, create and revoke need a leader
@@ -642,16 +657,70 @@ async function sendToNames(names, title, bodyFn) {
   await sendToTargets(await loadTokenTargets(), names, title, bodyFn);
 }
 
-/* The switches in Manage, Features, saved in app/settings.features. The ones
-   the server reads are on unless turned off, as in app/config/features.js. */
+/* The switches in Manage, Features, saved in app/settings.features, with
+   the same defaults as app/config/features.js. */
 async function loadSettings() {
   const snapshot = await db.collection('app').doc('settings').get();
   return snapshot.exists ? snapshot.data() || {} : {};
 }
 
-function switchOn(settings, id) {
+function switchOn(settings, id, fallback = true) {
   const features = (settings && settings.features) || {};
-  return Object.prototype.hasOwnProperty.call(features, id) ? features[id] === true : true;
+  return Object.prototype.hasOwnProperty.call(features, id) ? features[id] === true : fallback;
+}
+
+/* The Sheet's Entry grid, when an administrator has set the Sheet's link
+   (Manage, Data) and turned on "Write changes to the Sheet". Otherwise null,
+   and the import keeps reading the published Raw Data link. */
+function gridSheets(settings) {
+  return settings.sheetId && switchOn(settings, 'sheetWrite', false) ? createSheets(settings.sheetId) : null;
+}
+
+/* The last Sheet write's outcome, shown in Manage. Written only when it
+   changes, so a working Sheet costs no extra writes. */
+async function noteSheetStatus(settings, error) {
+  const was = settings.sheetStatus || {};
+  const message = error ? String(error.message || error).slice(0, 300) : '';
+  if (!error && was.ok !== false) return;
+  if (error && was.ok === false && was.message === message) return;
+  await db.collection('app').doc('settings').set({ sheetStatus: { ok: !error, message, at: Date.now() } }, { merge: true });
+}
+
+/* "Usher Door · Saturday, October 3 Morning", several joined, for one alert. */
+function dutyList(items) {
+  const lines = items.slice().sort((a, b) => a.date.localeCompare(b.date))
+    .map(item => item.duty + ' · ' + longDate(item.date) + ' ' + item.service);
+  return lines.length > 4 ? lines.slice(0, 3).join('; ') + '; and ' + (lines.length - 3) + ' more' : lines.join('; ');
+}
+
+/* A change made in the app goes into the Sheet's grid. Writes that came from
+   the Sheet itself (the import, a generated year) carry a new sheetSyncedAt
+   and are not written back. */
+async function writeBack(event, before, after) {
+  const existed = event.data.before && event.data.before.exists;
+  if (after && after.sheetSyncedAt && after.sheetSyncedAt !== (existed ? before.sheetSyncedAt : undefined)) return;
+  const settings = await loadSettings();
+  const sheets = gridSheets(settings);
+  if (!sheets) return;
+  try {
+    const done = await sheetSync.writeService(sheets, existed ? before : null, after);
+    logger.info('Sheet write', { service: event.params.id, done });
+    await noteSheetStatus(settings, null);
+  } catch (error) {
+    logger.error('Sheet write failed', { service: event.params.id, error: String(error && error.message || error) });
+    await noteSheetStatus(settings, error);
+  }
+}
+
+async function alertPlanned(saved) {
+  const byName = {};
+  saved.filter(item => item.memberName).forEach(item => { (byName[item.memberName] = byName[item.memberName] || []).push(item); });
+  const names = Object.keys(byName);
+  if (!names.length || !switchOn(await loadSettings(), 'notifications')) return;
+  const one = names.filter(name => byName[name].length === 1);
+  const many = names.filter(name => byName[name].length > 1);
+  if (one.length) await sendToNames(one, 'New duty for you', name => dutyList(byName[name]));
+  if (many.length) await sendToNames(many, 'New duties for you', name => dutyList(byName[name]));
 }
 
 /* ---- 1. new-duty alerts (switch: notifications) ---- */
@@ -664,15 +733,19 @@ exports.onScheduleWrite = onDocumentWritten(
       : {};
     if (!after || !after.exists) {
       await reconcileScheduleAssignmentProjection(event.params.id, before, { ...before, assignments: {} });
+      await writeBack(event, before, null);
       return;
     }
     const svc = after.data() || {};
     await reconcileScheduleAssignmentProjection(event.params.id, before, svc);
+    await writeBack(event, before, svc);
     // Brand-new service doc (initial seed, bulk import, or a fresh sheet-created
     // service): every assignment would read as "new", fanning a mass push out to
     // everyone at once. Skip - members still get the in-app badge and the
     // day-before reminder. Only alert on edits to an existing service.
     if (!(event.data.before && event.data.before.exists)) return;
+    // The month planner's saves send one alert per member themselves.
+    if (svc.planBatch && svc.planBatch !== before.planBatch) return;
     const beforeA = (before && before.assignments) || {};
     const afterA = svc.assignments || {};
     // for each duty whose member CHANGED to a new non-empty name
@@ -817,22 +890,28 @@ exports.publicSchedule = onRequest({ region: REGION }, async (_req, res) => {
    the member list and their department's name list. The Google Sheet import
    switch in Manage, Features turns the automatic import off. */
 async function importSheet() {
-  const settingsSnap = await db.collection('app').doc('settings').get();
-  const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
-  const response = await fetch(settings.sheetUrl || sheetLib.DEFAULT_SHEET_URL, { redirect: 'follow' });
-  if (!response.ok) throw new HttpsError('unavailable', 'The Google Sheet could not be read (' + response.status + ').');
-  const parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(await response.text()), new Date());
-  if (!parsed.services.length) {
-    throw new HttpsError('failed-precondition', 'The sheet had no services in it, so nothing was changed.');
-  }
+  const settings = await loadSettings();
   // Old spellings are mapped to the current ones first, so the sheet cannot
   // bring back a name the app has already cleaned up.
   const nameMapSnap = await db.collection('app').doc('nameMap').get();
   const nameMap = (nameMapSnap.exists && nameMapSnap.data().map) || {};
-  parsed.services.forEach(service => {
-    const assignments = service.assignments || {};
-    Object.keys(assignments).forEach(duty => { assignments[duty] = icsLib.canonName(assignments[duty], nameMap); });
-  });
+  const sheets = gridSheets(settings);
+  let parsed;
+  if (sheets) {
+    // The grid itself: edits the app makes through the API never reach Raw Data.
+    parsed = await sheetSync.readServices(sheets, nameMap);
+  } else {
+    const response = await fetch(settings.sheetUrl || sheetLib.DEFAULT_SHEET_URL, { redirect: 'follow' });
+    if (!response.ok) throw new HttpsError('unavailable', 'The Google Sheet could not be read (' + response.status + ').');
+    parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(await response.text()), new Date());
+    parsed.services.forEach(service => {
+      const assignments = service.assignments || {};
+      Object.keys(assignments).forEach(duty => { assignments[duty] = icsLib.canonName(assignments[duty], nameMap); });
+    });
+  }
+  if (!parsed.services.length) {
+    throw new HttpsError('failed-precondition', 'The sheet had no services in it, so nothing was changed.');
+  }
   const sheetMembers = Array.from(new Set(parsed.members.map(name => icsLib.canonName(name, nameMap))));
 
   const [existingSnap, membersSnap, departmentsSnap] = await Promise.all([
@@ -857,8 +936,9 @@ async function importSheet() {
   if (plan.creates.length || plan.updates.length || newMembers.length || rostersChanged) {
     // BulkWriter splits a large import into batches under Firestore's limit.
     const writer = db.bulkWriter();
-    plan.creates.forEach(item => writer.set(db.collection('schedule').doc(item.id), item.svc));
-    plan.updates.forEach(item => writer.set(db.collection('schedule').doc(item.id), item.patch, { merge: true }));
+    const sheetSyncedAt = Date.now(); // these changes came from the Sheet, so none is written back
+    plan.creates.forEach(item => writer.set(db.collection('schedule').doc(item.id), Object.assign({}, item.svc, { sheetSyncedAt })));
+    plan.updates.forEach(item => writer.set(db.collection('schedule').doc(item.id), Object.assign({}, item.patch, { sheetSyncedAt }), { merge: true }));
     if (newMembers.length) writer.set(db.collection('app').doc('members'), { list: members.concat(newMembers).sort() });
     if (rostersChanged) writer.set(db.collection('app').doc('departments'), { map: rosters }, { merge: true });
     await writer.close();
@@ -876,6 +956,100 @@ exports.scheduledSheetSync = onSchedule(
       await importSheet();
     } catch (error) {
       logger.error('scheduledSheetSync: import failed', { error: String(error && error.message || error) });
+    }
+  });
+
+/* Manage, Data, Check the Sheet: reads the Sheet's Entry grid and compares
+   it with the app, changing nothing. Administrators only. */
+exports.checkSheet = onCall({ region: REGION }, async request => {
+  const actor = await callableActor(request);
+  if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
+    throw new HttpsError('permission-denied', 'Only an administrator can check the Sheet.');
+  }
+  const settings = await loadSettings();
+  if (!settings.sheetId) throw new HttpsError('failed-precondition', 'Paste the Sheet\'s link first.');
+  const nameMapSnap = await db.collection('app').doc('nameMap').get();
+  const nameMap = (nameMapSnap.exists && nameMapSnap.data().map) || {};
+  let read;
+  try {
+    read = await sheetSync.readServices(createSheets(settings.sheetId), nameMap);
+  } catch (error) {
+    throw new HttpsError('failed-precondition', String(error.message || error));
+  }
+  const schedule = await db.collection('schedule').get();
+  const app = new Map(schedule.docs.map(doc => [doc.id, doc.data() || {}]));
+  const inSheet = new Set();
+  const differences = [];
+  read.services.forEach(service => {
+    const id = sheetLib.svcId(service);
+    inSheet.add(id);
+    const mine = app.get(id);
+    if (!mine) return;
+    Object.entries(service.assignments).forEach(([duty, name]) => {
+      const current = icsLib.canonName(String((mine.assignments || {})[duty] || ''), nameMap);
+      if (current !== name) differences.push({ service: id, duty, sheet: name, app: current });
+    });
+  });
+  const today = pacificDate();
+  return {
+    ok: true,
+    account: await accountEmail(),
+    tabs: read.tabs,
+    services: read.services.length,
+    notInApp: read.services.filter(service => !app.has(sheetLib.svcId(service))).length,
+    notInSheet: Array.from(app.entries()).filter(([id, service]) => !inSheet.has(id) && String(service.date || '') >= today).length,
+    differences: differences.slice(0, 25),
+    differenceCount: differences.length,
+    warnings: read.warnings.slice(0, 10)
+  };
+});
+
+/* A planning year of regular services (service-year.js): each one missing
+   from the app is added, and, when the app writes to the Sheet, a blank row
+   goes into the Sheet too. Administrators are then reminded to add that
+   year's feast services. */
+async function addServiceYear(year) {
+  const settings = await loadSettings();
+  const wanted = serviceYear(year);
+  const existing = await db.collection('schedule').where('date', '>=', wanted[0].date).get();
+  const have = new Map(existing.docs.map(doc => [doc.id, doc.data() || {}]));
+  const missing = wanted.filter(service => !have.has(service.id));
+  // Every regular service gets a Sheet row, including ones the app already
+  // has (with their duties); rows already in the grid are left alone.
+  const sheets = gridSheets(settings);
+  const sheetRows = sheets ? await sheetSync.addServices(sheets, wanted.map(service => have.has(service.id) ? Object.assign({}, have.get(service.id), { date: service.date, service: service.service }) : service)) : 0;
+  if (missing.length) {
+    const writer = db.bulkWriter();
+    const sheetSyncedAt = Date.now();
+    missing.forEach(({ id, ...service }) => writer.set(db.collection('schedule').doc(id), Object.assign(service, { sheetSyncedAt })));
+    await writer.close();
+  }
+  await db.collection('app').doc('settings').set({ feastNotice: { year: year + 1, since: Date.now() } }, { merge: true });
+  return { added: missing.length, sheetRows, from: wanted[0].date, to: wanted[wanted.length - 1].date };
+}
+
+exports.addServiceYear = onCall({ region: REGION }, async request => {
+  const actor = await callableActor(request);
+  if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
+    throw new HttpsError('permission-denied', 'Only an administrator can add a year of services.');
+  }
+  const year = Number(request.data && request.data.year);
+  if (!Number.isInteger(year) || year < 2026 || year > 2100) throw new HttpsError('invalid-argument', 'Choose a year.');
+  try {
+    return Object.assign({ ok: true }, await addServiceYear(year));
+  } catch (error) {
+    throw new HttpsError('failed-precondition', String(error && error.message || error));
+  }
+});
+
+/* Every November 1: December through the next December. */
+exports.yearlyServices = onSchedule(
+  { schedule: '0 6 1 11 *', timeZone: TZ, region: REGION },
+  async () => {
+    try {
+      logger.info('yearlyServices: done', await addServiceYear(Number(pacificDate().slice(0, 4))));
+    } catch (error) {
+      logger.error('yearlyServices: failed', { error: String(error && error.message || error) });
     }
   });
 

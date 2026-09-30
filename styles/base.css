@@ -232,6 +232,55 @@ button.service-head { cursor: pointer; }
 .suggest-label { min-width: 110px; color: var(--muted); }
 .add-service { align-items: center; }
 
+/* ---- the month planner (Manage, Services) ---- */
+
+.plan-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 8px 0 12px; }
+.plan-toolbar .month-nav { flex: 1 1 260px; }
+.plan-add { margin: 0 0 12px; font-size: 13.5px; }
+.plan-add summary { color: var(--accent); font-weight: 700; cursor: pointer; }
+.plan-scroll { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.plan-grid { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.plan-grid th, .plan-grid td { padding: 0; border-right: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface); }
+.plan-grid thead th { position: sticky; top: 0; z-index: 2; vertical-align: bottom; }
+.plan-grid tbody th[scope="row"], .plan-grid .plan-corner { position: sticky; left: 0; z-index: 1; padding: 6px 12px; color: var(--heading); font-weight: 650; text-align: left; white-space: nowrap; }
+.plan-grid .plan-corner { z-index: 3; color: var(--muted); font-size: 12px; font-weight: 700; }
+.plan-service { display: grid; gap: 1px; width: 100%; min-width: 96px; padding: 8px 10px; border: 0; background: none; color: var(--heading); font-size: 12px; line-height: 1.3; text-align: left; }
+.plan-service b { font-size: 13.5px; }
+.plan-service span { color: var(--muted); }
+.plan-service .plan-flag { color: var(--warn); font-weight: 700; }
+.plan-service[aria-expanded="true"] { background: var(--accent-soft); }
+.plan-head.is-past .plan-service, .plan-day.is-past .plan-service { opacity: 0.6; }
+.plan-grid .plan-group th { padding: 14px 12px 4px; border-right: 0; text-align: left; }
+.plan-group span { color: var(--dept, var(--muted)); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+/* The label spans the whole row, so it is the label that stays in view. */
+.plan-grid .plan-group span { position: sticky; left: 12px; }
+.plan-grid .plan-cell select, .plan-lines .plan-cell select {
+  width: 100%; min-width: 96px; min-height: 0; height: 38px; padding: 0 8px; border: 0; border-radius: 0; box-shadow: none;
+  background-color: transparent; color: var(--ink); font-size: 13px; text-overflow: ellipsis;
+}
+.plan-grid .plan-cell select:focus, .plan-lines .plan-cell select:focus { border: 0; box-shadow: none; }
+.plan-grid .plan-cell select:focus-visible, .plan-lines .plan-cell select:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.plan-cell.is-unusual { background: color-mix(in srgb, var(--canvas) 70%, var(--surface)); }
+.plan-cell.is-proposed { background: var(--accent-soft); }
+.plan-grid .plan-cell.is-proposed select, .plan-lines .plan-cell.is-proposed select { color: var(--accent); font-weight: 700; }
+.plan-grid .plan-cell.is-flagged select, .plan-lines .plan-cell.is-flagged select { color: var(--danger); font-weight: 700; }
+.plan-cell.is-busy { opacity: 0.55; }
+.plan-name { display: block; padding: 10px; color: var(--muted); white-space: nowrap; }
+.plan-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-top: 12px; font-size: 13.5px; }
+.plan-actions .button-row { margin: 0; }
+.plan-days { display: grid; gap: 10px; }
+.plan-day { padding: 4px 14px 8px; }
+.plan-day .plan-service { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 8px 0; font-size: 13px; }
+.plan-day .plan-service b { font-size: 15px; }
+.plan-day .plan-service .plan-flag { margin-left: auto; }
+.plan-lines { width: 100%; border-collapse: collapse; }
+.plan-lines th[scope="row"] { width: 44%; padding: 0 8px 0 0; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: left; }
+.plan-lines th, .plan-lines td { border-top: 1px solid var(--hairline); }
+.plan-lines .plan-group th { padding: 12px 0 2px; border-top: 0; }
+.plan-lines .plan-cell select { height: 42px; padding: 0 4px; font-size: 16px; }
+.plan-day .plan-detail { padding-top: 4px; }
+.sheet-check { margin-top: 10px; font-size: 13.5px; }
+
 /* ---- the schedule layouts ---- */
 
 .month-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
