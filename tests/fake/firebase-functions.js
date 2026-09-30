@@ -157,7 +157,64 @@ const handlers = {
     }
     return { ok: true, requestStatus: data.decision || null };
   },
-  async syncSheetNow() { return { ok: true, added: 0, updated: 0, newMembers: 0, warnings: [] }; }
+  async syncSheetNow() { return { ok: true, added: 0, updated: 0, newMembers: 0, warnings: [] }; },
+  /* The month planner's save, with the real function's checks. */
+  async saveDepartmentAssignments(data) {
+    const planBatch = 'plan-' + Date.now();
+    const services = {}, saved = [], skipped = [];
+    for (const change of data.changes) {
+      const where = { serviceId: change.serviceId, duty: change.duty };
+      if (!(change.serviceId in services)) services[change.serviceId] = (await getDoc(doc(null, 'schedule', change.serviceId))).data() || null;
+      const service = services[change.serviceId];
+      if (!service) { skipped.push(Object.assign({ reason: 'no-service' }, where)); continue; }
+      const assignments = service.assignments = Object.assign({}, service.assignments);
+      const current = assignments[change.duty] || '';
+      if (change.expectedMemberName != null && change.expectedMemberName !== current) { skipped.push(Object.assign({ reason: 'changed' }, where)); continue; }
+      let name = '';
+      if (change.memberUid) {
+        const snapshot = await getDoc(profileRef(data.departmentId, change.memberUid));
+        const person = snapshot.exists() ? snapshot.data() : null;
+        const reason = !person ? 'no-profile' : person.status !== 'active' ? 'target-inactive' : person.schedulable !== true ? 'target-not-schedulable'
+          : !(person.eligibleDuties || []).includes(change.duty) ? 'target-ineligible'
+            : availableAt(person, service.date, slug(service.service)) !== 'available' ? 'target-unavailable'
+              : Object.keys(assignments).some(duty => duty !== change.duty && assignments[duty] === person.memberName) ? 'already-serving' : '';
+        if (reason) { skipped.push(Object.assign({ reason }, where)); continue; }
+        name = person.memberName;
+      }
+      if (name === current) continue;
+      assignments[change.duty] = name;
+      service.planBatch = planBatch;
+      saved.push(Object.assign({ memberName: name, previous: current, date: service.date, service: service.service }, where));
+    }
+    for (const [id, service] of Object.entries(services)) {
+      if (service && service.planBatch === planBatch) await setDoc(doc(null, 'schedule', id), service);
+    }
+    return { ok: true, departmentId: data.departmentId, planBatch, saved, skipped };
+  },
+  async checkSheet() {
+    const settings = (await getDoc(doc(null, 'app', 'settings'))).data() || {};
+    if (!settings.sheetId) fail('failed-precondition', 'Paste the Sheet\'s link first.');
+    return { ok: true, account: 'server@example.test', tabs: ['2026 Entry'], services: 40, notInApp: 0, notInSheet: 2,
+      differences: [{ service: '2026-07-11_morning', duty: 'Usher Door', sheet: 'S. Grace', app: 'S. Leah' }], differenceCount: 1, warnings: [] };
+  },
+  /* Every Saturday (three services) and Tuesday (evening) from December 1
+     of the year through the next December, as the real function adds them. */
+  async addServiceYear(data) {
+    const pattern = { 6: [['Morning', '10:00'], ['Afternoon', '14:30'], ['Evening', '19:30']], 2: [['Evening', '19:30']] };
+    const day = new Date(Date.UTC(data.year, 11, 1));
+    let added = 0;
+    for (; day <= new Date(Date.UTC(data.year + 1, 11, 31)); day.setUTCDate(day.getUTCDate() + 1)) {
+      const date = day.toISOString().slice(0, 10);
+      for (const [label, time] of pattern[day.getUTCDay()] || []) {
+        const id = date + '_' + slug(label);
+        if ((await getDoc(doc(null, 'schedule', id))).exists()) continue;
+        await setDoc(doc(null, 'schedule', id), { date, time, service: label, worship: day.getUTCDay() === 6 ? 'Sabbath Day' : 'Third Day', choirSong: '', assignments: {} });
+        added++;
+      }
+    }
+    await setDoc(doc(null, 'app', 'settings'), { feastNotice: { year: data.year + 1 } }, { merge: true });
+    return { ok: true, added, sheetRows: 0, from: data.year + '-12-01', to: (data.year + 1) + '-12-31' };
+  }
 };
 
 export const getFunctions = () => ({ fake: true });

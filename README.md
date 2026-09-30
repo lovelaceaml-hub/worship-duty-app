@@ -21,7 +21,7 @@ Functions (Node 22), sign-in (member name and PIN), and push notifications.
 | `app/render.js` | Picks what shows (a lock screen or a tab) and draws it. |
 | `app/actions.js` | Connects buttons and forms to code (see below). |
 | `app/config/` | Departments and duties, and the feature switches in Manage, Features. |
-| `app/lib/` | The rules, with no side effects: dates, services, availability, double duties, workload, requests, names. Unit tested. |
+| `app/lib/` | The rules, with no side effects: dates, services, availability, double duties, workload, Fill, requests, names. Unit tested. |
 | `app/services/` | Reads, writes and server calls: sign-in, requests, departments, notifications, feedback. |
 | `app/screens/` | One file per screen or Manage section. The Schedule has one layout per appearance. |
 | `app/ui/` | Pieces used on many screens: header, tabs, banners, cards. |
@@ -153,15 +153,58 @@ Database rules, only when `firestore.rules` changed:
 npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only firestore:rules --project lv-zion-duties
 ```
 
+## Planning a month
+
+Manage, Services is the month planner. A leader sees their department's
+duties for every service still to come that month: a grid on a computer, a
+list on a phone. Changing a duty saves it at once. **Fill empty duties**
+proposes someone for each empty duty the service usually has, using only
+members who can take it and are available, whoever has served least first,
+and never two duties in one service. The leader changes any proposal, then
+saves them together; each member gets one notification listing their new
+duties. A service's heading opens its details (date, time, choir song,
+replacements, double duties, an administrator's override, delete).
+
+Every November 1 the server adds the regular services from December 1
+through the next December (every Saturday's three and every Tuesday
+evening). Administrators then see a reminder to add that year's feast
+services. Manage, Data can also add a year by hand.
+
+## The Google Sheet
+
+The Sheet stays the master. People type duties into its "<year> Entry"
+tabs (one row per service, one column per duty, header on row 2); the
+Sheet's own script copies them into "Raw Data".
+
+- By default the app only reads the Sheet: every 2 hours (or Import now in
+  Manage, Data) from the published Raw Data link.
+- With **Write changes to the Sheet** on (Manage, Features), the app writes
+  every duty change and new service into the Entry tabs within seconds, adds
+  each new year's tab, and reads the Entry tabs directly. A blank cell never
+  clears a duty in the app; clear it in the app, which blanks the cell.
+- Setting it up, once:
+  1. Turn on the Google Sheets API for the project:
+     `gcloud services enable sheets.googleapis.com --project lv-zion-duties`
+  2. Paste the Sheet's address in Manage, Data, then press **Check the
+     Sheet**. It reads the Sheet, compares it with the app, changes nothing,
+     and says which Google account the app uses.
+  3. Share the Sheet with that account as an Editor, and check again.
+  4. Try the writing on a copy of the Sheet first (File, Make a copy):
+     `node scripts/sheet-try.mjs "<the copy's address>"`, then look at the copy.
+  5. Update the Sheet's script so it reads every year's Entry tab.
+  6. Turn on Write changes to the Sheet.
+- If a write fails, Manage shows why, and the next change tries again.
+
 ## Where the data comes from
 
 - The schedule is imported from the Google Sheet every 2 hours, or right away
-  from Manage, Data. The import only reads the Sheet; nothing is written back.
-  New names in the Sheet join the member list, and names listed in
-  `app/nameMap` count as one person.
+  from Manage, Data (see "The Google Sheet" above). New names in the Sheet
+  join the member list, and names listed in `app/nameMap` count as one
+  person.
 - Everything else lives in Firestore: `schedule`, `app/*` (settings, members,
   leaders), `requests`, `departments/*/members` (rosters and availability),
   `setlists` and `songStats` (songs), and `feedback`.
 - Server jobs on a timer: duty reminders every hour, the Sheet import every
-  2 hours, and every 30 minutes the songs of each confirmed list are counted
-  as sung once 3 hours have passed since its service started.
+  2 hours, every 30 minutes the songs of each confirmed list are counted as
+  sung once 3 hours have passed since its service started, and every
+  November 1 the next planning year's regular services.

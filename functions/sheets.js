@@ -50,6 +50,11 @@ function createSheets(spreadsheetId, request = googleRequest) {
   if (!spreadsheetId) throw new Error('No Sheet link is set.');
   const base = API + encodeURIComponent(spreadsheetId);
   return {
+    /* The spreadsheet's own title. */
+    async title() {
+      const result = await request({ method: 'GET', url: base, params: { fields: 'properties.title' } });
+      return (result.properties && result.properties.title) || '';
+    },
     /* [{ sheetId, title, index }] */
     async tabs() {
       const result = await request({ method: 'GET', url: base, params: { fields: 'sheets.properties(sheetId,title,index)' } });

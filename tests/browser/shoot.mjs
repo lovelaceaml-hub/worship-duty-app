@@ -64,7 +64,7 @@ for (const [label, viewport] of [['phone', PHONE], ['desktop', DESKTOP]]) {
   await page.locator('[data-act="department-member"]').first().click();
   await shoot(page, label + '-manage-member');
   await section(page, 'manage-section', 'services');
-  await page.locator('#view button.service-head').first().click();
+  await page.locator('#view [data-act="plan-open"]').nth(1).click();
   await shoot(page, label + '-manage-service-open');
   await page.locator('[data-act="appearance-open"]').click();
   await shoot(page, label + '-appearance');
