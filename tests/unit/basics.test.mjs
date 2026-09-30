@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { displayName, canonicalName, byTitle, initials } from '../../app/lib/names.js';
+import { displayName, canonicalName, byTitle, initials, BUILT_IN_NAME_MAP } from '../../app/lib/names.js';
 import { clockTime, dayBadge, addMonths, pacificNow } from '../../app/lib/dates.js';
 import { html, raw, esc } from '../../app/html.js';
 import { DEPARTMENTS, DEFAULT_TIMES } from '../../app/config/duties.js';
@@ -63,6 +63,10 @@ test('the server fills in the same usual service times as the app', () => {
   for (const [label, time] of Object.entries(DEFAULT_TIMES)) {
     assert.equal(serviceStart({ date: '2026-10-06', service: label }), pacificTime('2026-10-06', time), label);
   }
+});
+
+test('the server cleans Sheet names with the same list of old spellings as the app', () => {
+  assert.deepEqual(require('../../functions/names.js').BUILT_IN_NAME_MAP, BUILT_IN_NAME_MAP);
 });
 
 test('the server has the same permissions.js as the browser', () => {

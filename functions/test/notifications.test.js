@@ -5,65 +5,8 @@
    last two off. index.js runs on a small in-memory Firestore and a messaging
    stub that records what would be sent. */
 const assert = require('node:assert/strict');
-const Module = require('node:module');
-const path = require('node:path');
 const test = require('node:test');
-
-const sourcePath = path.join(__dirname, '..', 'index.js');
-
-function loadWith(docs) {
-  const sent = [];
-  const snapshot = (docPath, data) => ({
-    id: docPath.split('/').pop(), exists: data !== undefined, data: () => data,
-    ref: { delete: async () => { delete docs[docPath]; } }
-  });
-  const compare = { '==': (a, b) => a === b, '>=': (a, b) => a >= b, '<': (a, b) => a < b };
-  function collection(path) {
-    const filters = [];
-    const query = {
-      doc: id => ({
-        id,
-        get: async () => snapshot(path + '/' + id, docs[path + '/' + id]),
-        set: async value => { docs[path + '/' + id] = value; },
-        collection: name => collection(path + '/' + id + '/' + name)
-      }),
-      where: (field, op, value) => { filters.push(data => compare[op]((data || {})[field], value)); return query; },
-      limit: () => query,
-      get: async () => {
-        const depth = path.split('/').length + 1;
-        const items = Object.keys(docs).filter(key => key.startsWith(path + '/') && key.split('/').length === depth)
-          .filter(key => filters.every(test => test(docs[key]))).map(key => snapshot(key, docs[key]));
-        return { docs: items, size: items.length, forEach: fn => items.forEach(fn) };
-      }
-    };
-    return query;
-  }
-  const db = {
-    collection,
-    runTransaction: () => {},
-    batch: () => ({ set() {}, update() {}, delete() {}, commit: async () => {} })
-  };
-  const messaging = {
-    async sendEachForMulticast(message) {
-      sent.push(message);
-      return { responses: message.tokens.map(() => ({ success: true })) };
-    }
-  };
-  const original = Module._load;
-  Module._load = function load(request, ...rest) {
-    if (request === 'firebase-admin/app') return { initializeApp() {} };
-    if (request === 'firebase-admin/firestore') return { getFirestore: () => db, FieldValue: { delete() {} } };
-    if (request === 'firebase-admin/auth') return { getAuth: () => ({}) };
-    if (request === 'firebase-admin/messaging') return { getMessaging: () => messaging };
-    return original.call(this, request, ...rest);
-  };
-  try {
-    delete require.cache[require.resolve(sourcePath)];
-    return { functions: require(sourcePath), sent };
-  } finally {
-    Module._load = original;
-  }
-}
+const { loadIndex: loadWith } = require('./load-index.js');
 
 const tokens = {
   'tokens/scheduler-phone': { name: 'E. Joseph' },
