@@ -378,6 +378,7 @@ service cloud.firestore {
         'updatedAt',
         'updatedByUid',
         'updatedBy',
+        'revision',
         'createdAt',
         'createdBy',
         'attribution',
@@ -541,11 +542,28 @@ service cloud.firestore {
     }
 
     function canReadDepartmentProfile(departmentId, memberUid, data) {
+      // Reads do not re-validate the full write-time shape (departmentProfileKeysSafe/
+      // departmentProfileValuesSafe/profileIdentityAtPath): create/update on this
+      // path are `if false` for clients, so every stored document was already
+      // shape-validated by the trusted server callables at write time (Admin SDK,
+      // bypasses rules). Re-running that validation on every read is what drove
+      // this rule past Firestore's 1000-expression budget (see the compact-phone
+      // staging review). The read boundary only needs: signed in, the document's
+      // own memberUid field matches the path (so a member can't be handed
+      // another member's doc through a mismatched path), no secret fields, and
+      // the caller is the member themself, an admin, or manages the department.
+      // request.auth.uid == memberUid is checked first so the common case (a
+      // member reading their own profile) short-circuits before the
+      // isAdmin()/managesDepartment() claim lookups ever run.
       return signedIn()
-        && departmentProfileKeysSafe(data)
-        && departmentProfileValuesSafe(data)
-        && profileIdentityAtPath(data, departmentId, memberUid)
-        && (isAdmin() || request.auth.uid == memberUid || managesDepartment(departmentId));
+        && secretFieldsAbsent(data)
+        && data.keys().hasAny(['memberUid'])
+        && data.memberUid == memberUid
+        && (
+          request.auth.uid == memberUid
+          || isAdmin()
+          || managesDepartment(departmentId)
+        );
     }
 
     function canCreateDepartmentProfile(departmentId, memberUid) {
@@ -624,7 +642,8 @@ service cloud.firestore {
         'assignedBy',
         'profileId',
         'overriddenAt',
-        'overriddenByUid'
+        'overriddenByUid',
+        'revision'
       ]) && secretFieldsAbsent(data);
     }
 
@@ -1796,6 +1815,29 @@ service cloud.firestore {
     // Internal delivery receipts are server-only.
     match /sent/{markerId} {
       allow read, write: if false;
+    }
+
+    // Department invitations hold token digests and are written only by the
+    // membership callables through the Admin SDK, which bypasses these rules.
+    // The catch-all below already denies this collection; this match states
+    // the boundary explicitly so a later edit cannot open it by accident.
+    match /departmentInvitations/{invitationId} {
+      allow read, write: if false;
+    }
+
+    // Member feedback (bug reports, suggestions). Any signed-in member may
+    // create one entry stamped with their own auth UID; only administrators
+    // read, update (mark done), or delete. No member can read others' feedback.
+    match /feedback/{feedbackId} {
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'kind', 'message', 'screen', 'appearance', 'createdAt', 'status'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.kind in ['feedback', 'bug', 'suggestion']
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.status == 'new';
+      allow read, update, delete: if isAdmin();
     }
 
     // Every collection not explicitly listed above is deny-by-default.

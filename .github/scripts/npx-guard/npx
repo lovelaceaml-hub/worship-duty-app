@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stands in for npx while design-gallery/release.mjs runs in GitHub Actions.
+# Stands in for npx while scripts/release.mjs runs in GitHub Actions.
 # release.mjs starts Firebase with spawnSync('npx', ['--yes', <WDS_FIREBASE_TOOLS>, ...]).
 # This folder is first on PATH for that one step only, so the guard sees the
 # exact command release.mjs built, blocks anything outside the pinned

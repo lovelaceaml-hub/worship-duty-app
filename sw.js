@@ -1,93 +1,72 @@
-/* Release stamp. scripts/deploy.sh rewrites the 'DEV' token here, in
-   index.html and in app.js at release time, so a new release lands in its own
-   cache and every stamped file below can be served straight from disk. */
+/* Service worker: offline copies of the app files, and push notifications.
+   RELEASE is set by scripts/build.mjs. Each release keeps its own cache, and
+   files carrying that release's ?v= stamp never change, so they are served
+   straight from the cache. Unbuilt source (RELEASE 'DEV') is never cached. */
 const RELEASE = 'DEV';
 const CACHE = 'wds-' + RELEASE;
 
 self.addEventListener('install', () => self.skipWaiting());
 
-self.addEventListener('activate', e => e.waitUntil((async () => {
-  // Drop every previous release's cache. Before this, 'wds-v1' grew forever and
-  // was never cleaned out.
+self.addEventListener('activate', event => event.waitUntil((async () => {
   const names = await caches.keys();
-  await Promise.all(names.filter(n => n !== CACHE).map(n => caches.delete(n)));
+  await Promise.all(names.filter(name => name !== CACHE).map(name => caches.delete(name)));
   await self.clients.claim();
 })()));
 
-// ---- Firebase Cloud Messaging (background delivery) ----
-// Public app config — copied from firebase-config.js (the SW cannot read that
-// file's window global). Data-only messages are sent from the server, so this
-// handler fully controls the notification and there is no double-display.
+/* Push messages from the server are data-only, so this shows each one once. */
 try {
   importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
   importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
   firebase.initializeApp({
-    apiKey: "AIzaSyAdOJ8cETHUqcyEbBSPbV6FnVn76ASB504",
-    authDomain: "lv-zion-duties.firebaseapp.com",
-    projectId: "lv-zion-duties",
-    storageBucket: "lv-zion-duties.firebasestorage.app",
-    messagingSenderId: "246214644879",
-    appId: "1:246214644879:web:2e5ee80c532b57872c8cfa"
+    apiKey: 'AIzaSyAdOJ8cETHUqcyEbBSPbV6FnVn76ASB504',
+    authDomain: 'lv-zion-duties.firebaseapp.com',
+    projectId: 'lv-zion-duties',
+    storageBucket: 'lv-zion-duties.firebasestorage.app',
+    messagingSenderId: '246214644879',
+    appId: '1:246214644879:web:2e5ee80c532b57872c8cfa'
   });
-  const messaging = firebase.messaging();
-  messaging.onBackgroundMessage(payload => {
+  firebase.messaging().onBackgroundMessage(payload => {
     const data = (payload && payload.data) || {};
-    const title = data.title || 'Worship duty update';
-    self.registration.showNotification(title, { body: data.body || '', icon: 'icon.svg' });
+    self.registration.showNotification(data.title || 'Worship duty update', { body: data.body || '', icon: 'icon.svg' });
   });
-} catch (e) {
-  // gstatic unreachable / offline — SW still serves cached content below
+} catch (_error) {
+  // Offline: the cached app still opens.
 }
 
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs =>
-      cs.length ? cs[0].focus() : self.clients.openWindow('./')
-    )
-  );
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then(windows => windows.length ? windows[0].focus() : self.clients.openWindow('./')));
 });
 
-/* Serve a request from the cache, refreshing the copy in the background. */
-async function cacheFirst(req) {
+async function fromCache(request) {
   const cache = await caches.open(CACHE);
-  const hit = await cache.match(req);
+  const hit = await cache.match(request);
   if (hit) return hit;
-  const res = await fetch(req);
-  if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
-  return res;
+  const response = await fetch(request);
+  if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+  return response;
 }
 
-/* Always try the network, fall back to whatever was cached last. */
-async function networkFirst(req) {
+async function fromNetwork(request) {
   try {
-    const res = await fetch(req);
-    if (res && res.ok) {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+    const response = await fetch(request);
+    if (response && response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then(cache => cache.put(request, copy)).catch(() => {});
     }
-    return res;
-  } catch (e) {
-    const hit = await caches.match(req);
+    return response;
+  } catch (error) {
+    const hit = await caches.match(request);
     if (hit) return hit;
-    throw e;
+    throw error;
   }
 }
 
-self.addEventListener('fetch', e => {
-  const req = e.request;
-  if (req.method !== 'GET') return;
-
-  let url;
-  try { url = new URL(req.url); } catch (err) { return; }
-  if (url.origin !== self.location.origin) return; // Firebase and the CDN manage their own
-
-  // A stamped file (app.js?v=..., song-app.css?v=...) can never change under a
-  // given stamp, so it is read straight from disk. A new release changes every
-  // stamp and lands in a fresh cache, so nobody can be served a stale mix.
-  if (url.searchParams.has('v')) { e.respondWith(cacheFirst(req)); return; }
-
-  // index.html and anything unstamped stays network-first, so a new release is
-  // always noticed; the cached copy is the offline fallback.
-  e.respondWith(networkFirst(req));
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (RELEASE === 'DEV' || request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return; // Firebase and the CDN handle their own
+  event.respondWith(url.searchParams.get('v') === RELEASE ? fromCache(request) : fromNetwork(request));
 });

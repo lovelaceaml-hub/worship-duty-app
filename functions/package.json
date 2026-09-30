@@ -1,14 +1,13 @@
 {
   "name": "worship-duty-functions",
-  "description": "Push notifications for the LV Zion worship duty schedule",
+  "description": "Cloud Functions for the LV Zion worship duty app: sign-in, departments, requests, notifications, calendar feed, sheet import",
   "main": "index.js",
   "private": true,
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
-    "test": "node --test test/public-schedule.test.js",
-    "migrate:member-access": "node scripts/migrate-member-access.js"
+    "test": "node --test \"test/*.test.*\""
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",

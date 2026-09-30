@@ -8,9 +8,10 @@ const sheetLib = require('./sheet-lib');
 const icsLib = require('./ics-lib');
 const { publicScheduleService } = require('./public-schedule');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
+const { TIME_ZONE: TZ, pacificDate, serviceStart, longDate, clockTime } = require('./time');
 const {
   DEFAULT_PIN,
   ORDINARY_DEFAULT_PIN,
@@ -19,17 +20,21 @@ const {
 } = require('./member-auth');
 const permissions = require('./permissions');
 const { createDepartmentHandlers, assignmentIdFor } = require('./department-handlers');
+const { currentRevision, nextRevision } = require('./revision');
+const { createWorkflowHandlers } = require('./workflows');
+const { createMembershipHandlers } = require('./membership');
 
 initializeApp();
 const db = getFirestore();
 const REGION = 'us-central1';
-const TZ = 'America/Los_Angeles';
 const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
 const departmentHandlers = createDepartmentHandlers({
   db,
   now: () => Date.now(),
   logger
 });
+const workflowHandlers = createWorkflowHandlers({ db, now: () => Date.now(), logger });
+const membershipHandlers = createMembershipHandlers({ db, now: () => Date.now() });
 
 const MEMBER_ALIASES = Object.freeze({
   'D. Chloe': 'M. Chloe',
@@ -60,6 +65,23 @@ async function reconcileScheduleAssignmentProjection(serviceId, before, after) {
   if (!changedDuties.length) return;
   const batch = db.batch();
   let writes = 0;
+  /* Self-healing for the Needs-replacement markers written by
+     saveMemberAvailability/resolveDutyAttention (Section 3): a marker is
+     live only while schedule.assignments[duty] still equals
+     needsReplacement[duty].memberName. This covers the legacy direct-write
+     and Sheet-sync paths, which do not know about markers at all. */
+  const existingNeedsReplacement = (after && after.needsReplacement) || {};
+  const needsReplacementClears = {};
+  for (const duty of changedDuties) {
+    const marker = existingNeedsReplacement[duty];
+    if (marker && String(afterAssignments[duty] || '') !== String(marker.memberName || '')) {
+      needsReplacementClears[duty] = FieldValue.delete();
+    }
+  }
+  if (Object.keys(needsReplacementClears).length) {
+    batch.set(db.collection('schedule').doc(serviceId), { needsReplacement: needsReplacementClears }, { merge: true });
+    writes += 1;
+  }
   for (const duty of changedDuties) {
     const departmentId = permissions.departmentForDuty(duty);
     if (!departmentId) continue;
@@ -103,7 +125,8 @@ async function reconcileScheduleAssignmentProjection(serviceId, before, after) {
       assignedByUid: 'schedule-projection',
       assignedBy: 'schedule-projection',
       override: true,
-      authorization: 'administrator-schedule-reconciliation'
+      authorization: 'administrator-schedule-reconciliation',
+      revision: nextRevision(existing.exists ? (existing.data() || {}) : {})
     }, { merge: false });
     writes += 1;
   }
@@ -152,31 +175,22 @@ function listFromMemberDocument(data) {
   return [];
 }
 
-function namesFromDepartmentDocument(data) {
-  const result = {};
-  if (!data || typeof data !== 'object') return result;
-  Object.keys(data).forEach(department => {
-    const value = data[department];
-    const names = Array.isArray(value)
-      ? value
-      : value && typeof value === 'object'
-        ? value.members || value.list || value.names || []
-        : [];
-    if (Array.isArray(names)) {
-      result[department] = names.map(canonicalMemberName).filter(Boolean);
-    }
-  });
-  return result;
-}
-
+/* The departments a member belongs to: the name lists in app/departments,
+   plus any department where they have an active profile (members added in
+   Manage by name search or invite link). */
 async function departmentsForMember(name) {
-  try {
-    const snapshot = await db.collection('app').doc('departments').get();
-    const departments = namesFromDepartmentDocument(snapshot.exists ? snapshot.data() : null);
-    return Object.keys(departments).filter(department => departments[department].some(item => item === name));
-  } catch (_error) {
-    return [];
-  }
+  const found = new Set();
+  const listSnap = await db.collection('app').doc('departments').get().catch(() => null);
+  const lists = listSnap && listSnap.exists ? (listSnap.data().map || {}) : {};
+  Object.entries(lists).forEach(([department, names]) => {
+    if (Array.isArray(names) && names.map(canonicalMemberName).includes(name)) found.add(department);
+  });
+  await Promise.all(permissions.DEPARTMENTS.map(async department => {
+    const profiles = await db.collection('departments').doc(department).collection('members')
+      .where('memberName', '==', name).limit(1).get().catch(() => null);
+    if (profiles && !profiles.empty && (profiles.docs[0].data() || {}).status !== 'inactive') found.add(department);
+  }));
+  return Array.from(found);
 }
 
 async function decorateMember(record) {
@@ -359,7 +373,8 @@ function exposeDepartmentCallable(handler) {
       const message = code === 'internal'
         ? 'The department authorization service is unavailable.'
         : String(error.message || 'The requested department action failed.');
-      throw new HttpsError(code, message);
+      const details = error && error.details && typeof error.details === 'object' ? error.details : undefined;
+      throw new HttpsError(code, message, details);
     }
   });
 }
@@ -384,6 +399,40 @@ exports.unassignDepartmentDuty = exposeDepartmentCallable(
 );
 exports.overrideDepartmentAssignment = exposeDepartmentCallable(
   departmentHandlers.overrideDepartmentAssignment
+);
+exports.saveMemberAvailability = exposeDepartmentCallable(
+  workflowHandlers.saveMemberAvailability
+);
+exports.resolveDutyAttention = exposeDepartmentCallable(
+  workflowHandlers.resolveDutyAttention
+);
+
+/* Adding members by name search or invite link. exposeDepartmentCallable
+   only establishes the verified, active, current-role, no-forced-PIN actor;
+   each handler checks rights on top. Search, create and revoke need a leader
+   of the department; accept does not, because any signed-in member may use
+   an invite link they were sent. */
+exports.searchDepartmentCandidates = exposeDepartmentCallable(
+  membershipHandlers.searchDepartmentCandidates
+);
+exports.createDepartmentInvitation = exposeDepartmentCallable(
+  membershipHandlers.createDepartmentInvitation
+);
+exports.revokeDepartmentInvitation = exposeDepartmentCallable(
+  membershipHandlers.revokeDepartmentInvitation
+);
+exports.acceptDepartmentInvitation = exposeDepartmentCallable(
+  membershipHandlers.acceptDepartmentInvitation
+);
+
+/* Every 30 minutes, record confirmed song lists as sung once their service
+   ended (three hours after it started). A second run finds them sung and
+   does nothing. */
+exports.songHistoryRecorder = onSchedule(
+  { schedule: 'every 30 minutes', timeZone: TZ, region: REGION },
+  async () => {
+    await workflowHandlers.recordSongHistory();
+  }
 );
 
 async function readCurrentAccount(request) {
@@ -467,52 +516,6 @@ async function runtimePermissionConfig() {
     : PERMISSION_CONFIG;
 }
 
-exports.updateDepartmentMembership = onCall({ region: REGION }, async request => {
-  const actor = await callableActor(request);
-  const data = request.data || {};
-  const department = String(data.department || '').trim();
-  const memberName = canonicalMemberName(data.memberName);
-  const status = data.status === 'archived' ? 'archived' : 'active';
-  if (!department || !memberName) {
-    throw new HttpsError('invalid-argument', 'Department and member name are required.');
-  }
-  const config = await runtimePermissionConfig();
-  if (!permissions.canManageDepartmentMember(actor, department, { name: memberName }, config)) {
-    throw new HttpsError('permission-denied', 'You cannot manage this department membership.');
-  }
-  const membershipId = encodeURIComponent(department) + '__' + encodeURIComponent(memberName);
-  const actorName = canonicalMemberName(actor.memberName || actor.name || actor.uid);
-  await db.runTransaction(async transaction => {
-    const departmentsRef = db.collection('app').doc('departments');
-    const membersRef = db.collection('app').doc('members');
-    const membershipRef = db.collection('memberships').doc(membershipId);
-    const [departmentsSnap, membersSnap] = await Promise.all([
-      transaction.get(departmentsRef), transaction.get(membersRef)
-    ]);
-    const map = Object.assign({}, departmentsSnap.exists ? departmentsSnap.data().map : {});
-    const roster = Array.isArray(map[department]) ? map[department].map(canonicalMemberName) : [];
-    map[department] = status === 'active'
-      ? Array.from(new Set(roster.concat(memberName))).sort()
-      : roster.filter(name => name !== memberName);
-    const members = listFromMemberDocument(membersSnap.exists ? membersSnap.data() : null)
-      .map(canonicalMemberName);
-    transaction.set(departmentsRef, { map }, { merge: true });
-    if (status === 'active' && !members.includes(memberName)) {
-      transaction.set(membersRef, { list: members.concat(memberName).sort() }, { merge: true });
-    }
-    transaction.set(membershipRef, {
-      department, memberName, memberId: memberName, status,
-      updatedAt: Date.now(), updatedByUid: request.auth.uid, updatedByName: actorName
-    }, { merge: true });
-    transaction.set(db.collection('audit').doc(), {
-      actor: actorName, actorUid: request.auth.uid,
-      action: status === 'active' ? 'department-member-activated' : 'department-member-archived',
-      target: memberName, department, timestamp: Date.now()
-    });
-  });
-  return { ok: true, department, memberName, status };
-});
-
 exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
   const actor = await callableActor(request);
   const data = request.data || {};
@@ -575,33 +578,11 @@ exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
   return { ok: true, config: next };
 });
 
-function dateInTimeZone(date) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).formatToParts(date);
-  const byType = Object.fromEntries(parts.map(part => [part.type, part.value]));
-  return `${byType.year}-${byType.month}-${byType.day}`;
-}
-
-/* ---- body formatting (kept close to the app's dutyLabel) ---- */
-function fmtDate(iso) {
-  return new Date(iso + 'T12:00:00').toLocaleDateString('en-US',
-    { weekday: 'long', month: 'long', day: 'numeric', timeZone: TZ });
-}
-function fmtTime(t) {
-  if (!t) return '';
-  const [hs, m] = t.split(':');
-  let h = parseInt(hs, 10);
-  const ap = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  return h + ':' + m + ' ' + ap;
-}
+/* The duty line in a notification: "Presider · Sabbath Day Morning ·
+   Wednesday, July 1 at 9:00 AM". */
 function bodyFor(duty, svc) {
-  return duty + ' - ' + (svc.worship || '') + ' ' + svc.service + ', ' +
-    fmtDate(svc.date) + ' at ' + fmtTime(svc.time);
+  return duty + ' · ' + [svc.worship, svc.service].filter(Boolean).join(' ') + ' · ' +
+    longDate(svc.date) + (svc.time ? ' at ' + clockTime(svc.time) : '');
 }
 
 /* ---- shared send helpers: names -> tokens -> data-only multicast ----
@@ -661,7 +642,19 @@ async function sendToNames(names, title, bodyFn) {
   await sendToTargets(await loadTokenTargets(), names, title, bodyFn);
 }
 
-/* ---- 1. new-duty alerts ---- */
+/* The switches in Manage, Features, saved in app/settings.features. The ones
+   the server reads are on unless turned off, as in app/config/features.js. */
+async function loadSettings() {
+  const snapshot = await db.collection('app').doc('settings').get();
+  return snapshot.exists ? snapshot.data() || {} : {};
+}
+
+function switchOn(settings, id) {
+  const features = (settings && settings.features) || {};
+  return Object.prototype.hasOwnProperty.call(features, id) ? features[id] === true : true;
+}
+
+/* ---- 1. new-duty alerts (switch: notifications) ---- */
 exports.onScheduleWrite = onDocumentWritten(
   { document: 'schedule/{id}', region: REGION },
   async (event) => {
@@ -690,14 +683,15 @@ exports.onScheduleWrite = onDocumentWritten(
     });
     const names = Object.keys(perName);
     if (!names.length) return;
-    await sendToNames(names, 'New duty assigned to you',
-      (name) => bodyFor(perName[name], svc));
+    if (!switchOn(await loadSettings(), 'notifications')) return;
+    await sendToNames(names, 'New duty for you', name => bodyFor(perName[name], svc));
   });
 
-/* ---- 2. day-before reminders ---- */
+/* ---- 2. day-before reminders (switch: reminders) ---- */
 exports.dutyReminders = onSchedule(
   { schedule: 'every 60 minutes', timeZone: TZ, region: REGION },
   async () => {
+    if (!switchOn(await loadSettings(), 'reminders')) return;
     const now = Date.now();
     const yesterday = new Date(now - 24 * 3600 * 1000);
     const cutoff = yesterday.toISOString().slice(0, 10); // date >= today-1
@@ -710,7 +704,7 @@ exports.dutyReminders = onSchedule(
     for (const d of snap.docs) {
       const svc = d.data() || {};
       if (!svc.date) continue;
-      const when = laStartMs(svc.date, svc.time || '12:00');
+      const when = serviceStart(svc);
       if (!(when > now && when - now < 24 * 3600 * 1000)) continue;
       const svcId = d.id;
       const assignments = svc.assignments || {};
@@ -739,67 +733,38 @@ exports.dutyReminders = onSchedule(
     await Promise.all(old.docs.map(m => m.ref.delete().catch(() => {})));
   });
 
-/* Compute a service's start time as epoch ms, interpreting date+time as
-   America/Los_Angeles wall-clock. Derives LA's UTC offset for that instant
-   via Intl so DST is handled without a fixed offset. */
-function laStartMs(dateIso, time) {
-  const [y, mo, da] = dateIso.split('-').map(Number);
-  const [h, mi] = time.split(':').map(Number);
-  const asUTC = Date.UTC(y, mo - 1, da, h, mi, 0);
-  // offset (ms) between the LA wall-clock and UTC at this instant
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
-  const parts = {};
-  dtf.formatToParts(new Date(asUTC)).forEach(p => { parts[p.type] = p.value; });
-  const asLA = Date.UTC(+parts.year, +parts.month - 1, +parts.day,
-    +parts.hour % 24, +parts.minute, +parts.second);
-  const offset = asLA - asUTC;
-  return asUTC - offset;
-}
-
-/* ---- 3. schedule-change request created: notify the scheduler ---- */
+/* ---- 3. change request sent: tell that department's leaders and the
+   scheduler (Manage, Features), never the member who asked ---- */
 exports.onRequestCreated = onDocumentCreated(
   { document: 'requests/{id}', region: REGION },
-  async (event) => {
-    const snap = event.data;
-    if (!snap || !snap.exists) return;
-    const req = snap.data() || {};
-
-    const settingsSnap = await db.collection('app').doc('settings').get();
-    const schedulerName = (settingsSnap.exists && settingsSnap.data().schedulerName) || '';
-    if (!schedulerName) {
-      logger.info('onRequestCreated: no schedulerName configured, skipping notify');
-      return;
-    }
-
-    const body = req.name + ' requests a change: ' + req.duty + ' - ' +
-      fmtDate(req.date) + ' ' + req.service +
-      (req.note ? ' · "' + req.note + '"' : '');
-
-    if (req.name === schedulerName) {
-      logger.info('onRequestCreated: requester is the scheduler, skipping self-notify', { id: event.params.id });
-      return;
-    }
-
-    await sendToNames([schedulerName], 'Schedule change requested', () => body);
+  async event => {
+    const request = event.data && event.data.exists ? event.data.data() || {} : null;
+    if (!request) return;
+    const [settingsSnap, config] = await Promise.all([db.collection('app').doc('settings').get(), runtimePermissionConfig()]);
+    const scheduler = (settingsSnap.exists && settingsSnap.data().schedulerName) || '';
+    const department = request.department || permissions.departmentForDuty(request.duty);
+    const leaders = ((config.departmentLeaders || {})[department] || []);
+    const requester = canonicalMemberName(request.name);
+    const recipients = Array.from(new Set([scheduler].concat(leaders).map(canonicalMemberName)))
+      .filter(name => name && name !== requester);
+    if (!recipients.length) return;
+    const body = request.name + ' asks to change ' + request.duty + ' · ' + longDate(request.date) + ' ' + request.service +
+      (request.note ? ' · "' + request.note + '"' : '');
+    await sendToNames(recipients, 'Change request', () => body);
   });
 
-/* ---- 4. schedule-change request resolved: notify the requester ---- */
+/* ---- 4. change request answered: tell the member ---- */
 exports.onRequestResolved = onDocumentUpdated(
   { document: 'requests/{id}', region: REGION },
-  async (event) => {
+  async event => {
     const before = event.data && event.data.before;
     const after = event.data && event.data.after;
     if (!before || !before.exists || !after || !after.exists) return;
-    const beforeData = before.data() || {};
-    const afterData = after.data() || {};
-    if (!(beforeData.status === 'pending' && afterData.status !== beforeData.status)) return;
-
-    const body = afterData.duty + ' - ' + fmtDate(afterData.date) + ' ' + afterData.service;
-    await sendToNames([afterData.name], 'Schedule change ' + afterData.status, () => body);
+    const was = before.data() || {}, now = after.data() || {};
+    if (!(was.status === 'pending' && now.status !== was.status)) return;
+    const title = now.status === 'approved' ? 'Your change request was approved'
+      : now.status === 'declined' ? 'Your change request was declined' : 'Your change request was answered';
+    await sendToNames([now.name], title, () => now.duty + ' · ' + longDate(now.date) + ' ' + now.service);
   });
 
 /* ---- 5. per-member .ics calendar feed ----
@@ -829,7 +794,7 @@ exports.ics = onRequest({ region: REGION }, async (req, res) => {
    LV Zion's temporary public release fetches this server-to-server. It cannot
    read app settings, members, requests, tokens, or any other Firestore data. */
 exports.publicSchedule = onRequest({ region: REGION }, async (_req, res) => {
-  const today = dateInTimeZone(new Date());
+  const today = pacificDate();
   const snapshot = await db.collection('schedule')
     .where('date', '>=', today)
     .orderBy('date')
@@ -843,73 +808,82 @@ exports.publicSchedule = onRequest({ region: REGION }, async (_req, res) => {
   res.json({ version: 1, generatedAt: new Date().toISOString(), services });
 });
 
-/* ---- 7. scheduled Sheet -> Firestore sync ----
-   The Google Sheet is the source of truth (other coordinators edit it); the
-   app already pulls the published CSV, but only when someone opens it. This
-   runs the same parse+merge server-side every 2 hours so Firestore (and
-   therefore push reminders, the song app, and the .ics feeds) stays fresh
-   even if nobody opens the app. Same merge policy as the app: only duties
-   the sheet mentions are touched, in-app-only edits are preserved. */
+
+/* ---- 7. Google Sheet import ----
+   Other coordinators keep the schedule in a Google Sheet; the app only reads
+   it. Every 2 hours (and when an administrator taps Import now in Manage,
+   Data) the published sheet is merged into the schedule: only the duties the
+   sheet lists are changed, anything added in the app stays. New names join
+   the member list and their department's name list. The Google Sheet import
+   switch in Manage, Features turns the automatic import off. */
+async function importSheet() {
+  const settingsSnap = await db.collection('app').doc('settings').get();
+  const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+  const response = await fetch(settings.sheetUrl || sheetLib.DEFAULT_SHEET_URL, { redirect: 'follow' });
+  if (!response.ok) throw new HttpsError('unavailable', 'The Google Sheet could not be read (' + response.status + ').');
+  const parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(await response.text()), new Date());
+  if (!parsed.services.length) {
+    throw new HttpsError('failed-precondition', 'The sheet had no services in it, so nothing was changed.');
+  }
+  // Old spellings are mapped to the current ones first, so the sheet cannot
+  // bring back a name the app has already cleaned up.
+  const nameMapSnap = await db.collection('app').doc('nameMap').get();
+  const nameMap = (nameMapSnap.exists && nameMapSnap.data().map) || {};
+  parsed.services.forEach(service => {
+    const assignments = service.assignments || {};
+    Object.keys(assignments).forEach(duty => { assignments[duty] = icsLib.canonName(assignments[duty], nameMap); });
+  });
+  const sheetMembers = Array.from(new Set(parsed.members.map(name => icsLib.canonName(name, nameMap))));
+
+  const [existingSnap, membersSnap, departmentsSnap] = await Promise.all([
+    db.collection('schedule').get(),
+    db.collection('app').doc('members').get(),
+    db.collection('app').doc('departments').get()
+  ]);
+  const existing = {};
+  existingSnap.forEach(document => { existing[document.id] = document.data() || {}; });
+  const plan = sheetLib.planMerge(parsed.services, existing);
+  const members = (membersSnap.exists && membersSnap.data().list) || [];
+  const newMembers = sheetMembers.filter(name => name && !members.includes(name));
+  const rosters = Object.assign({}, departmentsSnap.exists ? departmentsSnap.data().map : {});
+  let rostersChanged = false;
+  parsed.services.forEach(service => Object.entries(service.assignments || {}).forEach(([duty, name]) => {
+    const department = permissions.departmentForDuty(duty);
+    if (!name || !department) return;
+    const roster = rosters[department] || (rosters[department] = []);
+    if (!roster.includes(name)) { rosters[department] = roster.concat(name).sort(); rostersChanged = true; }
+  }));
+
+  if (plan.creates.length || plan.updates.length || newMembers.length || rostersChanged) {
+    // BulkWriter splits a large import into batches under Firestore's limit.
+    const writer = db.bulkWriter();
+    plan.creates.forEach(item => writer.set(db.collection('schedule').doc(item.id), item.svc));
+    plan.updates.forEach(item => writer.set(db.collection('schedule').doc(item.id), item.patch, { merge: true }));
+    if (newMembers.length) writer.set(db.collection('app').doc('members'), { list: members.concat(newMembers).sort() });
+    if (rostersChanged) writer.set(db.collection('app').doc('departments'), { map: rosters }, { merge: true });
+    await writer.close();
+  }
+  const result = { added: plan.creates.length, updated: plan.updates.length, newMembers: newMembers.length, warnings: parsed.warnings.slice(0, 20) };
+  logger.info('importSheet: done', result);
+  return result;
+}
+
 exports.scheduledSheetSync = onSchedule(
   { schedule: 'every 2 hours', timeZone: TZ, region: REGION },
   async () => {
-    const settingsSnap = await db.collection('app').doc('settings').get();
-    const url = (settingsSnap.exists && settingsSnap.data().sheetUrl) || sheetLib.DEFAULT_SHEET_URL;
-
-    let text;
+    if (!switchOn(await loadSettings(), 'sheetSync')) return;
     try {
-      const resp = await fetch(url, { redirect: 'follow' });
-      if (!resp.ok) {
-        logger.error('scheduledSheetSync: sheet fetch failed', { status: resp.status });
-        return;
-      }
-      text = await resp.text();
-    } catch (e) {
-      logger.error('scheduledSheetSync: sheet fetch threw', { error: String(e) });
-      return;
+      await importSheet();
+    } catch (error) {
+      logger.error('scheduledSheetSync: import failed', { error: String(error && error.message || error) });
     }
-    const parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(text), new Date());
-    if (parsed.warnings.length) logger.warn('scheduledSheetSync: parse warnings', { warnings: parsed.warnings });
-    if (!parsed.services.length) {
-      logger.warn('scheduledSheetSync: sheet parsed to zero services - leaving Firestore untouched');
-      return;
-    }
-
-    // Canonicalize sheet names before merging so the sync can't re-introduce
-    // variant spellings the app has already unified (which would silently
-    // misdirect push and .ics feeds keyed on the canonical name). Blank ''
-    // clears (see sheet-lib) pass through unchanged.
-    const nameMapSnap = await db.collection('app').doc('nameMap').get();
-    const nameMap = (nameMapSnap.exists && nameMapSnap.data().map) || {};
-    parsed.services.forEach(svc => {
-      const a = svc.assignments || {};
-      Object.keys(a).forEach(duty => { a[duty] = icsLib.canonName(a[duty], nameMap); });
-    });
-    parsed.members = Array.from(new Set(parsed.members.map(m => icsLib.canonName(m, nameMap)))).sort();
-
-    const existingSnap = await db.collection('schedule').get();
-    const existingById = {};
-    existingSnap.forEach(d => { existingById[d.id] = d.data() || {}; });
-
-    const plan = sheetLib.planMerge(parsed.services, existingById);
-
-    // grow the members list with any new names from the sheet
-    const membersSnap = await db.collection('app').doc('members').get();
-    const members = (membersSnap.exists && membersSnap.data().list) || [];
-    const newMembers = parsed.members.filter(m => m && members.indexOf(m) === -1);
-
-    // Use a BulkWriter so a large import can't blow past Firestore's 500-op
-    // single-batch cap (it auto-chunks and throttles under the hood).
-    if (plan.creates.length || plan.updates.length || newMembers.length) {
-      const writer = db.bulkWriter();
-      plan.creates.forEach(c => writer.set(db.collection('schedule').doc(c.id), c.svc));
-      plan.updates.forEach(u => writer.set(db.collection('schedule').doc(u.id), u.patch, { merge: true }));
-      if (newMembers.length) {
-        writer.set(db.collection('app').doc('members'), { list: members.concat(newMembers).sort() });
-      }
-      await writer.close();
-    }
-    logger.info('scheduledSheetSync: done', {
-      added: plan.creates.length, updated: plan.updates.length, newMembers: newMembers.length
-    });
   });
+
+/* Manage, Data, Import now. Administrators only. */
+exports.syncSheetNow = onCall({ region: REGION }, async request => {
+  const actor = await callableActor(request);
+  if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
+    throw new HttpsError('permission-denied', 'Only an administrator can import the sheet.');
+  }
+  return Object.assign({ ok: true }, await importSheet());
+});

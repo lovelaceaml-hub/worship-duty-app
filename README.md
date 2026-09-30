@@ -1,120 +1,167 @@
-# LV Zion Worship Service
+# LV Zion Worship Duty
 
-The web app the LV Zion congregation uses to see worship duty assignments, get
-reminders, plan songs, and manage department rosters.
+The app LV Zion members use to see the duty schedule and their own duties, ask
+for a change, and plan songs when they preside. Leaders use it to fill duties,
+answer requests, and keep their department rosters.
 
-Last updated: 2026-09-24.
+Live at https://lv-zion-duties.web.app.
 
-## Quick links
+## How it is built
 
-- **Live app:** https://lv-zion-duties.web.app (share this link with members)
-- **Preview channel (private review before a release):** https://lv-zion-duties--design-gallery-review-rtm2fa8h.web.app (it reads and writes real records, and expires seven days after the last preview publish)
-- **GitHub repo (private):** https://github.com/lovelaceaml-hub/worship-duty-app
-- **App.js split:** [plan](docs/PLAN-2026-09-22-APP-JS-SPLIT.md) and its shipped [module map](docs/CODE-INDEX.md#the-appjs-split-2026-09-22); `app.js` is now an entry script importing modules under `core/`, `views/`, `actions/`, merged with F1-F14's feature work on 2026-09-23.
-- **Handoff (current state, branches, open items):** [docs/HANDOFF.md](docs/HANDOFF.md)
-- **Playbook (run and release the app):** [docs/PLAYBOOK.md](docs/PLAYBOOK.md)
-- **User Guide (members):** [docs/USER-GUIDE.md](docs/USER-GUIDE.md)
-- **User Manual (leaders and administrators):** [docs/USER-MANUAL.md](docs/USER-MANUAL.md)
-- **Run records (one file per feature and release):** [docs/runs/keep-look-features/](docs/runs/keep-look-features/)
-- **Rules for agents working in this repo:** [AGENTS.md](AGENTS.md)
-- **Retired:** [Complete phone plan](docs/PLAN-COMPACT-PHONE-REFACTOR.md), historical since 2026-09-22; unmerged work preserved on `claude/compact-runtime` and `claude/compact-server`.
+Plain JavaScript modules in the browser, with no framework and no build step
+while developing. Firebase runs everything else: Hosting, Firestore, Cloud
+Functions (Node 22), sign-in (member name and PIN), and push notifications.
 
-## Current status
+| Where | What |
+| --- | --- |
+| `index.html` | The page: header, tabs, and the space screens draw into. |
+| `app/main.js` | Start-up: cached schedule first, then Firebase, live data, sign-in. |
+| `app/store.js` | All app state in one place: `data`, `session`, `ui`. |
+| `app/sync.js` | Live Firestore listeners that fill `data`. |
+| `app/render.js` | Picks what shows (a lock screen or a tab) and draws it. |
+| `app/actions.js` | Connects buttons and forms to code (see below). |
+| `app/config/` | Departments and duties, and the feature switches in Manage, Features. |
+| `app/lib/` | The rules, with no side effects: dates, services, availability, double duties, workload, requests, names. Unit tested. |
+| `app/services/` | Reads, writes and server calls: sign-in, requests, departments, notifications, feedback. |
+| `app/screens/` | One file per screen or Manage section. The Schedule has one layout per appearance. |
+| `app/ui/` | Pieces used on many screens: header, tabs, banners, cards. |
+| `app/appearance/` | The four appearances and the picker. |
+| `app/presider/` | The song planner. |
+| `styles/base.css` | The Original appearance, and the layout every appearance shares. |
+| `styles/themes/` | Prism, Navy & Cream and Aurora, each drawn over `base.css`. |
+| `permissions.js` | Who may do what. The server has an identical copy in `functions/`; a test keeps the two the same. |
+| `song-lib.js`, `song-seed.js` | Song counts and the song list. The Signal song ingest on Anthony's Mac loads these two files from this folder, so keep them here and keep their behavior. |
+| `functions/` | Cloud Functions. |
+| `firestore.rules` | Database rules. |
+| `scripts/` | Local server, build, release, and the functions deploy. |
+| `tests/` | Unit, rules and browser tests, and the fake Firebase they use. |
 
-Live. Features F1 to F14 shipped on `claude/keep-look-f4f5`; the app.js split
-(source reorganization, zero behavior change) merged with them into `main` on
-2026-09-23 and was released from `main` the same day (Hosting release marker
-`gallery1790151129923`). `main` is now the Hosting source branch.
+### Adding to the app
 
-On 2026-09-17 Anthony rejected the integrated new-shell preview because it
-replaced the app's look. The decision since then: keep the live look, add
-features into the four existing appearances (Original, Prism, Navy & Cream,
-Aurora) one at a time, show each on the preview channel first, and release on
-his approval.
+- **A button or form.** Give it `data-act="name"` (`data-change` for a select
+  or checkbox, `data-input` for typing) and add the handler in the same
+  screen file: `defineActions({ name: { run: el => ..., allowed: el => ... } })`.
+  `allowed` is checked before `run`. An action needs a signed-in member unless
+  it says `public: true`.
+- **Markup.** Build it with `` html`...` `` from `app/html.js`. Values are
+  escaped; wrap trusted markup in `raw()`.
+- **A rule.** Put it in `app/lib/` with a unit test in `tests/unit/`.
+- **A feature switch.** Add it to `app/config/features.js`. It shows up in
+  Manage, Features, and `feature('id')` reads it.
+- **A screen.** Add a file in `app/screens/`, a tab button in `index.html`,
+  and a line in `screen()` in `app/render.js`. A Manage section goes in
+  `app/screens/manage/index.js`.
 
-What members see now:
+## Run it on your computer
 
-- One shared header in every appearance: the LV badge, "LV ZION", the name of
-  the current screen, a small Appearance icon, and the member's name.
-- Tapping the name opens a menu with Availability, Settings, and Sign out.
-- On phones, Schedule, My Duties, Presider, and Manage are a floating bar at
-  the bottom of the screen. Wide screens keep the tabs at the top.
-- On phones, the secondary menus (Manage sections, Presider sections) are one
-  row under the header.
-- A green dot on My Duties means a new duty. A red dot on Manage means a
-  request or conflict needs attention.
-- A round feedback button sits above the bottom bar. Administrators read the
-  notes under Manage, Feedback.
-- Schedule opens on the next upcoming service in Pacific time and advances at
-  each service's start time.
-- Department leaders add members by name search and can reset a member PIN from
-  the roster. No account ID appears anywhere on screen.
-- Dark mode in Prism and Aurora follows the device setting. There are no dark
-  mode or pause buttons.
+```bash
+npm ci
+```
 
-Release history, open items, and standing warnings are in
-[docs/HANDOFF.md](docs/HANDOFF.md).
+```bash
+npm start
+```
 
-## Where the live app comes from
+`npm start` serves http://localhost:5174 with made-up members and a made-up
+schedule, and never touches Firebase. Passcode 2468, every PIN 1234. B. Adam
+is an administrator, E. Joseph leads Worship and Media, S. Grace leads Usher
+Sisters, and M. Ruth edits songs (see `tests/fake/fixture.js`).
 
-| Part | Source branch | Worktree |
-| --- | --- | --- |
-| Hosting (everything members see) | `main` | `/Users/anthony/Projects/worship-duty-app` |
-| Cloud Functions and Firestore rules | `claude/compact-integration` | `/Users/anthony/Projects/worship-duty-app-worktrees/compact-integration` |
+`npm run serve` runs the app against the real database. Anything you change
+there is real.
 
-Warning: the `firestore.rules` file on `main` is older than the live rules
-and must never be deployed. Rules deploy only from the `compact-integration`
-worktree.
+## Tests
 
-## Run the tests
+```bash
+npm run check
+```
 
-None of these need a passcode, a PIN, or a network connection to live data.
+```bash
+npm test
+```
 
-- Unit and contract tests: `node --test tests/*.test.mjs`
-- Identity migration (run for any member identity change): `node --test tests/member-migration.test.mjs`
-- Build the four appearances into one Hosting copy: `node design-gallery/build.mjs`
-- Browser suite for all four appearances (needs `npm ci` for Playwright; on a Mac run it outside the sandbox): `node design-gallery/test.mjs`
-- App.js split check: `node scripts/check-app-split.mjs <baseline-sha>` (see the [split plan](docs/PLAN-2026-09-22-APP-JS-SPLIT.md))
+```bash
+npm run test:functions
+```
 
-The GitHub workflows in `.github/workflows/` run the gallery build, the permission tests, and the browser checks.
+```bash
+npm run test:browser
+```
 
-## How to release (three commands, Anthony runs them)
+- `check`: every module's imports and exports line up.
+- `test`: the rules in `app/lib/`, permissions, and the Firestore rules.
+- `test:functions`: the Cloud Functions. Run `npm ci` in `functions/` once first.
+- `test:browser`: the main flows in a real browser on the fake data: sign-in,
+  change requests, assignments, availability, invite links, feedback, the song
+  planner, appearances, offline, and the built files.
+- `npm run screenshots -- --appearance prism --out /tmp/shots` saves every
+  screen in one appearance.
 
-1. Preview: `node design-gallery/release.mjs --preview` from `main`, then
-   review on the preview channel.
-2. Publish with the maintenance message on, then publish again with it off
-   (`node design-gallery/release.mjs --publish` both times).
-3. Exact copy-paste blocks with absolute paths are in
-   [docs/PLAYBOOK.md, sections 8 and 8a](docs/PLAYBOOK.md). Claude cannot run
-   production deploys (the Claude Code auto mode classifier denies them), so
-   Anthony runs these himself.
+GitHub runs all four on every pull request.
 
-Schedule edits never need a release. They sync live through the database or the
-Google Sheet import.
+## Release
 
-## Other documents
+Only the app itself (Firebase Hosting) is released this way; functions and
+rules are below.
 
-- [Features](docs/FEATURES.md): the on and off switches under Manage, Features
-- [Code index](docs/CODE-INDEX.md) and [feature map](docs/FEATURE-MAP.json): where things live in the code
-- [Design gallery README](design-gallery/README.md): how the four appearances are compiled
-- [Usage Counter](docs/USAGE-COUNTER.md): what the privacy-safe daily counter records
-- [Design](docs/DESIGN.md): the Original appearance's design system
-- [Setup Guide](docs/SETUP-GUIDE.md) (same file as the Playbook) and [Creation Guide](docs/CREATION-GUIDE.md) (same file as the historical Implementation guide)
-- Historical records: [department roster release](docs/DEPARTMENT-ROSTER-AVAILABILITY-RELEASE.md), [authentication release](docs/AUTH-DEPARTMENT-UPGRADE-RELEASE.md), [song app merge](docs/MERGE-HANDOFF.md), [compact design handoff](docs/COMPACT-DESIGN-HANDOFF.md) (rejected new-shell design), [all documents](docs/)
+**From GitHub** (also works from a cloud session):
 
-## Files
+- Every pushed branch except `main` gets its own 7-day preview link, shown in
+  the Actions run summary. Previews use the real data: look, do not tap.
+- To go live, run **Firebase release** on `main`
+  (https://github.com/lovelaceaml-hub/worship-duty-app/actions/workflows/firebase-release.yml).
+  It runs every test first, publishes, then checks that the calendar feed
+  still answers. Tick "maintenance" to show the "being updated" screen, and
+  release again without it to end it.
+- `.github/scripts/deploy-guard.sh` lets these workflows run only the pinned
+  Hosting command for this project. The deploy key (service account
+  `gh-hosting-deploy`, repository secret `FIREBASE_SERVICE_ACCOUNT`) must be
+  rotated by 2027-09-29.
+- To undo a release: Firebase console, Hosting, site `lv-zion-duties`,
+  Release history, Rollback on the release before it.
 
-- `index.html`: the app shell, the shared header markup, and the Original styles
-- `core/`, `views/`, `actions/`: the app modules that `app.js` loads
-- `member-access.js`, `department-*.js`: member identity, department-leader access, and department workflow helpers used by the browser
-- `live-design/`: the earlier two-choice design candidate, kept frozen as history (the [design gallery README](design-gallery/README.md) is current)
-- `tests/`, `scripts/`: tests and build or release helpers (not deployed)
-- `app.js`: entry script, imports `core/`, `views/`, `actions/dispatch.js` (see [docs/CODE-INDEX.md](docs/CODE-INDEX.md#the-appjs-split-2026-09-22) for the module map)
-- `permissions.js`: who may do what, used by the browser
-- `song-app.js`, `song-lib.js`, `song-seed.js`, `song-app.css`: the Presider song planner, loaded only when opened
-- `design-gallery/`: compiles Original, Prism, Navy & Cream, and Aurora into one Hosting build, and releases it
-- `prototype/`, `prototype-prism/`: the Aurora and Prism appearance sources the gallery compiles
-- `firebase-config.js`: public Firebase web config and Web Push key
-- `functions/`, `firestore.rules`: server code and rules. On `main` they are OLDER than what is live (see the warning above)
-- `sw.js`, `manifest.json`, `icon.svg`: make the app installable and able to receive push
-- `seed-data.js`: the original May to July 2026 spreadsheet import, kept as the offline fallback
+**From your Mac:**
+
+```bash
+node scripts/release.mjs preview
+```
+
+```bash
+node scripts/release.mjs live
+```
+
+The preview is the approval link (channel `design-gallery-review`, valid 7
+days). It uses the real data too. The build stamps every file with the
+release, so a phone never mixes two versions. `node scripts/release.mjs live
+--maintenance` shows the "being updated" screen.
+
+Cloud Functions, when `functions/` changed. Deploy them before the app when
+the app needs the new server code.
+
+```bash
+node scripts/deploy-functions.mjs
+```
+
+This deploys this app's functions by name. Never run a bare `firebase deploy`
+or `firebase deploy --only functions`: the Firebase project also holds another
+app's functions (`onVercelScheduleWrite` and `worshipVercelReconcile`), and
+those commands would offer to delete them.
+
+Database rules, only when `firestore.rules` changed:
+
+```bash
+npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only firestore:rules --project lv-zion-duties
+```
+
+## Where the data comes from
+
+- The schedule is imported from the Google Sheet every 2 hours, or right away
+  from Manage, Data. The import only reads the Sheet; nothing is written back.
+  New names in the Sheet join the member list, and names listed in
+  `app/nameMap` count as one person.
+- Everything else lives in Firestore: `schedule`, `app/*` (settings, members,
+  leaders), `requests`, `departments/*/members` (rosters and availability),
+  `setlists` and `songStats` (songs), and `feedback`.
+- Server jobs on a timer: duty reminders every hour, the Sheet import every
+  2 hours, and every 30 minutes the songs of each confirmed list are counted
+  as sung once 3 hours have passed since its service started.

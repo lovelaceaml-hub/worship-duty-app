@@ -1,12 +1,17 @@
 name: Firebase release (Hosting only, live site)
 
 # Publishes main to the live site https://lv-zion-duties.web.app through
-# design-gallery/release.mjs --publish. Run only when Anthony says to release
-# Worship Duty. It deploys Hosting only; Functions and Firestore rules stay
-# manual from the compact-integration worktree (see AGENTS.md).
+# scripts/release.mjs live. Run only when Anthony says to release Worship Duty.
+# It deploys Hosting only; Functions (scripts/deploy-functions.mjs) and
+# Firestore rules stay manual (see README.md).
 
 on:
   workflow_dispatch:
+    inputs:
+      maintenance:
+        description: Show the "being updated" screen (release again without it to end it)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -62,16 +67,18 @@ jobs:
       - name: Guard, release.mjs still builds only the pinned Hosting commands
         run: bash .github/scripts/deploy-guard.sh source
 
-      - name: Pre-release checks from AGENTS.md (node tests, including the Pacific next-service boundaries)
-        run: node --test tests/*.test.mjs
-
       - name: Install test dependencies
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Pre-release checks from AGENTS.md (four appearances with mocked Firebase)
-        run: node design-gallery/test.mjs
+      - name: Pre-release checks (modules, rules including the Pacific next-service boundaries)
+        run: |
+          npm run check
+          npm test
+
+      - name: Pre-release checks (main flows and all four appearances, on fake data)
+        run: npm run test:browser
 
       - name: Write deploy credentials
         env:
@@ -88,9 +95,10 @@ jobs:
       - name: Preflight, the deploy account can see the ics function behind the /ics/** rewrite
         run: bash .github/scripts/deploy-guard.sh ics-preflight
 
-      - name: Publish through release.mjs --publish (guarded, Hosting only)
+      - name: Publish through release.mjs live (guarded, Hosting only)
         env:
           DEPLOY_GUARD_MODE: release
+          MAINTENANCE: ${{ inputs.maintenance && '--maintenance' || '' }}
         run: |
           set -o pipefail
           export REAL_NPX="$(command -v npx)"
@@ -99,7 +107,7 @@ jobs:
           # ics function, and would then publish a broken /ics/** rewrite.
           rc=0
           PATH="$GITHUB_WORKSPACE/.github/scripts/npx-guard:$PATH" \
-            node design-gallery/release.mjs --publish 2>&1 | tee "$RUNNER_TEMP/deploy.log" || rc=$?
+            node scripts/release.mjs live $MAINTENANCE 2>&1 | tee "$RUNNER_TEMP/deploy.log" || rc=$?
           bash .github/scripts/deploy-guard.sh release-result "$rc" "$RUNNER_TEMP/deploy.log"
 
       - name: Read-only check, the live calendar feed still answers

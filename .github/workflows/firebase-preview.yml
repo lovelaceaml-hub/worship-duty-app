@@ -1,9 +1,9 @@
 name: Firebase preview (Hosting only)
 
 # Every pushed branch except main gets its own temporary Firebase Hosting
-# preview channel, built and deployed by design-gallery/release.mjs. Branch
-# previews never use design-gallery-review (Anthony's approval channel) or the
-# live site. Nothing here deploys Functions, Firestore rules or indexes.
+# preview channel, built and deployed by scripts/release.mjs. Branch previews
+# never use design-gallery-review (Anthony's approval channel) or the live
+# site. Nothing here deploys Functions, Firestore rules or indexes.
 # Previews read and write REAL records: look, do not tap.
 
 on:
@@ -72,7 +72,7 @@ jobs:
           export REAL_NPX="$(command -v npx)"
           chmod +x .github/scripts/npx-guard/npx
           PATH="$GITHUB_WORKSPACE/.github/scripts/npx-guard:$PATH" \
-            node design-gallery/release.mjs --preview --channel "$GUARD_PREVIEW_CHANNEL" 2>&1 | tee "$RUNNER_TEMP/deploy.log"
+            node scripts/release.mjs preview --channel "$GUARD_PREVIEW_CHANNEL" 2>&1 | tee "$RUNNER_TEMP/deploy.log"
 
       - name: Preview link and read-only load check
         env:
@@ -91,8 +91,8 @@ jobs:
           code="$(curl -sL -o "$RUNNER_TEMP/index.html" -w '%{http_code}' "$url/")"
           echo "HTTP $code"
           test "$code" = "200"
-          grep -q 'app.js' "$RUNNER_TEMP/index.html"
-          curl -sfL "$url/design-gallery-release.json" | grep -q '"design": "appearance-gallery-v1"'
+          grep -q 'app/main.js' "$RUNNER_TEMP/index.html"
+          curl -sfL "$url/release.json" | grep -q '"release"'
           for p in /.git/HEAD /.github/workflows/firebase-preview.yml; do
             c="$(curl -s -o /dev/null -w '%{http_code}' "$url$p")"
             echo "$p -> HTTP $c"

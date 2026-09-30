@@ -3,14 +3,14 @@
 #
 # The project also holds live Cloud Functions that belong to another app
 # (onVercelScheduleWrite, worshipVercelReconcile), plus this app's own
-# Functions and Firestore rules, which are deployed by hand from the
-# compact-integration worktree. GitHub Actions may only ever deploy Hosting,
-# and only through design-gallery/release.mjs.
+# Functions and Firestore rules, which are deployed by hand (functions with
+# scripts/deploy-functions.mjs). GitHub Actions may only ever deploy Hosting,
+# and only through scripts/release.mjs.
 #
 # Usage:
 #   deploy-guard.sh source
-#       Check that design-gallery/release.mjs still builds the pinned
-#       Hosting-only firebase-tools commands (fails early, before any build).
+#       Check that scripts/release.mjs still builds the pinned Hosting-only
+#       firebase-tools commands (fails early, before any build).
 #   deploy-guard.sh command <preview|release> <arguments release.mjs gave npx>
 #       Check the exact command release.mjs is about to run. Called by
 #       .github/scripts/npx-guard/npx, which stands in for npx in Actions.
@@ -19,13 +19,13 @@
 #       Read-only check that the deploy account can see the ics function.
 #   deploy-guard.sh channel <branch>
 #       Print the preview channel id for a branch.
-#   deploy-guard.sh config <path to firebase.gallery.json>
-#       Check the generated Hosting config names exactly one site,
+#   deploy-guard.sh config <path to firebase.json>
+#       Check the Hosting config names exactly one site,
 #       lv-zion-duties, keeps the one reviewed predeploy hook, and has no
 #       postdeploy, pinTag, source or frameworksBackend (hooks run outside
 #       the npx guard, and the other keys change what a Hosting deploy does).
 #   deploy-guard.sh release-result <exit code> <release log>
-#       After release.mjs --publish: fail loudly, with the rollback steps, if
+#       After release.mjs live: fail loudly, with the rollback steps, if
 #       firebase-tools could not resolve the ics function for /ics/**.
 #   deploy-guard.sh ics-live
 #       Read-only GET of the documented calendar feed on the live site after a
@@ -39,26 +39,26 @@ PROJECT="lv-zion-duties"
 # release.mjs through WDS_FIREBASE_TOOLS.
 FIREBASE_TOOLS="firebase-tools@15"
 SITE="lv-zion-duties"
-# The one reviewed Hosting predeploy hook (firebase.json on main, 2026-09-28).
-PREDEPLOY="node scripts/guard-gallery-deploy.mjs"
+# The one reviewed Hosting predeploy hook: the build (firebase.json, 2026-09-30).
+PREDEPLOY="node scripts/build.mjs"
 LIVE_URL="https://lv-zion-duties.web.app"
 # The example feed the ics function documents in its own usage message
 # (functions/index.js: "e.g. /ics/B.%20Anthony"). Public by design.
 ICS_CHECK_PATH="/ics/B.%20Anthony"
 ROLLBACK="Roll back now: open https://console.firebase.google.com/project/lv-zion-duties/hosting/sites/lv-zion-duties , find Release history, and choose Rollback on the release before this one."
 ROOT="${GUARD_REPO_ROOT:-$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)}"
-CONFIG="$ROOT/.hosting-gallery/firebase.gallery.json"
+CONFIG="$ROOT/firebase.json"
 CHANNEL_RE='^[a-z0-9]([a-z0-9-]{0,34}[a-z0-9])?$'
 
 block() { echo "BLOCKED: $*" >&2; exit 1; }
 
 check_source() {
-  local f="$ROOT/design-gallery/release.mjs"
-  [ -f "$f" ] || block "design-gallery/release.mjs is missing."
+  local f="$ROOT/scripts/release.mjs"
+  [ -f "$f" ] || block "scripts/release.mjs is missing."
   local pins=(
-    "const releaseArgs=args.includes('--publish')?['deploy','--only','hosting']:['hosting:channel:deploy',previewChannel,'--expires','7d'];"
-    "const firebase=['--yes',firebaseTools];"
-    "[...firebase,...releaseArgs,'--config',path.join(dest,'firebase.gallery.json'),'--project','lv-zion-duties']"
+    "const releaseArgs = target === 'live' ? ['deploy', '--only', 'hosting'] : ['hosting:channel:deploy', previewChannel, '--expires', '7d'];"
+    "const firebase = ['--yes', firebaseTools];"
+    "[...firebase, ...releaseArgs, '--config', path.join(repo, 'firebase.json'), '--project', 'lv-zion-duties']"
   )
   local p
   for p in "${pins[@]}"; do
@@ -140,14 +140,14 @@ check_config() {
     const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
     const h = c.hosting;
     const fail = m => { console.error("BLOCKED: " + m); process.exit(1); };
-    if (!h || Array.isArray(h) || h.site !== process.argv[2]) fail("the generated Hosting config must name exactly one site, " + process.argv[2] + ".");
+    if (!h || Array.isArray(h) || h.site !== process.argv[2]) fail("the Hosting config must name exactly one site, " + process.argv[2] + ".");
     // Hooks run as plain shell commands outside the npx guard, so only the
     // one reviewed predeploy hook may be present, exactly as it is on main.
     if (h.predeploy !== process.argv[3]) fail("hosting.predeploy must be exactly " + JSON.stringify(process.argv[3]) + " (found " + JSON.stringify(h.predeploy) + "). Review the change, then update PREDEPLOY in .github/scripts/deploy-guard.sh.");
     for (const k of ["postdeploy", "pinTag", "source", "frameworksBackend"]) {
-      if (Object.prototype.hasOwnProperty.call(h, k)) fail("the generated Hosting config must not set hosting." + k + " (hooks and framework or pinned-Functions options change what a Hosting deploy does).");
+      if (Object.prototype.hasOwnProperty.call(h, k)) fail("the Hosting config must not set hosting." + k + " (hooks and framework or pinned-Functions options change what a Hosting deploy does).");
     }
-    console.log("Guard: generated Hosting config targets only site " + h.site + ", with only the reviewed predeploy hook.");
+    console.log("Guard: the Hosting config targets only site " + h.site + ", with only the reviewed predeploy hook.");
   ' "$f" "$SITE" "$PREDEPLOY"
 }
 
@@ -167,7 +167,7 @@ ics_preflight() {
     });'
 }
 
-# After release.mjs --publish. firebase-tools only WARNS when it cannot find
+# After release.mjs live. firebase-tools only WARNS when it cannot find
 # the function behind a rewrite and then publishes a 1st gen style /ics/**
 # rewrite that does not reach the 2nd gen ics service (deploy/hosting/
 # convertConfig.js), so a green run could ship broken calendar links.
@@ -192,7 +192,7 @@ release_result() {
     exit 1
   fi
   if [ "$rc" -ne 0 ]; then
-    echo "::error::release.mjs --publish failed (exit $rc). Read this step's log; if the live site changed and looks wrong: $ROLLBACK"
+    echo "::error::release.mjs live failed (exit $rc). Read this step's log; if the live site changed and looks wrong: $ROLLBACK"
     exit "$rc"
   fi
   echo "Guard: the release log shows the /ics/** rewrite resolved to the ics function."
