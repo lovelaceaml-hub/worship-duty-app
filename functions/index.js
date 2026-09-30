@@ -642,7 +642,19 @@ async function sendToNames(names, title, bodyFn) {
   await sendToTargets(await loadTokenTargets(), names, title, bodyFn);
 }
 
-/* ---- 1. new-duty alerts ---- */
+/* The switches in Manage, Features, saved in app/settings.features. The ones
+   the server reads are on unless turned off, as in app/config/features.js. */
+async function loadSettings() {
+  const snapshot = await db.collection('app').doc('settings').get();
+  return snapshot.exists ? snapshot.data() || {} : {};
+}
+
+function switchOn(settings, id) {
+  const features = (settings && settings.features) || {};
+  return Object.prototype.hasOwnProperty.call(features, id) ? features[id] === true : true;
+}
+
+/* ---- 1. new-duty alerts (switch: notifications) ---- */
 exports.onScheduleWrite = onDocumentWritten(
   { document: 'schedule/{id}', region: REGION },
   async (event) => {
@@ -671,13 +683,15 @@ exports.onScheduleWrite = onDocumentWritten(
     });
     const names = Object.keys(perName);
     if (!names.length) return;
+    if (!switchOn(await loadSettings(), 'notifications')) return;
     await sendToNames(names, 'New duty for you', name => bodyFor(perName[name], svc));
   });
 
-/* ---- 2. day-before reminders ---- */
+/* ---- 2. day-before reminders (switch: reminders) ---- */
 exports.dutyReminders = onSchedule(
   { schedule: 'every 60 minutes', timeZone: TZ, region: REGION },
   async () => {
+    if (!switchOn(await loadSettings(), 'reminders')) return;
     const now = Date.now();
     const yesterday = new Date(now - 24 * 3600 * 1000);
     const cutoff = yesterday.toISOString().slice(0, 10); // date >= today-1
@@ -854,16 +868,10 @@ async function importSheet() {
   return result;
 }
 
-function sheetImportOn(settings) {
-  const features = (settings && settings.features) || {};
-  return features.sheetSync !== false;
-}
-
 exports.scheduledSheetSync = onSchedule(
   { schedule: 'every 2 hours', timeZone: TZ, region: REGION },
   async () => {
-    const settingsSnap = await db.collection('app').doc('settings').get();
-    if (!sheetImportOn(settingsSnap.exists ? settingsSnap.data() : {})) return;
+    if (!switchOn(await loadSettings(), 'sheetSync')) return;
     try {
       await importSheet();
     } catch (error) {

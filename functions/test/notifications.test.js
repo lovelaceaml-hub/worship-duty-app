@@ -1,8 +1,9 @@
 'use strict';
 
-/* Who gets a phone notification when a member asks for a change, and when
-   the request is answered. index.js runs on a small in-memory Firestore and
-   a messaging stub that records what would be sent. */
+/* Who gets a phone notification: for a change request and its answer, a new
+   duty, and a reminder, and that the switches in Manage, Features turn the
+   last two off. index.js runs on a small in-memory Firestore and a messaging
+   stub that records what would be sent. */
 const assert = require('node:assert/strict');
 const Module = require('node:module');
 const path = require('node:path');
@@ -12,18 +13,33 @@ const sourcePath = path.join(__dirname, '..', 'index.js');
 
 function loadWith(docs) {
   const sent = [];
-  const snapshot = (id, data) => ({ id, exists: data !== undefined, data: () => data });
+  const snapshot = (docPath, data) => ({
+    id: docPath.split('/').pop(), exists: data !== undefined, data: () => data,
+    ref: { delete: async () => { delete docs[docPath]; } }
+  });
+  const compare = { '==': (a, b) => a === b, '>=': (a, b) => a >= b, '<': (a, b) => a < b };
+  function collection(path) {
+    const filters = [];
+    const query = {
+      doc: id => ({
+        id,
+        get: async () => snapshot(path + '/' + id, docs[path + '/' + id]),
+        set: async value => { docs[path + '/' + id] = value; },
+        collection: name => collection(path + '/' + id + '/' + name)
+      }),
+      where: (field, op, value) => { filters.push(data => compare[op]((data || {})[field], value)); return query; },
+      limit: () => query,
+      get: async () => {
+        const depth = path.split('/').length + 1;
+        const items = Object.keys(docs).filter(key => key.startsWith(path + '/') && key.split('/').length === depth)
+          .filter(key => filters.every(test => test(docs[key]))).map(key => snapshot(key, docs[key]));
+        return { docs: items, size: items.length, forEach: fn => items.forEach(fn) };
+      }
+    };
+    return query;
+  }
   const db = {
-    collection(name) {
-      return {
-        doc: id => ({ get: async () => snapshot(id, docs[name + '/' + id]) }),
-        get: async () => {
-          const items = Object.keys(docs).filter(key => key.startsWith(name + '/'))
-            .map(key => snapshot(key.slice(name.length + 1), docs[key]));
-          return { docs: items, forEach: fn => items.forEach(fn) };
-        }
-      };
-    },
+    collection,
     runTransaction: () => {},
     batch: () => ({ set() {}, update() {}, delete() {}, commit: async () => {} })
   };
@@ -94,5 +110,35 @@ test('the member hears when their request is approved or declined', async () => 
     });
     assert.deepEqual(recipients(sent), ['member-phone']);
     assert.equal(sent[0].data.title, title);
+  }
+});
+
+/* A service 12 hours from now, in Pacific time, as the schedule stores it. */
+function serviceSoon() {
+  const start = new Date(Date.now() + 12 * 3600 * 1000);
+  const part = type => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(start).find(item => item.type === type).value;
+  return { date: part('year') + '-' + part('month') + '-' + part('day'), time: part('hour') + ':' + part('minute'), service: 'Evening', worship: 'Third Day',
+    assignments: { 'Usher Door': 'S. Leah' } };
+}
+
+test('a member hears about a new duty, unless New duty alerts is off', async () => {
+  const before = { date: '2026-10-03', time: '09:00', service: 'Morning', assignments: { 'Usher Door': 'S. Naomi' } };
+  const after = Object.assign({}, before, { assignments: { 'Usher Door': 'S. Leah' } });
+  const event = { data: { before: { exists: true, data: () => before }, after: { exists: true, data: () => after } }, params: { id: '2026-10-03_morning' } };
+  for (const [features, expected] of [[{}, ['member-phone']], [{ notifications: false }, []]]) {
+    const { functions, sent } = loadWith(Object.assign({ 'app/settings': { features } }, tokens));
+    await functions.onScheduleWrite.run(event);
+    assert.deepEqual(recipients(sent), expected, JSON.stringify(features));
+    if (expected.length) assert.equal(sent[0].data.title, 'New duty for you');
+  }
+});
+
+test('reminders go out in the 24 hours before a duty, unless Day-before reminders is off', async () => {
+  for (const [features, expected] of [[{}, ['member-phone']], [{ reminders: false }, []]]) {
+    const { functions, sent } = loadWith(Object.assign({ 'app/settings': { features }, 'schedule/soon': serviceSoon() }, tokens));
+    await functions.dutyReminders.run({});
+    assert.deepEqual(recipients(sent), expected, JSON.stringify(features));
+    if (expected.length) assert.equal(sent[0].data.title, 'Duty reminder');
   }
 });

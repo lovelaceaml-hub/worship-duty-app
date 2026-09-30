@@ -54,5 +54,5 @@ test('role changes need a leader manager and are recorded', () => {
 
 test('the sheet import needs an administrator when started by hand, and respects its switch', () => {
   assert.match(source, /exports\.syncSheetNow[\s\S]*permissions\.isAdmin\(actor/);
-  assert.match(source, /exports\.scheduledSheetSync[\s\S]*sheetImportOn\(/);
+  assert.match(source, /exports\.scheduledSheetSync[\s\S]*switchOn\(await loadSettings\(\), 'sheetSync'\)/);
 });
