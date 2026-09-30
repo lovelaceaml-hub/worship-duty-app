@@ -1,0 +1,97 @@
+/* The Presider song planner. Loaded with the planner; uses the same tokens
+   as base.css, so every appearance restyles it through its own tokens. */
+
+#song-root { --row-gap: 10px; }
+#song-root .planner-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 4px 2px 10px; }
+#song-root .planner-role { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+#song-root .planner-name { color: var(--heading); font-size: 18px; font-weight: 750; }
+#song-root .planner-next { color: var(--muted); font-size: 13px; }
+#song-root .planner-sections { display: flex; gap: 6px; margin: 0 0 16px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+#song-root .planner-sections button { flex: 1; min-height: 42px; border: 0; border-radius: 9px; background: none; color: var(--muted); font-size: 14px; font-weight: 650; }
+#song-root .planner-sections button.is-active { background: var(--accent); color: var(--on-accent); }
+
+/* ---- service cards ---- */
+
+#song-root .svc-card.is-other { border-style: dashed; }
+#song-root .svc-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 10px; padding-bottom: 10px; border-bottom: 1px solid var(--hairline); }
+#song-root .svc-title { color: var(--heading); font-size: 17px; }
+#song-root .presider { margin-left: auto; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; }
+#song-root .svc-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin: 8px 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+#song-root .song-state { font-weight: 700; }
+#song-root .song-state.is-none { color: var(--warn); }
+#song-root .song-state.is-picked, #song-root .song-state.is-changed { color: var(--accent); }
+#song-root .song-state.is-confirmed, #song-root .song-state.is-sung { color: var(--ok); }
+#song-root .svc-roles { display: grid; gap: 2px; margin: 6px 0 4px; }
+#song-root .svc-role { display: flex; gap: 8px; font-size: 13.5px; }
+#song-root .svc-role span { flex: 0 0 120px; color: var(--muted); }
+
+/* ---- order of worship and runsheet ---- */
+
+#song-root .order { margin: 10px 0 4px; }
+#song-root .order-head { margin: 12px 0 6px; color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+#song-root .order-head:first-child { margin-top: 0; }
+#song-root .order-step { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--hairline); font-size: 14.5px; }
+#song-root .order-step .num { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+#song-root .order-step .step-note { color: var(--muted); }
+#song-root .order-step .who { color: var(--heading); font-weight: 650; }
+#song-root .runsheet { font-size: 17px; }
+#song-root .runsheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 4px; }
+#song-root .runsheet .order-step { padding: 12px 0; font-size: 18px; }
+
+/* ---- Library: the list being built, then the songs ---- */
+
+#song-root .library { display: grid; gap: 16px; }
+#song-root .slots { display: grid; gap: 6px; margin: 12px 0; }
+#song-root .slot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; }
+#song-root .slot-name { flex: 0 0 96px; color: var(--muted); }
+#song-root .slot-song { font-weight: 650; }
+#song-root .slot-song.is-empty { color: var(--faint); font-weight: 400; font-style: italic; }
+#song-root .builder textarea { margin-top: 8px; }
+#song-root .total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 12px 0 8px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--muted); font-size: 12.5px; }
+#song-root .total strong { color: var(--heading); font-size: 24px; font-variant-numeric: tabular-nums; }
+#song-root .set-list { margin: 0; padding: 0; list-style: none; }
+#song-root .set-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--hairline); font-size: 14.5px; }
+#song-root .set-row .num { color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+#song-root .set-row .time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+#song-root .set-row .move { display: flex; }
+#song-root .set-row .icon-button { min-width: 34px; min-height: 34px; font-size: 16px; }
+#song-root .confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding: 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; }
+#song-root .confirm.is-changed { background: var(--danger-soft); color: var(--danger); }
+#song-root .confirm.is-done { display: block; background: var(--ok-soft); color: var(--ok); font-weight: 650; }
+#song-root .song-controls { display: grid; gap: 10px; }
+#song-root .song-controls .chips { margin: 0; }
+#song-root .sort { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 650; }
+#song-root .sort select { width: auto; min-height: 38px; font-size: 14px; }
+#song-root .sort .hint { margin: 0 0 0 auto; }
+#song-root .song-list { margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+#song-root .song { position: relative; border-bottom: 1px solid var(--hairline); }
+#song-root .song:last-child { border-bottom: 0; }
+#song-root .song-row { display: grid; grid-template-columns: 44px 10px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 50px; padding: 8px 56px 8px 12px; border: 0; background: none; font-size: 14.5px; text-align: left; }
+#song-root .song-row.is-static { padding-right: 12px; border-bottom: 1px solid var(--hairline); cursor: default; }
+#song-root .song-row.is-static:last-child { border-bottom: 0; }
+#song-root .song-row .num { color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+#song-root .song-row .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#song-root .song-row .time, #song-root .song-row .times { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#song-root .add { position: absolute; top: 7px; right: 10px; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--surface)); border-radius: 50%; background: var(--surface); color: var(--accent); font-size: 20px; font-weight: 700; line-height: 1; }
+#song-root .add.is-in { background: var(--accent); color: var(--on-accent); }
+#song-root .add.is-recent { border-color: var(--warn); }
+#song-root .add-count { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--brand-rose); color: #fff; font-size: 10px; }
+#song-root .song-detail { padding: 0 12px 12px 64px; font-size: 13.5px; }
+#song-root .song-detail .plain-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+#song-root .bar-row { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 5px 0; font-size: 13.5px; }
+#song-root .bar { height: 8px; overflow: hidden; border-radius: 4px; background: var(--hairline); }
+#song-root .bar span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+#song-root .bar-row .hint { margin: 0; }
+
+@media (min-width: 900px) {
+  #song-root .library { grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.4fr); align-items: start; }
+  #song-root .library-set { position: sticky; top: 70px; }
+  /* The list being built sits in the narrower column; the total shows the time. */
+  #song-root .set-row { grid-template-columns: 40px minmax(0, 1fr) auto auto; }
+  #song-root .set-row .time { display: none; }
+}
+@media (max-width: 640px) {
+  #song-root .song-detail { padding-left: 12px; }
+  #song-root .set-row { grid-template-columns: 40px minmax(0, 1fr) auto auto; }
+  #song-root .set-row .time { display: none; }
+}

@@ -1,3 +1,0 @@
-/* Preserve original runtime visibility gates above all presentation rules.
- * Feature flags, member roles and site/editor locks own the hidden class. */
-.prism .hidden { display: none !important; }

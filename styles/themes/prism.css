@@ -1,0 +1,781 @@
+/* Prism: an indigo accent, clean white cards on a very light canvas, the
+   round LV badge, the main tabs as a pill group in the header (a floating bar
+   on phones), and a month calendar beside the chosen day. It follows the
+   device's dark mode. Loaded after base.css when a member picks Prism, so
+   every rule here is scoped to html[data-appearance="prism"]. */
+
+/* ---- tokens ---- */
+
+html[data-appearance="prism"] {
+  color-scheme: light;
+  --brand: #3153ed;
+  --brand-deep: #3153ed;
+  --brand-dark: #172544;
+  --brand-rose: #c23a5e;
+  --ink: #172544;
+  --muted: #596780;
+  --faint: #64718a;
+  --canvas: #f8f9fd;
+  --surface: #ffffff;
+  --line: #e3e8f1;
+  --hairline: #edf0f6;
+  --field-line: #d3dbe9;
+  --accent: #3153ed;
+  --accent-2: #5268f2;
+  --accent-soft: #eff3ff;
+  --accent-grad: linear-gradient(120deg, #3254f0, #5268f2);
+  --heading: #172544;
+  --on-accent: #ffffff;
+  --danger: #ab3450;
+  --danger-soft: #fff0f3;
+  --ok: #246b53;
+  --ok-soft: #edf7f1;
+  --warn: #805218;
+  --warn-soft: #fff5e5;
+  --shadow: 0 5px 22px rgba(29, 56, 96, 0.04);
+  --shadow-soft: 0 3px 10px rgba(29, 56, 96, 0.05);
+  --shadow-bar: 0 14px 34px rgba(24, 52, 102, 0.22), 0 3px 10px rgba(24, 52, 102, 0.12);
+  --focus: #6a82ff;
+  --radius: 16px;
+  --radius-small: 9px;
+  --font: "Inter", "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --gutter: 44px;
+  --page: 1638px;
+  /* Prism's own */
+  --accent-fill: #3153ed;      /* solid selections and primary buttons, always with white text */
+  --accent-hover: #2842d6;
+  --subtle: #f6f8fd;           /* quiet inner panels */
+  --pill: #f3f5fb;             /* the tab group, the view switch and round buttons */
+  --pill-hover: #e7ecfb;
+  --seg-on: #ffffff;
+  --panel-top: linear-gradient(120deg, #edf3ff, #f2f1fb);
+  --note-bg: #edf4ff;
+  --note-ink: #2c4fc4;
+  --sand: #f3e9d9;
+  --sand-ink: #6f5a3d;
+  --badge-dot: #b1e3ea;
+  --attention: #c56630;
+  --flag-ok: #9a6210;
+  --switch-off: #b3bfd6;
+  --cal-hover: #f4f7ff;
+  --cal-outside: #f7f8fc;
+  --morning-bg: #f0f4fe;
+  --morning-ink: #4a5f82;
+  --morning-dot: #7391d2;
+  --afternoon-bg: #fcf4e9;
+  --afternoon-ink: #7d5c2f;
+  --afternoon-dot: #c69b60;
+  --evening-bg: #efedf9;
+  --evening-ink: #685683;
+  --evening-dot: #9283b0;
+  --menu-shadow: 0 18px 44px rgba(24, 52, 102, 0.16);
+  --dialog-shadow: 0 26px 80px rgba(24, 37, 79, 0.24);
+  --backdrop: rgba(16, 32, 66, 0.42);
+  --head-h: 82px;
+  --nav-h: 49px;
+  --sticky-top: 18px;
+  --icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.8-3.8'/%3E%3C/svg%3E");
+  --icon-sun: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4'/%3E%3C/svg%3E");
+  --icon-sunrise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 18a5 5 0 0 0-10 0M12 2v7M4.2 10.2l1.4 1.4M1.5 18h2M20.5 18h2M18.4 11.6l1.4-1.4M22.5 22h-21M8 6l4-4 4 4'/%3E%3C/svg%3E");
+  --icon-moon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z'/%3E%3C/svg%3E");
+  --icon-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 2.5 3 6.1 6.7 1-4.9 4.7 1.2 6.7-6-3.2-6 3.2 1.2-6.7-4.9-4.7 6.7-1Z'/%3E%3C/svg%3E");
+  --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  --icon-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E");
+  --icon-music: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E");
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-appearance="prism"] {
+    color-scheme: dark;
+    --brand: #a7bcff;
+    --brand-deep: #4467ef;
+    --brand-dark: #edf2ff;
+    --ink: #edf2ff;
+    --muted: #b9c4dc;
+    --faint: #aebbd3;
+    --canvas: #141d30;
+    --surface: #1e2a42;
+    --line: #36435e;
+    --hairline: #303d56;
+    --field-line: #4b5a78;
+    --accent: #a7bcff;
+    --accent-2: #829bff;
+    --accent-soft: #2d3e68;
+    --accent-grad: linear-gradient(110deg, #4467f1, #6778ee);
+    --heading: #edf2ff;
+    --danger: #ffb5c5;
+    --danger-soft: #4b3042;
+    --ok: #9bddba;
+    --ok-soft: #243e3d;
+    --warn: #f0cc96;
+    --warn-soft: #453c2e;
+    --shadow: 0 5px 22px rgba(0, 0, 0, 0.2);
+    --shadow-soft: 0 3px 10px rgba(0, 0, 0, 0.2);
+    --shadow-bar: 0 14px 34px rgba(0, 0, 0, 0.5), 0 3px 10px rgba(0, 0, 0, 0.32);
+    --focus: #8ba5ff;
+    --accent-fill: #4467ef;
+    --accent-hover: #5577f2;
+    --subtle: #23314b;
+    --pill: #26334e;
+    --pill-hover: #30405f;
+    --seg-on: #34456d;
+    --panel-top: linear-gradient(110deg, #283c67, #36335c);
+    --note-bg: #2c3c61;
+    --note-ink: #c5d3ff;
+    --sand: #4e4437;
+    --sand-ink: #efdab6;
+    --badge-dot: #7fc4cf;
+    --attention: #e08a55;
+    --switch-off: #50617f;
+    --cal-hover: #263659;
+    --cal-outside: #1a2439;
+    --morning-bg: #283a60;
+    --morning-ink: #c3d4f7;
+    --morning-dot: #8fa9e6;
+    --afternoon-bg: #40382d;
+    --afternoon-ink: #ecd0aa;
+    --afternoon-dot: #d8ab70;
+    --evening-bg: #35304c;
+    --evening-ink: #d4c7f0;
+    --evening-dot: #a896d0;
+    --menu-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+    --dialog-shadow: 0 26px 80px rgba(0, 0, 0, 0.55);
+    --backdrop: rgba(5, 9, 20, 0.62);
+  }
+}
+
+@media (max-width: 1200px) {
+  html[data-appearance="prism"] { --gutter: 28px; }
+}
+@media (max-width: 760px) {
+  html[data-appearance="prism"] { --gutter: 22px; }
+}
+@media (max-width: 640px) {
+  html[data-appearance="prism"] { --gutter: 16px; --head-h: 66px; }
+}
+@media (max-width: 380px) {
+  html[data-appearance="prism"] { --gutter: 12px; }
+}
+
+/* ---- page and header ---- */
+
+html[data-appearance="prism"] body::before { display: none; }
+
+/* The header is a white band across the whole window with a hairline under
+   it (the border image paints past the page's side padding). */
+html[data-appearance="prism"] .header {
+  min-height: var(--head-h);
+  gap: 10px 16px;
+  padding: 0;
+  border-bottom: 0;
+  border-image: linear-gradient(var(--surface) calc(100% - 1px), var(--line) calc(100% - 1px)) fill 0 / 0 / 0 100vmax;
+}
+html[data-appearance="prism"] .brand { gap: 12px; }
+html[data-appearance="prism"] .brand-mark { position: relative; width: 41px; height: 41px; background: var(--accent-fill); color: #fff; font-size: 15px; font-weight: 720; letter-spacing: -0.04em; }
+html[data-appearance="prism"] .brand-mark::after { content: ""; position: absolute; right: -2px; bottom: -2px; box-sizing: border-box; width: 13px; height: 13px; border: 3px solid var(--surface); border-radius: 50%; background: var(--badge-dot); }
+html[data-appearance="prism"] .brand-name { color: var(--ink); font-size: 14px; font-weight: 800; letter-spacing: 0.045em; line-height: 1.2; }
+html[data-appearance="prism"] .brand-screen { margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: 0.17em; line-height: 1.3; }
+html[data-appearance="prism"] .sync-status { min-height: 30px; padding: 4px 11px; border: 0; border-radius: 999px; background: var(--subtle); color: var(--muted); font-size: 11.5px; font-weight: 700; box-shadow: none; }
+html[data-appearance="prism"] .sync-status::before { width: 6px; height: 6px; }
+html[data-appearance="prism"] .sync-status.is-live { background: var(--ok-soft); color: var(--ok); }
+html[data-appearance="prism"] .header-tools { gap: 4px; }
+html[data-appearance="prism"] .icon-button { border-radius: 12px; color: var(--muted); }
+html[data-appearance="prism"] .icon-button:hover { background: var(--pill-hover); color: var(--accent); }
+html[data-appearance="prism"] .account-chip { gap: 9px; padding: 3px 6px 3px 3px; border-radius: 999px; color: var(--ink); font-size: 12.5px; font-weight: 650; }
+html[data-appearance="prism"] .account-chip:hover { background: var(--pill); }
+html[data-appearance="prism"] .account-initials { width: 34px; height: 34px; background: var(--sand); color: var(--sand-ink); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+html[data-appearance="prism"] .account-name { max-width: 160px; }
+html[data-appearance="prism"] .account-caret { color: var(--muted); }
+html[data-appearance="prism"] .account-menu { top: calc(100% + 8px); min-width: 200px; padding: 7px; border-color: var(--line); border-radius: 18px; box-shadow: var(--menu-shadow); }
+html[data-appearance="prism"] .account-menu button { min-height: 44px; padding: 8px 13px; border-radius: 12px; color: var(--ink); font-size: 13.5px; }
+html[data-appearance="prism"] .account-menu button:hover,
+html[data-appearance="prism"] .account-menu button:focus-visible { background: var(--accent-soft); color: var(--accent); }
+html[data-appearance="prism"] .account-menu .account-sign-out { border-top-color: var(--hairline); border-radius: 0 0 12px 12px; color: var(--danger); }
+html[data-appearance="prism"] .account-menu .account-sign-out:hover,
+html[data-appearance="prism"] .account-menu .account-sign-out:focus-visible { background: var(--danger-soft); color: var(--danger); }
+html[data-appearance="prism"] .account-who { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+
+/* ---- main tabs: a pill group in the header row on wider screens ---- */
+
+@media (min-width: 641px) {
+  html[data-appearance="prism"] .tabs {
+    position: relative;
+    top: auto;
+    z-index: 71;
+    width: max-content;
+    max-width: 100%;
+    gap: 6px;
+    /* Pulled up into the middle of the header row, then back out below it. */
+    margin: calc((var(--head-h) + var(--nav-h)) / -2) auto calc((var(--head-h) - var(--nav-h)) / 2 + 24px);
+    padding: 5px;
+    border: 0;
+    border-radius: 30px;
+    background: var(--pill);
+  }
+  html[data-appearance="prism"] .tab { flex: none; gap: 8px; min-height: 39px; padding: 9px 18px; border: 0; border-radius: 24px; background: none; color: var(--muted); font-size: 13px; font-weight: 650; white-space: nowrap; transition: background-color 0.15s, color 0.15s; }
+  html[data-appearance="prism"] .tab svg { display: block; width: 17px; height: 17px; }
+  html[data-appearance="prism"] .tab:hover { background: var(--pill-hover); color: var(--accent); }
+  html[data-appearance="prism"] .tab.is-active { background: var(--accent-fill); color: #fff; box-shadow: 0 3px 8px rgba(49, 83, 237, 0.2); }
+  html[data-appearance="prism"] .tab-dot { top: 6px; right: 8px; width: 7px; height: 7px; background: var(--attention); box-shadow: 0 0 0 2px var(--pill); }
+  html[data-appearance="prism"] .tab-dot.is-new { background: var(--ok); }
+  html[data-appearance="prism"] .feedback-button { right: max(24px, env(safe-area-inset-right)); bottom: calc(24px + env(safe-area-inset-bottom)); }
+}
+/* Tall enough screens keep the header row, with the tabs, in view. */
+@media (min-width: 641px) and (min-height: 600px) {
+  html[data-appearance="prism"] { --sticky-top: calc(var(--head-h) + 18px); scroll-padding-top: calc(var(--head-h) + 14px); }
+  html[data-appearance="prism"] .header { position: sticky; top: 0; z-index: 70; }
+  html[data-appearance="prism"] .tabs { position: sticky; top: calc((var(--head-h) - var(--nav-h)) / 2); }
+}
+/* Narrower screens make room for the tabs: the sync status becomes a dot,
+   the account chip shows initials only, and the tabs lose their icons. */
+@media (min-width: 641px) and (max-width: 1099px) {
+  html[data-appearance="prism"] .sync-status { width: 22px; height: 22px; min-height: 0; padding: 0; justify-content: center; overflow: hidden; background: none; color: transparent; font-size: 0; }
+  html[data-appearance="prism"] .sync-status.is-live { background: none; color: transparent; }
+  html[data-appearance="prism"] .sync-status::before { width: 9px; height: 9px; }
+  html[data-appearance="prism"] .account-name { display: none; }
+  html[data-appearance="prism"] .account-who { display: block; }
+}
+@media (min-width: 768px) and (max-width: 899px) {
+  html[data-appearance="prism"] .tab { padding: 9px 14px; }
+  html[data-appearance="prism"] .tab svg { display: none; }
+}
+/* Small tablets: the tabs float as a white pill of their own under the
+   header, below the account menu when it opens over them. */
+@media (min-width: 641px) and (max-width: 767px) {
+  html[data-appearance="prism"] .tabs { z-index: 69; margin: 14px auto 22px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow-soft); }
+  html[data-appearance="prism"] .tab-dot { box-shadow: 0 0 0 2px var(--surface); }
+}
+@media (min-width: 641px) and (max-width: 767px) and (min-height: 600px) {
+  html[data-appearance="prism"] { --sticky-top: calc(var(--head-h) + var(--nav-h) + 40px); scroll-padding-top: calc(var(--head-h) + var(--nav-h) + 36px); }
+  html[data-appearance="prism"] .tabs { top: calc(var(--head-h) + 10px); }
+}
+
+/* ---- banners ---- */
+
+html[data-appearance="prism"] .banner { gap: 14px; padding: 13px 16px; border: 1px solid var(--line); border-left: 3px solid var(--accent-fill); border-radius: 11px; background: var(--accent-soft); color: var(--ink); font-size: 13.5px; line-height: 1.6; }
+html[data-appearance="prism"] .banner.is-alert { border-color: color-mix(in srgb, var(--warn) 25%, var(--line)); border-left-color: var(--warn); background: var(--warn-soft); }
+html[data-appearance="prism"] .banner-close { color: var(--muted); }
+
+/* ---- common pieces ---- */
+
+html[data-appearance="prism"] .card { margin-bottom: 16px; padding: 22px; border-color: var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+html[data-appearance="prism"] .card-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+html[data-appearance="prism"] .card-subtitle { margin: 2px 0 10px; font-size: 16px; font-weight: 700; letter-spacing: -0.015em; }
+html[data-appearance="prism"] .card > .card-subtitle:not(:first-child) { margin-top: 22px; }
+html[data-appearance="prism"] .screen-title { margin: 2px 2px 16px; font-size: 30px; font-weight: 700; letter-spacing: -0.035em; }
+html[data-appearance="prism"] .section-heading { margin: 28px 2px 13px; font-size: 19px; font-weight: 700; letter-spacing: -0.025em; }
+html[data-appearance="prism"] .hint { color: var(--muted); font-size: 13px; line-height: 1.65; }
+html[data-appearance="prism"] .hint.small { font-size: 12px; }
+html[data-appearance="prism"] .hint.warn { color: var(--warn); }
+html[data-appearance="prism"] .empty { margin: 14px 0; padding: 34px 24px; border: 1px dashed var(--line); border-radius: 14px; background: var(--subtle); color: var(--muted); font-size: 14px; line-height: 1.7; }
+html[data-appearance="prism"] .note { border-left-color: var(--accent-fill); }
+html[data-appearance="prism"] .tag { padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; }
+html[data-appearance="prism"] .tag.is-done { background: var(--ok-soft); color: var(--ok); }
+html[data-appearance="prism"] .status { padding: 4px 9px; border-radius: 6px; font-size: 10.5px; letter-spacing: 0.06em; }
+html[data-appearance="prism"] .card-note { padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--subtle); color: var(--muted); font-size: 13px; }
+html[data-appearance="prism"] .card-note.is-warning { border-color: color-mix(in srgb, var(--warn) 22%, var(--line)); background: var(--warn-soft); color: var(--warn); }
+
+/* ---- buttons ---- */
+
+html[data-appearance="prism"] .primary,
+html[data-appearance="prism"] .ghost { min-height: 42px; padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 700; }
+html[data-appearance="prism"] .primary { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; box-shadow: none; }
+html[data-appearance="prism"] .primary:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
+html[data-appearance="prism"] .ghost { border-color: var(--line); background: var(--surface); color: var(--accent); }
+html[data-appearance="prism"] .ghost:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: var(--accent-soft); }
+html[data-appearance="prism"] .ghost.is-on { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: var(--ok-soft); color: var(--ok); }
+html[data-appearance="prism"] .primary.small,
+html[data-appearance="prism"] .ghost.small { min-height: 36px; padding: 7px 12px; border-radius: 9px; font-size: 12.5px; }
+html[data-appearance="prism"] .link { color: var(--accent); font-weight: 700; }
+html[data-appearance="prism"] .link:hover { text-decoration: underline; text-underline-offset: 3px; }
+html[data-appearance="prism"] .link.danger,
+html[data-appearance="prism"] .danger { color: var(--danger); }
+
+/* ---- forms ---- */
+
+html[data-appearance="prism"] input[type=text],
+html[data-appearance="prism"] input[type=password],
+html[data-appearance="prism"] input[type=search],
+html[data-appearance="prism"] input[type=date],
+html[data-appearance="prism"] input[type=time],
+html[data-appearance="prism"] input[type=url],
+html[data-appearance="prism"] select,
+html[data-appearance="prism"] textarea { border-color: var(--field-line); border-radius: 10px; background: var(--surface); color: var(--ink); font-weight: 500; }
+html[data-appearance="prism"] input:focus,
+html[data-appearance="prism"] select:focus,
+html[data-appearance="prism"] textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+html[data-appearance="prism"] select.is-flagged { border-color: var(--warn); background: var(--warn-soft); box-shadow: none; }
+html[data-appearance="prism"] ::placeholder { color: var(--faint); opacity: 1; }
+html[data-appearance="prism"] .field,
+html[data-appearance="prism"] .field-label { color: var(--muted); font-size: 12.5px; font-weight: 700; }
+html[data-appearance="prism"] .check { color: var(--ink); }
+html[data-appearance="prism"] .check input { accent-color: var(--accent-fill); }
+html[data-appearance="prism"] .switch-row { border-top-color: var(--hairline); }
+html[data-appearance="prism"] input[role="switch"] { background: var(--switch-off); }
+html[data-appearance="prism"] input[role="switch"]:checked { background: var(--accent-fill); }
+html[data-appearance="prism"] .picker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin: 0 0 20px; padding: 16px 22px; border-radius: 14px; background: var(--accent-soft); color: var(--ink); font-size: 14.5px; font-weight: 700; }
+html[data-appearance="prism"] .picker select { flex: 1 1 240px; max-width: 420px; border-color: color-mix(in srgb, var(--accent) 20%, var(--line)); }
+html[data-appearance="prism"] .picker-single { margin: 2px 2px 16px; color: var(--heading); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+html[data-appearance="prism"] .help summary { padding: 10px 0; color: var(--accent); line-height: 20px; }
+
+@media (min-width: 641px) and (pointer: fine) {
+  html[data-appearance="prism"] input[type=text],
+  html[data-appearance="prism"] input[type=password],
+  html[data-appearance="prism"] input[type=search],
+  html[data-appearance="prism"] input[type=date],
+  html[data-appearance="prism"] input[type=time],
+  html[data-appearance="prism"] input[type=url],
+  html[data-appearance="prism"] select,
+  html[data-appearance="prism"] textarea { min-height: 44px; font-size: 14.5px; }
+}
+
+/* ---- chips, view switch and section menus ---- */
+
+html[data-appearance="prism"] .chips.scroll-x { margin-inline: -6px; padding: 6px; }
+html[data-appearance="prism"] #song-root .song-controls .chips { margin: -6px; }
+html[data-appearance="prism"] .chip { min-height: 40px; padding: 7px 15px; border-color: var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 12.5px; font-weight: 650; }
+html[data-appearance="prism"] .chip:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); color: var(--accent); }
+html[data-appearance="prism"] .chip.is-active { border-color: color-mix(in srgb, var(--accent) 45%, var(--surface)); background: var(--accent-soft); color: var(--accent); }
+html[data-appearance="prism"] .segmented { gap: 2px; padding: 3px; border: 0; border-radius: 11px; background: var(--pill); }
+html[data-appearance="prism"] .segmented button { min-height: 36px; padding: 6px 15px; border-radius: 8px; color: var(--muted); font-size: 13px; font-weight: 650; }
+html[data-appearance="prism"] .segmented button:hover { color: var(--accent); }
+html[data-appearance="prism"] .segmented button[aria-pressed="true"] { background: var(--seg-on); color: var(--accent); box-shadow: 0 2px 7px rgba(34, 50, 80, 0.1); }
+/* The scrolling section menus keep room around their buttons, so a focus ring is not cut off. */
+html[data-appearance="prism"] .sections { gap: 6px; margin: -6px -6px 22px; padding: 6px 6px 12px; border-bottom: 0; background: linear-gradient(var(--line), var(--line)) 6px 100% / calc(100% - 12px) 1px no-repeat; }
+html[data-appearance="prism"] .sections button { min-height: 40px; padding: 9px 15px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 13.5px; font-weight: 650; }
+html[data-appearance="prism"] .sections button:hover { background: var(--pill); color: var(--accent); }
+html[data-appearance="prism"] .sections button.is-active { background: var(--accent-fill); color: #fff; }
+html[data-appearance="prism"] .sections .count,
+html[data-appearance="prism"] .subnav-top .count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 5px; padding: 0 5px; border-radius: 9px; background: var(--brand-rose); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+
+/* ---- services and duties ---- */
+
+html[data-appearance="prism"] .date-heading { margin: 28px 2px 12px; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+html[data-appearance="prism"] .day-badge { padding: 3px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 10.5px; letter-spacing: 0.05em; }
+html[data-appearance="prism"] .service-head { align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 12px; border-bottom-color: var(--line); }
+html[data-appearance="prism"] .service-title { font-size: 16px; font-weight: 700; letter-spacing: -0.015em; }
+html[data-appearance="prism"] .service-label { color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0; }
+html[data-appearance="prism"] .service-time { padding: 4px 9px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; font-weight: 700; }
+html[data-appearance="prism"] button.service-head:hover .service-title { color: var(--accent); }
+html[data-appearance="prism"] .choir-song { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: var(--muted); font-size: 13.5px; }
+html[data-appearance="prism"] .choir-song::before { content: ""; flex: none; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--icon-music) center / contain no-repeat; mask: var(--icon-music) center / contain no-repeat; }
+html[data-appearance="prism"] .duty-group { margin-top: 16px; }
+html[data-appearance="prism"] .duty-group-name { margin-bottom: 5px; color: var(--dept, var(--faint)); font-size: 11px; font-weight: 750; letter-spacing: 0.07em; }
+html[data-appearance="prism"] .duty-group-name::before { width: 6px; height: 6px; }
+html[data-appearance="prism"] .duty-row { gap: 10px; padding: 5px 0 5px 15px; font-size: 14.5px; }
+html[data-appearance="prism"] .duty-name { color: var(--muted); font-size: 13px; }
+html[data-appearance="prism"] .person { font-weight: 650; }
+html[data-appearance="prism"] .person.is-me { padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+html[data-appearance="prism"] .person.is-empty { color: var(--faint); font-weight: 450; }
+html[data-appearance="prism"] .flag { background: var(--brand-rose); }
+html[data-appearance="prism"] .flag.is-ok { background: var(--flag-ok); }
+html[data-appearance="prism"] .override summary { color: var(--warn); }
+html[data-appearance="prism"] .suggest-label { color: var(--muted); }
+
+/* Manage's open service: the service details in a quiet panel, then one
+   bordered group per department. */
+html[data-appearance="prism"] .service-editor > .field-grid { padding: 4px 16px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
+html[data-appearance="prism"] .service-editor .duty-group { margin-top: 14px; padding: 12px 16px 6px; border: 1px solid var(--line); border-radius: 12px; }
+html[data-appearance="prism"] .service-editor .duty-group-name { margin-bottom: 0; }
+
+/* On wide screens a service's departments sit side by side. */
+@media (min-width: 900px) {
+  html[data-appearance="prism"] .month-list .service-card,
+  html[data-appearance="prism"] .manage-section .service-card:not(.is-open) { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 32px; align-items: start; }
+  html[data-appearance="prism"] .month-list .service-card > :not(.duty-group),
+  html[data-appearance="prism"] .manage-section .service-card:not(.is-open) > :not(.duty-group) { grid-column: 1 / -1; }
+  html[data-appearance="prism"] .service-editor .field-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+  html[data-appearance="prism"] .duty-team { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 32px; align-items: start; }
+  /* Single fields and pickers keep a readable width on wide screens. */
+  html[data-appearance="prism"] .card > .inline-form > select,
+  html[data-appearance="prism"] .card > .inline-form > input { max-width: 480px; }
+  html[data-appearance="prism"] .request-answer .field { max-width: 560px; }
+}
+
+/* ---- Schedule: toolbar ---- */
+
+/* The month title, its count, the arrows, Next service and the view switch
+   share one row; the search and filters sit under it in the same card. */
+html[data-appearance="prism"] .schedule-toolbar { align-items: center; gap: 12px 14px; margin: 0; padding: 18px 22px 16px; border: 1px solid var(--line); border-radius: 17px 17px 0 0; background: var(--surface); }
+html[data-appearance="prism"] .schedule-toolbar .month-nav { display: contents; }
+html[data-appearance="prism"] .month-title { order: 1; font-size: 25px; font-weight: 700; letter-spacing: -0.035em; }
+html[data-appearance="prism"] .month-count { order: 2; margin-top: 4px; color: var(--muted); font-size: 12.5px; }
+html[data-appearance="prism"] .month-buttons { order: 3; margin-left: auto; gap: 6px; }
+html[data-appearance="prism"] .month-buttons .icon-button { width: 38px; min-width: 38px; min-height: 38px; padding: 0; border: 0; border-radius: 50%; background: var(--pill); color: var(--ink); font-size: 20px; }
+html[data-appearance="prism"] .month-buttons .icon-button:hover { background: var(--pill-hover); color: var(--accent); }
+html[data-appearance="prism"] .schedule-toolbar > .ghost { order: 4; }
+html[data-appearance="prism"] .schedule-toolbar > .segmented { order: 5; margin: 0; }
+html[data-appearance="prism"] .schedule-filters { gap: 10px 14px; margin: 0 0 22px; padding: 14px 22px 16px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 17px 17px; background: var(--surface); box-shadow: var(--shadow); }
+html[data-appearance="prism"] .schedule-filters .search { flex: 1 1 320px; max-width: 480px; }
+html[data-appearance="prism"] .schedule-filters select { flex: 0 1 230px; }
+html[data-appearance="prism"] .schedule-filters .check { margin-left: auto; color: var(--muted); font-size: 13px; }
+html[data-appearance="prism"] .search::before { content: ""; position: absolute; top: 50%; left: 13px; width: 16px; height: 16px; transform: translateY(-50%); background: var(--faint); -webkit-mask: var(--icon-search) center / contain no-repeat; mask: var(--icon-search) center / contain no-repeat; pointer-events: none; }
+html[data-appearance="prism"] .search input { padding-left: 38px; padding-right: 38px; border-color: transparent; background: var(--canvas); }
+html[data-appearance="prism"] .search input:focus { border-color: var(--accent); background: var(--surface); }
+html[data-appearance="prism"] .search kbd { border-color: var(--line); background: var(--surface); color: var(--muted); }
+
+/* ---- Schedule: the month calendar ---- */
+
+html[data-appearance="prism"] .schedule-body { gap: 18px; }
+html[data-appearance="prism"] .schedule-body > .month-list { grid-column: 1 / -1; }
+html[data-appearance="prism"] .month-list > .date-heading:first-child { margin-top: 4px; }
+html[data-appearance="prism"] .calendar { padding: 0; border-color: var(--line); border-radius: 17px; box-shadow: var(--shadow); }
+html[data-appearance="prism"] .calendar-weekdays { padding: 14px 0; border-bottom: 1px solid var(--line); }
+html[data-appearance="prism"] .calendar-weekdays span { padding: 0; color: var(--faint); font-size: 11.5px; font-weight: 650; text-transform: none; }
+html[data-appearance="prism"] .calendar-day { position: relative; isolation: isolate; overflow: hidden; gap: 5px; min-width: 0; min-height: 117px; padding: 11px 9px; border: 0; border-right: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); border-radius: 0; background: var(--surface); color: var(--ink); }
+html[data-appearance="prism"] .calendar-day:nth-child(7n) { border-right: 0; }
+html[data-appearance="prism"] .calendar-grid > .calendar-day:nth-last-child(-n+7) { border-bottom: 0; }
+html[data-appearance="prism"] .calendar-grid > .calendar-day:nth-last-child(7) { border-bottom-left-radius: 16px; }
+html[data-appearance="prism"] .calendar-grid > .calendar-day:last-child { border-bottom-right-radius: 16px; }
+html[data-appearance="prism"] .calendar-day:hover { background: var(--cal-hover); }
+html[data-appearance="prism"] .calendar-day:focus-visible { outline-offset: -3px; }
+html[data-appearance="prism"] .calendar-day.is-outside { opacity: 1; background: var(--cal-outside); color: var(--faint); }
+html[data-appearance="prism"] .calendar-day.is-outside .calendar-date { font-weight: 500; }
+html[data-appearance="prism"] .calendar-day.is-selected { background: var(--accent-fill); color: #fff; }
+html[data-appearance="prism"] .calendar-day.is-selected:focus-visible { outline-color: #fff; }
+/* A faint ring in the corner of the chosen day, as Prism drew it. */
+html[data-appearance="prism"] .calendar-day.is-selected::after { content: ""; position: absolute; right: -70px; bottom: -75px; z-index: -1; width: 130px; height: 130px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 50%; }
+html[data-appearance="prism"] .calendar-date { gap: 4px; font-size: 13.5px; font-weight: 600; line-height: 1.2; }
+html[data-appearance="prism"] .calendar-you { padding: 1px 5px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 9.5px; font-weight: 750; line-height: 1.5; }
+html[data-appearance="prism"] .calendar-day.is-selected .calendar-you { background: #fff; color: var(--accent-fill); }
+html[data-appearance="prism"] .calendar-services { gap: 4px; margin-top: 4px; }
+html[data-appearance="prism"] .calendar-service { display: flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 5px; background: var(--morning-bg); color: var(--morning-ink); font-size: 10.5px; font-weight: 650; line-height: 1.4; }
+html[data-appearance="prism"] .calendar-service::before { content: ""; flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--morning-dot); }
+html[data-appearance="prism"] .calendar-service.is-afternoon { background: var(--afternoon-bg); color: var(--afternoon-ink); }
+html[data-appearance="prism"] .calendar-service.is-afternoon::before { background: var(--afternoon-dot); }
+html[data-appearance="prism"] .calendar-service.is-evening { background: var(--evening-bg); color: var(--evening-ink); }
+html[data-appearance="prism"] .calendar-service.is-evening::before { background: var(--evening-dot); }
+html[data-appearance="prism"] .calendar-service.is-mine { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+html[data-appearance="prism"] .calendar-service.is-mine::before { width: 6px; height: 6px; background: var(--accent-fill); }
+html[data-appearance="prism"] .calendar-day.is-selected .calendar-service { background: rgba(255, 255, 255, 0.1); color: #fff; box-shadow: none; }
+html[data-appearance="prism"] .calendar-day.is-selected .calendar-service::before { background: rgba(255, 255, 255, 0.8); }
+html[data-appearance="prism"] .calendar-day.is-selected .calendar-service.is-mine::before { background: #fff; }
+
+/* ---- Schedule: the chosen day ---- */
+
+html[data-appearance="prism"] .day-panel { border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: 0 7px 25px rgba(27, 44, 77, 0.05); }
+html[data-appearance="prism"] .day-panel-title { margin: 0; padding: 20px 21px 18px; border-radius: 16px 16px 0 0; background: var(--panel-top); color: var(--heading); font-size: 21px; font-weight: 700; letter-spacing: -0.03em; }
+html[data-appearance="prism"] .day-panel > .empty { margin: 16px; }
+html[data-appearance="prism"] .day-panel .time-buttons { gap: 7px; margin: 0; padding: 16px 17px 0; }
+html[data-appearance="prism"] .day-panel .time-buttons button { display: flex; flex: 1 1 0; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 0; min-height: 76px; padding: 10px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 700; line-height: 1.3; }
+html[data-appearance="prism"] .day-panel .time-buttons button span { color: var(--muted); font-size: 11.5px; font-weight: 550; }
+html[data-appearance="prism"] .day-panel .time-buttons button::before { content: ""; width: 19px; height: 19px; margin-bottom: 5px; background: currentColor; -webkit-mask: var(--icon-sun) center / contain no-repeat; mask: var(--icon-sun) center / contain no-repeat; }
+html[data-appearance="prism"] .day-panel .time-buttons button[data-service$="_early-morning"]::before { -webkit-mask-image: var(--icon-sunrise); mask-image: var(--icon-sunrise); }
+html[data-appearance="prism"] .day-panel .time-buttons button[data-service$="_evening"]::before { -webkit-mask-image: var(--icon-moon); mask-image: var(--icon-moon); }
+html[data-appearance="prism"] .day-panel .time-buttons button[data-service$="_commemoration"]::before { -webkit-mask-image: var(--icon-star); mask-image: var(--icon-star); }
+html[data-appearance="prism"] .day-panel .time-buttons button:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+html[data-appearance="prism"] .day-panel .time-buttons button[aria-pressed="true"] { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; box-shadow: 0 5px 12px rgba(49, 83, 237, 0.16); }
+html[data-appearance="prism"] .day-panel .time-buttons button[aria-pressed="true"] span { color: #fff; }
+html[data-appearance="prism"] .my-duties-note { position: relative; padding: 10px 12px 10px 34px; border-radius: 10px; background: var(--note-bg); color: var(--note-ink); font-size: 13px; }
+html[data-appearance="prism"] .my-duties-note::before { content: ""; position: absolute; top: 12px; left: 12px; width: 15px; height: 15px; background: currentColor; -webkit-mask: var(--icon-check) center / contain no-repeat; mask: var(--icon-check) center / contain no-repeat; }
+html[data-appearance="prism"] .day-panel .my-duties-note { margin: 14px 17px 0; }
+html[data-appearance="prism"] .day-panel .service-card { margin: 0; padding: 16px 21px 18px; border: 0; border-radius: 0 0 16px 16px; background: none; box-shadow: none; }
+html[data-appearance="prism"] .day-panel .service-card:not(:last-child) { border-bottom: 1px solid var(--line); border-radius: 0; }
+html[data-appearance="prism"] .day-panel .duty-group { margin-top: 14px; }
+html[data-appearance="prism"] .day-panel .duty-row { padding: 7px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
+html[data-appearance="prism"] .day-panel .duty-row:last-child { border-bottom: 0; }
+html[data-appearance="prism"] .day-panel .duty-name { flex: 0 1 48%; min-width: 0; margin-right: auto; font-size: 12.5px; }
+html[data-appearance="prism"] .day-panel .duty-row > .person { text-align: right; }
+html[data-appearance="prism"] .day-panel .edit-link { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: calc(100% - 36px); min-height: 44px; margin: 16px 18px 18px; padding: 10px 14px 10px 16px; border-radius: 10px; background: var(--accent-fill); color: #fff; font-size: 13.5px; font-weight: 700; }
+html[data-appearance="prism"] .day-panel .edit-link:hover { background: var(--accent-hover); text-decoration: none; }
+html[data-appearance="prism"] .day-panel .edit-link::after { content: ""; flex: none; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--icon-arrow) center / contain no-repeat; mask: var(--icon-arrow) center / contain no-repeat; }
+
+/* The calendar and the chosen day side by side. */
+@media (min-width: 761px) {
+  html[data-appearance="prism"] .schedule-calendar .schedule-body { grid-template-columns: minmax(0, 1fr) 290px; align-items: start; gap: 16px; }
+  html[data-appearance="prism"] .day-panel { position: sticky; top: var(--sticky-top); }
+}
+@media (min-width: 1001px) {
+  html[data-appearance="prism"] .schedule-calendar .schedule-body { grid-template-columns: minmax(0, 1fr) 310px; gap: 18px; }
+}
+@media (min-width: 1201px) {
+  html[data-appearance="prism"] .schedule-calendar .schedule-body { grid-template-columns: minmax(0, 1fr) 342px; gap: 22px; }
+}
+@media (min-width: 1600px) {
+  html[data-appearance="prism"] .schedule-calendar .schedule-body { grid-template-columns: minmax(0, 1fr) 370px; }
+  html[data-appearance="prism"] .calendar-day { min-height: 125px; }
+}
+@media (max-width: 1200px) {
+  html[data-appearance="prism"] .calendar-day { min-height: 105px; padding: 9px 6px; }
+  html[data-appearance="prism"] .calendar-service { padding: 3px 4px; gap: 4px; }
+}
+@media (max-width: 1000px) {
+  html[data-appearance="prism"] .calendar-day { min-height: 92px; padding: 8px 5px; }
+  html[data-appearance="prism"] .calendar-service { font-size: 10px; }
+  html[data-appearance="prism"] .calendar-service::before { display: none; }
+}
+
+/* ---- My Duties ---- */
+
+/* The notification and calendar buttons at the top of My Duties sit in one
+   card with their "How this works" note, as Prism's reminders panel did. */
+html[data-appearance="prism"][data-screen="my"] #view > .button-row:first-child { margin: 0; padding: 18px 20px 4px; border: 1px solid var(--line); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; background: var(--surface); }
+html[data-appearance="prism"][data-screen="my"] #view > .button-row:first-child + .help { margin: 0 0 16px; padding: 2px 20px 10px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--radius) var(--radius); background: var(--surface); }
+html[data-appearance="prism"] .song-prompt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; margin: 0 0 16px; padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+html[data-appearance="prism"] .song-prompt .hint { flex: 1 1 260px; margin: 0; }
+html[data-appearance="prism"] .duty-card { gap: 0 16px; margin-bottom: 12px; padding: 14px 18px 14px 14px; border-radius: 15px; }
+html[data-appearance="prism"] .duty-card:hover { border-color: color-mix(in srgb, var(--accent) 22%, var(--line)); }
+html[data-appearance="prism"] .duty-card-toggle:focus-visible { outline-offset: -3px; }
+html[data-appearance="prism"] .duty-date { border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); color: var(--accent); }
+html[data-appearance="prism"] .duty-date b { font-size: 24px; font-weight: 650; letter-spacing: -0.04em; }
+html[data-appearance="prism"] .duty-date small { color: var(--faint); font-size: 10px; font-weight: 700; }
+html[data-appearance="prism"] .duty-body { border-left-color: var(--line); }
+html[data-appearance="prism"] .duty-when { color: var(--ink); }
+html[data-appearance="prism"] .duty-time { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+html[data-appearance="prism"] .duty-worship { color: var(--muted); font-size: 13.5px; }
+html[data-appearance="prism"] .duty-line { min-height: 40px; margin-top: 0; font-size: 15px; font-weight: 650; }
+html[data-appearance="prism"] .request-button { margin: 0; background: var(--accent-soft); color: var(--accent); }
+html[data-appearance="prism"] .request-button:hover { background: var(--pill-hover); }
+html[data-appearance="prism"] .duty-divider { border-top-color: var(--hairline); }
+html[data-appearance="prism"] .duty-team { padding: 2px 14px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
+html[data-appearance="prism"] .request-form { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
+html[data-appearance="prism"] .update,
+html[data-appearance="prism"] .list-item { border-bottom-color: var(--hairline); }
+
+/* ---- Availability and Settings ---- */
+
+html[data-appearance="prism"] .availability-row { padding: 8px 10px 8px 14px; border-color: var(--line); border-radius: 11px; background: var(--surface); }
+html[data-appearance="prism"] .exception { border-color: var(--line); border-radius: 11px; }
+
+/* ---- Manage ---- */
+
+html[data-appearance="prism"] .department-card { border-top: 3px solid var(--dept); }
+html[data-appearance="prism"] .department-card h3 { font-size: 18px; letter-spacing: -0.02em; }
+html[data-appearance="prism"] .list-row { border-bottom-color: var(--hairline); }
+html[data-appearance="prism"] .member-row { border-color: var(--line); }
+html[data-appearance="prism"] .member-row:first-child { border-radius: 12px 12px 0 0; }
+html[data-appearance="prism"] .member-row:last-child { border-radius: 0 0 12px 12px; }
+html[data-appearance="prism"] .member-row:only-child { border-radius: 12px; }
+html[data-appearance="prism"] .member-row.is-inactive { background: var(--subtle); }
+html[data-appearance="prism"] .member-open .tag { justify-self: start; }
+html[data-appearance="prism"] .invite { border-color: var(--field-line); border-radius: 12px; background: var(--subtle); }
+html[data-appearance="prism"] .sticky-actions { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--menu-shadow); }
+html[data-appearance="prism"] .table-wrap { border: 1px solid var(--line); border-radius: 12px; }
+html[data-appearance="prism"] .table th,
+html[data-appearance="prism"] .table td { padding: 10px 13px; border-bottom-color: var(--line); }
+html[data-appearance="prism"] .table th { background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 750; letter-spacing: 0.03em; }
+html[data-appearance="prism"] .table tbody tr:nth-child(even) td { background: var(--subtle); }
+html[data-appearance="prism"] .table tr:last-child td { border-bottom: 0; }
+html[data-appearance="prism"] .pager { gap: 12px; }
+html[data-appearance="prism"] .pager .icon-button { border-radius: 50%; background: var(--pill); color: var(--accent); }
+
+/* ---- sign-in and other gates ---- */
+
+html[data-appearance="prism"] .gate { max-width: 460px; margin-top: 44px; padding: 34px 30px 30px; border-top: 1px solid var(--line); border-radius: 20px; box-shadow: var(--menu-shadow); }
+html[data-appearance="prism"] .gate-title { font-size: 25px; font-weight: 700; letter-spacing: -0.035em; }
+html[data-appearance="prism"] .gate .inline-form { flex-direction: column; align-items: stretch; gap: 11px; margin-top: 20px; }
+html[data-appearance="prism"] .gate .inline-form > input,
+html[data-appearance="prism"] .gate .inline-form > select { flex: none; }
+html[data-appearance="prism"] .gate input[type=password] { background: var(--subtle); text-align: center; letter-spacing: 0.2em; }
+html[data-appearance="prism"] .maintenance { max-width: 560px; }
+html[data-appearance="prism"] .maintenance-service { border-top-color: var(--hairline); }
+html[data-appearance="prism"] .maintenance-service .duty-row { padding-left: 0; }
+
+/* ---- feedback button and dialogs ---- */
+
+html[data-appearance="prism"] .feedback-button { border-color: rgba(255, 255, 255, 0.55); background: var(--accent-grad); box-shadow: 0 8px 22px rgba(49, 83, 237, 0.3); }
+html[data-appearance="prism"] dialog { padding: 24px; border-color: var(--line); border-radius: 18px; box-shadow: var(--dialog-shadow); }
+html[data-appearance="prism"] dialog::backdrop { background: var(--backdrop); }
+html[data-appearance="prism"] dialog h2 { font-size: 20px; font-weight: 750; letter-spacing: -0.02em; }
+html[data-appearance="prism"] .choice-row span { min-height: 44px; border-color: var(--line); border-radius: 10px; font-size: 13px; }
+html[data-appearance="prism"] .choice-row input:checked + span { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
+html[data-appearance="prism"] .appearance-choice { border-color: var(--line); border-radius: 14px; }
+html[data-appearance="prism"] .appearance-choice:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+html[data-appearance="prism"] .appearance-choice[aria-pressed="true"] { border-color: var(--accent-fill); background: var(--accent-soft); }
+
+/* ---- Presider: the song planner ---- */
+
+html[data-appearance="prism"] #song-root .planner-head { align-items: center; gap: 8px 12px; margin: 0 0 16px; padding: 12px 16px; border-radius: 12px; background: var(--note-bg); }
+html[data-appearance="prism"] #song-root .planner-role { padding: 4px 8px; border-radius: 6px; background: var(--surface); color: var(--accent); font-size: 10px; letter-spacing: 0.12em; }
+html[data-appearance="prism"] #song-root .planner-name { font-size: 16px; }
+html[data-appearance="prism"] #song-root .planner-next { margin-left: auto; color: var(--muted); }
+html[data-appearance="prism"] #song-root .planner-sections { justify-content: flex-start; gap: 8px; margin: 0 0 22px; padding: 0 0 12px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
+html[data-appearance="prism"] #song-root .planner-sections button { flex: 0 0 auto; min-width: 92px; min-height: 40px; padding: 9px 20px; border-radius: 999px; font-size: 13.5px; }
+html[data-appearance="prism"] #song-root .planner-sections button:hover { background: var(--pill); color: var(--accent); }
+html[data-appearance="prism"] #song-root .planner-sections button.is-active { background: var(--accent-fill); color: #fff; }
+html[data-appearance="prism"] #song-root .svc-head { border-bottom-color: var(--line); }
+html[data-appearance="prism"] #song-root .svc-title { font-size: 16px; letter-spacing: -0.015em; }
+html[data-appearance="prism"] #song-root .presider { border-radius: 6px; }
+html[data-appearance="prism"] #song-root .svc-role span { color: var(--muted); }
+html[data-appearance="prism"] #song-root .order { padding: 12px 16px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
+html[data-appearance="prism"] #song-root .order-head { color: var(--accent); font-size: 10.5px; letter-spacing: 0.1em; }
+html[data-appearance="prism"] #song-root .order-step { border-bottom-color: var(--line); font-size: 14px; }
+html[data-appearance="prism"] #song-root .order-step:last-child { border-bottom: 0; }
+html[data-appearance="prism"] #song-root .order-step .num,
+html[data-appearance="prism"] #song-root .set-row .num { justify-self: start; min-width: 28px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 650; text-align: center; }
+html[data-appearance="prism"] #song-root .order-step .who { color: var(--accent); }
+html[data-appearance="prism"] #song-root .runsheet .order { padding: 0; border: 0; background: none; }
+html[data-appearance="prism"] #song-root .runsheet .order-step .num { min-width: 32px; padding: 4px 6px; border: 0; background: var(--accent-soft); color: var(--accent); font-size: 12px; }
+html[data-appearance="prism"] #song-root .slot-name { color: var(--muted); }
+html[data-appearance="prism"] #song-root .total { border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line)); border-radius: 12px; background: var(--accent-soft); }
+html[data-appearance="prism"] #song-root .total strong { color: var(--accent); font-size: 28px; font-weight: 650; letter-spacing: -0.03em; }
+html[data-appearance="prism"] #song-root .set-row { border-bottom-color: var(--line); }
+html[data-appearance="prism"] #song-root .set-row .icon-button { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+html[data-appearance="prism"] #song-root .set-row .icon-button[data-act="song-remove"] { color: var(--danger); }
+html[data-appearance="prism"] #song-root .confirm { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 11px; }
+html[data-appearance="prism"] #song-root .confirm.is-changed { border-left-color: var(--danger); }
+html[data-appearance="prism"] #song-root .confirm.is-done { border-left-color: var(--ok); }
+html[data-appearance="prism"] #song-root .song-controls input[type=search] { min-height: 48px; border-color: var(--line); border-radius: 12px; box-shadow: var(--shadow-soft); }
+html[data-appearance="prism"] #song-root .song-controls input[type=search]:focus { border-color: var(--accent); }
+html[data-appearance="prism"] #song-root .song-list { border-color: var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+html[data-appearance="prism"] #song-root .song { border-bottom-color: var(--hairline); }
+html[data-appearance="prism"] #song-root .song-row { min-height: 56px; padding: 10px 58px 10px 14px; gap: 10px; }
+html[data-appearance="prism"] #song-root .song-row.is-static { padding-right: 14px; border-bottom-color: var(--hairline); }
+html[data-appearance="prism"] #song-root .card > .song-row.is-static { padding-right: 0; padding-left: 0; }
+html[data-appearance="prism"] #song-root button.song-row:hover { background: var(--cal-hover); }
+html[data-appearance="prism"] #song-root .song:first-child > .song-row { border-radius: 13px 13px 0 0; }
+html[data-appearance="prism"] #song-root .song:last-child > .song-row { border-radius: 0 0 13px 13px; }
+html[data-appearance="prism"] #song-root .song-row .num { padding: 5px 2px; border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line)); border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; text-align: center; }
+html[data-appearance="prism"] #song-root .song-row .title { font-weight: 600; }
+html[data-appearance="prism"] #song-root .add { top: 10px; border-color: color-mix(in srgb, var(--accent) 22%, var(--line)); background: var(--accent-soft); color: var(--accent); }
+html[data-appearance="prism"] #song-root .add.is-in { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
+html[data-appearance="prism"] #song-root .add.is-recent { border-color: var(--warn); }
+html[data-appearance="prism"] #song-root .song-detail { padding: 12px 16px 14px 68px; background: var(--subtle); }
+html[data-appearance="prism"] #song-root .song:last-child .song-detail { border-radius: 0 0 13px 13px; }
+html[data-appearance="prism"] #song-root .bar { height: 8px; border: 1px solid var(--line); background: var(--subtle); }
+html[data-appearance="prism"] #song-root .bar span { background: var(--accent-fill); }
+html[data-appearance="prism"] #song-root .pager { padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font-weight: 700; }
+
+/* The Library as a studio: songs on the left, the list being built on the right. */
+@media (min-width: 900px) {
+  html[data-appearance="prism"] #song-root .library { grid-template-columns: minmax(0, 1fr) 360px; gap: 26px; }
+  html[data-appearance="prism"] #song-root .library-set { grid-column: 2; grid-row: 1; top: var(--sticky-top); }
+  html[data-appearance="prism"] #song-root .library-songs { grid-column: 1; grid-row: 1; }
+}
+
+/* ---- phones ---- */
+
+@media (max-width: 640px) {
+  html[data-appearance="prism"] .header { gap: 6px 8px; margin-bottom: 18px; }
+  html[data-appearance="prism"] .brand { gap: 10px; }
+  html[data-appearance="prism"] .brand-mark { width: 38px; height: 38px; font-size: 14px; }
+  html[data-appearance="prism"] .brand-mark::after { width: 12px; height: 12px; }
+  html[data-appearance="prism"] .brand-name { font-size: 14px; }
+  html[data-appearance="prism"] .brand-screen { font-size: 9.5px; letter-spacing: 0.15em; }
+  html[data-appearance="prism"] .brand { min-height: 40px; }
+  html[data-appearance="prism"] .sync-status { width: 20px; height: 20px; min-height: 0; padding: 0; justify-content: center; overflow: hidden; background: none; color: transparent; font-size: 0; }
+  html[data-appearance="prism"] .sync-status.is-live { background: none; color: transparent; }
+  html[data-appearance="prism"] .sync-status::before { width: 9px; height: 9px; }
+  html[data-appearance="prism"] .account-chip { gap: 6px; font-size: 12px; }
+  html[data-appearance="prism"] .account-initials { width: 30px; height: 30px; font-size: 10.5px; }
+  html[data-appearance="prism"] .account-name { max-width: 92px; }
+
+  /* The floating tab bar. */
+  html[data-appearance="prism"] .tabs { gap: 4px; padding: 5px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--surface)); border-radius: 22px; background: var(--surface); box-shadow: var(--shadow-bar); }
+  html[data-appearance="prism"] .tab { min-height: 52px; padding: 7px 3px 6px; border-radius: 17px; color: var(--ink); font-size: 11.5px; font-weight: 650; }
+  html[data-appearance="prism"] .tab svg { width: 19px; height: 19px; }
+  html[data-appearance="prism"] .tab.is-active { background: var(--accent-grad); color: #fff; box-shadow: 0 6px 14px rgba(49, 83, 237, 0.3); }
+  html[data-appearance="prism"] .tab-dot { top: 6px; right: calc(50% - 19px); width: 8px; height: 8px; background: var(--attention); box-shadow: 0 0 0 2px var(--surface); }
+  html[data-appearance="prism"] .tab-dot.is-new { background: var(--ok); }
+  html[data-appearance="prism"] .feedback-button { right: 16px; }
+
+  /* A screen's section menu, right under the header. */
+  html[data-appearance="prism"][data-subnav="on"] .header { margin-bottom: 0; }
+  html[data-appearance="prism"][data-subnav="on"] .subnav-top:not([hidden]) { gap: 6px; margin: 0 calc(-1 * var(--gutter)) 18px; padding: 10px var(--gutter); border-bottom: 1px solid var(--line); }
+  html[data-appearance="prism"] .subnav-top button { flex: 1 0 auto; min-height: 42px; padding: 9px 14px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 13.5px; font-weight: 650; }
+  html[data-appearance="prism"] .subnav-top button.is-active { background: var(--accent-fill); color: #fff; }
+
+  html[data-appearance="prism"] .card { padding: 18px 16px; }
+  html[data-appearance="prism"] .screen-title { font-size: 26px; }
+  html[data-appearance="prism"] .picker { padding: 14px 16px; }
+  html[data-appearance="prism"] .picker select { max-width: none; }
+  html[data-appearance="prism"] .gate { margin-top: 24px; padding: 28px 20px 24px; }
+  html[data-appearance="prism"] .sticky-actions { bottom: calc(84px + env(safe-area-inset-bottom)); padding-right: 64px; }
+
+  /* Everything a finger taps is at least 40px tall. */
+  html[data-appearance="prism"] .primary.small,
+  html[data-appearance="prism"] .ghost.small,
+  html[data-appearance="prism"] .link,
+  html[data-appearance="prism"] .segmented button { min-height: 40px; }
+  html[data-appearance="prism"] .request-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; }
+  html[data-appearance="prism"] .duty-line { min-height: 42px; }
+  html[data-appearance="prism"] .availability-row select { min-height: 40px; }
+  html[data-appearance="prism"] #song-root .set-row .icon-button { min-width: 40px; min-height: 40px; }
+  html[data-appearance="prism"] #song-root .add { top: 8px; width: 40px; height: 40px; }
+  html[data-appearance="prism"] #song-root .song-row { min-height: 56px; padding-right: 60px; }
+
+  /* Schedule toolbar: title and arrows, then Next service and the view switch. */
+  html[data-appearance="prism"] .schedule-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title buttons" "count buttons" "next view"; gap: 0 10px; padding: 16px 14px 14px; border-radius: 14px 14px 0 0; }
+  html[data-appearance="prism"] .month-title { grid-area: title; font-size: 22px; }
+  html[data-appearance="prism"] .month-count { grid-area: count; margin: 0; font-size: 12px; }
+  html[data-appearance="prism"] .month-buttons { grid-area: buttons; margin: 0; }
+  html[data-appearance="prism"] .month-buttons .icon-button { width: 40px; min-width: 40px; min-height: 40px; }
+  html[data-appearance="prism"] .schedule-toolbar > .ghost { grid-area: next; justify-self: start; margin-top: 12px; }
+  html[data-appearance="prism"] .schedule-toolbar > .segmented { grid-area: view; margin-top: 12px; }
+  html[data-appearance="prism"] .schedule-filters { gap: 10px; margin-bottom: 16px; padding: 12px 14px 14px; border-radius: 0 0 14px 14px; }
+  html[data-appearance="prism"] .schedule-filters .search { flex: 1 0 100%; max-width: none; }
+  html[data-appearance="prism"] .schedule-filters select { flex: 1 1 150px; min-width: 0; }
+  html[data-appearance="prism"] .schedule-filters .check { margin-left: 0; }
+  html[data-appearance="prism"] .search kbd { display: none; }
+  html[data-appearance="prism"] .search input { padding-right: 12px; }
+
+  /* The calendar shows each day's services as dots; the chosen day lists them. */
+  html[data-appearance="prism"] .calendar { border-radius: 14px; }
+  html[data-appearance="prism"] .calendar-weekdays { padding: 11px 0; }
+  html[data-appearance="prism"] .calendar-weekdays span { font-size: 11px; }
+  html[data-appearance="prism"] .calendar-day { align-items: center; gap: 5px; min-height: 54px; padding: 9px 2px 7px; }
+  html[data-appearance="prism"] .calendar-grid > .calendar-day:nth-last-child(7) { border-bottom-left-radius: 13px; }
+  html[data-appearance="prism"] .calendar-grid > .calendar-day:last-child { border-bottom-right-radius: 13px; }
+  html[data-appearance="prism"] .calendar-date { flex-direction: column; justify-content: flex-start; gap: 3px; font-size: 13.5px; }
+  html[data-appearance="prism"] .calendar-you { padding: 0 4px; font-size: 9px; line-height: 14px; }
+  html[data-appearance="prism"] .calendar-services { display: flex; flex-direction: row; justify-content: center; gap: 3px; margin: 0; }
+  html[data-appearance="prism"] .calendar-service { width: 5px; height: 5px; padding: 0; border-radius: 50%; background: #b4c1d8; color: transparent; font-size: 0; box-shadow: none; }
+  html[data-appearance="prism"] .calendar-service.is-afternoon,
+  html[data-appearance="prism"] .calendar-service.is-evening { background: #b4c1d8; }
+  html[data-appearance="prism"] .calendar-service::before { display: none; }
+  html[data-appearance="prism"] .calendar-service.is-mine { width: 6px; height: 6px; background: var(--accent-fill); }
+  html[data-appearance="prism"] .calendar-day.is-selected .calendar-service { background: rgba(255, 255, 255, 0.6); }
+  html[data-appearance="prism"] .calendar-day.is-selected .calendar-service.is-mine { background: #fff; }
+  html[data-appearance="prism"] .calendar-day.is-selected::after { display: none; }
+  html[data-appearance="prism"] .day-panel { border-radius: 14px; }
+  html[data-appearance="prism"] .day-panel-title { padding: 18px 18px 16px; border-radius: 13px 13px 0 0; font-size: 20px; }
+  html[data-appearance="prism"] .day-panel .time-buttons { padding: 14px 14px 0; }
+  html[data-appearance="prism"] .day-panel .my-duties-note { margin: 14px 14px 0; }
+  html[data-appearance="prism"] .day-panel .service-card { padding: 14px 18px 16px; border-radius: 0 0 13px 13px; }
+  html[data-appearance="prism"] .day-panel .edit-link { width: calc(100% - 28px); margin: 14px; }
+
+  html[data-appearance="prism"] .duty-card { gap: 0 12px; padding: 10px 12px 10px 10px; }
+  html[data-appearance="prism"] .duty-date b { font-size: 21px; }
+  html[data-appearance="prism"] .duty-team { padding: 2px 12px 10px; }
+  html[data-appearance="prism"] .duty-team .duty-row { padding-left: 0; }
+  html[data-appearance="prism"] .duty-name { flex: 0 1 112px; min-width: 0; }
+  html[data-appearance="prism"] .duty-row > .person { white-space: nowrap; }
+  html[data-appearance="prism"] .person.is-me { padding: 2px 6px; }
+  html[data-appearance="prism"] .song-prompt { padding: 14px 16px; }
+  html[data-appearance="prism"] .song-prompt .primary { width: 100%; }
+
+  html[data-appearance="prism"] #song-root .planner-head { padding: 11px 14px; }
+  html[data-appearance="prism"] #song-root .planner-next { margin-left: 0; flex-basis: 100%; }
+  html[data-appearance="prism"] #song-root .song-detail { padding-left: 14px; }
+}
+@media (max-width: 380px) {
+  html[data-appearance="prism"] .account-name { display: none; }
+  html[data-appearance="prism"] .tab { font-size: 11px; }
+}
+
+/* ---- dark mode: colors the tokens cannot reach ---- */
+
+@media (prefers-color-scheme: dark) {
+  html[data-appearance="prism"] .duty-group-name { color: color-mix(in srgb, var(--dept, #aebbd3) 45%, #ffffff); }
+  html[data-appearance="prism"] .calendar-day.is-selected::after { border-color: rgba(255, 255, 255, 0.12); }
+  html[data-appearance="prism"] .tab.is-active { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+  html[data-appearance="prism"] .feedback-button { border-color: rgba(255, 255, 255, 0.2); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+  html[data-appearance="prism"] .day-panel { box-shadow: var(--shadow); }
+  html[data-appearance="prism"] .segmented button[aria-pressed="true"] { box-shadow: 0 2px 7px rgba(0, 0, 0, 0.25); }
+}
+@media (prefers-color-scheme: dark) and (min-width: 641px) {
+  /* Darker, not lighter, pills on the chosen day keep white text readable on the dark accent. */
+  html[data-appearance="prism"] .calendar-day.is-selected .calendar-service { background: rgba(8, 14, 40, 0.2); }
+}
+@media (prefers-color-scheme: dark) and (max-width: 640px) {
+  html[data-appearance="prism"] .calendar-service,
+  html[data-appearance="prism"] .calendar-service.is-afternoon,
+  html[data-appearance="prism"] .calendar-service.is-evening { background: #5d6d8d; }
+  html[data-appearance="prism"] .calendar-service.is-mine { background: var(--accent); }
+}
+
+@media print {
+  html[data-appearance="prism"] .header { position: static; border-image: none; border-bottom: 1px solid var(--line); }
+  html[data-appearance="prism"] .day-panel { position: static; }
+  html[data-appearance="prism"] .calendar-day.is-selected { background: none; color: inherit; outline: 2px solid var(--accent); outline-offset: -2px; }
+}

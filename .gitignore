@@ -1,17 +1,13 @@
-functions/node_modules/
 node_modules/
+functions/node_modules/
 .firebase/
 .env*
 *.log
 .DS_Store
-docs/evidence/
-.hosting-gallery/
-.hosting-live/
-design-gallery-results/
 
-# Test and preview output
-live-design-results/
-preview-artifacts/
+# Build and test output
+dist/
+screenshots/
 coverage/
 test-results/
 playwright-report/
@@ -25,3 +21,6 @@ Thumbs.db
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Worktrees the Claude app makes inside the repository
+.claude/worktrees/

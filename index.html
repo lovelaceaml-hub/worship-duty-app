@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#2383c6">
 <title>LV Zion · Worship Service</title>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
@@ -11,481 +11,72 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js" crossorigin>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
-<style>
-  :root {
-    --brand-blue: #2383c6;
-    --brand-blue-deep: #075f96;
-    --brand-blue-dark: #174a6b;
-    --brand-rose: #da0f47;
-    --ink: #202428;
-    --muted: #56616b;
-    --faint: #6a747d;
-    --canvas: #f3f6f8;
-    --surface: #ffffff;
-    --line: #d6e0e6;
-    --hairline: #e6ecef;
-    --accent: var(--brand-blue-deep);
-    --accent-2: var(--brand-blue);
-    --accent-grad: linear-gradient(135deg, var(--brand-blue-deep), var(--brand-blue));
-    --accent-soft: #eaf5fb;
-    --danger: #b80d3c;
-    --ok: #16734c;
-    --warn: #8a5a0a;
-    --glass: var(--surface);
-    --glass-strong: var(--surface);
-    --glass-border: var(--line);
-    --specular: none;
-    --blur: none;
-    --blur-lite: none;
-    --shadow: 0 10px 28px rgba(23, 74, 107, 0.07);
-    --shadow-soft: 0 4px 14px rgba(23, 74, 107, 0.06);
-    --shadow-bar: 0 -8px 24px rgba(23, 74, 107, 0.10);
-    --r-lg: 14px;
-    --r-md: 10px;
-    --sans: "Avenir Next", Avenir, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --gutter: 22px;
-  }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    margin: 0; min-height: 100vh; color: var(--ink); background: var(--canvas);
-    font-family: var(--sans); font-size: 16px; line-height: 1.5;
-    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-  }
-  body::before { content: ""; display: block; height: 5px; background: var(--brand-blue); }
-  .maintenance-screen { min-height: calc(100vh - 5px); display: none; place-items: center; padding: 24px; }
-  .maintenance-panel { width: min(100%, 520px); padding: 36px 28px; border: 1px solid var(--line); border-top: 5px solid var(--brand-blue); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
-  .maintenance-kicker { margin-bottom: 8px; color: var(--brand-blue-deep); font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-  .maintenance-panel h1 { margin: 0 0 12px; color: var(--brand-blue-dark); font-size: clamp(27px, 7vw, 38px); line-height: 1.12; }
-  .maintenance-panel p { margin: 0 auto; max-width: 400px; color: var(--muted); font-size: 16px; }
-  .maintenance-panel .maintenance-note { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--hairline); font-size: 14px; }
-  html[data-maintenance="active"] body > .wrap { display: none; }
-  html[data-maintenance="active"] body > .maintenance-screen { display: grid; }
-  .maintenance-schedule { margin-top: 24px; text-align: left; }
-  .maintenance-service { padding: 16px 0; border-top: 1px solid var(--hairline); }
-  .maintenance-service:first-child { border-top: 0; }
-  .maintenance-service-title { color: var(--brand-blue-dark); font-weight: 750; }
-  .maintenance-service-time { margin: 2px 0 8px; color: var(--muted); font-size: 13px; }
-  .maintenance-duty { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(100px, 1fr); gap: 12px; padding: 3px 0; font-size: 14px; }
-  .maintenance-duty span:first-child { color: var(--muted); }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 0 var(--gutter) 72px; }
-  button, input, select, textarea { font: inherit; }
-  button { touch-action: manipulation; }
-  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
-    outline: 3px solid rgba(35, 131, 198, 0.34); outline-offset: 2px;
-  }
-
-  /* One shared header structure for every appearance: round brand badge, brand
-     name, a second line naming the current screen, and the signed-in member
-     chip on the right. These rules are the structure plus Original's own look;
-     Prism, Navy & Cream, and Aurora restyle it in design-gallery/header.css. */
-  header.app { display: flex; align-items: center; gap: 10px 14px; padding: 26px 2px 18px; border-bottom: 1px solid var(--line); }
-  .wd-head-brand { display: flex; align-items: center; gap: 12px; flex: 0 1 auto; min-width: 0; margin-right: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-  .wd-head-mark { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--accent-grad); color: #fff; font-size: 15px; font-weight: 750; letter-spacing: -0.03em; }
-  .wd-head-text { display: block; min-width: 0; }
-  .wd-head-name { display: block; color: var(--brand-blue-dark); font-size: 17px; font-weight: 750; letter-spacing: 0.04em; line-height: 1.15; white-space: nowrap; }
-  .wd-head-screen { display: block; margin-top: 3px; overflow: hidden; color: var(--brand-blue-deep); font-size: 11.5px; font-weight: 700; letter-spacing: 0.15em; line-height: 1.3; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-  .wd-head-tools { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: 0 1 auto; min-width: 0; }
-  .wd-head-member { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; min-height: 40px; padding: 3px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
-  .wd-head-member[hidden] { display: none; }
-  .wd-head-initials { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); color: var(--brand-blue-deep); font-size: 12px; font-weight: 750; }
-  .wd-head-person { min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .wd-head-caret { flex: none; color: var(--muted); }
-  /* Account menu: opens from the member chip (Availability, Settings, Sign out).
-     Structure plus Original's look; Prism, Navy & Cream, and Aurora restyle it
-     in design-gallery/header.css. It sits above the floating bottom bar (50 to
-     90) and the appearance toast (110). */
-  .wd-head-tools { position: relative; }
-  .wd-head-member[aria-expanded="true"] .wd-head-caret { transform: rotate(180deg); }
-  .wd-account-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 120; display: grid; gap: 2px; width: max-content; min-width: 196px; max-width: calc(100vw - 24px); padding: 6px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: 0 14px 34px rgba(23, 74, 107, 0.16); }
-  .wd-account-menu[hidden] { display: none; }
-  .wd-account-menu button { display: flex; align-items: center; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 9px; background: none; box-shadow: none; color: var(--ink); font: inherit; font-size: 14px; font-weight: 650; text-align: left; white-space: nowrap; cursor: pointer; }
-  .wd-account-menu button:hover, .wd-account-menu button:focus-visible { background: var(--accent-soft); color: var(--brand-blue-deep); }
-  .wd-account-menu .wd-account-out { margin-top: 4px; border-top: 1px solid var(--hairline); border-radius: 0 0 9px 9px; color: var(--danger); }
-  .wd-account-who { display: none; padding: 8px 12px 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
-  .account-view .account-title { margin: 2px 2px 4px; font-size: 19px; }
-  .account-view .account-title:focus { outline: none; }
-  .account-view .card > :last-child { margin-bottom: 0; }
-  .sync-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 650; box-shadow: var(--shadow-soft); }
-  .sync-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
-  .sync-pill.live { color: var(--ok); }
-  .sync-pill.live::before { background: var(--ok); box-shadow: 0 0 0 3px rgba(22,115,76,0.12); }
-
-  nav.tabs { position: sticky; top: 0; z-index: 50; display: flex; margin: 0 0 22px; background: rgba(243,246,248,0.96); border-bottom: 1px solid var(--line); }
-  nav.tabs button { flex: 1; position: relative; min-height: 54px; padding: 15px 8px 12px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font-size: 14px; font-weight: 650; cursor: pointer; }
-  nav.tabs button.active { color: var(--brand-blue-deep); border-bottom-color: var(--brand-blue); background: var(--surface); }
-  nav.tabs button .dot { position: absolute; top: 11px; right: max(10px, calc(50% - 42px)); width: 7px; height: 7px; border-radius: 50%; background: var(--brand-rose); }
-  /* Green dot on My Duties: a new duty. Red dot on Manage: requests or conflicts. Each appearance supplies its own --ok green. */
-  nav.tabs button#tab-my .dot { background: var(--ok); }
-  nav.tabs.hidden, nav.tabs button.hidden { display: none; }
-
-  .card { margin-bottom: 14px; padding: 19px 21px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
-  #view { animation: enter 0.22s ease both; }
-  @keyframes enter { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
-  .banner { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; padding: 12px 14px; border: 1px solid #bcd8e8; border-left: 4px solid var(--brand-blue); border-radius: var(--r-md); background: var(--accent-soft); font-size: 14px; }
-  .banner.alert { border-color: #edc0ce; border-left-color: var(--brand-rose); background: #fff5f8; }
-  .banner button.x { margin-left: auto; padding: 0 4px; border: 0; background: none; color: var(--muted); font-size: 20px; cursor: pointer; }
-  .date-head { display: flex; align-items: center; gap: 12px; margin: 28px 2px 11px; }
-  .date-head .day { color: var(--brand-blue-dark); font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
-  .date-head .badge { padding: 3px 9px; border-radius: 4px; background: var(--brand-blue-deep); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
-  .card-head { display: flex; width: 100%; justify-content: space-between; align-items: baseline; gap: 8px; padding: 0 0 11px; margin-bottom: 8px; border: 0; border-bottom: 1px solid var(--hairline); background: none; color: inherit; text-align: left; cursor: pointer; }
-  .card-head .svc-title { color: var(--brand-blue-dark); font-size: 17px; font-weight: 700; }
-  .card-head .svc-title small, .card-head .time, .choir-song { color: var(--muted); font-size: 13px; font-weight: 500; }
-  .card-head .time { white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .dot-c { display: inline-block; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
-  .cat-label, .cat-edit-label { display: flex; align-items: center; gap: 9px; margin: 15px 0 4px; color: var(--faint); font-size: 11px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
-  .duty-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0 4px 17px; font-size: 15px; }
-  .duty-row .dname { flex: 0 0 128px; color: var(--muted); font-size: 13px; }
-  .duty-row .pill { color: var(--ink); font-weight: 650; }
-  .duty-row .pill.me { padding: 2px 9px; border-radius: 4px; background: var(--accent-soft); color: var(--brand-blue-deep); }
-  .conflict-note { display:flex; align-items:center; gap:9px; margin:10px 0 2px; color:var(--warn); font-size:13px; font-weight:650; }
-  .conflict-note .linkish { padding: 0; font-size: 13px; }
-  .conflict-note.ok { color: var(--muted); font-weight: 500; }
-  select.conflict { border-color: #bd8a34; box-shadow: 0 0 0 3px rgba(138,90,10,0.10); }
-  .warn-badge { display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px; margin-left:7px; border-radius:50%; background:var(--brand-rose); color:#fff; font-size:11px; font-weight:800; line-height:1; vertical-align:middle; }
-  .warn-badge.ok { background:var(--warn); }
-  .empty { padding: 50px 20px; color: var(--muted); text-align: center; font-size: 15px; }
-
-  .linkish { padding: 8px 0; border: 0; background: none; color: var(--brand-blue-deep); font-size: 15px; font-weight: 650; cursor: pointer; }
-  .hint { margin: 6px 2px 16px; color: var(--muted); font-size: 13px; }
-  select, input[type=text], input[type=password], input[type=date], input[type=time] { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #b8c7d0; border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 16px; outline: none; transition: border-color .15s, box-shadow .15s; }
-  select:focus, input:focus { border-color: var(--brand-blue); box-shadow: 0 0 0 3px rgba(35,131,198,0.16); }
-  .me-picker { margin: 18px 0 16px; }
-  .me-picker label { display: block; margin-bottom: 8px; color: var(--brand-blue-dark); font-size: 16px; font-weight: 700; }
-  .notify-box, .req-actions-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  .notify-help summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
-  .notify-help p { margin: 0 0 8px; }
-  button.primary, button.ghost { min-height: 44px; padding: 10px 17px; border-radius: 7px; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .12s, background .15s; }
-  button.primary { border: 1px solid var(--brand-blue-deep); background: var(--brand-blue-deep); color: #fff; box-shadow: 0 5px 12px rgba(7,95,150,0.17); }
-  button.ghost { border: 1px solid #a9c7d9; background: var(--surface); color: var(--brand-blue-deep); }
-  button.primary:active, button.ghost:active { transform: translateY(1px); }
-  button.ghost.on { border-color: #8ec3ab; color: var(--ok); }
-  button.danger-link { padding: 6px; border: 0; background: none; color: var(--danger); font-size: 13px; font-weight: 650; cursor: pointer; }
-  button.mini { min-height: 44px; padding: 7px 10px; font-size: 13px; }
-
-  /* My Duties day card: date tile, then one slim line per service. The layout is shared by all four appearances; each appearance restyles colors and surfaces. */
-  .card.duty-card { position: relative; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 0 14px; align-items: start; padding: 12px 16px 12px 12px; overflow: hidden; }
-  .duty-card::before { display: none; }
-  .card.duty-card .dc-toggle { position: absolute; inset: 0; z-index: 0; width: auto; height: auto; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: inherit; background: transparent; box-shadow: none; transform: none; cursor: pointer; }
-  .card.duty-card .dc-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .duty-card .dc-body button, .duty-card .req-form, .duty-card .duty-expand { position: relative; z-index: 1; }
-  .duty-card .dc-date { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 58px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); line-height: 1; }
-  .duty-card .dc-date b { font-size: 23px; font-weight: 750; letter-spacing: -.02em; }
-  .duty-card .dc-date small { margin-top: 5px; color: var(--muted); font-size: 10.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
-  .duty-card .dc-body { min-width: 0; min-height: 58px; padding-left: 14px; border-left: 1px solid var(--hairline); display: flex; flex-direction: column; justify-content: center; }
-  .duty-card .what { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; margin: 0; color: var(--brand-blue-dark); line-height: 1.35; }
-  .duty-card .dc-time { font-size: 16px; font-weight: 750; white-space: nowrap; }
-  .duty-card .dc-worship { color: var(--muted); font-size: 14px; font-weight: 500; }
-  .duty-card .dc-badge { padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 750; }
-  .duty-card .role { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin: 3px 0 0; padding: 0; border: 0; font-size: 15px; font-weight: 650; line-height: 1.35; }
-  .duty-card .role .rname { flex: 1 1 auto; min-width: 0; }
-  .duty-card .role .req-change, .duty-card .role .req-pending-tag { margin-left: auto; }
-  /* Request change is a round icon button; its text stays as the accessible name. */
-  .card.duty-card .role .req-change { position: relative; flex: 0 0 auto; width: 36px; height: 36px; min-height: 0; margin: -4px 0; padding: 0; border-radius: 50%; background: var(--accent-soft); overflow: hidden; white-space: nowrap; text-indent: 100%; }
-  .card.duty-card .role .req-change::before { content: ""; position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 4 3 8l4 4'/%3E%3Cpath d='M3 8h13'/%3E%3Cpath d='m17 20 4-4-4-4'/%3E%3Cpath d='M21 16H8'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 4 3 8l4 4'/%3E%3Cpath d='M3 8h13'/%3E%3Cpath d='m17 20 4-4-4-4'/%3E%3Cpath d='M21 16H8'/%3E%3C/svg%3E") center / contain no-repeat; }
-  .card.duty-card .role .req-change:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .duty-card .dc-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding-left: 16px; }
-  .duty-card .dc-extra .linkish { min-height: 30px; padding: 2px 0; font-size: 12.5px; }
-  .duty-card .svc-sep { margin: 8px 0; padding: 0; border-top: 1px solid var(--hairline); }
-  .duty-expand, .req-form { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
-  @media (max-width: 640px) {
-    .card.duty-card { grid-template-columns: 48px minmax(0, 1fr); gap: 0 12px; padding: 10px 12px 10px 10px; }
-    .duty-card .dc-date { width: 48px; height: 54px; border-radius: 11px; }
-    .duty-card .dc-date b { font-size: 21px; }
-    .duty-card .dc-body { min-height: 54px; padding-left: 12px; }
-    .duty-card .what { gap: 0 8px; }
-    .duty-card .dc-worship { font-size: 13.5px; }
-  }
-  .song-tag { padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--brand-blue-deep); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
-  .song-tag.done { background: #e6f4ec; color: var(--ok); }
-  .alerts-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .alerts-head .alerts-clear { padding: 0; min-height: 32px; font-size: 13px; }
-  .alert-item, .req-item { padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 13px; }
-  .alert-item { display: flex; gap: 10px; align-items: baseline; }
-  .alert-item:last-child, .req-item:last-child { border-bottom: 0; }
-  .alert-item .t, .req-item .req-meta { color: var(--faint); font-size: 11px; }
-  .req-pending-tag { color: var(--muted); font-size: 12px; font-style: italic; }
-  .req-form textarea { width: 100%; min-height: 76px; padding: 10px 12px; resize: vertical; border: 1px solid #b8c7d0; border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 15px; outline: none; }
-  .req-form textarea:focus { border-color: var(--brand-blue); box-shadow: 0 0 0 3px rgba(35,131,198,0.16); }
-  .req-form .req-actions { display: flex; gap: 8px; margin-top: 8px; }
-  .status-chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
-  .status-chip.pending { background: #fff7e7; color: var(--warn); }
-  .status-chip.approved { background: #edf8f2; color: var(--ok); }
-  .status-chip.declined { background: #fff1f5; color: var(--danger); }
-  .req-item .req-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .req-item .req-when { font-weight: 650; }
-  .req-item .req-note { margin-top: 4px; color: var(--muted); }
-
-  .subnav { display: flex; gap: 7px; margin: 18px 0; flex-wrap: wrap; align-items: center; }
-  .subnav button { min-height: 44px; padding: 8px 13px; border: 1px solid #b8c7d0; border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; cursor: pointer; }
-  .subnav button.active { border-color: var(--brand-blue-deep); background: var(--brand-blue-deep); color: #fff; }
-  .subnav .lock-btn { margin-left: auto; }
-  /* Phone copy of a screen's secondary menu, placed below the header by watchTopSubnav() in app.js. */
-  nav#subnav-top, nav#subnav-top[hidden] { display: none; }
-  form.add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  form.add-row input, form.add-row select { flex: 1; min-width: 105px; }
-  .edit-grid { display: grid; grid-template-columns: 132px 1fr; gap: 8px 12px; align-items: center; margin: 8px 0; }
-  .edit-grid .lab { color: var(--muted); text-align: right; font-size: 13px; }
-  .edit-grid select, .edit-grid input { min-height: 40px; padding: 8px 10px; font-size: 14px; }
-  .list-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-  .list-row input[type=text] { min-height: 36px; padding: 4px 2px; border: 0; background: none; font-size: 15px; font-weight: 650; }
-  .list-row .count { color: var(--faint); white-space: nowrap; font-size: 12px; }
-  .role-assignment { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; padding: 5px 0; border-bottom: 1px solid var(--hairline); }
-  .role-assignment:last-of-type { border-bottom: 0; }
-  .role-add { margin-top: 12px; margin-bottom: 0; }
-  .data-actions .card p { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
-  .data-actions .card p b { color: var(--ink); }
-  code.cfg { display: block; overflow-x: auto; padding: 8px 10px; border-radius: 6px; background: #edf2f5; font-size: 12px; }
-  .sync-status, .sync-warnings { color: var(--muted); font-size: 13px; }
-  .sync-warnings { margin: 4px 0 0; padding-left: 18px; }
-  .plan-conflict { padding: 12px 0 6px; border-top: 1px solid var(--line); }
-  .plan-conflict:first-of-type { border-top: 0; }
-  .plan-when { margin-bottom: 6px; font-size: 14px; }
-  .plan-duties { color: var(--muted); font-size: 13px; }
-  .plan-suggest { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 4px 0; font-size: 13px; }
-  .plan-suggest .lab { min-width: 110px; color: var(--muted); }
-  .plan-scroll { overflow-x: auto; margin-top: 10px; }
-  .plan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .plan-table th, .plan-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
-  .plan-table th, .plan-table tr.plan-idle td { color: var(--muted); }
-
-  .lock-box { max-width: 480px; margin: 38px auto 0; padding: 34px 28px; text-align: center; border-top: 4px solid var(--brand-blue); }
-  .lock-title { margin-bottom: 3px; color: var(--brand-blue-dark); font-size: 22px; font-weight: 700; }
-  .lock-box .hint { max-width: 380px; margin: 6px auto 18px; }
-  .lock-box form { justify-content: center; max-width: 360px; margin: 0 auto; }
-  .pin-error { margin: 10px 0 0; color: var(--danger); font-size: 13px; font-weight: 650; }
-  .feature-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 18px; }
-  .f-label { font-size: 15px; font-weight: 650; }
-  .f-desc { margin-top: 1px; color: var(--muted); font-size: 13px; }
-  .switch { position: relative; flex: 0 0 auto; display: inline-block; width: 48px; height: 28px; cursor: pointer; }
-  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
-  .switch .track { position: absolute; inset: 0; border-radius: 999px; background: #aeb9c0; transition: background .2s; }
-  .switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.24); transition: transform .2s; }
-  .switch input:checked + .track { background: var(--brand-blue-deep); }
-  .switch input:checked + .track::after { transform: translateX(20px); }
-  .switch input:focus-visible + .track { outline: 3px solid rgba(35,131,198,0.42); outline-offset: 3px; }
-
-  .song-head { margin: 14px 0 2px; }
-  .song-head .ghost { min-height: 38px; padding: 7px 13px; font-size: 13px; }
-  .department-eyebrow { color: var(--brand-blue-deep); font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
-  .department-scope h2, .department-hero h2, .department-profile-hero h2 { margin: 3px 0 4px; color: var(--brand-blue-dark); font-size: 28px; letter-spacing: -.025em; }
-  .department-security-note, .department-profile-note, .department-attribution, .department-uid { color: var(--muted); font-size: 13px; }
-  .department-security-note { margin: 0; padding: 11px 13px; border-left: 3px solid var(--brand-blue); background: var(--accent-soft); }
-  .department-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-  .department-card { display: flex; min-height: 220px; flex-direction: column; margin: 0; padding: 18px; }
-  .department-card-top { display: flex; align-items: center; gap: 8px; color: var(--muted); }
-  .department-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--brand-blue); box-shadow: 0 0 0 4px var(--accent-soft); }
-  .department-card h3 { margin: 18px 0 4px; color: var(--brand-blue-dark); font-size: 21px; }
-  .department-card-copy { margin: 0 0 13px; color: var(--muted); font-size: 13px; }
-  .department-card-leader { min-height: 42px; margin: 0 0 18px; color: var(--muted); font-size: 13px; }
-  .department-card-leader strong { display: block; color: var(--ink); font-size: 12px; }
-  .department-card .primary { align-self: flex-start; margin-top: auto; }
-  .department-back { margin: 0 0 8px 2px; }
-  .department-loading, .department-error { text-align: center; }
-  .department-loading h2, .department-error h2 { margin: 5px 0; color: var(--brand-blue-dark); font-size: 21px; }
-  .department-spinner { display: inline-block; width: 24px; height: 24px; margin: 6px auto; border: 3px solid var(--line); border-top-color: var(--brand-blue); border-radius: 50%; animation: department-spin .8s linear infinite; }
-  @keyframes department-spin { to { transform: rotate(360deg); } }
-  .department-leader-strip { display: flex; flex-wrap: wrap; gap: 9px; align-items: baseline; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--accent-soft); font-size: 13px; }
-  .department-leader-strip strong { color: var(--brand-blue-dark); }
-  .department-roster-groups { display: grid; gap: 14px; }
-  .department-group { padding: 4px 0; }
-  .department-group-heading, .department-section-heading, .department-profile-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .department-group-heading { margin: 22px 2px 8px; }
-  .department-group-heading h3, .department-editor h3, .department-add-form h3, .department-history h3, .department-attribution-card h3 { margin: 0; color: var(--brand-blue-dark); font-size: 17px; }
-  .department-group-heading > span, .department-editor-state { min-width: 26px; padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--brand-blue-deep); font-size: 12px; font-weight: 750; text-align: center; }
-  .department-member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 13px 14px; border: 1px solid var(--line); border-bottom: 0; background: var(--surface); }
-  .department-member-row:first-of-type { border-radius: 9px 9px 0 0; }
-  .department-member-row:last-of-type { border-bottom: 1px solid var(--line); border-radius: 0 0 9px 9px; }
-  .department-member-row:only-of-type { border-bottom: 1px solid var(--line); border-radius: 9px; }
-  .department-member-row.is-inactive { background: color-mix(in srgb, var(--canvas) 74%, var(--surface)); }
-  .department-member-open { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
-  .department-member-name { overflow: hidden; text-overflow: ellipsis; font-weight: 750; }
-  .department-role { color: var(--brand-blue-deep); font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
-  .department-member-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; color: var(--muted); font-size: 11px; text-align: right; }
-  .department-status { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 750; }
-  .department-status.active { background: #e4f5ec; color: var(--ok); }
-  .department-status.inactive { background: #f0f2f3; color: var(--muted); }
-  .department-empty-note { margin: 8px 2px 15px; color: var(--muted); font-size: 13px; }
-  .department-add-form { margin-top: 18px; }
-  .department-add-form h3 { margin-top: 3px; }
-  .department-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 13px 0; }
-  .department-form-grid label, .department-exception-form label, .department-editor > label { color: var(--muted); font-size: 12px; font-weight: 700; }
-  .department-form-grid input { margin-top: 5px; }
-  .department-profile-title { align-items: flex-start; }
-  .department-profile-title h2 { margin-bottom: 0; }
-  .department-uid { margin: 2px 0 0; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-  .department-profile-note { margin-bottom: 0; }
-  .department-profile-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
-  .department-editor { margin-top: 14px; }
-  .department-duty-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0 18px; }
-  .department-check { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font-size: 13px; }
-  .department-check input { width: 18px; height: 18px; accent-color: var(--brand-blue-deep); }
-  .department-schedulable { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding-top: 14px; border-top: 1px solid var(--hairline); }
-  .department-schedulable span:first-child { display: grid; gap: 1px; color: var(--ink); font-size: 14px; }
-  .department-schedulable small { color: var(--muted); font-size: 12px; font-weight: 400; }
-  .department-availability-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .department-availability-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font-size: 13px; }
-  .department-availability-row select { width: auto; min-height: 38px; padding: 6px 9px; font-size: 13px; }
-  .department-exceptions { display: grid; gap: 7px; }
-  .department-exception-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
-  .department-exception-row span:first-child { display: grid; gap: 1px; }
-  .department-exception-row small { color: var(--muted); font-size: 11px; }
-  .department-exception-status { color: var(--muted); font-size: 11px; font-weight: 750; text-transform: capitalize; }
-  .department-exception-status.available { color: var(--ok); }
-  .department-exception-form { display: grid; grid-template-columns: 1.1fr 1fr .9fr auto; gap: 8px; align-items: end; margin-top: 12px; }
-  .department-exception-form select { min-height: 46px; }
-  .department-history pre { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 7px; background: var(--canvas); color: var(--muted); font-size: 11px; white-space: pre-wrap; }
-  .department-attribution-card ul { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
-  .department-save-bar { display: flex; flex-wrap: wrap; gap: 9px; margin: 17px 0 5px; }
-  .department-override { margin-top: 7px; padding: 9px 10px; border: 1px solid #e3c995; border-radius: 8px; background: #fffaf0; }
-  .department-override summary { color: var(--warn); cursor: pointer; font-size: 12px; font-weight: 800; }
-  .department-override-warning { margin: 9px 0; color: var(--warn); font-size: 12px; }
-  .department-override label { display: block; margin: 8px 0 4px; color: var(--muted); font-size: 11px; font-weight: 700; }
-  .department-override select, .department-override input { min-height: 38px; padding: 6px 9px; font-size: 13px; }
-  .department-override button { margin-top: 9px; }
-  @media (max-width: 640px) {
-    .department-card-grid, .department-form-grid, .department-duty-grid, .department-availability-grid { grid-template-columns: 1fr; }
-    .department-member-row { grid-template-columns: minmax(0, 1fr) auto; }
-    .department-member-meta { grid-column: 1 / -1; justify-content: flex-start; text-align: left; }
-    .department-exception-form { grid-template-columns: 1fr 1fr; }
-    .department-exception-form button { grid-column: 1 / -1; }
-  }
-  /* F10 feedback: a small round button above the floating bottom bar, the
-     sheet it opens, and the administrator list in Manage. These are Original's
-     styles, built from Original's own tokens; Prism, Navy & Cream and Aurora
-     restyle them in design-gallery/feedback.css. The button and sheet sit on
-     <body>, below toasts (110+) and above page content and the bar (50). */
-  .wd-fbk-btn { position: fixed; right: max(20px, env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 60; display: grid; place-items: center; width: 46px; height: 46px; padding: 0; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; background: var(--accent-grad); color: #fff; box-shadow: 0 8px 20px rgba(7,95,150,0.30); cursor: pointer; transition: transform .18s, box-shadow .18s; }
-  .wd-fbk-btn[hidden], html[data-keyboard="open"] .wd-fbk-btn { display: none; }
-  .wd-fbk-btn svg { display: block; }
-  .wd-fbk-btn:hover { transform: translateY(-2px); }
-  .wd-fbk-btn:active { transform: scale(0.94); }
-  .wd-fbk-btn:focus-visible { outline: 3px solid rgba(35,131,198,0.45); outline-offset: 3px; }
-  .wd-fbk-sheet { position: fixed; inset: 0; width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--ink); box-shadow: 0 24px 70px rgba(16,42,58,0.28); font-family: var(--sans); }
-  .wd-fbk-sheet:not([open]) { display: none; }
-  .wd-fbk-sheet::backdrop { background: rgba(16,42,58,0.45); }
-  .wd-fbk-form { margin: 0; padding: 20px; }
-  .wd-fbk-form h2 { margin: 0 0 4px; color: var(--brand-blue-dark); font-size: 19px; line-height: 1.25; }
-  .wd-fbk-lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.5; }
-  .wd-fbk-kinds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 0 0 14px; }
-  .wd-fbk-kinds label { position: relative; display: grid; }
-  .wd-fbk-kinds input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-  .wd-fbk-kinds span { display: flex; align-items: center; justify-content: center; min-height: 46px; padding: 6px 6px; border: 1px solid #b8c7d0; border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; line-height: 1.2; text-align: center; }
-  .wd-fbk-kinds input:checked + span { border-color: var(--brand-blue-deep); background: var(--brand-blue-deep); color: #fff; }
-  .wd-fbk-kinds input:focus-visible + span { outline: 3px solid rgba(35,131,198,0.45); outline-offset: 2px; }
-  .wd-fbk-label { display: block; margin: 0 0 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
-  .wd-fbk-form textarea { display: block; width: 100%; min-height: 124px; padding: 10px 12px; resize: vertical; border: 1px solid #b8c7d0; border-radius: 8px; background: var(--surface); color: var(--ink); font-family: inherit; font-size: 16px; line-height: 1.5; outline: none; }
-  .wd-fbk-form textarea:focus { border-color: var(--brand-blue); box-shadow: 0 0 0 3px rgba(35,131,198,0.16); }
-  .wd-fbk-error { margin: 10px 0 0; padding: 9px 12px; border-left: 3px solid var(--brand-blue); border-radius: 6px; background: var(--accent-soft); color: var(--ink); font-size: 13px; }
-  .wd-fbk-error[hidden] { display: none; }
-  .wd-fbk-actions { display: flex; gap: 8px; margin: 14px 0 0; }
-  .wd-fbk-actions .primary { flex: 1 1 auto; }
-  .wd-fbk-group { margin: 4px 2px 10px; color: var(--brand-blue-dark); font-size: 15px; }
-  .wd-fbk-entry .req-item { padding: 0; font-size: 13px; }
-  .wd-fbk-message { margin: 8px 0 6px; color: var(--ink); font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .wd-fbk-entry .req-actions-row { margin: 12px 0 0; align-items: center; }
-  @media (max-width: 640px) {
-    /* Phones: just above the floating bar (bar top is about 76px from the edge). The sheet hugs the top so the keyboard never covers it. */
-    .wd-fbk-btn { right: 14px; bottom: calc(86px + env(safe-area-inset-bottom)); }
-    .wd-fbk-sheet { margin: 12px auto auto; }
-    .wd-fbk-form { padding: 16px; }
-    /* Original only (Navy & Cream sets data-nc-scheme and already leaves room): let the last card scroll clear of the button. */
-    html:not([data-nc-scheme]) div.wrap { padding-bottom: calc(142px + env(safe-area-inset-bottom)); }
-  }
-  @media print { .wd-fbk-btn, .wd-fbk-sheet { display: none !important; } }
-  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
-  @media (max-width: 640px) {
-    :root { --gutter: 16px; }
-    .wrap { padding: 0 var(--gutter) calc(28px + env(safe-area-inset-bottom)); }
-    /* Compact header: the title and the sync pill share one line, so the tab
-       bar sits near the top of the screen instead of a third of the way down. */
-    header.app { flex-wrap: nowrap; gap: 6px 8px; padding: 14px 2px 10px; }
-    .wd-head-brand { gap: 10px; flex: none; }
-    .wd-head-mark { width: 38px; height: 38px; font-size: 14px; }
-    .wd-head-name { font-size: 15px; }
-    .wd-head-screen { font-size: 10.5px; letter-spacing: 0.13em; }
-    .wd-head-member { gap: 6px; font-size: 12px; }
-    .wd-head-initials { width: 30px; height: 30px; font-size: 11px; }
-    .wd-head-person { max-width: 84px; }
-    /* Original's sync status stays in the header row as a small dot: green when
-       live, grey for "This device only". The words stay in the element for
-       screen readers (zero-size text, not display: none) and in its title. */
-    header.app .sub { flex: none; display: flex; align-items: center; margin-top: 0; }
-    header.app .sync-pill { gap: 0; min-height: 0; width: 20px; height: 20px; padding: 0; justify-content: center; overflow: hidden; border: 0; border-radius: 50%; background: none; box-shadow: none; font-size: 0; line-height: 0; color: transparent; white-space: nowrap; }
-    header.app .sync-pill::before { flex: none; width: 9px; height: 9px; }
-    @media (max-width: 359px) { .wd-head-person { display: none; } }
-    /* The chip shows initials only at this width, so the account menu names the member. */
-    @media (max-width: 359px) { .wd-account-who { display: block; } }
-    .sync-pill { min-height: 28px; padding: 4px 9px; font-size: 11px; }
-    /* On phones the main tabs float at the bottom of the screen, always in
-       thumb reach. Same buttons, labels, dots, and click handling as the top
-       tabs on wider screens; the page reserves room so nothing sits behind them. */
-    .wrap { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
-    /* F4b: the bar is made easier to notice with Original's own colors: a
-       blue-tinted outline and a deeper lifted shadow, a solid blue selected tab
-       with a white label (the same fill as the selected "All" chip), a small
-       icon over every label, a slight lift on the selected tab, press feedback,
-       and one short slide-up when the bar first appears. The reduced-motion
-       rule above switches every animation and transition off. */
-    nav.tabs { position: fixed; top: auto; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 50; gap: 4px; margin: 0; padding: 5px; background: var(--surface); border: 1px solid var(--line); border-color: color-mix(in srgb, var(--brand-blue) 45%, var(--surface)); border-radius: calc(var(--r-lg) + 5px); box-shadow: 0 14px 34px rgba(23, 74, 107, 0.26), 0 3px 10px rgba(23, 74, 107, 0.14); animation: wd-bar-in 0.22s ease-out; }
-    @keyframes wd-bar-in { from { opacity: 0; transform: translateY(18px); } }
-    nav.tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 54px; min-width: 0; padding: 7px 3px 6px; border: 0; border-radius: var(--r-lg); color: var(--brand-blue-dark); font-size: 12.5px; transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease; }
-    body:not(.aurora) nav.tabs button::before { content: ""; flex: none; width: 20px; height: 20px; background: currentColor; -webkit-mask: var(--tab-icon) center / contain no-repeat; mask: var(--tab-icon) center / contain no-repeat; }
-    nav.tabs button[data-tab="schedule"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='3'/%3E%3Cpath d='M7 3v4m10-4v4M3 11h18m-13 4h2m4 0h2'/%3E%3C/svg%3E"); }
-    nav.tabs button[data-tab="my"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='4' width='14' height='17' rx='2'/%3E%3Cpath d='M9 4V2h6v2m-7 9 2 2 5-5'/%3E%3C/svg%3E"); }
-    nav.tabs button[data-tab="songs"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-3v13M9 9l12-3'/%3E%3Cellipse cx='6' cy='18' rx='3' ry='2'/%3E%3Cellipse cx='18' cy='15' rx='3' ry='2'/%3E%3C/svg%3E"); }
-    nav.tabs button[data-tab="manage"] { --tab-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h5m4 0h9M3 12h11m4 0h3M3 18h2m4 0h12'/%3E%3Ccircle cx='10' cy='6' r='2'/%3E%3Ccircle cx='16' cy='12' r='2'/%3E%3Ccircle cx='7' cy='18' r='2'/%3E%3C/svg%3E"); }
-    nav.tabs button.active { background: linear-gradient(135deg, var(--brand-blue-deep), var(--brand-blue-dark)); color: #fff; box-shadow: 0 6px 14px rgba(7, 95, 150, 0.34); transform: translateY(-2px); }
-    nav.tabs button:active { transform: scale(0.96); }
-    nav.tabs button .dot { top: 6px; right: calc(50% - 19px); width: 8px; height: 8px; box-shadow: 0 0 0 2px var(--surface); }
-    nav.tabs.nav-loading, html[data-keyboard="open"] nav.tabs { display: none; }
-    .card { padding: 17px 16px; }
-    .duty-row .dname { flex-basis: 104px; }
-    .edit-grid { grid-template-columns: 1fr; }
-    .edit-grid .lab { text-align: left; }
-    .subnav .lock-btn { margin-left: 0; }
-    /* Secondary menus sit at the top on phones: one compact row that scrolls
-       sideways and never wraps. The in-page copy is hidden while this one shows. */
-    html[data-subnav-top="on"] nav#subnav-top:not([hidden]) { display: flex; flex-wrap: nowrap; align-items: center; margin: 12px 0 14px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-    nav#subnav-top::-webkit-scrollbar { display: none; }
-    nav#subnav-top button { flex: 1 0 auto; white-space: nowrap; }
-    html[data-subnav-top="on"] #view .subnav:not(.chips), html[data-subnav-top="on"] #view #song-root .ns-tabs { display: none; }
-  }
-  @media (max-width: 379px) { :root { --gutter: 12px; } nav.tabs button { font-size: 12px; } nav#subnav-top button { padding-left: 9px; padding-right: 9px; } }
-</style>
+<link rel="stylesheet" href="styles/base.css?v=DEV">
+<script>
+  /* Apply the member's saved appearance before the page first paints. */
+  (function () {
+    try {
+      var mode = JSON.parse(localStorage.getItem('wds-design-gallery-v1') || '{}').mode;
+      if (['prism', 'navy', 'aurora'].indexOf(mode) === -1 || /[?&]design=classic\b/.test(location.search)) return;
+      document.documentElement.dataset.appearance = mode;
+      document.write('<link rel="stylesheet" id="theme-css" href="styles/themes/' + mode + '.css?v=DEV">');
+    } catch (error) { /* storage blocked: Original */ }
+  })();
+</script>
 </head>
 <body>
-<main class="maintenance-screen" role="main" aria-labelledby="maintenance-title">
-  <section class="maintenance-panel">
-    <div class="maintenance-kicker">Las Vegas Zion</div>
-    <h1 id="maintenance-title">Schedule maintenance in progress</h1>
-    <p>We are correcting service dates, duty assignments, leader settings, and song tracking.</p>
-    <p class="maintenance-note">Please check back shortly. Existing schedule information is being preserved.</p>
-    <div id="maintenance-schedule" class="maintenance-schedule" aria-live="polite">Loading upcoming services...</div>
-  </section>
-</main>
-<div class="wrap">
-  <header class="app wd-head">
-    <button class="header-home wd-head-brand" data-act="home" aria-label="Return to schedule"><span class="wd-head-mark" aria-hidden="true">LV</span><span class="wd-head-text"><span class="wd-head-name" data-wd-head="name">LV ZION</span><span class="wd-head-screen" data-wd-head="screen">Worship Duty</span></span></button>
+<div class="app">
+  <header class="header">
+    <button type="button" class="brand" data-act="home" aria-label="Go to the schedule">
+      <span class="brand-mark" aria-hidden="true">LV</span>
+      <span class="brand-text"><span class="brand-name">LV ZION</span><span class="brand-screen" data-slot="screen">Worship Duty</span></span>
+    </button>
     <h1 class="sr-only">LV Zion Worship Service</h1>
-    <div class="sub"><span id="sync-pill" class="sync-pill" role="img" aria-label="This device only" title="This device only">This device only</span></div>
-    <div class="wd-head-tools"><button type="button" class="wd-head-member" data-wd-head="member" aria-haspopup="menu" aria-expanded="false" hidden><span class="wd-head-initials" data-wd-head="initials" aria-hidden="true"></span><span class="wd-head-person" data-wd-head="person"></span><span class="wd-head-caret" aria-hidden="true">&#8964;</span></button><div class="wd-account-menu" data-wd-head="menu" role="menu" aria-label="Your account" hidden><div class="wd-account-who" data-wd-head="who" aria-hidden="true"></div><button type="button" role="menuitem" data-act="account" data-view="availability">Availability</button><button type="button" role="menuitem" data-act="account" data-view="settings">Settings</button><button type="button" role="menuitem" class="wd-account-out" data-act="member-logout">Sign out</button></div></div>
+    <span class="sync-status" data-slot="sync" role="status">Offline</span>
+    <div class="header-tools">
+      <button type="button" class="icon-button appearance-button" data-act="appearance-open" aria-label="Appearance" title="Appearance" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2.1-1 2.1-2 0-.6-.3-1.1-.6-1.5-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.9-1.8H17a4 4 0 0 0 4-4c0-4.1-4-7.4-9-7.4Z"/><circle cx="7.6" cy="11.4" r="1"/><circle cx="10.4" cy="7.6" r="1"/><circle cx="15" cy="7.8" r="1"/></svg>
+      </button>
+      <div class="account">
+        <button type="button" class="account-chip" data-slot="member" aria-haspopup="menu" aria-expanded="false" hidden>
+          <span class="account-initials" data-slot="initials" aria-hidden="true"></span>
+          <span class="account-name" data-slot="person"></span>
+          <span class="account-caret" aria-hidden="true">&#8964;</span>
+        </button>
+        <div class="account-menu" data-slot="menu" role="menu" aria-label="Your account" hidden>
+          <p class="account-who" data-slot="person" aria-hidden="true"></p>
+          <button type="button" role="menuitem" data-act="account" data-view="availability">Availability</button>
+          <button type="button" role="menuitem" data-act="account" data-view="settings">Settings</button>
+          <button type="button" role="menuitem" class="account-sign-out" data-act="sign-out">Sign out</button>
+        </div>
+      </div>
+    </div>
   </header>
 
-  <nav class="tabs">
-    <button data-act="tab" data-tab="schedule">Schedule</button>
-    <button data-act="tab" data-tab="my" id="tab-my">My Duties</button>
-    <button data-act="tab" data-tab="songs" id="tab-presider" class="hidden">Presider</button>
-    <button data-act="tab" data-tab="manage" id="tab-manage">Manage</button>
+  <nav class="tabs" aria-label="Main" hidden>
+    <button type="button" class="tab" data-act="tab" data-tab="schedule">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-13 4h2m4 0h2"/></svg>
+      <span class="tab-label">Schedule</span><span class="tab-dot" hidden></span>
+    </button>
+    <button type="button" class="tab" data-act="tab" data-tab="my">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2m-7 9 2 2 5-5"/></svg>
+      <span class="tab-label">My Duties</span><span class="tab-dot is-new" hidden></span>
+    </button>
+    <button type="button" class="tab" data-act="tab" data-tab="songs" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-3v13M9 9l12-3"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="18" cy="15" rx="3" ry="2"/></svg>
+      <span class="tab-label">Presider</span><span class="tab-dot" hidden></span>
+    </button>
+    <button type="button" class="tab" data-act="tab" data-tab="manage" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h5m4 0h9M3 12h11m4 0h3M3 18h2m4 0h12"/><circle cx="10" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="7" cy="18" r="2"/></svg>
+      <span class="tab-label">Manage</span><span class="tab-dot" hidden></span>
+    </button>
   </nav>
 
   <div id="banners" aria-live="polite"></div>
   <main id="view"></main>
 </div>
-<script src="seed-data.js?v=DEV"></script>
 <script src="permissions.js?v=DEV"></script>
 <script src="firebase-config.js?v=DEV"></script>
-<script type="module" src="app.js?v=DEV"></script>
+<script type="module" src="app/main.js?v=DEV"></script>
 </body>
 </html>
