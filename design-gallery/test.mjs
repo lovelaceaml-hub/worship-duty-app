@@ -149,6 +149,10 @@ const fixture = {
   services,
   departmentRoster,
   holdSettings: true,
+  // The live rules refuse app/songSettings, and app/presiders while that
+  // document does not exist (its read rule needs resource.data).
+  denied: ['app/songSettings', 'app/presiders'],
+  delays: {songStats: 40},
   docs: {
     'app/settings': {
       sitePinHash: pinHash,
@@ -169,8 +173,6 @@ const fixture = {
       songEditors: ['E. Simon']
     },
     'app/nameMap': {map: {'B. Anthony L': 'B. Anthony', 'D. Chloe': 'M. Chloe'}},
-    'app/presiders': {names: ['B. Anthony', 'E. Simon']},
-    'app/songSettings': {pinHash},
     'setlists/2026-07-01_morning': {
       id: '2026-07-01_morning', date: '2026-07-01',
       worshipType: 'Sabbath Day', serviceLabel: 'Morning',
@@ -180,6 +182,14 @@ const fixture = {
       id: '2026-07-02_evening', date: '2026-07-02',
       worshipType: 'Sabbath Day', serviceLabel: 'Evening',
       presider: 'E. Simon', songs: ['002'], status: 'planned', updatedAt: 1
+    },
+    'songStats/001': {
+      songId: '001', timesSung: 3, lastSung: '2026-06-20',
+      history: [
+        {date: '2026-05-30', service: '2026-05-30_morning', by: 'B. Anthony', markedAt: 1},
+        {date: '2026-06-13', service: '2026-06-13_morning', by: 'E. Simon', markedAt: 2},
+        {date: '2026-06-20', service: '2026-06-20_morning', by: 'B. Anthony', markedAt: 3}
+      ]
     },
     'requests/req-worship': {
       id: 'req-worship', svcId: '2026-07-01_morning', name: 'B. Anthony',
@@ -879,6 +889,22 @@ try {
     !nav.hidden && nav.getAttribute('aria-label') === 'Presider sections' && nav.offsetParent !== null));
   check('Presider starts on Home', await subText(page, songSubActive), 'Home');
   check('Presider Home shows My Services', await page.locator('#song-root').innerText().then(text => text.includes('My Services')));
+  // A refused listener (app/songSettings, app/presiders) must not disconnect the planner.
+  await page.waitForTimeout(150);
+  check('Presider planner shows the shared song list after a refused read',
+    await page.locator('#song-root').innerText().then(text => text.includes('1 song')));
+  await subClick(page, songSub('library'));
+  await page.waitForSelector('#song-root .song-row');
+  check('Presider Library shows each song\'s times-sung count',
+    (await page.locator('#song-root .song-row').first().locator('.s-times').innerText()).trim(), '3×');
+  await subClick(page, songSub('home'));
+  await page.evaluate(() => {
+    const id = 'setlists/2026-07-01_morning';
+    window.__mockLive.emit(id, {...window.__mockLive.get(id), songs: ['001', '002'], updatedAt: 2});
+  });
+  await page.waitForTimeout(150);
+  check('Presider planner still receives live song-list changes',
+    await page.locator('#song-root').innerText().then(text => text.includes('2 songs')));
   check('Presider has a Services tracking destination', await page.locator('#song-root .ns-tabs [data-tab="services"]').count(), 1);
   check('Presider has Home, Library, Services, and Insights tabs', await page.locator('#song-root .ns-tabs button').allTextContents(),
     ['Home', 'Library', 'Services', 'Insights']);

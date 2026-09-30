@@ -17,7 +17,14 @@ export const doc=(db,...parts)=>({type:'doc',path:parts.join('/')});
 export const collection=(db,...parts)=>({type:'collection',path:parts.join('/')});
 export const query=(ref,...filters)=>({...ref,filters});
 export const where=(...args)=>args;
-export function onSnapshot(ref,cb,error){const listener={ref,cb,error};listeners.push(listener);window.__mockLive.reads.push(ref.path);if(ref.path!=='app/settings'||!fixture.holdSettings)setTimeout(()=>cb(snap(ref)),10);return()=>{const i=listeners.indexOf(listener);if(i>=0)listeners.splice(i,1);};}
+/* Paths the live rules refuse (fixture.denied) get the permission error after
+   20 ms. Data arrives after 10 ms, or after fixture.delays[path] ms: a large
+   collection nothing else listens to (songStats) reaches the page after the
+   refusal does, which is the order that matters in production. A removed
+   listener receives nothing, as with the real SDK. */
+const denied=path=>(fixture.denied||[]).includes(path);
+const delay=path=>(fixture.delays||{})[path]??10;
+export function onSnapshot(ref,cb,error){const listener={ref,cb,error};window.__mockLive.reads.push(ref.path);if(denied(ref.path)){setTimeout(()=>error&&error({code:'permission-denied',message:'Missing or insufficient permissions.'}),20);return()=>{};}listeners.push(listener);if(ref.path!=='app/settings'||!fixture.holdSettings)setTimeout(()=>{if(listeners.includes(listener))cb(snap(ref));},delay(ref.path));return()=>{const i=listeners.indexOf(listener);if(i>=0)listeners.splice(i,1);};}
 export async function setDoc(ref,value,opts){window.__mockLive.writes.push({path:ref.path,op:'set',value:clone(value)});const v=opts?.merge?{...data.get(ref.path),...value}:value;window.__mockLive.emit(ref.path,v);}
 export async function updateDoc(ref,value){return setDoc(ref,value,{merge:true});}
 export async function deleteDoc(ref){window.__mockLive.writes.push({path:ref.path,op:'delete'});data.delete(ref.path);for(const l of listeners)if(l.ref.path===ref.path||ref.path.startsWith(l.ref.path+'/'))l.cb(snap(l.ref));}
