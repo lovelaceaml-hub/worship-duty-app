@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Stands in for npx while scripts/release.mjs runs in GitHub Actions.
+# release.mjs starts Firebase with spawnSync('npx', ['--yes', <WDS_FIREBASE_TOOLS>, ...]).
+# This folder is first on PATH for that one step only, so the guard sees the
+# exact command release.mjs built, blocks anything outside the pinned
+# allowlist, and only then runs the real npx (REAL_NPX, recorded by the
+# workflow before PATH changed) with the same arguments plus --non-interactive.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+guard="$here/../deploy-guard.sh"
+bash "$guard" command "${DEPLOY_GUARD_MODE:?DEPLOY_GUARD_MODE must be preview or release}" "$@"
+config=""
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [ "${args[$i]}" = "--config" ]; then config="${args[$((i + 1))]}"; fi
+done
+bash "$guard" config "$config"
+real="${REAL_NPX:?REAL_NPX must point at the real npx}"
+[ "$real" != "${BASH_SOURCE[0]}" ] && [ "$(cd "$(dirname "$real")" && pwd)" != "$here" ] || { echo "BLOCKED: REAL_NPX points back at this guard." >&2; exit 1; }
+echo "Guard: running the checked command with --non-interactive added."
+exec "$real" "$@" --non-interactive
