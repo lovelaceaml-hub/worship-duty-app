@@ -3,7 +3,8 @@
 /* Dates and times in Pacific time, the church's time zone. */
 
 const TIME_ZONE = 'America/Los_Angeles';
-const DEFAULT_TIMES = Object.freeze({ 'Early Morning': '05:00', Morning: '09:00', Afternoon: '15:00', Evening: '20:00' });
+// Usual start times since 2026-09-12, as in app/config/duties.js.
+const DEFAULT_TIMES = Object.freeze({ 'Early Morning': '05:00', Morning: '10:00', Afternoon: '14:30', Evening: '19:30' });
 
 /* Today's Pacific date (or `date`'s), as YYYY-MM-DD. */
 function pacificDate(date = new Date()) {

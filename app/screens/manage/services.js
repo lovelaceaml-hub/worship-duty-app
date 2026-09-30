@@ -8,7 +8,7 @@ import { data, ui, feature, nameOf } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { dutyGroups, choirLine, dateHeading, empty } from '../../ui/components.js';
-import { DEPARTMENTS, SERVICE_LABELS, WORSHIP_TYPES, departmentOf } from '../../config/duties.js';
+import { DEPARTMENTS, SERVICE_LABELS, WORSHIP_TYPES, DEFAULT_TIMES, departmentOf } from '../../config/duties.js';
 import { upcoming, serviceId } from '../../lib/services.js';
 import { clockTime, todayISO } from '../../lib/dates.js';
 import { canTake } from '../../lib/availability.js';
@@ -127,7 +127,7 @@ export function render() {
   return html`
     ${canCreateService() ? html`<form class="card inline-form add-service" data-act="service-add">
       <input type="date" name="date" value="${todayISO()}" required aria-label="Date">
-      <input type="time" name="time" value="09:00" required aria-label="Time">
+      <input type="time" name="time" value="${DEFAULT_TIMES.Morning}" required aria-label="Time">
       <select name="service" aria-label="Service">${SERVICE_LABELS.map(label => html`<option${label === 'Morning' ? ' selected' : ''}>${label}</option>`)}</select>
       <input type="text" name="worship" list="worship-types" value="Sabbath Day" aria-label="Worship">
       <button type="submit" class="primary">Add service</button>

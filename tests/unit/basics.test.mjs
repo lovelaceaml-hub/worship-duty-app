@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { displayName, canonicalName, byTitle, initials } from '../../app/lib/names.js';
 import { clockTime, dayBadge, addMonths, pacificNow } from '../../app/lib/dates.js';
 import { html, raw, esc } from '../../app/html.js';
-import { DEPARTMENTS } from '../../app/config/duties.js';
+import { DEPARTMENTS, DEFAULT_TIMES } from '../../app/config/duties.js';
 import { FEATURES, featureOn } from '../../app/config/features.js';
 
 const require = createRequire(import.meta.url);
@@ -56,6 +56,13 @@ test('html`` writes true and false out inside attribute quotes only', () => {
 test('the browser and the server list the same departments and duties', () => {
   const permissions = require('../../permissions.js');
   assert.deepEqual(Object.fromEntries(DEPARTMENTS.map(department => [department.name, department.duties])), permissions.DEPARTMENT_DUTIES);
+});
+
+test('the server fills in the same usual service times as the app', () => {
+  const { serviceStart, pacificTime } = require('../../functions/time.js');
+  for (const [label, time] of Object.entries(DEFAULT_TIMES)) {
+    assert.equal(serviceStart({ date: '2026-10-06', service: label }), pacificTime('2026-10-06', time), label);
+  }
 });
 
 test('the server has the same permissions.js as the browser', () => {

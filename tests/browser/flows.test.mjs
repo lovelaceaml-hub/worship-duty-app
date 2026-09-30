@@ -303,6 +303,8 @@ test('each appearance has its own look and Schedule layout, and the choice is re
   }
   await page.locator('header [data-act="appearance-open"]').click();
   await page.locator('[data-appearance-choice="aurora"]').click();
+  // The choice is saved once its stylesheet has loaded, in the same step that switches the page.
+  await page.waitForFunction(() => document.documentElement.dataset.appearance === 'aurora');
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.appearance === 'aurora');
   await page.locator('#view .schedule-strip').waitFor();

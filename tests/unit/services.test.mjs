@@ -56,8 +56,8 @@ test('the Pacific clock decides, not the device or UTC clock', () => {
 
 test('a service without a time uses its label\'s usual time; bad rows are ignored', () => {
   const list = [{ date: 'not-a-date', time: '05:00', service: 'Early Morning' }, { date: '2026-09-14', service: 'Evening' }];
-  assert.equal(startTime(list[1]), '20:00');
-  assert.equal(nextService(list, pacific('2026-09-14', '19:59')).service, 'Evening');
+  assert.equal(startTime(list[1]), '19:30');
+  assert.equal(nextService(list, pacific('2026-09-14', '19:29')).service, 'Evening');
 });
 
 test('upcoming and past split at the start minute', () => {

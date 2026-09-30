@@ -17,7 +17,9 @@ export const ALL_DUTIES = DEPARTMENTS.flatMap(department => department.duties);
 /* Service labels in the order a day runs, and the default start time used
    when a service has no time of its own. */
 export const SERVICE_LABELS = ['Early Morning', 'Morning', 'Afternoon', 'Evening', 'Commemoration'];
-export const DEFAULT_TIMES = { 'Early Morning': '05:00', Morning: '09:00', Afternoon: '15:00', Evening: '20:00' };
+/* Usual start times since 2026-09-12 (the Feast of Trumpets). Each service in
+   the schedule carries its own time; these fill in when one is missing. */
+export const DEFAULT_TIMES = { 'Early Morning': '05:00', Morning: '10:00', Afternoon: '14:30', Evening: '19:30' };
 
 export const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
 
