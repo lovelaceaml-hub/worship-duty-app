@@ -21,7 +21,8 @@ const PROFILE_MUTABLE_FIELDS = Object.freeze([
 const PROFILE_METADATA_FIELDS = Object.freeze([
   'updatedAt',
   'updatedByUid',
-  'updatedBy'
+  'updatedBy',
+  'revision'
 ]);
 
 const PROFILE_IDENTITY_FIELDS = Object.freeze([
@@ -636,6 +637,7 @@ module.exports = {
   normalizeAvailability: normalizedAvailability,
   normalizeAssignment,
   profileForScheduling,
+  effectiveAvailability,
   authorizeAssignment,
   authorizeAssignmentOverride,
   canAssignDepartmentDuty: authorizeAssignment,
