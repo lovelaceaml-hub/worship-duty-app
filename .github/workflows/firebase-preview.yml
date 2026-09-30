@@ -1,0 +1,111 @@
+name: Firebase preview (Hosting only)
+
+# Every pushed branch except main gets its own temporary Firebase Hosting
+# preview channel, built and deployed by scripts/release.mjs. Branch previews
+# never use design-gallery-review (Anthony's approval channel) or the live
+# site. Nothing here deploys Functions, Firestore rules or indexes.
+# Previews read and write REAL records: look, do not tap.
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - 'dependabot/**'
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WDS_FIREBASE_TOOLS: firebase-tools@15
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guard, release.mjs still builds only the pinned Hosting commands
+        run: bash .github/scripts/deploy-guard.sh source
+
+      - name: Preview channel id for this branch
+        id: channel
+        run: echo "id=$(bash .github/scripts/deploy-guard.sh channel "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+
+      - name: Write deploy credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::The repository secret FIREBASE_SERVICE_ACCOUNT is not set yet, so no preview can be deployed."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+
+      - name: Preflight, the deploy account can see the ics function behind the /ics/** rewrite
+        # Without Cloud Functions list access, firebase-tools silently writes a
+        # broken /ics/** rewrite (1st gen style) instead of pointing at the
+        # 2nd gen ics service. Fail before deploying rather than ship that.
+        run: bash .github/scripts/deploy-guard.sh ics-preflight
+
+      - name: Build and deploy the preview through release.mjs (guarded)
+        env:
+          DEPLOY_GUARD_MODE: preview
+          GUARD_PREVIEW_CHANNEL: ${{ steps.channel.outputs.id }}
+        run: |
+          set -o pipefail
+          export REAL_NPX="$(command -v npx)"
+          chmod +x .github/scripts/npx-guard/npx
+          PATH="$GITHUB_WORKSPACE/.github/scripts/npx-guard:$PATH" \
+            node scripts/release.mjs preview --channel "$GUARD_PREVIEW_CHANNEL" 2>&1 | tee "$RUNNER_TEMP/deploy.log"
+
+      - name: Preview link and read-only load check
+        env:
+          CHANNEL: ${{ steps.channel.outputs.id }}
+        run: |
+          if grep -q "Unable to find a valid endpoint for function" "$RUNNER_TEMP/deploy.log"; then
+            echo "::error::firebase-tools could not resolve the ics function, so this preview's /ics/** rewrite is broken."
+            exit 1
+          fi
+          url="$(grep -oE "https://lv-zion-duties--${CHANNEL}-[a-z0-9]+\.web\.app" "$RUNNER_TEMP/deploy.log" | head -n 1)"
+          if [ -z "$url" ]; then
+            echo "::error::Could not find the preview URL in the deploy output."
+            exit 1
+          fi
+          echo "Preview: $url"
+          code="$(curl -sL -o "$RUNNER_TEMP/index.html" -w '%{http_code}' "$url/")"
+          echo "HTTP $code"
+          test "$code" = "200"
+          grep -q 'app/main.js' "$RUNNER_TEMP/index.html"
+          curl -sfL "$url/release.json" | grep -q '"release"'
+          for p in /.git/HEAD /.github/workflows/firebase-preview.yml; do
+            c="$(curl -s -o /dev/null -w '%{http_code}' "$url$p")"
+            echo "$p -> HTTP $c"
+            test "$c" = "404"
+          done
+          {
+            echo "### Worship Duty preview"
+            echo ""
+            echo "Branch \`$GITHUB_REF_NAME\` at \`${GITHUB_SHA::7}\`: $url"
+            echo ""
+            echo "Expires in 7 days. It uses the REAL schedule and member records, so look but do not tap."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove deploy credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-sa.json"

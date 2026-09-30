@@ -101,7 +101,26 @@ GitHub runs all four on every pull request.
 
 ## Release
 
-The app itself (Firebase Hosting), first to a preview, then live:
+Only the app itself (Firebase Hosting) is released this way; functions and
+rules are below.
+
+**From GitHub** (also works from a cloud session):
+
+- Every pushed branch except `main` gets its own 7-day preview link, shown in
+  the Actions run summary. Previews use the real data: look, do not tap.
+- To go live, run **Firebase release** on `main`
+  (https://github.com/lovelaceaml-hub/worship-duty-app/actions/workflows/firebase-release.yml).
+  It runs every test first, publishes, then checks that the calendar feed
+  still answers. Tick "maintenance" to show the "being updated" screen, and
+  release again without it to end it.
+- `.github/scripts/deploy-guard.sh` lets these workflows run only the pinned
+  Hosting command for this project. The deploy key (service account
+  `gh-hosting-deploy`, repository secret `FIREBASE_SERVICE_ACCOUNT`) must be
+  rotated by 2027-09-29.
+- To undo a release: Firebase console, Hosting, site `lv-zion-duties`,
+  Release history, Rollback on the release before it.
+
+**From your Mac:**
 
 ```bash
 node scripts/release.mjs preview
@@ -111,10 +130,10 @@ node scripts/release.mjs preview
 node scripts/release.mjs live
 ```
 
-The preview is a private link for 7 days, and it uses the real database. The
-build stamps every file with the release, so a phone never mixes two versions.
-`node scripts/release.mjs live --maintenance` shows a "being updated" screen
-with the schedule; release again without `--maintenance` to end it.
+The preview is the approval link (channel `design-gallery-review`, valid 7
+days). It uses the real data too. The build stamps every file with the
+release, so a phone never mixes two versions. `node scripts/release.mjs live
+--maintenance` shows the "being updated" screen.
 
 Cloud Functions, when `functions/` changed. Deploy them before the app when
 the app needs the new server code.
