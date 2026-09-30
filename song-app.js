@@ -2242,16 +2242,13 @@ function wireRoot() {
 
 function subscribe() {
   const unsubs = [];
-  let fellBack = false;
+  /* One refused or failed listener stops on its own and never disconnects the
+     others. This used to drop every listener and switch the planner to
+     this-device-only mode on any permission error, and the live rules refuse
+     app/songSettings (and app/presiders while that document does not exist),
+     so the planner lost its live connection as soon as it opened. */
   function fallbackToLocal(err) {
-    if (err && err.code !== 'permission-denied') { console.warn('song snapshot error (staying in Firebase mode):', err); return; }
-    if (fellBack) return;
-    fellBack = true;
-    console.warn('Firestore access denied for the song picker — falling back to this device only:', err);
-    unsubs.forEach(u => { try { u(); } catch (e) { /* ignore */ } });
-    fb = null;
-    loadLocal();
-    render();
+    console.warn('A song planner listener stopped:', err);
   }
 
   unsubs.push(fb.onSnapshot(fb.collection(fb.db, 'setlists'), snap => {
@@ -2290,11 +2287,6 @@ function subscribe() {
       });
       if (rows.length) pushToSheet('stats', rows);
     }
-    render();
-  }, fallbackToLocal));
-
-  unsubs.push(fb.onSnapshot(fb.doc(fb.db, 'app', 'songSettings'), snap => {
-    state.settings = snap.exists() ? snap.data() : {};
     render();
   }, fallbackToLocal));
 
