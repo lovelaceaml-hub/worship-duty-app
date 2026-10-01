@@ -5,8 +5,6 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const sheetLib = require('./sheet-lib');
-const icsLib = require('./ics-lib');
-const { publicScheduleService } = require('./public-schedule');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
@@ -33,6 +31,7 @@ const appDocs = require('./app-docs');
 const { detailsFor } = require('./refusals');
 const { createNotifier } = require('./notify');
 const { reconcileScheduleAssignmentProjection } = require('./schedule-projection');
+const { createPublicEndpoints } = require('./public-endpoints');
 
 initializeApp();
 const db = getFirestore();
@@ -641,47 +640,11 @@ exports.onFeedbackDone = onDocumentUpdated(
     await notifier.alertFeedbackDone(event.params.id, before.data() || {}, after.data() || {});
   });
 
-/* ---- 5. per-member .ics calendar feed ----
-   Served through a hosting rewrite as /ics/<member name>. Subscribe once in
-   Apple/Google Calendar and duty changes flow in automatically (calendars
-   re-fetch every few hours). Note: schedule data is already world-readable
-   via the open Firestore rules, so this endpoint exposes nothing new. */
-exports.ics = onRequest({ region: REGION }, async (req, res) => {
-  const member = decodeURIComponent(req.path.replace(/^\/(ics\/)?/, '')).replace(/[\r\n]/g, '').trim();
-  if (!member) {
-    res.status(400).type('text/plain').send('Usage: /ics/<member name>, e.g. /ics/B.%20Anthony');
-    return;
-  }
-  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  const [schedSnap, mapSnap] = await Promise.all([
-    db.collection('schedule').where('date', '>=', since).get(),
-    db.collection('app').doc('nameMap').get()
-  ]);
-  const services = schedSnap.docs.map(d => d.data() || {});
-  const nameMap = (mapSnap.exists && mapSnap.data().map) || {};
-  const body = icsLib.buildIcsForMember(services, member, nameMap);
-  res.set('Cache-Control', 'public, max-age=300');
-  res.type('text/calendar; charset=utf-8').send(body);
-});
-
-/* ---- 6. read-only public schedule projection ----
-   LV Zion's temporary public release fetches this server-to-server. It cannot
-   read app settings, members, requests, tokens, or any other Firestore data. */
-exports.publicSchedule = onRequest({ region: REGION }, async (_req, res) => {
-  const today = pacificDate();
-  const snapshot = await db.collection('schedule')
-    .where('date', '>=', today)
-    .orderBy('date')
-    .limit(260)
-    .get();
-  const services = snapshot.docs
-    .map(document => publicScheduleService(document.data()))
-    .filter(Boolean);
-  res.set('Cache-Control', 'public, max-age=60, s-maxage=60');
-  res.set('X-Content-Type-Options', 'nosniff');
-  res.json({ version: 1, generatedAt: new Date().toISOString(), services });
-});
-
+/* ---- 5 and 6. the public calendar feed and schedule (public-endpoints.js).
+   Few instances: neither needs more, and they are open to anyone. ---- */
+const publicEndpoints = createPublicEndpoints({ db });
+exports.ics = onRequest({ region: REGION, maxInstances: 5 }, publicEndpoints.ics);
+exports.publicSchedule = onRequest({ region: REGION, maxInstances: 5 }, publicEndpoints.publicSchedule);
 
 /* ---- 7. Google Sheet import ----
    Other coordinators keep the schedule in a Google Sheet; the app only reads
@@ -707,13 +670,13 @@ async function importSheet() {
     parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(await response.text()), new Date());
     parsed.services.forEach(service => {
       const assignments = service.assignments || {};
-      Object.keys(assignments).forEach(duty => { assignments[duty] = icsLib.canonName(assignments[duty], nameMap); });
+      Object.keys(assignments).forEach(duty => { assignments[duty] = canonicalName(assignments[duty], nameMap); });
     });
   }
   if (!parsed.services.length) {
     throw new HttpsError('failed-precondition', 'The sheet had no services in it, so nothing was changed.');
   }
-  const sheetMembers = Array.from(new Set(parsed.members.map(name => icsLib.canonName(name, nameMap))));
+  const sheetMembers = Array.from(new Set(parsed.members.map(name => canonicalName(name, nameMap))));
 
   const [existingSnap, membersSnap, departmentsSnap] = await Promise.all([
     db.collection('schedule').get(),
@@ -787,7 +750,7 @@ exports.checkSheet = onCall({ region: REGION }, async request => {
     const mine = app.get(id);
     if (!mine) return;
     Object.entries(service.assignments).forEach(([duty, name]) => {
-      const current = icsLib.canonName(String((mine.assignments || {})[duty] || ''), nameMap);
+      const current = canonicalName((mine.assignments || {})[duty], nameMap);
       if (current !== name) differences.push({ service: id, duty, sheet: name, app: current });
     });
   });
