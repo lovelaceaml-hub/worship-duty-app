@@ -463,8 +463,8 @@ test('a page opened before a release asks for a reload instead of loading the ne
       await tab(page, 'songs');
       await page.locator('#song-root', { hasText: 'The app was updated. Reload to open the song planner.' }).waitFor();
       assert.deepEqual(next, [], 'no file of the next release was loaded');
-      await page.locator('#song-root [data-act="reload"]').click();
-      await page.waitForFunction(() => document.querySelector('script[type="module"]').src.includes('v=r2'));
+      await Promise.all([page.waitForEvent('load'), page.locator('#song-root [data-act="reload"]').click()]);
+      assert.match(await page.evaluate(() => document.querySelector('script[type="module"]').src), /v=r2/);
     } finally {
       await context.close();
       live.stop();
