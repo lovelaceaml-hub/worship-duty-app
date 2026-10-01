@@ -8,10 +8,10 @@ const sheetLib = require('./sheet-lib');
 const icsLib = require('./ics-lib');
 const { publicScheduleService } = require('./public-schedule');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
-const { TIME_ZONE: TZ, pacificDate, serviceStart, longDate, clockTime } = require('./time');
+const { TIME_ZONE: TZ, pacificDate } = require('./time');
 const {
   DEFAULT_PIN,
   ORDINARY_DEFAULT_PIN,
@@ -19,19 +19,20 @@ const {
   createMemberAuthCallables
 } = require('./member-auth');
 const permissions = require('./permissions');
-const { createDepartmentHandlers, assignmentIdFor } = require('./department-handlers');
-const { currentRevision, nextRevision } = require('./revision');
+const { createDepartmentHandlers } = require('./department-handlers');
 const { createWorkflowHandlers } = require('./workflows');
 const { createMembershipHandlers } = require('./membership');
 const { createSheets, accountEmail } = require('./sheets');
 const sheetSync = require('./sheet-sync');
 const { serviceYear } = require('./service-year');
-const { dutyName, canonicalName, usableMemberName } = require('./names');
+const { canonicalName, usableMemberName } = require('./names');
 const { addServingMembers } = require('./serving-members');
 const { setDutyDefault } = require('./duty-defaults');
 const { renameMember: renameMemberEverywhere } = require('./rename-member');
 const appDocs = require('./app-docs');
 const { detailsFor } = require('./refusals');
+const { createNotifier } = require('./notify');
+const { reconcileScheduleAssignmentProjection } = require('./schedule-projection');
 
 initializeApp();
 const db = getFirestore();
@@ -45,91 +46,9 @@ const departmentHandlers = createDepartmentHandlers({
 const workflowHandlers = createWorkflowHandlers({ db, now: () => Date.now(), logger });
 const membershipHandlers = createMembershipHandlers({ db, now: () => Date.now() });
 
+const notifier = createNotifier({ db, messaging: getMessaging(), logger });
 const loadNameMap = () => appDocs.loadNameMap(db);
 const runtimePermissionConfig = () => appDocs.runtimePermissionConfig(db);
-
-function scheduleServiceTimeKey(service) {
-  return String(service && (service.serviceTime || service.service || service.time) || '')
-    .toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-async function reconcileScheduleAssignmentProjection(serviceId, before, after) {
-  const beforeAssignments = before && before.assignments || {};
-  const afterAssignments = after && after.assignments || {};
-  const changedDuties = Array.from(new Set([
-    ...Object.keys(beforeAssignments),
-    ...Object.keys(afterAssignments)
-  ])).filter(duty => beforeAssignments[duty] !== afterAssignments[duty]);
-  if (!changedDuties.length) return;
-  const batch = db.batch();
-  let writes = 0;
-  /* Self-healing for the Needs-replacement markers written by
-     saveMemberAvailability/resolveDutyAttention (Section 3): a marker is
-     live only while schedule.assignments[duty] still equals
-     needsReplacement[duty].memberName. This covers the legacy direct-write
-     and Sheet-sync paths, which do not know about markers at all. */
-  const existingNeedsReplacement = (after && after.needsReplacement) || {};
-  const needsReplacementClears = {};
-  for (const duty of changedDuties) {
-    const marker = existingNeedsReplacement[duty];
-    if (marker && String(afterAssignments[duty] || '') !== String(marker.memberName || '')) {
-      needsReplacementClears[duty] = FieldValue.delete();
-    }
-  }
-  if (Object.keys(needsReplacementClears).length) {
-    batch.set(db.collection('schedule').doc(serviceId), { needsReplacement: needsReplacementClears }, { merge: true });
-    writes += 1;
-  }
-  for (const duty of changedDuties) {
-    const departmentId = permissions.departmentForDuty(duty);
-    if (!departmentId) continue;
-    const assignment = {
-      departmentId,
-      serviceId,
-      serviceDate: after.date,
-      serviceTime: scheduleServiceTimeKey(after),
-      duty
-    };
-    const reference = db.collection('departmentAssignments').doc(assignmentIdFor(assignment));
-    const name = String(afterAssignments[duty] || '').trim();
-    if (!name) {
-      batch.delete(reference);
-      writes += 1;
-      continue;
-    }
-    const existing = await reference.get();
-    if (existing.exists && String((existing.data() || {}).memberName || '') === name) continue;
-    const profiles = await db.collection('departments').doc(departmentId)
-      .collection('members').where('memberName', '==', name).limit(2).get();
-    if (profiles.size !== 1) {
-      batch.delete(reference);
-      writes += 1;
-      logger.warn('schedule projection profile was not unique', { serviceId, duty, departmentId });
-      continue;
-    }
-    const profileDocument = profiles.docs[0];
-    const profile = profileDocument.data() || {};
-    batch.set(reference, {
-      id: reference.id,
-      departmentId,
-      memberUid: profileDocument.id,
-      memberName: profile.memberName || name,
-      duty,
-      serviceId,
-      serviceDate: after.date,
-      serviceTime: assignment.serviceTime,
-      profileId: profile.profileId || profile.id || '',
-      assignedAt: Date.now(),
-      assignedByUid: 'schedule-projection',
-      assignedBy: 'schedule-projection',
-      override: true,
-      authorization: 'administrator-schedule-reconciliation',
-      revision: nextRevision(existing.exists ? (existing.data() || {}) : {})
-    }, { merge: false });
-    writes += 1;
-  }
-  if (writes) await batch.commit();
-}
 
 /* What the leader settings (app/leaderConfig, see runtimePermissionConfig)
    give a member who has no roles stored yet: their roles, the departments
@@ -454,7 +373,7 @@ exports.resolveDutyAttention = exposeDepartmentCallable(
 exports.saveDepartmentAssignments = exposeDepartmentCallable(async request => {
   const result = await departmentHandlers.saveDepartmentAssignments(request);
   try {
-    await alertPlanned(result.saved);
+    await notifier.alertPlanned(result.saved);
   } catch (error) {
     logger.error('Planner alerts failed', { error: String(error && error.message || error) });
   }
@@ -623,81 +542,8 @@ exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
   return { ok: true, config: next };
 });
 
-/* The duty line in a notification: "Presider · Sabbath Day Morning ·
-   Wednesday, July 1 at 9:00 AM". */
-function bodyFor(duty, svc) {
-  return dutyName(duty) + ' · ' + [svc.worship, svc.service].filter(Boolean).join(' ') + ' · ' +
-    longDate(svc.date) + (svc.time ? ' at ' + clockTime(svc.time) : '');
-}
-
-/* ---- shared send helpers: names -> tokens -> data-only multicast ----
-   Prunes token docs FCM reports as invalid/unregistered on any send. */
-
-/* Load every token doc once as [{ token, name }]. Callers that send in a loop
-   (dutyReminders) load this a single time instead of re-scanning per recipient. */
-async function loadTokenTargets() {
-  const snap = await db.collection('tokens').get();
-  const targets = []; // { token, name }
-  snap.forEach(d => {
-    const data = d.data();
-    if (data && data.name) targets.push({ token: d.id, name: data.name });
-  });
-  return targets;
-}
-
-/* Send title/body to every already-loaded target whose name is in `names`. */
-async function sendToTargets(targets, names, title, bodyFn) {
-  const wanted = new Set(names.filter(Boolean));
-  if (!wanted.size) return;
-  const picked = targets.filter(t => wanted.has(t.name));
-  if (!picked.length) return;
-  // Bodies can differ per recipient, so batch tokens by identical body and
-  // send one data-only multicast per distinct body.
-  const byBody = {};
-  picked.forEach(t => {
-    const body = bodyFn(t.name);
-    (byBody[body] || (byBody[body] = [])).push(t.token);
-  });
-  const dead = [];
-  for (const body of Object.keys(byBody)) {
-    const grp = byBody[body];
-    const resp = await getMessaging().sendEachForMulticast({
-      tokens: grp,
-      data: { title: title, body: body }
-    });
-    resp.responses.forEach((r, i) => {
-      if (!r.success && r.error) {
-        const code = r.error.code || '';
-        if (code === 'messaging/registration-token-not-registered' ||
-            code === 'messaging/invalid-argument' ||
-            code === 'messaging/invalid-registration-token') {
-          dead.push(grp[i]);
-        }
-      }
-    });
-  }
-  await Promise.all(dead.map(tok =>
-    db.collection('tokens').doc(tok).delete().catch(() => {})));
-}
-
-/* One-shot convenience for callers that send once (loads tokens then sends). */
-async function sendToNames(names, title, bodyFn) {
-  const wanted = new Set(names.filter(Boolean));
-  if (!wanted.size) return;
-  await sendToTargets(await loadTokenTargets(), names, title, bodyFn);
-}
-
-/* The switches in Manage, Features, saved in app/settings.features, with
-   the same defaults as app/config/features.js. */
-async function loadSettings() {
-  const snapshot = await db.collection('app').doc('settings').get();
-  return snapshot.exists ? snapshot.data() || {} : {};
-}
-
-function switchOn(settings, id, fallback = true) {
-  const features = (settings && settings.features) || {};
-  return Object.prototype.hasOwnProperty.call(features, id) ? features[id] === true : fallback;
-}
+const loadSettings = () => appDocs.loadSettings(db);
+const switchOn = appDocs.switchOn;
 
 /* The Sheet's Entry grid, when an administrator has set the Sheet's link
    (Manage, Data) and turned on "Write changes to the Sheet". Otherwise null,
@@ -714,13 +560,6 @@ async function noteSheetStatus(settings, error) {
   if (!error && was.ok !== false) return;
   if (error && was.ok === false && was.message === message) return;
   await db.collection('app').doc('settings').set({ sheetStatus: { ok: !error, message, at: Date.now() } }, { merge: true });
-}
-
-/* "Usher Door · Saturday, October 3 Morning", several joined, for one alert. */
-function dutyList(items) {
-  const lines = items.slice().sort((a, b) => a.date.localeCompare(b.date))
-    .map(item => dutyName(item.duty) + ' · ' + longDate(item.date) + ' ' + item.service);
-  return lines.length > 4 ? lines.slice(0, 3).join('; ') + '; and ' + (lines.length - 3) + ' more' : lines.join('; ');
 }
 
 /* A change made in the app goes into the Sheet's grid. Writes that came from
@@ -742,98 +581,35 @@ async function writeBack(event, before, after) {
   }
 }
 
-async function alertPlanned(saved) {
-  const byName = {};
-  saved.filter(item => item.memberName).forEach(item => { (byName[item.memberName] = byName[item.memberName] || []).push(item); });
-  const names = Object.keys(byName);
-  if (!names.length || !switchOn(await loadSettings(), 'notifications')) return;
-  const one = names.filter(name => byName[name].length === 1);
-  const many = names.filter(name => byName[name].length > 1);
-  if (one.length) await sendToNames(one, 'New duty for you', name => dutyList(byName[name]));
-  if (many.length) await sendToNames(many, 'New duties for you', name => dutyList(byName[name]));
-}
-
-/* ---- 1. new-duty alerts (switch: notifications) ---- */
+/* ---- 1. after every schedule write: the assignment records, the Sheet's
+   grid and new-duty alerts (switch: notifications). Each runs on its own, so
+   one that fails does not stop the others. ---- */
 exports.onScheduleWrite = onDocumentWritten(
   { document: 'schedule/{id}', region: REGION },
   async (event) => {
-    const after = event.data && event.data.after;
-    const before = event.data.before && event.data.before.exists
-      ? event.data.before.data() || {}
-      : {};
-    if (!after || !after.exists) {
-      await reconcileScheduleAssignmentProjection(event.params.id, before, { ...before, assignments: {} });
-      await writeBack(event, before, null);
-      return;
+    const existed = !!(event.data && event.data.before && event.data.before.exists);
+    const before = existed ? event.data.before.data() || {} : {};
+    const afterSnapshot = event.data && event.data.after;
+    const after = afterSnapshot && afterSnapshot.exists ? afterSnapshot.data() || {} : null;
+    const steps = [
+      ['projection', () => reconcileScheduleAssignmentProjection({ db, logger }, event.params.id, before, after || { ...before, assignments: {} })],
+      ['sheet', () => writeBack(event, before, after)],
+      ['alerts', () => notifier.alertScheduleWrite(before, after, existed)]
+    ];
+    for (const [step, run] of steps) {
+      try {
+        await run();
+      } catch (error) {
+        logger.error('onScheduleWrite: ' + step + ' failed', { service: event.params.id, error: String(error && error.message || error) });
+      }
     }
-    const svc = after.data() || {};
-    await reconcileScheduleAssignmentProjection(event.params.id, before, svc);
-    await writeBack(event, before, svc);
-    // Brand-new service doc (initial seed, bulk import, or a fresh sheet-created
-    // service): every assignment would read as "new", fanning a mass push out to
-    // everyone at once. Skip - members still get the in-app badge and the
-    // day-before reminder. Only alert on edits to an existing service.
-    if (!(event.data.before && event.data.before.exists)) return;
-    // The month planner's saves send one alert per member themselves.
-    if (svc.planBatch && svc.planBatch !== before.planBatch) return;
-    const beforeA = (before && before.assignments) || {};
-    const afterA = svc.assignments || {};
-    // for each duty whose member CHANGED to a new non-empty name
-    const perName = {}; // name -> duty (first that changed for them)
-    Object.keys(afterA).forEach(duty => {
-      const name = afterA[duty];
-      if (name && name !== beforeA[duty] && !(name in perName)) perName[name] = duty;
-    });
-    const names = Object.keys(perName);
-    if (!names.length) return;
-    if (!switchOn(await loadSettings(), 'notifications')) return;
-    await sendToNames(names, 'New duty for you', name => bodyFor(perName[name], svc));
   });
 
 /* ---- 2. day-before reminders (switch: reminders) ---- */
 exports.dutyReminders = onSchedule(
   { schedule: 'every 60 minutes', timeZone: TZ, region: REGION },
   async () => {
-    if (!switchOn(await loadSettings(), 'reminders')) return;
-    const now = Date.now();
-    const yesterday = new Date(now - 24 * 3600 * 1000);
-    const cutoff = yesterday.toISOString().slice(0, 10); // date >= today-1
-    const snap = await db.collection('schedule').where('date', '>=', cutoff).get();
-
-    // Load every token once for the whole run instead of re-scanning the
-    // collection per assigned duty (reads were services × duties × tokens).
-    const tokenTargets = await loadTokenTargets();
-
-    for (const d of snap.docs) {
-      const svc = d.data() || {};
-      if (!svc.date) continue;
-      const when = serviceStart(svc);
-      if (!(when > now && when - now < 24 * 3600 * 1000)) continue;
-      const svcId = d.id;
-      const assignments = svc.assignments || {};
-      // group members by duty so each gets their own duty in the body
-      for (const duty of Object.keys(assignments)) {
-        const name = assignments[duty];
-        if (!name) continue;
-        const markerId = svcId + '_' + duty.replace(/[^a-zA-Z0-9]+/g, '-') + '_' +
-          name.replace(/[^a-zA-Z0-9]+/g, '-');
-        const marker = db.collection('sent').doc(markerId);
-        const existing = await marker.get();
-        if (existing.exists) continue;
-        // Mark BEFORE sending: a crash between send and mark would otherwise
-        // re-send next hour. We accept a rare missed reminder over a double one.
-        await marker.set({ t: now });
-        try {
-          await sendToTargets(tokenTargets, [name], 'Duty reminder', () => bodyFor(duty, svc));
-        } catch (e) {
-          logger.error('dutyReminders: send failed', { markerId, error: String(e) });
-        }
-      }
-    }
-    // prune markers older than 7 days
-    const old = await db.collection('sent')
-      .where('t', '<', now - 7 * 24 * 3600 * 1000).get();
-    await Promise.all(old.docs.map(m => m.ref.delete().catch(() => {})));
+    await notifier.sendReminders();
   });
 
 /* ---- 3. change request sent: tell that department's leaders and the
@@ -842,19 +618,7 @@ exports.onRequestCreated = onDocumentCreated(
   { document: 'requests/{id}', region: REGION },
   async event => {
     const request = event.data && event.data.exists ? event.data.data() || {} : null;
-    if (!request) return;
-    const [settingsSnap, config, nameMap] = await Promise.all([db.collection('app').doc('settings').get(), runtimePermissionConfig(), loadNameMap()]);
-    const canonicalMemberName = name => canonicalName(name, nameMap);
-    const scheduler = (settingsSnap.exists && settingsSnap.data().schedulerName) || '';
-    const department = request.department || permissions.departmentForDuty(request.duty);
-    const leaders = ((config.departmentLeaders || {})[department] || []);
-    const requester = canonicalMemberName(request.name);
-    const recipients = Array.from(new Set([scheduler].concat(leaders).map(canonicalMemberName)))
-      .filter(name => name && name !== requester);
-    if (!recipients.length) return;
-    const body = request.name + ' asks to change ' + dutyName(request.duty) + ' · ' + longDate(request.date) + ' ' + request.service +
-      (request.note ? ' · "' + request.note + '"' : '');
-    await sendToNames(recipients, 'Change request', () => body);
+    if (request) await notifier.alertRequestCreated(event.params.id, request);
   });
 
 /* ---- 4. change request answered: tell the member ---- */
@@ -864,11 +628,7 @@ exports.onRequestResolved = onDocumentUpdated(
     const before = event.data && event.data.before;
     const after = event.data && event.data.after;
     if (!before || !before.exists || !after || !after.exists) return;
-    const was = before.data() || {}, now = after.data() || {};
-    if (!(was.status === 'pending' && now.status !== was.status)) return;
-    const title = now.status === 'approved' ? 'Your change request was approved'
-      : now.status === 'declined' ? 'Your change request was declined' : 'Your change request was answered';
-    await sendToNames([now.name], title, () => dutyName(now.duty) + ' · ' + longDate(now.date) + ' ' + now.service);
+    await notifier.alertRequestResolved(event.params.id, before.data() || {}, after.data() || {});
   });
 
 /* ---- 4b. feedback marked done: tell the member who sent it ---- */
@@ -878,11 +638,7 @@ exports.onFeedbackDone = onDocumentUpdated(
     const before = event.data && event.data.before;
     const after = event.data && event.data.after;
     if (!before || !before.exists || !after || !after.exists) return;
-    const was = before.data() || {}, now = after.data() || {};
-    if (was.status === 'done' || now.status !== 'done' || !now.name) return;
-    const message = String(now.message || '').replace(/\s+/g, ' ').trim();
-    await sendToNames([canonicalName(now.name, await loadNameMap())], 'Your feedback was marked done',
-      () => '"' + (message.length > 80 ? message.slice(0, 77) + '…' : message) + '" Thank you for sending it.');
+    await notifier.alertFeedbackDone(event.params.id, before.data() || {}, after.data() || {});
   });
 
 /* ---- 5. per-member .ics calendar feed ----

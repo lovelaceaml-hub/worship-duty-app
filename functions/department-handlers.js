@@ -999,6 +999,7 @@ function createDepartmentHandlers(options = {}) {
 module.exports = {
   PROFILE_PATCH_FIELDS,
   memberListNames,
+  readAccountForMemberUid,
   createDepartmentHandlers,
   assignmentIdFor,
   profileWithPatch,

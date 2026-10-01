@@ -56,4 +56,4 @@ function clockTime(time) {
   return (hour % 12 || 12) + ':' + minutes + ' ' + (hour >= 12 ? 'PM' : 'AM');
 }
 
-module.exports = { TIME_ZONE, pacificDate, pacificTime, serviceStart, hasStarted, longDate, clockTime };
+module.exports = { TIME_ZONE, DEFAULT_TIMES, pacificDate, pacificTime, serviceStart, hasStarted, longDate, clockTime };
