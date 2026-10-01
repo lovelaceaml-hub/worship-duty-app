@@ -14,7 +14,8 @@ function fakeDb(docs) {
     collection: name => collectionRef(path + '/' + name),
     get: async () => ({ exists: store.has(path), data: () => store.get(path) }),
     set: async (value, options) => { store.set(path, options && options.merge ? Object.assign({}, store.get(path), value) : value); },
-    update: async value => { store.set(path, Object.assign({}, store.get(path), value)); }
+    update: async value => { store.set(path, Object.assign({}, store.get(path), value)); },
+    delete: async () => { store.delete(path); }
   });
   const collectionRef = path => ({
     doc: id => docRef(path + '/' + id),
@@ -61,8 +62,30 @@ test('a name is fixed everywhere and the member keeps their sign-in', async () =
   assert.equal(db.store.get('departments/Usher Sisters/members/member:Bridgette').memberName, 'S. Bridgette');
 });
 
-test('a name that is not on the list, or one already taken, is refused', async () => {
+test('a name that is not on the list is refused', async () => {
   const db = fakeDb({ 'app/members': { list: ['Bridgette', 'S. Leah'] } });
   await assert.rejects(renameMember(db, { from: 'Nobody', to: 'S. Nobody', newAccount }), error => error.code === 'not-found');
-  await assert.rejects(renameMember(db, { from: 'Bridgette', to: 'S. Leah', newAccount }), error => error.code === 'already-exists');
+});
+
+test('when the right name is already a member, the two become one', async () => {
+  const db = fakeDb({
+    'app/members': { list: ['Bridgette', 'S. Bridgette', 'S. Leah'] },
+    'accounts/S. Bridgette': { memberName: 'S. Bridgette', authUid: 'sb-uid', pinHash: 'her-pin' },
+    'accounts/Bridgette': { memberName: 'Bridgette', pinHash: 'other-pin' },
+    'departments/Usher Sisters/members/sb-uid': { memberUid: 'sb-uid', memberName: 'S. Bridgette', status: 'inactive', schedulable: true, eligibleDuties: ['Usher Door'] },
+    'departments/Usher Sisters/members/member:Bridgette': { memberUid: 'member:Bridgette', memberName: 'Bridgette', status: 'active', schedulable: true, eligibleDuties: ['Usher Back'] },
+    'departments/Lobby/members/member:Bridgette': { memberUid: 'member:Bridgette', memberName: 'Bridgette', status: 'active', schedulable: true, eligibleDuties: ['Lobby Desk #1'] },
+    'schedule/2026-10-03_morning': { date: '2026-10-03', assignments: { 'Usher Back': 'Bridgette' } }
+  });
+  const result = await renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 7 });
+  assert.equal(result.merged, true);
+  assert.deepEqual(db.store.get('app/members').list, ['S. Bridgette', 'S. Leah']);
+  assert.equal(db.store.get('accounts/S. Bridgette').pinHash, 'her-pin', 'her own account stays');
+  assert.equal(db.store.get('accounts/Bridgette').active, false);
+  const usher = db.store.get('departments/Usher Sisters/members/sb-uid');
+  assert.deepEqual([usher.status, usher.eligibleDuties], ['active', ['Usher Door', 'Usher Back']]);
+  assert.equal(db.store.has('departments/Usher Sisters/members/member:Bridgette'), false);
+  assert.equal(db.store.get('departments/Lobby/members/sb-uid').memberName, 'S. Bridgette');
+  assert.equal(db.store.has('departments/Lobby/members/member:Bridgette'), false);
+  assert.equal(db.store.get('schedule/2026-10-03_morning').assignments['Usher Back'], 'S. Bridgette');
 });

@@ -36,7 +36,7 @@ export async function renameMember(from, to) {
   renderSoon();
   try {
     const result = await call('renameMember', { from, to });
-    notice(from + ' is now ' + to + ' everywhere (' + plural(result.services || 0, 'service') + ' updated).');
+    notice((result.merged ? from + ' and ' + to + ' are now one member, ' + to : from + ' is now ' + to + ' everywhere') + ' (' + plural(result.services || 0, 'service') + ' updated).');
     sheet.renaming = false;
     renderSoon();
     return true;

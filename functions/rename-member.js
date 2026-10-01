@@ -28,13 +28,15 @@ async function renameMember(db, { from, to, newAccount, now = Date.now() }) {
   if (to.length > MAX_NAME || to.includes('/')) throw Object.assign(new Error('That name cannot be used.'), { code: 'invalid-argument' });
   const counts = { services: 0, songLists: 0, requests: 0, profiles: 0 };
 
-  // The member list: the new name must not belong to someone else already.
+  // The member list. When the new name is already there, the two are the
+  // same person and become one ("merge").
   const membersRef = db.collection('app').doc('members');
   const membersSnap = await membersRef.get();
   const members = membersSnap.exists ? membersSnap.data() || {} : {};
   const list = Array.isArray(members.list) ? members.list : [];
   if (!list.includes(from)) throw Object.assign(new Error(from + ' is not on the member list.'), { code: 'not-found' });
-  if (list.includes(to)) throw Object.assign(new Error(to + ' is already on the member list. Ask for help to merge two members.'), { code: 'already-exists' });
+  const merge = list.includes(to);
+  counts.merged = merge;
   await membersRef.set(Object.assign({}, members, { list: swap(list, from, to).sort() }));
 
   // Old spelling -> new, and anything that pointed at the old spelling.
@@ -73,25 +75,59 @@ async function renameMember(db, { from, to, newAccount, now = Date.now() }) {
   const settingsSnap = await settingsRef.get();
   if (settingsSnap.exists && (settingsSnap.data() || {}).schedulerName === from) await settingsRef.set({ schedulerName: to }, { merge: true });
 
-  // The sign-in account: the new record keeps the old uid (and PIN, if any).
+  // The sign-in account.
   const accounts = db.collection('accounts');
   const oldSnap = await accounts.doc(from).get();
   const oldAccount = oldSnap.exists ? oldSnap.data() || {} : null;
   const keptUid = String((oldAccount && (oldAccount.authUid || oldAccount.uid)) || 'member:' + ((oldAccount && oldAccount.memberId) || from));
-  const fresh = await newAccount(to);
-  const account = Object.assign({}, fresh, oldAccount || {}, {
-    id: to, memberId: to, name: to, memberName: to, authUid: keptUid, renamedFrom: from, renamedAt: now
-  });
-  if (!account.pinHash) account.pinHash = fresh.pinHash;
-  await accounts.doc(to).set(account);
+  const toSnap = await accounts.doc(to).get();
+  const toAccount = toSnap.exists ? toSnap.data() || {} : null;
+  let targetUid;
+  if (merge && toAccount) {
+    // Merging into someone who has signed in: keep their account as it is.
+    targetUid = String(toAccount.authUid || toAccount.uid || 'member:' + (toAccount.memberId || to));
+  } else if (merge) {
+    // Merging into a name that has never signed in: it keeps its own uid; the
+    // PIN set under the old spelling comes along.
+    targetUid = 'member:' + to;
+    const fresh = await newAccount(to);
+    if (oldAccount && oldAccount.pinHash) Object.assign(fresh, { pinHash: oldAccount.pinHash, mustChangePin: !!oldAccount.mustChangePin });
+    await accounts.doc(to).set(Object.assign(fresh, { renamedFrom: from, renamedAt: now }));
+  } else {
+    // A plain rename keeps the old uid and PIN, so nothing else has to move.
+    targetUid = keptUid;
+    const fresh = await newAccount(to);
+    const account = Object.assign({}, fresh, oldAccount || {}, {
+      id: to, memberId: to, name: to, memberName: to, authUid: keptUid, renamedFrom: from, renamedAt: now
+    });
+    if (!account.pinHash) account.pinHash = fresh.pinHash;
+    await accounts.doc(to).set(account);
+  }
   if (oldAccount) await accounts.doc(from).set(Object.assign({}, oldAccount, { active: false, renamedTo: to, renamedAt: now }));
 
-  // Department profiles keep their uid; only the name changes.
+  // Department profiles. A rename only changes the name. A merge joins the
+  // two profiles in a department (duties from both, active if either was).
   for (const department of permissions.DEPARTMENTS) {
-    for (const document of (await db.collection('departments').doc(department).collection('members').get()).docs) {
-      if ((document.data() || {}).memberName !== from) continue;
-      await document.ref.update({ memberName: to, updatedAt: now, updatedBy: 'Name fixed' });
+    const docs = (await db.collection('departments').doc(department).collection('members').get()).docs;
+    const own = docs.find(document => (document.data() || {}).memberName === to);
+    for (const document of docs) {
+      const profile = document.data() || {};
+      if (profile.memberName !== from) continue;
       counts.profiles += 1;
+      if (!merge) { await document.ref.update({ memberName: to, updatedAt: now, updatedBy: 'Name fixed' }); continue; }
+      if (own) {
+        const kept = own.data() || {};
+        await own.ref.update({
+          eligibleDuties: Array.from(new Set((kept.eligibleDuties || []).concat(profile.eligibleDuties || []))),
+          status: kept.status === 'active' || profile.status === 'active' ? 'active' : 'inactive',
+          schedulable: kept.schedulable === true || profile.schedulable === true,
+          updatedAt: now, updatedBy: 'Merged ' + from
+        });
+      } else {
+        await db.collection('departments').doc(department).collection('members').doc(targetUid)
+          .set(Object.assign({}, profile, { memberUid: targetUid, uid: targetUid, memberName: to, updatedAt: now, updatedBy: 'Merged ' + from }));
+      }
+      if (document.id !== targetUid) await document.ref.delete();
     }
   }
   // Services: duties, double-duty marks and replacement flags.

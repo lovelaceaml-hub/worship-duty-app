@@ -81,7 +81,7 @@ function renameCard() {
   const missing = names.filter(untitled);
   return html`<section class="card">
     <h3 class="card-subtitle">Fix a member's name</h3>
-    <p class="hint">Changes the name everywhere: the member list, every service, departments, song lists and requests. The member keeps their sign-in and PIN, and no one gets a duty alert.
+    <p class="hint">Changes the name everywhere: the member list, every service, departments, song lists and requests. The member keeps their sign-in and PIN, and no one gets a duty alert. If the correct name is already a member, the two become one.
       ${missing.length ? html` ${plural(missing.length, 'name has', 'names have')} no title (B., S., D., M., E., P.) and ${missing.length === 1 ? 'is' : 'are'} listed first.` : ''}</p>
     <form class="inline-form" data-act="member-rename">
       <select name="from" aria-label="Current name" required><option value="">Current name</option>
@@ -124,7 +124,9 @@ defineActions({
       const from = String(values.get('from') || '');
       const to = String(values.get('to') || '').trim().replace(/\s+/g, ' ');
       if (!from || !to) return;
-      if (!confirm('Change "' + from + '" to "' + to + '" everywhere?')) return;
+      const merge = data.members.includes(to);
+      if (!confirm(merge ? '"' + to + '" is already a member. Make "' + from + '" and "' + to + '" one member, named "' + to + '"?'
+        : 'Change "' + from + '" to "' + to + '" everywhere?')) return;
       if (await renameMember(from, to)) form.reset();
     }
   },

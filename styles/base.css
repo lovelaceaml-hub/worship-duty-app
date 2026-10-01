@@ -236,6 +236,8 @@ button.service-head { cursor: pointer; }
 
 .plan-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 8px 0 12px; }
 .plan-toolbar .month-nav { flex: 1 1 260px; }
+.fill-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fill-controls select { width: auto; min-height: 42px; }
 .plan-add { margin: 0 0 12px; font-size: 13.5px; }
 .plan-add summary { color: var(--accent); font-weight: 700; cursor: pointer; }
 .plan-scroll { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }

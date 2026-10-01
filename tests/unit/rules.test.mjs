@@ -139,6 +139,22 @@ test('Fill spreads a month evenly and avoids two services on one day', () => {
   assert.ok(Object.values(perDay).every(count => count <= 2), 'at most two services a day each');
 });
 
+test('Fill by Rotation goes down the list by name, after whoever served last; Random picks anyone free', () => {
+  const names = ['S. Ada', 'S. Bea', 'S. Cora', 'S. Dina'];
+  const roster = names.map(name => normalizeProfile({
+    memberUid: 'member:' + name, departmentId: 'Usher Sisters', memberName: name, status: 'active', schedulable: true,
+    eligibleDuties: ['Usher Door'], availability: { recurring: {}, exceptions: { '2026-10-17': name === 'S. Dina' ? { '*': 'unavailable' } : {} } }
+  }, 'Usher Sisters'));
+  const history = [{ date: '2026-09-26', service: 'Morning', time: '10:00', assignments: { 'Usher Door': 'S. Bea' } }];
+  const services = ['2026-10-03', '2026-10-10', '2026-10-17', '2026-10-24', '2026-10-31']
+    .map(date => ({ date, service: 'Morning', time: '10:00', assignments: {} }));
+  const rotation = fill(services, ['Usher Door'], () => roster, {}, { mode: 'rotation', history });
+  // After Bea: Cora, Dina, (Dina is away on the 17th) Ada, Bea, Cora.
+  assert.deepEqual(rotation.proposals.map(item => item.memberName), ['S. Cora', 'S. Dina', 'S. Ada', 'S. Bea', 'S. Cora']);
+  const random = fill(services, ['Usher Door'], () => roster, {}, { mode: 'random', random: () => 0.99 });
+  assert.deepEqual(random.proposals.map(item => item.memberName), ['S. Dina', 'S. Dina', 'S. Cora', 'S. Dina', 'S. Dina']);
+});
+
 test('Fill looks at every duty a kind of service has had in the past year', () => {
   const today = '2026-10-01';
   const past = [
