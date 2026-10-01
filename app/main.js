@@ -6,7 +6,7 @@ import { session, ui, loadCache, saveCache } from './store.js';
 import { connect, fb } from './firebase.js';
 import { startSync } from './sync.js';
 import { render, renderSoon } from './render.js';
-import { onAuthChange, rememberedMember } from './services/session.js';
+import { onAuthChange, rememberedMember, watchSessionEnd } from './services/session.js';
 import { checkReminders } from './services/notifications.js';
 import { rememberInvite } from './services/departments.js';
 import { applySavedAppearance } from './appearance/picker.js';
@@ -68,6 +68,7 @@ async function start() {
   }
   clearTimeout(slow);
   if (late) { session.status = 'loading'; renderSoon(); }
+  watchSessionEnd();
   startSync();
   fb.onAuthStateChanged(fb.auth, onAuthChange);
   setInterval(checkReminders, 10 * 60 * 1000);

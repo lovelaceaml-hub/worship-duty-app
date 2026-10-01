@@ -156,7 +156,9 @@ export async function turnOff() {
   renderSoon();
 }
 
-/* True when this device can get alerts while the app is closed. */
+/* True when this device can get alerts while the app is closed. The token
+   document is written at every start (lastSeenAt), so one the server
+   removed after a delivery problem comes back while the token still works. */
 async function registerPush() {
   try {
     if (!fb.messaging || !window.FCM_VAPID_KEY || !notificationsOn() || !ui.me) return false;
@@ -165,11 +167,9 @@ async function registerPush() {
     if (!token) return false;
     const previous = readText('wds-fcm-token');
     if (previous && previous !== token) await fb.deleteDoc(fb.doc(fb.db, 'tokens', previous)).catch(() => {});
-    if (previous !== token || readText('wds-fcm-name') !== ui.me) {
-      await fb.setDoc(fb.doc(fb.db, 'tokens', token), { name: ui.me, updatedAt: Date.now() });
-      writeText('wds-fcm-token', token);
-      writeText('wds-fcm-name', ui.me);
-    }
+    const now = Date.now();
+    await fb.setDoc(fb.doc(fb.db, 'tokens', token), { name: ui.me, updatedAt: now, lastSeenAt: now });
+    writeText('wds-fcm-token', token);
     return true;
   } catch (error) {
     console.warn('Push registration failed:', error);
@@ -187,6 +187,6 @@ export async function unregisterPush() {
     if (token && fb.db) await fb.deleteDoc(fb.doc(fb.db, 'tokens', token)).catch(() => {});
   } finally {
     writeText('wds-fcm-token', null);
-    writeText('wds-fcm-name', null);
+    writeText('wds-fcm-name', null); // kept by earlier versions
   }
 }

@@ -106,13 +106,14 @@ export async function onAuthChange(user) {
 /* Plain words for a failed sign-in or PIN change. A member who is already
    signed in (changing their PIN in Settings) gets the server's own reason. */
 function signInProblem(error, { signedIn = false } = {}) {
-  if (error && error.details && error.details.reason === 'pin-too-common') return 'That PIN is too easy to guess. Choose a different one.';
-  if (signedIn) return problem(error);
+  const reason = error && error.details && error.details.reason;
   const code = String(error && error.code || '').replace(/^functions\//, '');
+  if (reason === 'pin-too-common') return 'That PIN is too easy to guess. Choose a different one.';
+  if (reason === 'locked' || code === 'resource-exhausted') return 'Too many tries. Wait 15 minutes, then try again.';
+  if (signedIn) return problem(error);
   if (code === 'invalid-argument') return 'Choose your name and enter a 4 to 6 digit PIN.';
   if (code === 'unavailable' || code === 'internal') return 'Sign-in is not available right now. Try again.';
   if (code === 'failed-precondition') return 'Change your PIN first.';
-  if (code === 'resource-exhausted') return 'Too many tries. Wait 15 minutes, then try again.';
   return 'That name and PIN do not match.';
 }
 
@@ -179,3 +180,31 @@ export async function signOut() {
 
 /* The member this device last signed in as, for offline viewing. */
 export function rememberedMember() { return readText('wds-me'); }
+
+/* The server ends a member's session after a PIN reset, a role change or a
+   name fix: its callables then refuse with reason 'session-ended'. Any call
+   refused that way signs the member out, and the sign-in screen asks them to
+   sign in again; no other message is shown for it. */
+let ending = false;
+async function endSession() {
+  if (ending || !session.member) return;
+  ending = true;
+  try {
+    await signOut();
+    ui.signIn = { member: '', busy: false, error: 'Please sign in again.' };
+    renderSoon();
+  } finally {
+    ending = false;
+  }
+}
+
+export function watchSessionEnd() {
+  const callable = fb.callable;
+  fb.callable = name => {
+    const run = callable(name);
+    return payload => run(payload).catch(error => {
+      if (error && error.details && error.details.reason === 'session-ended') endSession();
+      throw error;
+    });
+  };
+}

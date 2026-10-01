@@ -270,6 +270,22 @@ test('start-up shows the saved schedule while the app connects', async () => {
   await context.close();
 });
 
+test('a session the server ended (PIN reset, role change, name fix) signs the member out cleanly', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  await fromMenu(page, 'account', 'availability');
+  await page.locator('select[data-change="availability-week"][data-key="evening"]').selectOption('unavailable');
+  await page.evaluate(() => {
+    window.__fakeCalls.push = () => { throw Object.assign(new Error('Your session has ended.'), { code: 'functions/unauthenticated', details: { reason: 'session-ended' } }); };
+  });
+  await page.locator('[data-act="availability-save"]').click();
+  await page.locator('#sign-in-member').waitFor();
+  await page.locator('.gate .form-error', { hasText: 'Please sign in again.' }).waitFor();
+  assert.equal(await page.locator('nav.tabs').isHidden(), true);
+  assert.equal(await page.evaluate(() => localStorage.getItem('wds-me')), null);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a member whose PIN is locked after too many tries is told to wait', async () => {
   const { context, page } = await openPage(browser, server.url);
   await unlock(page);
