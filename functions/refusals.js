@@ -102,9 +102,8 @@ function refusal(code, reason, message, extra) {
 
 /* A department-auth.js decision that did not allow the change. */
 function decisionRefusal(result, extra) {
-  const code = result.reason === 'unauthenticated'
-    ? 'unauthenticated'
-    : PERMISSION_REASONS.has(result.reason) ? 'permission-denied' : 'failed-precondition';
+  if (result.reason === 'unauthenticated') return refusal('unauthenticated', 'sign-in-required', MESSAGES['sign-in-required'], extra);
+  const code = PERMISSION_REASONS.has(result.reason) ? 'permission-denied' : 'failed-precondition';
   return refusal(code, result.reason, MESSAGES[result.reason] || 'That change is not allowed.', extra);
 }
 
