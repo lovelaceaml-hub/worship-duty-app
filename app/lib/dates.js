@@ -112,3 +112,11 @@ export function relativeDay(iso, today = todayISO()) {
   const months = Math.round(days / 30);
   return plural(months, 'month') + ' ago';
 }
+
+/* "Jul 6" for a moment in milliseconds (when something was asked, answered
+   or changed), with the year ("Jul 6, 2026") or the time ("Jul 6, 3:05 PM")
+   when asked for. */
+export function shortStamp(at, { year = false, time = false } = {}) {
+  const parts = Object.assign({ month: 'short', day: 'numeric' }, year ? { year: 'numeric' } : {}, time ? { hour: 'numeric', minute: '2-digit' } : {});
+  return new Date(at).toLocaleString('en-US', parts);
+}

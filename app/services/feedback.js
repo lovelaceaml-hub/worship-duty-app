@@ -15,9 +15,10 @@ export async function sendFeedback(kind, message) {
   const text = String(message || '').trim().slice(0, 2000);
   if (!text) throw new Error('Type a message first.');
   if (navigator.onLine === false) throw new Error('You are offline, so this was not sent. Your message is still here.');
+  // The stored name; screens show it with nameOf().
   const entry = {
     uid: session.user ? session.user.uid : '',
-    name: nameOf(ui.me),
+    name: ui.me,
     kind: KINDS.some(item => item[0] === kind) ? kind : 'feedback',
     message: text,
     screen: ui.tab,

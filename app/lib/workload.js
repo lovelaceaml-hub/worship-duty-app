@@ -1,9 +1,7 @@
 /* How much each member is serving, and who to suggest as a replacement. */
-import { ALL_DUTIES } from '../config/duties.js';
 import { addDays } from './dates.js';
-import { canTake } from './availability.js';
-import { canAlsoServe, isUsher, prayerOf } from './conflicts.js';
-import { hasDuty } from './worship.js';
+import { candidates } from './availability.js';
+import { isUsher, prayerOf } from './conflicts.js';
 
 /* { name: { past4, past8, upcoming, total, last, next } } across all services. */
 export function workload(services, members, today) {
@@ -29,40 +27,24 @@ export function workload(services, members, today) {
   return stats;
 }
 
-/* Up to `limit` profiles from `roster` who can take `duty` at `service` and
-   may hold it with what they already do there (conflicts.js). For an usher
-   duty, someone praying in that service comes first, as in Fill. Then the
-   lightest recent and upcoming load, then longest since they last served. */
-export function suggestReplacements(service, duty, roster, stats, { exclude = '', limit = 3 } = {}) {
-  const assignments = service.assignments || {};
-  const none = { past4: 0, upcoming: 0, last: '' };
-  const praying = name => (isUsher(duty) && prayerOf(assignments, name) ? 0 : 1);
-  return roster
-    .filter(profile => profile.memberName !== exclude && canAlsoServe(assignments, profile.memberName, duty) && canTake(profile, service, duty))
-    .map(profile => ({ profile, load: stats[profile.memberName] || none }))
-    .sort((a, b) => praying(a.profile.memberName) - praying(b.profile.memberName) ||
-      (a.load.upcoming + a.load.past4) - (b.load.upcoming + b.load.past4) ||
-      (a.load.last === b.load.last ? 0 : (a.load.last < b.load.last ? -1 : 1)))
-    .slice(0, limit)
-    .map(item => item.profile);
+/* How busy a member is lately: their duties in the last 8 weeks plus the
+   ones coming up. Fill, suggestions and Checks all weigh people by this. */
+export function recentLoad(stats, name) {
+  const served = stats[name] || {};
+  return (served.past8 || 0) + (served.upcoming || 0);
 }
 
-/* Duties a service normally has filled: those filled in at least half of the
-   planned services of the same worship and service label. Services with no
-   assignments at all are not planned yet and are left out. */
-export function usualDuties(services) {
-  const filled = {}, planned = {};
-  services.forEach(service => {
-    const duties = Object.keys(service.assignments || {}).filter(duty => service.assignments[duty]);
-    if (!duties.length) return;
-    const key = (service.worship || '') + '|' + (service.service || '');
-    planned[key] = (planned[key] || 0) + 1;
-    const counts = filled[key] || (filled[key] = {});
-    duties.forEach(duty => { counts[duty] = (counts[duty] || 0) + 1; });
-  });
-  return service => {
-    const key = (service.worship || '') + '|' + (service.service || '');
-    const counts = filled[key] || {}, total = planned[key] || 0;
-    return total ? ALL_DUTIES.filter(duty => (counts[duty] || 0) * 2 >= total && hasDuty(service, duty)) : [];
-  };
+/* Up to `limit` profiles from `roster` who can take `duty` at `service` and
+   may hold it with what they already do there (availability.js whyNot), the
+   best first: for an usher duty someone praying in that service, as in Fill;
+   then the lightest recent load; then whoever served longest ago. */
+export function suggestReplacements(service, duty, roster, stats, { exclude = '', limit = 3 } = {}) {
+  const assignments = service.assignments || {};
+  const praying = name => (isUsher(duty) && prayerOf(assignments, name) ? 0 : 1);
+  const last = name => (stats[name] || {}).last || '';
+  const longestAgo = (a, b) => (last(a) === last(b) ? 0 : (last(a) < last(b) ? -1 : 1));
+  return candidates(service, duty, roster.filter(profile => profile.memberName !== exclude), assignments)
+    .sort((a, b) => praying(a.memberName) - praying(b.memberName) ||
+      recentLoad(stats, a.memberName) - recentLoad(stats, b.memberName) || longestAgo(a.memberName, b.memberName))
+    .slice(0, limit);
 }

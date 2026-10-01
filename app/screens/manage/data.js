@@ -3,15 +3,14 @@
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, feature, nameOf } from '../../store.js';
-import { renderSoon } from '../../render.js';
+import { render as redraw } from '../../render.js';
 import { notice } from '../../ui/banners.js';
-import { fb, write, problem } from '../../firebase.js';
 import { isAdmin } from '../../services/access.js';
-import { downloadBackup, importSheetNow, lastSheetImport, sheet, checkSheet, addServiceYear, renameMember } from '../../services/data-tools.js';
-import { todayISO } from '../../lib/dates.js';
+import { downloadBackup, importSheetNow, lastSheetImport, sheet, checkSheet, addServiceYear, renameMember, saveSettings } from '../../services/data-tools.js';
+import { todayISO, shortStamp } from '../../lib/dates.js';
 import { dutyName } from '../../config/duties.js';
 
-const when = at => new Date(at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const when = at => shortStamp(at, { time: true });
 
 function importCard() {
   const last = lastSheetImport();
@@ -24,7 +23,7 @@ function importCard() {
     ${last ? html`<p class="hint small">Last import from this device: ${when(last.at)}, ${last.added || 0} added, ${last.updated || 0} updated${last.warnings && last.warnings.length ? ', ' + plural(last.warnings.length, 'row') + ' skipped' : ''}.</p>` : ''}
     <button type="button" class="primary" data-act="sheet-import"${sheet.busy || !feature('sheetSync') ? ' disabled' : ''}>${sheet.busy ? 'Importing…' : 'Import now'}</button>
     ${fromGrid ? '' : html`<label class="field"><span>Published sheet link (File, Share, Publish to web, CSV)</span>
-      <input type="url" data-change="sheet-url" value="${data.settings.sheetUrl || ''}" placeholder="https://docs.google.com/spreadsheets/…/pub?output=csv"></label>`}
+      <input type="url" data-change="sheet-url" value="${data.settings.sheetUrl || ''}" placeholder="Paste the published CSV link"></label>`}
   </section>`;
 }
 
@@ -53,7 +52,7 @@ function writeCard() {
       ? 'Duty changes made in the app go into the Sheet\'s Entry grid within seconds, and new services get a row.'
       : 'Off in Features: the app only reads the Sheet. Paste the Sheet\'s link and check it before you turn it on.'}</p>
     <label class="field"><span>The Sheet's link (its address while you edit it)</span>
-      <input type="url" data-change="sheet-edit-link" value="${link}" placeholder="https://docs.google.com/spreadsheets/d/…/edit"></label>
+      <input type="url" data-change="sheet-edit-link" value="${link}" placeholder="Paste the Sheet's address"></label>
     ${status && status.ok === false ? html`<p class="card-note is-warning">The last change did not reach the Sheet (${when(status.at)}): ${status.message}</p>` : ''}
     <button type="button" class="ghost" data-act="sheet-check"${sheet.checking || !data.settings.sheetId ? ' disabled' : ''}>${sheet.checking ? 'Checking…' : 'Check the Sheet'}</button>
     <p class="hint small">Checking reads the Sheet and compares it with the app. It changes nothing.</p>
@@ -94,7 +93,7 @@ function renameCard() {
 
 export function render() {
   return html`
-    ${isAdmin() ? renameCard() : ''}
+    ${renameCard()}
     ${importCard()}
     ${writeCard()}
     ${yearCard()}
@@ -103,17 +102,6 @@ export function render() {
       <p class="hint">Download the whole schedule as a file to keep somewhere safe.</p>
       <button type="button" class="ghost" data-act="backup-download">Download backup</button>
     </section>`;
-}
-
-async function saveSetting(fields, done) {
-  try {
-    await write(() => fb.setDoc(fb.doc(fb.db, 'app', 'settings'), fields, { merge: true }));
-    Object.assign(data.settings, fields);
-    notice(done);
-  } catch (error) {
-    notice('That was not saved: ' + problem(error), true);
-  }
-  renderSoon();
 }
 
 defineActions({
@@ -136,7 +124,8 @@ defineActions({
     run: el => {
       const url = el.value.trim();
       if (url && !/^https:\/\/docs\.google\.com\//.test(url)) { notice('Use the link Google Sheets gives you under Publish to web.', true); return; }
-      saveSetting({ sheetUrl: url }, 'Sheet link saved.');
+      if (!url && data.settings.sheetUrl && !confirm('Remove the published Sheet link? The import stops until a link is pasted again.')) { redraw(); return; }
+      saveSettings({ sheetUrl: url }, url ? 'Sheet link saved.' : 'Sheet link removed.', { optimistic: false });
     }
   },
   'sheet-edit-link': {
@@ -145,8 +134,9 @@ defineActions({
       const value = el.value.trim();
       const match = value.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/);
       if (value && !match) { notice('Paste the Sheet\'s address from your browser while you edit it (it has /spreadsheets/d/ in it).', true); return; }
+      if (!value && data.settings.sheetId && !confirm('Remove the Sheet\'s link?' + (feature('sheetWrite') ? ' The app stops writing duty changes into the Sheet.' : ''))) { redraw(); return; }
       sheet.check = null;
-      saveSetting({ sheetId: match ? match[1] : '' }, value ? 'Sheet link saved. Check the Sheet next.' : 'Sheet link removed.');
+      saveSettings({ sheetId: match ? match[1] : '' }, value ? 'Sheet link saved. Check the Sheet next.' : 'Sheet link removed.', { optimistic: false });
     }
   },
   'sheet-check': { allowed: () => isAdmin(), run: () => checkSheet() },

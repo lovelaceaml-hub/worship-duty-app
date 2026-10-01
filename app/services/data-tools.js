@@ -1,7 +1,9 @@
-/* Manage, Data: a backup file of the shared schedule, bringing the Google
-   Sheet in now instead of waiting for the next import, checking the Sheet
-   the app writes to, and adding a year of regular services. */
-import { call, problem } from '../firebase.js';
+/* Manage, Data and Features: app/settings (the switches, links and notes
+   every member's app follows), a backup file of the shared schedule,
+   bringing the Google Sheet in now instead of waiting for the next import,
+   checking the Sheet the app writes to, adding a year of regular services
+   and fixing a member's name. */
+import { fb, call, write, problem } from '../firebase.js';
 import { plural } from '../html.js';
 import { data, readJSON, writeJSON } from '../store.js';
 import { todayISO } from '../lib/dates.js';
@@ -24,12 +26,32 @@ export function downloadBackup() {
   URL.revokeObjectURL(link.href);
 }
 
-export const sheet = { busy: false, checking: false, check: null, addingYear: false };
+/* Change fields of app/settings. They show at once (`optimistic`), or only
+   once saved; a save that fails puts the old values back. Resolves to
+   whether it was saved. */
+export async function saveSettings(fields, done, { optimistic = true } = {}) {
+  const before = {};
+  Object.keys(fields).forEach(key => { before[key] = data.settings[key]; });
+  if (optimistic) { Object.assign(data.settings, fields); renderSoon(); }
+  try {
+    await write(() => fb.setDoc(fb.doc(fb.db, 'app', 'settings'), fields, { merge: true }));
+    Object.assign(data.settings, fields);
+    if (done) notice(done);
+    return true;
+  } catch (error) {
+    Object.assign(data.settings, before);
+    notice('That was not saved: ' + problem(error), true);
+    return false;
+  } finally {
+    renderSoon();
+  }
+}
+
+/* The Sheet tools' state; `check` is the last "Check the Sheet" result. */
+export const sheet = { busy: false, checking: false, check: null, addingYear: false, renaming: false };
 
 export function lastSheetImport() { return readJSON('wds-sheet-import', null); }
 
-/* The server fetches the published sheet and merges it into the schedule,
-   the same way its import does every 2 hours. */
 /* Fix a member's name everywhere (functions renameMember). */
 export async function renameMember(from, to) {
   sheet.renaming = true;
@@ -48,6 +70,8 @@ export async function renameMember(from, to) {
   }
 }
 
+/* The server fetches the published sheet and merges it into the schedule,
+   the same way its import does every 2 hours. */
 export async function importSheetNow() {
   sheet.busy = true;
   renderSoon();
@@ -58,7 +82,10 @@ export async function importSheetNow() {
     if (result.added) changes.push(plural(result.added, 'service') + ' added');
     if (result.updated) changes.push(plural(result.updated, 'service') + ' updated');
     if (result.newMembers) changes.push(plural(result.newMembers, 'new member'));
-    notice(changes.length ? 'Imported from the sheet: ' + changes.join(', ') + '.' : 'The schedule already matches the sheet.');
+    // Services still waiting to be written to the Sheet keep the app's duties.
+    const waiting = result.waiting ? ' ' + plural(result.waiting, 'service was', 'services were') + ' left as they are, because their changes are still on the way to the Sheet.' : '';
+    if (result.failed) notice('Part of the import was not saved (' + plural(result.failed, 'change') + '). Import again.' + waiting, true);
+    else notice((changes.length ? 'Imported from the Sheet: ' + changes.join(', ') + '.' : 'The schedule already matches the Sheet.') + waiting);
   } catch (error) {
     notice('The sheet was not imported: ' + problem(error), true);
   }
@@ -87,8 +114,9 @@ export async function addServiceYear(year) {
   renderSoon();
   try {
     const result = await call('addServiceYear', { year });
-    notice(result.added ? 'Added ' + plural(result.added, 'service') + (result.sheetRows ? ', and ' + plural(result.sheetRows, 'row') + ' in the Sheet' : '') + '.'
-      : 'Every regular service from December ' + year + ' through December ' + (year + 1) + ' was already there.');
+    notice((result.added ? 'Added ' + plural(result.added, 'service') + (result.sheetRows ? ', and ' + plural(result.sheetRows, 'row') + ' in the Sheet' : '') + '.'
+      : 'Every regular service from December ' + year + ' through December ' + (year + 1) + ' was already there.') +
+      (result.sheetProblem ? ' Their rows were not added to the Sheet: ' + result.sheetProblem : ''), !!result.sheetProblem);
   } catch (error) {
     notice('The services were not added: ' + problem(error), true);
   }

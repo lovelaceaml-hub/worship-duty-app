@@ -9,11 +9,12 @@ import { KINDS, feedback, loadFeedback, markDone, deleteFeedback } from '../../s
 import { SCREEN_NAMES } from '../../ui/header.js';
 import { APPEARANCES } from '../../appearance/registry.js';
 import { isAdmin } from '../../services/access.js';
+import { shortStamp } from '../../lib/dates.js';
 
 function entry(item) {
   const kind = (KINDS.find(([value]) => value === item.kind) || KINDS[0])[1];
   const details = [
-    item.createdAt ? new Date(item.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '',
+    item.createdAt ? shortStamp(item.createdAt, { time: true }) : '',
     SCREEN_NAMES[item.screen] ? 'on ' + SCREEN_NAMES[item.screen] : '',
     APPEARANCES[item.appearance] ? APPEARANCES[item.appearance].name : ''
   ].filter(Boolean).join(' · ');
@@ -22,7 +23,7 @@ function entry(item) {
     <p class="message">${item.message}</p>
     <p class="hint small">${details}</p>
     <div class="button-row">
-      ${item.status === 'done' ? '' : html`<button type="button" class="ghost small" data-act="feedback-done" data-id="${item.id}">Mark done</button>`}
+      ${item.status === 'done' ? '' : html`<button type="button" class="ghost small" data-act="feedback-done" data-id="${item.id}" data-name="${item.name || ''}">Mark done</button>`}
       <button type="button" class="link danger" data-act="feedback-delete" data-id="${item.id}">Delete</button>
     </div>
   </article>`;
@@ -44,7 +45,10 @@ export function render() {
 defineActions({
   'feedback-refresh': { allowed: () => isAdmin(), run: () => loadFeedback(true) },
   'feedback-show-done': () => { feedback.showDone = !feedback.showDone; redraw(); },
-  'feedback-done': { allowed: () => isAdmin(), run: el => markDone(el.dataset.id) },
+  'feedback-done': {
+    allowed: () => isAdmin(),
+    run: el => { if (confirm('Mark this note done? ' + (el.dataset.name ? nameOf(el.dataset.name) : 'The sender') + ' gets a notification that it was read.')) markDone(el.dataset.id); }
+  },
   'feedback-delete': {
     allowed: () => isAdmin(),
     run: el => { if (confirm('Delete this note? This cannot be undone.')) deleteFeedback(el.dataset.id); }
