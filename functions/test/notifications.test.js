@@ -56,6 +56,22 @@ test('the member hears when their request is approved or declined', async () => 
   }
 });
 
+test('the member who sent feedback hears when it is marked done, once', async () => {
+  const note = { name: 'S. Leah', kind: 'bug', message: 'The Schedule tab is slow.', status: 'new' };
+  const updated = (from, to) => ({
+    data: { before: { exists: true, data: () => Object.assign({}, note, from) }, after: { exists: true, data: () => Object.assign({}, note, to) } },
+    params: { id: 'f1' }
+  });
+  let { functions, sent } = loadWith(Object.assign({}, tokens));
+  await functions.onFeedbackDone.run(updated({ status: 'new' }, { status: 'done' }));
+  assert.deepEqual(recipients(sent), ['member-phone']);
+  assert.equal(sent[0].data.title, 'Your feedback was marked done');
+  assert.match(sent[0].data.body, /The Schedule tab is slow\./);
+  ({ functions, sent } = loadWith(Object.assign({}, tokens)));
+  await functions.onFeedbackDone.run(updated({ status: 'done' }, { status: 'done' }));
+  assert.deepEqual(sent, []);
+});
+
 /* A service 12 hours from now, in Pacific time, as the schedule stores it. */
 function serviceSoon() {
   const start = new Date(Date.now() + 12 * 3600 * 1000);

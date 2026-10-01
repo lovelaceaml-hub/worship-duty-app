@@ -22,16 +22,15 @@ import { managedDepartment } from './index.js';
 
 function departmentList() {
   const names = managedDepartments().filter(name => name !== 'All');
-  return html`<div class="department-grid">${names.map(name => {
+  return html`<div class="card department-list">${names.map(name => {
     const department = departmentNamed(name);
     const loaded = state.rosters[name];
     const leaders = leadersOf(name);
-    return html`<article class="card department-card" style="--dept: ${department ? department.color : 'currentColor'}">
-      <h3>${name}</h3>
-      <p class="hint">${loaded ? plural(loaded.length, 'member') : 'Open to see the members'}</p>
-      <p class="hint"><strong>Leaders:</strong> ${leaders.length ? leaders.map(nameOf).join(', ') : 'none set'}</p>
-      <button type="button" class="primary" data-act="department-open" data-department="${name}">Open</button>
-    </article>`;
+    return html`<button type="button" class="department-row" data-act="department-open" data-department="${name}" style="--dept: ${department ? department.color : 'currentColor'}">
+      <span class="department-name">${name}</span>
+      <span class="department-meta">${leaders.length ? 'Led by ' + leaders.map(nameOf).join(', ') : 'No leader set'}${loaded ? ' · ' + plural(loaded.length, 'member') : ''}</span>
+      <span class="department-go" aria-hidden="true">›</span>
+    </button>`;
   })}</div>`;
 }
 

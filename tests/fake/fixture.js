@@ -42,7 +42,8 @@
       Object.entries(rosters).forEach(([department, names]) => {
         if (['Parking Lot', 'Offering'].includes(department) && label !== 'Morning') return;
         duties[department].slice(0, department === 'Worship' ? 4 : 2).forEach((duty, index) => {
-          assignments[duty] = names[(turn + index) % names.length];
+          // Thanks Prayer is only at Sabbath Day Morning.
+          if (duty !== 'Prayer of Thanks' || (worship === 'Sabbath Day' && label === 'Morning')) assignments[duty] = names[(turn + index) % names.length];
         });
       });
       turn++;

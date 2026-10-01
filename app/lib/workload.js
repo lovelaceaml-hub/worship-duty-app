@@ -2,6 +2,7 @@
 import { ALL_DUTIES } from '../config/duties.js';
 import { addDays } from './dates.js';
 import { canTake } from './availability.js';
+import { hasDuty } from './worship.js';
 
 /* { name: { past4, past8, upcoming, total, last, next } } across all services. */
 export function workload(services, members, today) {
@@ -58,6 +59,6 @@ export function usualDuties(services) {
   return service => {
     const key = (service.worship || '') + '|' + (service.service || '');
     const counts = filled[key] || {}, total = planned[key] || 0;
-    return total ? ALL_DUTIES.filter(duty => (counts[duty] || 0) * 2 >= total) : [];
+    return total ? ALL_DUTIES.filter(duty => (counts[duty] || 0) * 2 >= total && hasDuty(service, duty)) : [];
   };
 }

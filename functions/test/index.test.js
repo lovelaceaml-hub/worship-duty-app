@@ -33,7 +33,7 @@ test('exports exactly the functions the app and the public site use', () => {
   assert.deepEqual(Object.keys(loadExports()).sort(), [
     'acceptDepartmentInvitation', 'addServiceYear', 'assignDepartmentDuty', 'changeMemberPin', 'checkSheet',
     'createDepartmentInvitation', 'createDepartmentProfile', 'dutyReminders', 'ics', 'listDepartmentRoster',
-    'onRequestCreated', 'onRequestResolved', 'onScheduleWrite', 'overrideDepartmentAssignment', 'publicSchedule',
+    'onFeedbackDone', 'onRequestCreated', 'onRequestResolved', 'onScheduleWrite', 'overrideDepartmentAssignment', 'publicSchedule',
     'resetMemberPin', 'resolveDutyAttention', 'revokeDepartmentInvitation', 'saveDepartmentAssignments',
     'saveMemberAvailability', 'scheduledSheetSync', 'searchDepartmentCandidates', 'songHistoryRecorder',
     'syncSheetNow', 'unassignDepartmentDuty', 'updateDepartmentProfile', 'updateMemberAvailability',

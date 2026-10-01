@@ -5,6 +5,7 @@ import { ui, feature, nameOf } from '../store.js';
 import { clockTime, longDate, dayBadge } from '../lib/dates.js';
 import { doubleDuties, isMarkedOk } from '../lib/conflicts.js';
 import { serviceId } from '../lib/services.js';
+import { hasDuty } from '../lib/worship.js';
 
 function person(name) {
   const mine = !!ui.me && name === ui.me;
@@ -26,7 +27,7 @@ function doubleDutyFlag(service, name) {
 export function dutyGroups(service, { only = '', showEmpty = feature('emptyDuties') } = {}) {
   const assignments = service.assignments || {};
   return DEPARTMENTS.filter(department => !only || only === 'All' || department.name === only).map(department => {
-    const duties = department.duties.filter(duty => showEmpty || assignments[duty]);
+    const duties = department.duties.filter(duty => assignments[duty] || (showEmpty && hasDuty(service, duty)));
     if (!duties.length) return '';
     return html`<div class="duty-group" style="--dept: ${department.color}">
       <h4 class="duty-group-name">${department.name}</h4>

@@ -841,6 +841,20 @@ exports.onRequestResolved = onDocumentUpdated(
     await sendToNames([now.name], title, () => dutyName(now.duty) + ' · ' + longDate(now.date) + ' ' + now.service);
   });
 
+/* ---- 4b. feedback marked done: tell the member who sent it ---- */
+exports.onFeedbackDone = onDocumentUpdated(
+  { document: 'feedback/{id}', region: REGION },
+  async event => {
+    const before = event.data && event.data.before;
+    const after = event.data && event.data.after;
+    if (!before || !before.exists || !after || !after.exists) return;
+    const was = before.data() || {}, now = after.data() || {};
+    if (was.status === 'done' || now.status !== 'done' || !now.name) return;
+    const message = String(now.message || '').replace(/\s+/g, ' ').trim();
+    await sendToNames([canonicalMemberName(now.name)], 'Your feedback was marked done',
+      () => '"' + (message.length > 80 ? message.slice(0, 77) + '…' : message) + '" Thank you for sending it.');
+  });
+
 /* ---- 5. per-member .ics calendar feed ----
    Served through a hosting rewrite as /ics/<member name>. Subscribe once in
    Apple/Google Calendar and duty changes flow in automatically (calendars

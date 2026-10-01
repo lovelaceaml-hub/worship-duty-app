@@ -14,6 +14,7 @@ import { notice } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
 import { DEPARTMENTS, SERVICE_LABELS, WORSHIP_TYPES, DEFAULT_TIMES, departmentOf, dutyName } from '../../config/duties.js';
 import { serviceId, byStart, isUpcoming } from '../../lib/services.js';
+import { hasDuty, hasChoir } from '../../lib/worship.js';
 import { clockTime, todayISO, addMonths, monthName, longDate, weekdayShort, dayOfMonth } from '../../lib/dates.js';
 import { canTake } from '../../lib/availability.js';
 import { openDoubleDuties, doubleDuties, isMarkedOk } from '../../lib/conflicts.js';
@@ -78,6 +79,9 @@ function planned(service) {
 
 /* ---- one duty cell ---- */
 
+/* A duty shows at a service that has it, or when someone already holds it. */
+const atService = (service, duty) => hasDuty(service, duty) || !!(service.assignments || {})[duty];
+
 function cell(service, duty, context) {
   const id = serviceId(service), key = keyOf(id, duty);
   const department = departmentOf(duty).name;
@@ -87,6 +91,7 @@ function cell(service, duty, context) {
   const classes = ['plan-cell'];
   if (proposal) classes.push('is-proposed');
   if (unusual && !current && !proposal) classes.push('is-unusual');
+  if (!current && !hasDuty(service, duty)) return html`<td class="plan-cell is-none"><span class="sr-only">Not at this service</span></td>`;
   const label = dutyName(duty) + ', ' + weekdayShort(service.date) + ' ' + dayOfMonth(service.date) + ' ' + service.service;
   if (!isUpcoming(service) || !canEditDuty(duty)) {
     return html`<td class="${classes.concat('is-fixed').join(' ')}"><span class="plan-name">${current ? nameOf(current) : ''}</span></td>`;
@@ -150,7 +155,7 @@ function grid(services, context) {
         ${services.map(service => html`<th scope="col" class="plan-head${isUpcoming(service) ? '' : ' is-past'}">${serviceHeading(service)}</th>`)}</tr></thead>
       <tbody>${departments.map(department => html`
         ${all ? html`<tr class="plan-group" style="--dept: ${department.color}"><th scope="rowgroup" colspan="${services.length + 1}"><span>${department.name}</span></th></tr>` : ''}
-        ${department.duties.map(duty => html`<tr><th scope="row">${dutyName(duty)}</th>${services.map(service => cell(service, duty, context))}</tr>`)}`)}
+        ${department.duties.filter(duty => services.some(service => atService(service, duty))).map(duty => html`<tr><th scope="row">${dutyName(duty)}</th>${services.map(service => cell(service, duty, context))}</tr>`)}`)}
       </tbody>
     </table>
   </div>`;
@@ -164,7 +169,7 @@ function list(services, context) {
       ${serviceHeading(service)}
       ${open ? details(service) : html`<table class="plan-lines"><tbody>${departments.map(department => html`
         ${departments.length > 1 ? html`<tr class="plan-group" style="--dept: ${department.color}"><th scope="rowgroup" colspan="2"><span>${department.name}</span></th></tr>` : ''}
-        ${department.duties.map(duty => html`<tr><th scope="row">${dutyName(duty)}</th>${cell(service, duty, context)}</tr>`)}`)}
+        ${department.duties.filter(duty => atService(service, duty)).map(duty => html`<tr><th scope="row">${dutyName(duty)}</th>${cell(service, duty, context)}</tr>`)}`)}
       </tbody></table>`}
     </section>`;
   })}</div>`;
@@ -241,13 +246,13 @@ function details(service) {
       ${field('Date', html`<input type="date" value="${service.date}" data-change="service-field" data-service="${id}" data-field="date"${admin ? '' : ' disabled'}>`)}
       ${field('Time', html`<input type="time" value="${service.time}" data-change="service-field" data-service="${id}" data-field="time"${admin ? '' : ' disabled'}>`)}
       ${field('Worship', html`<input type="text" value="${service.worship}" list="worship-types" data-change="service-field" data-service="${id}" data-field="worship"${admin ? '' : ' disabled'}>`)}
-      ${canEditSongsFor(service) ? field('Choir song', html`<input type="text" value="${service.choirSong || ''}" placeholder="#311 I Repent of My Sin" data-change="service-field" data-service="${id}" data-field="choirSong">`) : ''}
+      ${canEditSongsFor(service) && (hasChoir(service.worship || 'Sabbath Day') || service.choirSong) ? field('Choir song', html`<input type="text" value="${service.choirSong || ''}" placeholder="#311 I Repent of My Sin" data-change="service-field" data-service="${id}" data-field="choirSong">`) : ''}
     </div>
     ${replacementPanel(service)}
     ${doubleDutyNotes(service)}
     ${departmentsShown().map(department => html`<div class="duty-group" style="--dept: ${department.color}">
       <h4 class="duty-group-name">${department.name}</h4>
-      <div class="field-grid">${department.duties.map(duty => html`<label class="field"><span>${dutyName(duty)}</span>${dutySelect(service, duty)}</label>`)}</div>
+      <div class="field-grid">${department.duties.filter(duty => atService(service, duty)).map(duty => html`<label class="field"><span>${dutyName(duty)}</span>${dutySelect(service, duty)}</label>`)}</div>
     </div>`)}
     ${admin ? html`<div class="right"><button type="button" class="link danger" data-act="service-delete" data-service="${id}">Delete this service</button></div>` : ''}
   </div>`;
