@@ -677,7 +677,7 @@ html[data-appearance="prism"] #song-root .pager { padding: 6px; border: 1px soli
   html[data-appearance="prism"] .link,
   html[data-appearance="prism"] .chip,
   html[data-appearance="prism"] .segmented button { min-height: 44px; }
-  html[data-appearance="prism"] .request-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; }
+  html[data-appearance="prism"] .request-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
   html[data-appearance="prism"] .duty-line { min-height: 42px; }
   html[data-appearance="prism"] .availability-row select { min-height: 40px; }
   html[data-appearance="prism"] #song-root .set-row .icon-button { min-width: 44px; min-height: 44px; }
@@ -747,7 +747,8 @@ html[data-appearance="prism"] #song-root .pager { padding: 6px; border: 1px soli
 @media (prefers-color-scheme: dark) {
   /* Department colors are dark: on a dark card their names and dots are lightened. */
   html[data-appearance="prism"] :is(.duty-group-name, .plan-group span) { color: color-mix(in srgb, var(--dept, #aebbd3) 45%, #ffffff); }
-  html[data-appearance="prism"] :is(.duty-group-name, .department-row)::before { background: color-mix(in srgb, var(--dept, #aebbd3) 60%, #ffffff); }
+  html[data-appearance="prism"] :is(.duty-group-name, .department-row)::before,
+  html[data-appearance="prism"] .duty-line .dot { background: color-mix(in srgb, var(--dept, #aebbd3) 60%, #ffffff); }
   html[data-appearance="prism"] .calendar-day.is-selected::after { border-color: rgba(255, 255, 255, 0.12); }
   html[data-appearance="prism"] .tab.is-active { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
   html[data-appearance="prism"] .feedback-button { border-color: rgba(255, 255, 255, 0.2); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }

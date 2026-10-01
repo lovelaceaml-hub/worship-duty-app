@@ -239,7 +239,7 @@ html[data-appearance="navy"] .duty-date { border-radius: 10px; }
 html[data-appearance="navy"] .duty-date small { color: var(--muted); font-weight: 600; }
 html[data-appearance="navy"] .duty-when { color: var(--ink); }
 html[data-appearance="navy"] .duty-worship { font-weight: 450; }
-html[data-appearance="navy"] .request-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; margin: 0; }
+html[data-appearance="navy"] .request-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; margin: 0; }
 html[data-appearance="navy"] .update-date { color: var(--muted); }
 
 /* ---- Account and Manage ---- */

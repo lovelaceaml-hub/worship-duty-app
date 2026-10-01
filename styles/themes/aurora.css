@@ -413,7 +413,7 @@ html[data-appearance="aurora"] .duty-body { border-left-color: var(--line); }
 html[data-appearance="aurora"] .duty-when { color: var(--ink); }
 html[data-appearance="aurora"] .duty-time { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
 html[data-appearance="aurora"] .duty-line { min-height: 40px; margin-top: 0; color: var(--ink); }
-html[data-appearance="aurora"] .request-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; margin: 0 -6px 0 0; }
+html[data-appearance="aurora"] .request-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; margin: 0 -6px 0 0; }
 html[data-appearance="aurora"] .duty-card.is-open { border-color: var(--picked-line); }
 html[data-appearance="aurora"] .duty-team, html[data-appearance="aurora"] .request-form { border-top-color: var(--line); }
 html[data-appearance="aurora"] .duty-card-toggle:focus-visible { outline-offset: -3px; }
@@ -642,7 +642,8 @@ html[data-appearance="aurora"] #song-root .runsheet-head h2 { color: var(--ink);
   html[data-appearance="aurora"] .card .empty { background: none; }
   /* Department colors are dark: on a dark card their names and dots are lightened. */
   html[data-appearance="aurora"] :is(.duty-group-name, .plan-group span) { color: color-mix(in srgb, var(--dept, var(--accent)) 38%, #e3e8f6); }
-  html[data-appearance="aurora"] :is(.duty-group-name, .department-row)::before { background: color-mix(in srgb, var(--dept, var(--accent)) 55%, #e3e8f6); }
+  html[data-appearance="aurora"] :is(.duty-group-name, .department-row)::before,
+  html[data-appearance="aurora"] .duty-line .dot { background: color-mix(in srgb, var(--dept, var(--accent)) 55%, #e3e8f6); }
   html[data-appearance="aurora"] .day-dots i { background: #7d88a8; }
   html[data-appearance="aurora"] .day-hero { box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
   html[data-appearance="aurora"] .flag.is-ok { background: #9a6412; }
