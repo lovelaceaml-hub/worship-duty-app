@@ -54,28 +54,6 @@ const PROFILE_ALLOWED_FIELDS = Object.freeze([
   'decisions'
 ]);
 
-const ASSIGNMENT_FIELDS = Object.freeze([
-  'id',
-  'department',
-  'departmentId',
-  'memberUid',
-  'uid',
-  'memberName',
-  'duty',
-  'serviceId',
-  'serviceDate',
-  'date',
-  'serviceTime',
-  'time',
-  'override',
-  'authorization',
-  'overrideReason',
-  'assignedAt',
-  'assignedByUid',
-  'assignedBy',
-  'profileId'
-]);
-
 const ASSIGNMENT_INPUT_FIELDS = Object.freeze([
   'assignmentId',
   'department',
@@ -363,12 +341,6 @@ function authorizeProfileUpdate(actor, before, after) {
   return decision(false, 'profile-write-not-authorized');
 }
 
-function authorizeProfileDelete(actor, profile) {
-  if (!isAdministrator(actor)) return decision(false, 'administrator-required');
-  if (!profileIdentity(profile)) return decision(false, 'invalid-profile-identity');
-  return decision(true, '');
-}
-
 function normalizeProfilePatch(patch) {
   if (!isPlainObject(patch)) throw new TypeError('patch must be a plain object');
   const aliases = { duties: 'eligibleDuties', isSchedulable: 'schedulable' };
@@ -619,16 +591,11 @@ function profilePath(department, memberUid) {
   return `departments/${departmentId(department)}/members/${uid(memberUid)}`;
 }
 
-function assignmentPath(assignmentId) {
-  return `departmentAssignments/${text(assignmentId, { max: 240, path: 'assignmentId' })}`;
-}
-
 module.exports = {
   PROFILE_MUTABLE_FIELDS,
   PROFILE_METADATA_FIELDS,
   PROFILE_IDENTITY_FIELDS,
   PROFILE_ALLOWED_FIELDS,
-  ASSIGNMENT_FIELDS,
   ASSIGNMENT_INPUT_FIELDS,
   profileIdentity,
   profileIdentityMatches,
@@ -637,18 +604,11 @@ module.exports = {
   isAuthenticated,
   isCurrentRoleVersion,
   isAdministrator,
-  isAdmin: isAdministrator,
   isMemberActor,
   managesDepartment,
-  canManageDepartment: managesDepartment,
   authorizeProfileRead,
   authorizeProfileCreate,
   authorizeProfileUpdate,
-  authorizeProfileDelete,
-  canReadProfile: authorizeProfileRead,
-  canCreateProfile: authorizeProfileCreate,
-  canUpdateProfile: authorizeProfileUpdate,
-  canDeleteProfile: authorizeProfileDelete,
   normalizeProfilePatch,
   normalizeAvailability: normalizedAvailability,
   normalizeAssignment,
@@ -656,11 +616,8 @@ module.exports = {
   effectiveAvailability,
   authorizeAssignment,
   authorizeAssignmentOverride,
-  canAssignDepartmentDuty: authorizeAssignment,
-  canOverrideAssignment: authorizeAssignmentOverride,
   departmentForDuty: permissions.departmentForDuty,
   exactDuty,
   serviceTimeKey,
-  profilePath,
-  assignmentPath
+  profilePath
 };

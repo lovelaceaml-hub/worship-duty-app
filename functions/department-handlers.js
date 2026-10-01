@@ -140,10 +140,6 @@ function patchFromRequest(data, options = {}) {
   if (unknownCommandField) {
     throw errorWithCode('invalid-argument', `Profile field is not allowed: ${unknownCommandField}.`);
   }
-  const protectedFields = ['role', 'member', 'memberName', 'id', 'profileId'];
-  if (protectedFields.some(field => Object.prototype.hasOwnProperty.call(data, field))) {
-    throw errorWithCode('invalid-argument', 'Profile identity and role fields are immutable.');
-  }
   const source = data.patch == null
     ? Object.fromEntries(Array.from(PROFILE_PATCH_FIELDS)
       .filter(field => Object.prototype.hasOwnProperty.call(data, field))
@@ -283,18 +279,12 @@ function assignmentRecord(assignment, profile, actor, at, extra = {}) {
   };
 }
 
-function slugify(value) {
-  return String(value == null ? '' : value).toLocaleLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
 function assignmentForSchedule(assignment, schedule) {
   if (!schedule || typeof schedule !== 'object') {
     throw errorWithCode('not-found', 'The schedule service was not found.', { reason: 'service-missing' });
   }
   const serviceDate = String(schedule.date || '').trim();
-  const serviceTime = slugify(schedule.serviceTime || schedule.service || schedule.time || '');
+  const serviceTime = authz.serviceTimeKey(schedule);
   if (!serviceDate || !serviceTime) {
     throw errorWithCode('failed-precondition', 'The schedule service identity is incomplete.', { reason: 'invalid-service' });
   }
@@ -404,21 +394,6 @@ function safeRosterProfile(value, documentId, department) {
     if (Object.prototype.hasOwnProperty.call(profile, field)) output[field] = profile[field];
   });
   return output;
-}
-
-async function writeAudit(db, entry) {
-  if (!db || !db.collection) throw errorWithCode('internal', 'Audit storage is unavailable.');
-  const audit = db.collection('audit');
-  if (typeof audit.add === 'function') {
-    const reference = await audit.add(entry);
-    return reference && reference.id ? reference.id : '';
-  }
-  if (typeof audit.doc === 'function') {
-    const reference = audit.doc();
-    await reference.set(entry);
-    return reference.id || '';
-  }
-  throw errorWithCode('internal', 'Audit storage is unavailable.');
 }
 
 function createDepartmentHandlers(options = {}) {
@@ -930,7 +905,7 @@ function createDepartmentHandlers(options = {}) {
             duty: change.duty,
             serviceId: change.serviceId,
             serviceDate: String(service.value.date || ''),
-            serviceTime: slugify(service.value.serviceTime || service.value.service || service.value.time || '')
+            serviceTime: authz.serviceTimeKey(service.value)
           }), service.value);
         } catch (error) {
           skipped.push({ ...where, reason: 'invalid-service' });
@@ -986,18 +961,14 @@ function createDepartmentHandlers(options = {}) {
     listDepartmentRoster,
     updateDepartmentProfile,
     updateMemberAvailability,
-    updateDepartmentAvailability: updateMemberAvailability,
     createDepartmentProfile,
     assignDepartmentDuty,
     unassignDepartmentDuty,
-    overrideDepartmentAssignment,
-    adminOverrideAssignment: overrideDepartmentAssignment,
-    recoverDepartmentProfile: updateDepartmentProfile
+    overrideDepartmentAssignment
   });
 }
 
 module.exports = {
-  PROFILE_PATCH_FIELDS,
   memberListNames,
   readAccountForMemberUid,
   createDepartmentHandlers,
@@ -1006,7 +977,6 @@ module.exports = {
   requestActor,
   inputData,
   profileRef,
-  assignmentForSchedule,
   assignmentRecord,
   errorWithCode,
   rejectDecision,
