@@ -9,10 +9,14 @@
  * labeled assignment and an audit record, never a profile mutation.
  */
 
+const { FieldValue } = require('firebase-admin/firestore');
 const authz = require('./department-auth.js');
 const permissions = require('./permissions.js');
 const { currentRevision, nextRevision, assertFresh } = require('./revision.js');
 const { refusal, decisionRefusal, DEFAULT_REASONS } = require('./refusals.js');
+const { canonicalName } = require('./names.js');
+const { loadNameMap } = require('./app-docs.js');
+const { hasStarted } = require('./time.js');
 
 const PROFILE_PATCH_FIELDS = new Set(authz.PROFILE_MUTABLE_FIELDS);
 const PROFILE_DECISION_FIELDS = Object.freeze([
@@ -114,6 +118,7 @@ function pathInputs(data) {
   if (!department || !memberUid) {
     throw errorWithCode('invalid-argument', 'departmentId and memberUid are required.');
   }
+  if (!permissions.DEPARTMENTS.includes(department)) throw errorWithCode('invalid-argument', 'That is not one of the departments.');
   return { department, memberUid };
 }
 
@@ -285,6 +290,39 @@ function assignmentForSchedule(assignment, schedule) {
   return { ...assignment, serviceDate, serviceTime };
 }
 
+/* An assignment's duty in its stored spelling ('usher door' is Usher Door),
+   so no second key in another spelling goes into a service. */
+function withExactDuty(assignment) {
+  const duty = authz.exactDuty(assignment.duty);
+  if (!duty) throw errorWithCode('invalid-argument', 'That is not one of the duties.');
+  return { ...assignment, duty };
+}
+
+/* A service that has started keeps its duties: only an administrator's
+   recorded override changes it. */
+function refuseStarted(schedule, at) {
+  if (hasStarted(schedule, at)) {
+    throw errorWithCode('failed-precondition', 'That service has already started. Its duties stay as they are.', { reason: 'service-started' });
+  }
+}
+
+/* A schedule write that gives `duty` to `holder` (a name in its current
+   spelling, '' to empty it) also removes a "needs a replacement" flag
+   raised for someone else, in the same write, so a stale flag can never
+   hide the new holder's. */
+function withHandOver(schedule, duty, update, holder, canonical) {
+  const flag = ((schedule && schedule.needsReplacement) || {})[duty];
+  if (!flag || canonical(flag.memberName) === holder) return update;
+  return { ...update, needsReplacement: { [duty]: FieldValue.delete() } };
+}
+
+/* A service's assignments with every name in its current spelling. */
+function canonicalAssignments(assignments, nameMap) {
+  const out = {};
+  Object.keys(assignments || {}).forEach(duty => { out[duty] = canonicalName(assignments[duty], nameMap); });
+  return out;
+}
+
 async function readAccountForMemberUid(db, memberUid) {
   const accounts = db.collection('accounts');
   const ids = [memberUid];
@@ -329,6 +367,7 @@ function departmentInput(data) {
     memberUid: 'roster-request'
   });
   if (!identity) throw errorWithCode('invalid-argument', 'departmentId is required.');
+  if (!permissions.DEPARTMENTS.includes(identity.departmentId)) throw errorWithCode('invalid-argument', 'That is not one of the departments.');
   return identity.departmentId;
 }
 
@@ -548,10 +587,13 @@ function createDepartmentHandlers(options = {}) {
     } catch (error) {
       throw errorWithCode('invalid-argument', error.message);
     }
+    assignment = withExactDuty(assignment);
     if (!assignment.serviceId) throw errorWithCode('invalid-argument', 'A service ID is required for an assignment.');
     if (typeof db.runTransaction !== 'function') {
       throw errorWithCode('internal', 'Atomic schedule assignment storage is unavailable.');
     }
+    const nameMap = await loadNameMap(db);
+    const canonical = name => canonicalName(name, nameMap);
     const profileReference = profileRef(db, assignment.departmentId, assignment.memberUid);
     const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
     let record;
@@ -560,26 +602,27 @@ function createDepartmentHandlers(options = {}) {
       const scheduleSnapshot = await transaction.get(scheduleReference);
       if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.', { reason: 'service-missing' });
       const scheduleData = scheduleSnapshot.data() || {};
+      refuseStarted(scheduleData, now());
       const verifiedAssignment = assignmentForSchedule(assignment, scheduleData);
       const profileSnapshot = await transaction.get(profileReference);
       if (!profileSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.', { reason: 'profile-missing' });
       const profile = profileSnapshot.data() || {};
-      if (assignment.memberName && assignment.memberName !== String(profile.memberName || profile.member || '')) {
+      if (assignment.memberName && canonical(assignment.memberName) !== canonical(profile.memberName || profile.member)) {
         throw errorWithCode('invalid-argument', 'The member name does not match the verified profile.', { reason: 'name-mismatch' });
       }
       const assignmentRevisions = scheduleData.assignmentRevisions || {};
       const assignments = scheduleData.assignments || {};
       assertFresh({
         expectedRevision,
-        expectedWitness: expectedMemberName,
+        expectedWitness: expectedMemberName == null ? undefined : canonical(expectedMemberName),
         currentRevision: currentRevision({ revision: assignmentRevisions[verifiedAssignment.duty] }),
-        currentWitness: String(assignments[verifiedAssignment.duty] || ''),
+        currentWitness: canonical(assignments[verifiedAssignment.duty]),
         details: { memberName: String(assignments[verifiedAssignment.duty] || '') }
       });
       const result = authz.authorizeAssignment(actor, verifiedAssignment, profile);
       rejectDecision(result);
       const targetName = String(profile.memberName || profile.member || '');
-      const held = permissions.blockingDuties(assignments, targetName, result.assignment.duty);
+      const held = permissions.blockingDuties(canonicalAssignments(assignments, nameMap), canonical(targetName), result.assignment.duty);
       if (held.length) {
         throw errorWithCode('failed-precondition', 'The member is already serving in this service.', { reason: 'already-serving', duties: held });
       }
@@ -591,10 +634,10 @@ function createDepartmentHandlers(options = {}) {
       });
       const assignmentReference = db.collection('departmentAssignments').doc(assignmentIdFor(result.assignment));
       transaction.set(assignmentReference, record, { merge: false });
-      transaction.set(scheduleReference, {
+      transaction.set(scheduleReference, withHandOver(scheduleData, result.assignment.duty, {
         assignments: { [result.assignment.duty]: record.memberName },
         assignmentRevisions: { [result.assignment.duty]: revisionValue }
-      }, { merge: true });
+      }, canonical(record.memberName), canonical), { merge: true });
     });
     return { ok: true, revision: revisionValue, assignment: record, override: false };
   }
@@ -614,6 +657,7 @@ function createDepartmentHandlers(options = {}) {
     } catch (error) {
       throw errorWithCode('invalid-argument', error.message);
     }
+    assignment = withExactDuty(assignment);
     const at = now();
     if (typeof db.runTransaction !== 'function') {
       throw errorWithCode('internal', 'Atomic override storage is unavailable.');
@@ -673,10 +717,10 @@ function createDepartmentHandlers(options = {}) {
       const auditReference = db.collection('audit').doc(auditId);
       transaction.set(assignmentReference, record, { merge: false });
       transaction.set(auditReference, auditRecord, { merge: false });
-      transaction.set(scheduleReference, {
+      transaction.set(scheduleReference, withHandOver(scheduleData, result.assignment.duty, {
         assignments: { [result.assignment.duty]: record.memberName },
         assignmentRevisions: { [result.assignment.duty]: revisionValue }
-      }, { merge: true });
+      }, record.memberName, name => String(name || '')), { merge: true });
     });
     return {
       ok: true,
@@ -709,6 +753,7 @@ function createDepartmentHandlers(options = {}) {
     } catch (error) {
       throw errorWithCode('invalid-argument', error.message);
     }
+    assignment = withExactDuty(assignment);
     if (!assignment.serviceId) {
       throw errorWithCode('invalid-argument', 'A service ID is required to clear an assignment.');
     }
@@ -723,27 +768,30 @@ function createDepartmentHandlers(options = {}) {
     if (typeof db.runTransaction !== 'function') {
       throw errorWithCode('internal', 'Atomic schedule assignment storage is unavailable.');
     }
+    const nameMap = await loadNameMap(db);
+    const canonical = name => canonicalName(name, nameMap);
     let revisionValue;
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
       if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.', { reason: 'service-missing' });
       const scheduleData = scheduleSnapshot.data() || {};
+      refuseStarted(scheduleData, now());
       assignment = assignmentForSchedule(assignment, scheduleData);
       const assignmentRevisions = scheduleData.assignmentRevisions || {};
       const assignments = scheduleData.assignments || {};
       assertFresh({
         expectedRevision,
-        expectedWitness: expectedMemberName,
+        expectedWitness: expectedMemberName == null ? undefined : canonical(expectedMemberName),
         currentRevision: currentRevision({ revision: assignmentRevisions[assignment.duty] }),
-        currentWitness: String(assignments[assignment.duty] || ''),
+        currentWitness: canonical(assignments[assignment.duty]),
         details: { memberName: String(assignments[assignment.duty] || '') }
       });
       revisionValue = nextRevision({ revision: assignmentRevisions[assignment.duty] });
       transaction.delete(assignmentReference);
-      transaction.set(scheduleReference, {
+      transaction.set(scheduleReference, withHandOver(scheduleData, assignment.duty, {
         assignments: { [assignment.duty]: '' },
         assignmentRevisions: { [assignment.duty]: revisionValue }
-      }, { merge: true });
+      }, '', canonical), { merge: true });
     });
     return {
       ok: true,
@@ -777,8 +825,8 @@ function createDepartmentHandlers(options = {}) {
       const extra = Object.keys(change).find(key => !['serviceId', 'duty', 'memberUid', 'expectedMemberName'].includes(key));
       if (extra) throw errorWithCode('invalid-argument', `Change field is not allowed: ${extra}.`);
       const serviceId = String(change.serviceId || '').trim();
-      const duty = String(change.duty || '').trim();
-      if (!serviceId || !duty) throw errorWithCode('invalid-argument', 'Each change needs a serviceId and a duty.');
+      const duty = authz.exactDuty(change.duty);
+      if (!serviceId || !duty) throw errorWithCode('invalid-argument', 'Each change needs a serviceId and one of the duties.');
       if (authz.departmentForDuty(duty) !== department) {
         throw errorWithCode('failed-precondition', 'That duty belongs to another department.', { reason: 'duty-department-mismatch' });
       }
@@ -792,6 +840,8 @@ function createDepartmentHandlers(options = {}) {
     const serviceIds = Array.from(new Set(changes.map(change => change.serviceId)));
     const memberUids = Array.from(new Set(changes.map(change => change.memberUid).filter(Boolean)));
     const planBatch = `plan-${now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const nameMap = await loadNameMap(db);
+    const canonical = name => canonicalName(name, nameMap);
     let saved = [];
     let skipped = [];
     await db.runTransaction(async transaction => {
@@ -820,8 +870,9 @@ function createDepartmentHandlers(options = {}) {
         const where = { serviceId: change.serviceId, duty: change.duty };
         const service = services.get(change.serviceId);
         if (!service) { skipped.push({ ...where, reason: 'no-service' }); continue; }
+        if (hasStarted(service.value, at)) { skipped.push({ ...where, reason: 'service-started' }); continue; }
         const current = String(service.assignments[change.duty] || '');
-        if (change.expectedMemberName != null && change.expectedMemberName !== current) {
+        if (change.expectedMemberName != null && canonical(change.expectedMemberName) !== canonical(current)) {
           skipped.push({ ...where, reason: 'changed', memberName: current });
           continue;
         }
@@ -847,14 +898,15 @@ function createDepartmentHandlers(options = {}) {
           const decision = authz.authorizeAssignment(actor, assignment, profile);
           if (!decision.allowed) { skipped.push({ ...where, reason: decision.reason }); continue; }
           name = String(profile.memberName || profile.member || '');
-          if (permissions.blockingDuties(service.assignments, name, change.duty).length) {
-            skipped.push({ ...where, reason: 'already-serving' });
+          const held = permissions.blockingDuties(canonicalAssignments(service.assignments, nameMap), canonical(name), change.duty);
+          if (held.length) {
+            skipped.push({ ...where, reason: 'already-serving', duties: held });
             continue;
           }
           assignment = decision.assignment;
           record = { profile };
         }
-        if (name === current) continue;
+        if (canonical(name) === canonical(current)) continue;
         const revision = nextRevision({ revision: service.revisions[change.duty] });
         service.assignments[change.duty] = name;
         service.revisions[change.duty] = revision;
@@ -872,11 +924,12 @@ function createDepartmentHandlers(options = {}) {
       }
       services.forEach((service, id) => {
         if (!Object.keys(service.changed).length) return;
-        transaction.set(db.collection('schedule').doc(id), {
-          assignments: service.changed,
-          assignmentRevisions: service.changedRevisions,
-          planBatch
-        }, { merge: true });
+        let update = { assignments: service.changed, assignmentRevisions: service.changedRevisions, planBatch };
+        Object.keys(service.changed).forEach(duty => {
+          const handed = withHandOver(service.value, duty, {}, canonical(service.changed[duty]), canonical);
+          if (handed.needsReplacement) update = { ...update, needsReplacement: { ...(update.needsReplacement || {}), ...handed.needsReplacement } };
+        });
+        transaction.set(db.collection('schedule').doc(id), update, { merge: true });
       });
     });
     return { ok: true, departmentId: department, planBatch, saved, skipped };
