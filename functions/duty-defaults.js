@@ -8,20 +8,21 @@
 const permissions = require('./permissions.js');
 const { dutyName } = require('./names.js');
 
-function failure(code, message) {
+function failure(code, message, reason) {
   const error = new Error(message);
   error.code = code;
+  error.details = { reason };
   return error;
 }
 
 async function setDutyDefault({ db, actor, config, data }) {
   const duty = String(data && data.duty || '').trim();
   if (!Object.prototype.hasOwnProperty.call(permissions.DUTY_DEFAULTS, duty)) {
-    throw failure('invalid-argument', 'That duty has no default.');
+    throw failure('invalid-argument', 'That duty has no default.', 'no-default');
   }
   const department = permissions.departmentForDuty(duty);
   if (!permissions.canManageDepartment(actor, department, config)) {
-    throw failure('permission-denied', 'Only a ' + department + ' leader or an administrator can change the default for ' + dutyName(duty) + '.');
+    throw failure('permission-denied', 'Only a ' + department + ' leader or an administrator can change the default for ' + dutyName(duty) + '.', 'not-allowed');
   }
   const memberName = String(data.memberName || '').trim().slice(0, 80);
   if (memberName) {
@@ -33,7 +34,7 @@ async function setDutyDefault({ db, actor, config, data }) {
         (profile.eligibleDuties || []).some(item => String(item).trim().toLowerCase() === duty.toLowerCase());
     });
     if (!takes) {
-      throw failure('failed-precondition', memberName + ' does not take ' + dutyName(duty) + ' in ' + department + '. Add it to their duties first.');
+      throw failure('failed-precondition', memberName + ' does not take ' + dutyName(duty) + ' in ' + department + '. Add it to their duties first.', 'not-eligible');
     }
   }
   await db.collection('app').doc('settings').set({ dutyDefaults: { [duty]: memberName } }, { merge: true });

@@ -12,6 +12,7 @@
 const authz = require('./department-auth.js');
 const permissions = require('./permissions.js');
 const { currentRevision, nextRevision, assertFresh } = require('./revision.js');
+const { refusal, decisionRefusal, DEFAULT_REASONS } = require('./refusals.js');
 
 const PROFILE_PATCH_FIELDS = new Set(authz.PROFILE_MUTABLE_FIELDS);
 const PROFILE_DECISION_FIELDS = Object.freeze([
@@ -51,11 +52,9 @@ function assignmentCommandWithoutRevisionFields(data) {
   return clean;
 }
 
+/* An error for the app: details.reason defaults to the one for its code. */
 function errorWithCode(code, message, details) {
-  const error = new Error(message);
-  error.code = code;
-  if (details && typeof details === 'object') error.details = details;
-  return error;
+  return refusal(code, (details && details.reason) || DEFAULT_REASONS[code] || 'server-error', message, details);
 }
 
 function plainObject(value) {
@@ -69,10 +68,10 @@ function requestActor(request) {
     throw errorWithCode('unauthenticated', 'A verified member session is required.');
   }
   if (request.auth.currentAccount && !authz.isCurrentRoleVersion(request.auth, request.auth.currentAccount)) {
-    throw errorWithCode('permission-denied', 'The member role has changed. Sign in again.');
+    throw errorWithCode('permission-denied', 'The member role has changed. Sign in again.', { reason: 'session-ended' });
   }
   if (request.auth.currentAccount && request.auth.currentAccount.active === false) {
-    throw errorWithCode('permission-denied', 'The member account is inactive.');
+    throw errorWithCode('permission-denied', 'The member account is inactive.', { reason: 'account-inactive' });
   }
   return {
     uid: request.auth.uid,
@@ -224,22 +223,10 @@ function profileWithPatch(before, patch, actor, at) {
   return next;
 }
 
+/* A department-auth.js decision that refused: its reason goes to the app. */
 function rejectDecision(result) {
   if (result.allowed) return;
-  const permissionReasons = new Set([
-    'unauthenticated',
-    'cross-department',
-    'profile-write-not-authorized',
-    'administrator-required',
-    'explicit-override-required',
-    'target-profile-mismatch'
-  ]);
-  const code = result.reason === 'unauthenticated'
-    ? 'unauthenticated'
-    : permissionReasons.has(result.reason)
-      ? 'permission-denied'
-      : 'failed-precondition';
-  throw errorWithCode(code, `Department authorization denied: ${result.reason}.`);
+  throw decisionRefusal(result);
 }
 
 function assertAssignmentKeys(data) {
@@ -285,15 +272,15 @@ function slugify(value) {
 
 function assignmentForSchedule(assignment, schedule) {
   if (!schedule || typeof schedule !== 'object') {
-    throw errorWithCode('not-found', 'The schedule service was not found.');
+    throw errorWithCode('not-found', 'The schedule service was not found.', { reason: 'service-missing' });
   }
   const serviceDate = String(schedule.date || '').trim();
   const serviceTime = slugify(schedule.serviceTime || schedule.service || schedule.time || '');
   if (!serviceDate || !serviceTime) {
-    throw errorWithCode('failed-precondition', 'The schedule service identity is incomplete.');
+    throw errorWithCode('failed-precondition', 'The schedule service identity is incomplete.', { reason: 'invalid-service' });
   }
   if (assignment.serviceDate !== serviceDate || assignment.serviceTime !== serviceTime) {
-    throw errorWithCode('failed-precondition', 'The assignment service identity does not match the schedule.');
+    throw errorWithCode('aborted', 'The service\'s date or time is not what you saw. Reload to see the newer version.', { reason: 'changed' });
   }
   return { ...assignment, serviceDate, serviceTime };
 }
@@ -318,7 +305,7 @@ async function readAccountForMemberUid(db, memberUid) {
   // Their first sign-in makes one named after them, with this same uid.
   const name = memberUid.startsWith('member:') ? memberUid.slice('member:'.length) : '';
   if (name && (await memberListNames(db)).includes(name)) return { id: name, data: { memberName: name } };
-  throw errorWithCode('not-found', 'The member account was not found.');
+  throw errorWithCode('not-found', 'The member account was not found.', { reason: 'account-missing' });
 }
 
 /* The names in app/members, the church's member list. */
@@ -383,7 +370,7 @@ function createDepartmentHandlers(options = {}) {
     const data = inputData(request);
     const department = departmentInput(data);
     if (!authz.managesDepartment(actor, department)) {
-      throw errorWithCode('permission-denied', 'You cannot list this department roster.');
+      throw errorWithCode('permission-denied', 'You cannot list this department roster.', { reason: 'cross-department' });
     }
     const snapshot = await db.collection('departments').doc(department).collection('members').get();
     const members = snapshot.docs
@@ -406,14 +393,14 @@ function createDepartmentHandlers(options = {}) {
     const expectedUpdatedAt = data.expectedUpdatedAt;
     const at = now();
     if (typeof db.runTransaction !== 'function') {
-      throw errorWithCode('failed-precondition', 'Atomic profile storage is unavailable.');
+      throw errorWithCode('internal', 'Atomic profile storage is unavailable.');
     }
     const reference = profileRef(db, path.department, path.memberUid);
     let next;
     await db.runTransaction(async transaction => {
       const snapshot = await transaction.get(reference);
       if (!snapshot.exists) {
-        throw errorWithCode('not-found', 'The department member profile was not found.');
+        throw errorWithCode('not-found', 'The department member profile was not found.', { reason: 'profile-missing' });
       }
       const before = snapshot.data() || {};
       assertFresh({
@@ -488,14 +475,14 @@ function createDepartmentHandlers(options = {}) {
     }
     const reference = profileRef(db, path.department, path.memberUid);
     const existing = await reference.get();
-    if (existing.exists) throw errorWithCode('already-exists', 'The department member profile already exists.');
+    if (existing.exists) throw errorWithCode('already-exists', 'The department member profile already exists.', { reason: 'profile-exists' });
     const at = now();
     const account = await readAccountForMemberUid(db, path.memberUid);
     const accountName = String(account.data.memberName || account.data.name || account.data.member || account.id).trim();
-    if (!accountName) throw errorWithCode('failed-precondition', 'The member account name is missing.');
+    if (!accountName) throw errorWithCode('failed-precondition', 'The member account name is missing.', { reason: 'account-missing' });
     const suppliedName = String(data.memberName || data.member || '').trim();
     if (suppliedName && suppliedName !== accountName) {
-      throw errorWithCode('invalid-argument', 'The member name does not match the verified account.');
+      throw errorWithCode('invalid-argument', 'The member name does not match the verified account.', { reason: 'name-mismatch' });
     }
     const requestedRole = data.role == null ? 'member' : data.role;
     const requestedStatus = data.status == null
@@ -551,7 +538,7 @@ function createDepartmentHandlers(options = {}) {
     const data = inputData(request);
     assertAssignmentKeys(data);
     if (data.override === true) {
-      throw errorWithCode('failed-precondition', 'Use the explicit administrator override callable.');
+      throw errorWithCode('invalid-argument', 'Use the explicit administrator override callable.');
     }
     const expectedRevision = data.expectedRevision;
     const expectedMemberName = data.expectedMemberName;
@@ -561,8 +548,9 @@ function createDepartmentHandlers(options = {}) {
     } catch (error) {
       throw errorWithCode('invalid-argument', error.message);
     }
-    if (!assignment.serviceId || typeof db.runTransaction !== 'function') {
-      throw errorWithCode('failed-precondition', 'Atomic schedule assignment storage is unavailable.');
+    if (!assignment.serviceId) throw errorWithCode('invalid-argument', 'A service ID is required for an assignment.');
+    if (typeof db.runTransaction !== 'function') {
+      throw errorWithCode('internal', 'Atomic schedule assignment storage is unavailable.');
     }
     const profileReference = profileRef(db, assignment.departmentId, assignment.memberUid);
     const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
@@ -570,14 +558,14 @@ function createDepartmentHandlers(options = {}) {
     let revisionValue;
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
-      if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.');
+      if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.', { reason: 'service-missing' });
       const scheduleData = scheduleSnapshot.data() || {};
       const verifiedAssignment = assignmentForSchedule(assignment, scheduleData);
       const profileSnapshot = await transaction.get(profileReference);
-      if (!profileSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.');
+      if (!profileSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.', { reason: 'profile-missing' });
       const profile = profileSnapshot.data() || {};
       if (assignment.memberName && assignment.memberName !== String(profile.memberName || profile.member || '')) {
-        throw errorWithCode('invalid-argument', 'The member name does not match the verified profile.');
+        throw errorWithCode('invalid-argument', 'The member name does not match the verified profile.', { reason: 'name-mismatch' });
       }
       const assignmentRevisions = scheduleData.assignmentRevisions || {};
       const assignments = scheduleData.assignments || {};
@@ -591,8 +579,9 @@ function createDepartmentHandlers(options = {}) {
       const result = authz.authorizeAssignment(actor, verifiedAssignment, profile);
       rejectDecision(result);
       const targetName = String(profile.memberName || profile.member || '');
-      if (permissions.blockingDuties(assignments, targetName, result.assignment.duty).length) {
-        throw errorWithCode('failed-precondition', 'The member is already serving in this service.');
+      const held = permissions.blockingDuties(assignments, targetName, result.assignment.duty);
+      if (held.length) {
+        throw errorWithCode('failed-precondition', 'The member is already serving in this service.', { reason: 'already-serving', duties: held });
       }
       revisionValue = nextRevision({ revision: assignmentRevisions[result.assignment.duty] });
       record = assignmentRecord(result.assignment, profile, actor, now(), {
@@ -615,7 +604,7 @@ function createDepartmentHandlers(options = {}) {
     const data = inputData(request);
     assertAssignmentKeys(data);
     if (data.override !== true) {
-      throw errorWithCode('failed-precondition', 'An explicit administrator override is required.');
+      throw errorWithCode('failed-precondition', 'An explicit administrator override is required.', { reason: 'explicit-override-required' });
     }
     const expectedRevision = data.expectedRevision;
     const expectedMemberName = data.expectedMemberName;
@@ -630,7 +619,7 @@ function createDepartmentHandlers(options = {}) {
       throw errorWithCode('internal', 'Atomic override storage is unavailable.');
     }
     if (!assignment.serviceId) {
-      throw errorWithCode('failed-precondition', 'A service ID is required for an assignment override.');
+      throw errorWithCode('invalid-argument', 'A service ID is required for an assignment override.');
     }
     const profileReference = profileRef(db, assignment.departmentId, assignment.memberUid);
     const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
@@ -639,14 +628,14 @@ function createDepartmentHandlers(options = {}) {
     let revisionValue;
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
-      if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.');
+      if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.', { reason: 'service-missing' });
       const scheduleData = scheduleSnapshot.data() || {};
       const verifiedAssignment = assignmentForSchedule(assignment, scheduleData);
       const profileSnapshot = await transaction.get(profileReference);
-      if (!profileSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.');
+      if (!profileSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.', { reason: 'profile-missing' });
       const profile = profileSnapshot.data() || {};
       if (assignment.memberName && assignment.memberName !== String(profile.memberName || profile.member || '')) {
-        throw errorWithCode('invalid-argument', 'The member name does not match the verified profile.');
+        throw errorWithCode('invalid-argument', 'The member name does not match the verified profile.', { reason: 'name-mismatch' });
       }
       const assignmentRevisions = scheduleData.assignmentRevisions || {};
       const assignments = scheduleData.assignments || {};
@@ -724,20 +713,20 @@ function createDepartmentHandlers(options = {}) {
       throw errorWithCode('invalid-argument', 'A service ID is required to clear an assignment.');
     }
     if (authz.departmentForDuty(assignment.duty) !== assignment.departmentId) {
-      throw errorWithCode('failed-precondition', 'Department authorization denied: duty-department-mismatch.');
+      throw errorWithCode('failed-precondition', 'That duty belongs to another department.', { reason: 'duty-department-mismatch' });
     }
     if (!authz.isAdministrator(actor) && !authz.managesDepartment(actor, assignment.departmentId)) {
-      throw errorWithCode('permission-denied', 'Department authorization denied: profile-write-not-authorized.');
+      throw errorWithCode('permission-denied', 'You do not lead that department.', { reason: 'cross-department' });
     }
     const assignmentReference = db.collection('departmentAssignments').doc(assignmentIdFor(assignment));
     const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
     if (typeof db.runTransaction !== 'function') {
-      throw errorWithCode('failed-precondition', 'Atomic schedule assignment storage is unavailable.');
+      throw errorWithCode('internal', 'Atomic schedule assignment storage is unavailable.');
     }
     let revisionValue;
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
-      if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.');
+      if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.', { reason: 'service-missing' });
       const scheduleData = scheduleSnapshot.data() || {};
       assignment = assignmentForSchedule(assignment, scheduleData);
       const assignmentRevisions = scheduleData.assignmentRevisions || {};
@@ -778,7 +767,7 @@ function createDepartmentHandlers(options = {}) {
     if (unknown) throw errorWithCode('invalid-argument', `Field is not allowed: ${unknown}.`);
     const department = departmentInput({ departmentId: data.departmentId });
     if (!authz.isAdministrator(actor) && !authz.managesDepartment(actor, department)) {
-      throw errorWithCode('permission-denied', 'Department authorization denied: cross-department.');
+      throw errorWithCode('permission-denied', 'You do not lead that department.', { reason: 'cross-department' });
     }
     if (!Array.isArray(data.changes) || data.changes.length < 1 || data.changes.length > 200) {
       throw errorWithCode('invalid-argument', 'changes must hold 1 to 200 entries.');
@@ -791,7 +780,7 @@ function createDepartmentHandlers(options = {}) {
       const duty = String(change.duty || '').trim();
       if (!serviceId || !duty) throw errorWithCode('invalid-argument', 'Each change needs a serviceId and a duty.');
       if (authz.departmentForDuty(duty) !== department) {
-        throw errorWithCode('failed-precondition', 'Department authorization denied: duty-department-mismatch.');
+        throw errorWithCode('failed-precondition', 'That duty belongs to another department.', { reason: 'duty-department-mismatch' });
       }
       return {
         serviceId,

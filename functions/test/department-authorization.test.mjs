@@ -354,7 +354,7 @@ test('administrator override is explicit, audited by the handler, and profile-ne
         ...assignment({ duty: 'Sermon', override: true, overrideReason: 'Emergency coverage' })
       }
     }),
-    error => error.code === 'failed-precondition' && /duty-department-mismatch/.test(error.message)
+    error => error.code === 'failed-precondition' && error.details.reason === 'duty-department-mismatch'
   );
 });
 
@@ -390,7 +390,7 @@ test('callable handlers share the same boundary for availability and normal assi
       auth: leader,
       data: assignment()
     }),
-    error => error.code === 'failed-precondition' && /target-unavailable/.test(error.message)
+    error => error.code === 'failed-precondition' && error.details.reason === 'target-unavailable'
   );
 
   await handlers.updateMemberAvailability({
@@ -481,18 +481,18 @@ test('assignment handlers bind profile and availability checks to an existing sc
       auth: leader,
       data: assignment({ serviceId: 'service-existing', serviceDate: '2026-09-21' })
     }),
-    error => error.code === 'failed-precondition' && /does not match/.test(error.message)
+    error => error.code === 'aborted' && error.details.reason === 'changed'
   );
   await assert.rejects(
     handlers.assignDepartmentDuty({
       auth: leader,
       data: assignment({ serviceId: 'service-existing', memberName: 'Spoofed Example' })
     }),
-    error => error.code === 'invalid-argument' && /verified profile/.test(error.message)
+    error => error.code === 'invalid-argument' && error.details.reason === 'name-mismatch'
   );
   await assert.rejects(
     handlers.assignDepartmentDuty({ auth: leader, data: assignment({ serviceId: 'service-existing' }) }),
-    error => error.code === 'failed-precondition' && /already serving/.test(error.message)
+    error => error.code === 'failed-precondition' && error.details.reason === 'already-serving'
   );
 });
 

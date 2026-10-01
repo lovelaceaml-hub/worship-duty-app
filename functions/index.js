@@ -31,6 +31,7 @@ const { addServingMembers } = require('./serving-members');
 const { setDutyDefault } = require('./duty-defaults');
 const { renameMember: renameMemberEverywhere } = require('./rename-member');
 const appDocs = require('./app-docs');
+const { detailsFor } = require('./refusals');
 
 initializeApp();
 const db = getFirestore();
@@ -370,8 +371,7 @@ function exposeMemberAuthCallable(handler) {
       const message = code === 'internal'
         ? 'The member authentication service is unavailable.'
         : String(error.message || 'The requested authentication action failed.');
-      const details = error && error.details && typeof error.details === 'object' ? error.details : undefined;
-      throw new HttpsError(code, message, details);
+      throw new HttpsError(code, message, detailsFor(error, code));
     }
   });
 }
@@ -412,11 +412,11 @@ function exposeDepartmentCallable(handler) {
       });
     } catch (error) {
       const code = error && AUTH_ERROR_CODES.has(error.code) ? error.code : 'internal';
+      if (code === 'internal') logger.error('Department callable failed', { error: String(error && error.message || error) });
       const message = code === 'internal'
         ? 'The department authorization service is unavailable.'
         : String(error.message || 'The requested department action failed.');
-      const details = error && error.details && typeof error.details === 'object' ? error.details : undefined;
-      throw new HttpsError(code, message, details);
+      throw new HttpsError(code, message, detailsFor(error, code));
     }
   });
 }
@@ -490,24 +490,24 @@ exports.songHistoryRecorder = onSchedule(
 );
 
 async function readCurrentAccount(request) {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'A verified member session is required.');
+  if (!request.auth) throw new HttpsError('unauthenticated', 'A verified member session is required.', { reason: 'sign-in-required' });
   const token = request.auth.token || {};
   const memberId = String(token.memberId || '').trim();
-  if (!memberId) throw new HttpsError('permission-denied', 'The signed-in member account is missing.');
+  if (!memberId) throw new HttpsError('permission-denied', 'The signed-in member account is missing.', { reason: 'session-ended' });
   const snapshot = await db.collection('accounts').doc(memberId).get();
-  if (!snapshot.exists) throw new HttpsError('permission-denied', 'The signed-in member account is missing.');
+  if (!snapshot.exists) throw new HttpsError('permission-denied', 'The signed-in member account is missing.', { reason: 'session-ended' });
   const account = Object.assign({ id: snapshot.id }, snapshot.data() || {});
   const expectedUid = String(account.authUid || `member:${memberId}`);
   if (expectedUid !== request.auth.uid) {
-    throw new HttpsError('permission-denied', 'The signed-in member account is invalid.');
+    throw new HttpsError('permission-denied', 'The signed-in member account is invalid.', { reason: 'session-ended' });
   }
   if (!Number.isSafeInteger(token.roleVersion)
       || !Number.isSafeInteger(account.roleVersion)
       || token.roleVersion !== account.roleVersion) {
-    throw new HttpsError('permission-denied', 'The member role has changed. Sign in again.');
+    throw new HttpsError('permission-denied', 'The member role has changed. Sign in again.', { reason: 'session-ended' });
   }
   if (account.active === false) {
-    throw new HttpsError('permission-denied', 'The member account is inactive.');
+    throw new HttpsError('permission-denied', 'The member account is inactive.', { reason: 'account-inactive' });
   }
   return { memberId, account };
 }
@@ -551,7 +551,7 @@ async function callableActor(request) {
   const current = await readCurrentAccount(request);
   const token = currentTokenForAccount(request.auth.token || {}, current.account, current.memberId);
   if (token.mustChangePin === true) {
-    throw new HttpsError('failed-precondition', 'Change your PIN before using privileged actions.');
+    throw new HttpsError('failed-precondition', 'Change your PIN before using privileged actions.', { reason: 'pin-change-required' });
   }
   return Object.assign({
     uid: request.auth.uid,
