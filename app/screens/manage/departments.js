@@ -176,7 +176,7 @@ function memberProfile(department, uid) {
     <section class="card">
       <h3 class="card-subtitle">Every week</h3>
       <div class="availability-grid">${SERVICE_LABELS.map(label => {
-        const key = timeKey(label), on = availability.recurring[key] === 'available';
+        const key = timeKey(label), on = availability.recurring[key] !== 'unavailable';
         return html`<label class="availability-row"><span>${label}</span><select data-change="profile-week" data-key="${key}"${disabled}>
           <option value="available"${on ? ' selected' : ''}>Available</option><option value="unavailable"${on ? '' : ' selected'}>Not available</option></select></label>`;
       })}</div>

@@ -13,13 +13,14 @@ function fakeDb(docs) {
     id: path.split('/').pop(),
     collection: name => collectionRef(path + '/' + name),
     get: async () => ({ exists: store.has(path), data: () => store.get(path) }),
-    set: async value => { store.set(path, value); }
+    set: async value => { store.set(path, value); },
+    update: async value => { store.set(path, Object.assign({}, store.get(path), value)); }
   });
   const collectionRef = path => ({
     doc: id => docRef(path + '/' + id),
     get: async () => ({
       docs: Array.from(store.keys()).filter(key => key.startsWith(path + '/') && !key.slice(path.length + 1).includes('/'))
-        .map(key => ({ id: key.slice(path.length + 1), data: () => store.get(key) }))
+        .map(key => ({ id: key.slice(path.length + 1), ref: docRef(key), data: () => store.get(key) }))
     })
   });
   return { store, collection: name => collectionRef(name) };
@@ -51,10 +52,26 @@ test('everyone who served in a department is added to it, once, with the duties 
   assert.deepEqual(result.unmatched, ['B. Guest']);
   const grace = db.store.get('departments/Usher Sisters/members/grace-auth-uid');
   assert.equal(grace.memberName, 'S. Grace');
-  assert.deepEqual(grace.eligibleDuties, ['Usher Front']);
+  assert.deepEqual(grace.eligibleDuties, ['Usher Door', 'Usher Front', 'Usher Back'], 'any Usher Sisters duty');
   assert.equal(grace.schedulable, true);
   assert.equal(db.store.get('departments/Usher Sisters/members/member:S. Leah').status, 'inactive');
 
   const again = await addServingMembers(db, { today, now: 2000 });
   assert.deepEqual(again.added, []);
+  assert.deepEqual(again.widened, []);
+});
+
+test('a profile this job added earlier with only its served duties gets every duty, unless a leader changed them', async () => {
+  const fromSchedule = { source: 'schedule' };
+  const db = fakeDb({
+    'app/members': { list: ['S. Naomi', 'S. Esther'] },
+    'departments/Usher Sisters/members/member:S. Naomi': { memberUid: 'member:S. Naomi', memberName: 'S. Naomi', eligibleDuties: ['Usher Back'],
+      provenance: fromSchedule, fieldAttribution: { eligibleDuties: fromSchedule } },
+    'departments/Usher Sisters/members/member:S. Esther': { memberUid: 'member:S. Esther', memberName: 'S. Esther', eligibleDuties: ['Usher Back'],
+      provenance: fromSchedule, fieldAttribution: { eligibleDuties: { source: 'manual' } } }
+  });
+  const result = await addServingMembers(db, { today, now: 1 });
+  assert.deepEqual(result.widened.map(item => item.name), ['S. Naomi']);
+  assert.deepEqual(db.store.get('departments/Usher Sisters/members/member:S. Naomi').eligibleDuties, ['Usher Door', 'Usher Front', 'Usher Back']);
+  assert.deepEqual(db.store.get('departments/Usher Sisters/members/member:S. Esther').eligibleDuties, ['Usher Back']);
 });

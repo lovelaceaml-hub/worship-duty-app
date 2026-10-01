@@ -7,6 +7,7 @@ import { doubleDuties, openDoubleDuties } from '../../app/lib/conflicts.js';
 import { availabilityOn, canTake, normalizeProfile, timeKey, timeLabel } from '../../app/lib/availability.js';
 import { workload, suggestReplacements, usualDuties } from '../../app/lib/workload.js';
 import { isOpen, shownStatus, requestId } from '../../app/lib/requests.js';
+import { fill, fillDuties } from '../../app/lib/fill.js';
 
 test('two duties in one service are flagged, except one prayer duty with one usher duty', () => {
   const service = { assignments: { 'Prayer of Thanks': 'B. Adam', 'Usher #1': 'B. Adam', Presider: 'E. Joseph', 'Media Booth #1': 'E. Joseph' } };
@@ -31,7 +32,7 @@ test('a day off overrides the weekly pattern; "*" covers the whole day', () => {
   assert.equal(availabilityOn(profile, '2026-09-12', 'morning'), 'available');
   assert.equal(availabilityOn(profile, '2026-09-19', 'morning'), 'unavailable');
   assert.equal(availabilityOn(profile, '2026-09-26', 'evening'), 'available');
-  assert.equal(availabilityOn(profile, '2026-09-12', 'afternoon'), 'unknown');
+  assert.equal(availabilityOn(profile, '2026-09-12', 'afternoon'), 'available', 'a time not set counts as available');
   assert.equal(timeKey('Early Morning'), 'early-morning');
   assert.equal(timeLabel('*'), 'All services that day');
 });
@@ -86,7 +87,6 @@ test('a change request is open while pending and the member still holds the duty
 });
 
 test('Fill gives each empty duty to the least-served member who can take it, never twice in one service', async () => {
-  const { fill } = await import('../../app/lib/fill.js');
   const person = (name, extra = {}) => normalizeProfile(Object.assign({
     memberUid: 'member:' + name, departmentId: 'Usher Sisters', memberName: name, status: 'active', schedulable: true,
     eligibleDuties: ['Usher Door', 'Usher Front'], availability: { recurring: { morning: 'available' }, exceptions: {} }
@@ -117,4 +117,38 @@ test('Fill gives each empty duty to the least-served member who can take it, nev
   assert.deepEqual(unfilled, []);
   const none = fill([{ date: '2026-09-19', service: 'Morning', assignments: {} }], ['Usher Door'], () => roster.slice(0, 1), {});
   assert.deepEqual([none.proposals.length, none.unfilled], [0, [{ serviceId: '2026-09-19_morning', duty: 'Usher Door' }]]);
+});
+
+test('Fill spreads a month evenly and avoids two services on one day', () => {
+  const names = ['S. Ada', 'S. Bea', 'S. Cora', 'S. Dina', 'S. Eva', 'S. Fay'];
+  const roster = names.map(name => normalizeProfile({
+    memberUid: 'member:' + name, departmentId: 'Usher Sisters', memberName: name, status: 'active', schedulable: true,
+    eligibleDuties: ['Usher Door', 'Usher Front', 'Usher Back'], availability: { recurring: {}, exceptions: {} }
+  }, 'Usher Sisters'));
+  // Four Saturdays with three services each, three duties per service: 36 duties for 6 people.
+  const services = ['2026-10-03', '2026-10-10', '2026-10-17', '2026-10-24'].flatMap(date =>
+    [['Morning', '10:00'], ['Afternoon', '14:30'], ['Evening', '19:30']].map(([service, time]) => ({ date, service, time, assignments: {} })));
+  const { proposals, unfilled } = fill(services, ['Usher Door', 'Usher Front', 'Usher Back'], () => roster, {});
+  assert.equal(proposals.length, 36);
+  assert.deepEqual(unfilled, []);
+  const counts = names.map(name => proposals.filter(item => item.memberName === name).length);
+  assert.deepEqual(counts, [6, 6, 6, 6, 6, 6], 'everyone gets the same number');
+  // With six people and three duties per service, nobody needs two services on one day.
+  const perDay = {};
+  proposals.forEach(item => { const key = item.serviceId.slice(0, 10) + item.memberName; perDay[key] = (perDay[key] || 0) + 1; });
+  assert.ok(Object.values(perDay).every(count => count <= 2), 'at most two services a day each');
+});
+
+test('Fill looks at every duty a kind of service has had in the past year', () => {
+  const today = '2026-10-01';
+  const past = [
+    { date: '2026-09-26', worship: 'Sabbath Day', service: 'Evening', assignments: { 'Usher Door': 'S. Ada', 'Usher Back': 'S. Bea' } },
+    { date: '2026-09-19', worship: 'Sabbath Day', service: 'Evening', assignments: { 'Usher Door': 'S. Ada', Presider: 'B. Adam' } }
+  ];
+  const duties = fillDuties(past, today);
+  assert.deepEqual(duties({ worship: 'Sabbath Day', service: 'Evening' }), ['Presider', 'Usher Door', 'Usher Back']);
+  // A kind of service with no history gets every duty it has (no Thanks Prayer or Closing Prayer at Prayer Week).
+  const prayerWeek = duties({ worship: 'Prayer Week', service: 'Evening' });
+  assert.ok(prayerWeek.includes('Usher Front') && prayerWeek.includes('Sermon'));
+  assert.ok(!prayerWeek.includes('Closing Prayer') && !prayerWeek.includes('Prayer of Thanks'));
 });

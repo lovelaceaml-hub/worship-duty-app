@@ -17,6 +17,8 @@ test('names show as title and first name, with a last initial only when two memb
   assert.equal(displayName('S. Monica Castro', members), 'S. Monica C.');
   assert.equal(displayName('B. Adam Hill', members), 'B. Adam');
   assert.equal(displayName('BJason'), 'B. Jason');
+  assert.equal(displayName('Bridgette'), 'Bridgette', 'a name with no title is not split');
+  assert.equal(displayName('M.Chad'), 'M. Chad');
   assert.equal(canonicalName('B. Anthony L', {}), 'B. Anthony');
   assert.equal(canonicalName('B. Old', { 'B. Old': 'B. New' }), 'B. New');
   assert.equal(initials('S. Monica C.'), 'SM');

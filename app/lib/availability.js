@@ -67,14 +67,16 @@ export function isLeaderProfile(profile) {
   return /leader|manager/i.test(String(profile && profile.role || ''));
 }
 
-/* 'available', 'unavailable' or 'unknown' for one service time on one date. */
+/* 'available' or 'unavailable' for one service time on one date ('unknown'
+   only for a missing date or time). A time the member has not set counts as
+   available: they are free unless they say they are not. */
 export function availabilityOn(profile, date, key) {
   if (!profile || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) || !key) return 'unknown';
   const { recurring = {}, exceptions = {} } = profile.availability || {};
   const exception = exceptions[date];
   if (exception && Object.prototype.hasOwnProperty.call(exception, key)) return exception[key];
   if (exception && Object.prototype.hasOwnProperty.call(exception, '*')) return exception['*'];
-  return recurring[key] || 'unknown';
+  return recurring[key] || 'available'; // not set counts as available
 }
 
 /* A normal assignment needs an active, schedulable profile that lists the

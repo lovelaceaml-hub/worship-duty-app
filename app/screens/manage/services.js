@@ -19,7 +19,7 @@ import { clockTime, todayISO, addMonths, monthName, longDate, weekdayShort, dayO
 import { canTake } from '../../lib/availability.js';
 import { openDoubleDuties, doubleDuties, isMarkedOk } from '../../lib/conflicts.js';
 import { workload, suggestReplacements, usualDuties } from '../../lib/workload.js';
-import { fill } from '../../lib/fill.js';
+import { fill, fillDuties } from '../../lib/fill.js';
 import { isAdmin, canCreateService, canEditDuty, canEditSongsFor, canAcknowledgeConflict } from '../../services/access.js';
 import { roster, profileOf, profileNamed, loadRoster, assign, unassign, departments as departmentState, legacyRoster } from '../../services/departments.js';
 import { addService, updateService, deleteService, markDoubleDuty } from '../../services/schedule.js';
@@ -385,10 +385,10 @@ defineActions({
       const departments = departmentsShown();
       if (departments.some(department => !roster(department.name).length)) { notice('The rosters are still loading. Try again in a moment.', true); return; }
       const editable = departments.flatMap(department => department.duties).filter(canEditDuty);
-      const usual = usualDuties(data.services);
+      const dutiesOf = fillDuties(data.services, todayISO());
       const services = data.services.filter(service => service.date.startsWith(month()) && isUpcoming(service));
       const stats = workload(data.services, data.members, todayISO());
-      const result = fill(services, service => usual(service).filter(duty => editable.includes(duty)), duty => roster(departmentOf(duty).name), stats);
+      const result = fill(services, service => dutiesOf(service).filter(duty => editable.includes(duty)), duty => roster(departmentOf(duty).name), stats);
       ui.plan.proposals = {};
       result.proposals.forEach(item => { ui.plan.proposals[keyOf(item.serviceId, item.duty)] = { memberUid: item.memberUid, memberName: item.memberName }; });
       ui.plan.unfilled = result.unfilled.length;

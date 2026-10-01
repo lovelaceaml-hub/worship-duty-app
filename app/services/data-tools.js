@@ -30,6 +30,24 @@ export function lastSheetImport() { return readJSON('wds-sheet-import', null); }
 
 /* The server fetches the published sheet and merges it into the schedule,
    the same way its import does every 2 hours. */
+/* Fix a member's name everywhere (functions renameMember). */
+export async function renameMember(from, to) {
+  sheet.renaming = true;
+  renderSoon();
+  try {
+    const result = await call('renameMember', { from, to });
+    notice(from + ' is now ' + to + ' everywhere (' + plural(result.services || 0, 'service') + ' updated).');
+    sheet.renaming = false;
+    renderSoon();
+    return true;
+  } catch (error) {
+    notice('The name was not changed: ' + problem(error), true);
+    sheet.renaming = false;
+    renderSoon();
+    return false;
+  }
+}
+
 export async function importSheetNow() {
   sheet.busy = true;
   renderSoon();

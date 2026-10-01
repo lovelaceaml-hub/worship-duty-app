@@ -547,7 +547,7 @@ function effectiveAvailability(profile, serviceDate, serviceTime) {
   const exception = profile.availability.exceptions[serviceDate];
   if (exception && Object.prototype.hasOwnProperty.call(exception, key)) return exception[key];
   if (exception && Object.prototype.hasOwnProperty.call(exception, '*')) return exception['*'];
-  return profile.availability.recurring[key] || 'unknown';
+  return profile.availability.recurring[key] || 'available'; // not set counts as available
 }
 
 function isAvailable(profile, serviceDate, serviceTime) {
