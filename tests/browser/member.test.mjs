@@ -112,7 +112,10 @@ test('a draft left on the device is never shown to the next member who signs in'
   await page.locator('form[data-act="availability-add"] input[name="date"]').fill('2026-07-25');
   await page.locator('form[data-act="availability-add"] button[type="submit"]').click();
   await page.locator('.exception', { hasText: 'Saturday, July 25' }).waitFor();
+  let asked = '';
+  page.once('dialog', dialog => { asked = dialog.message(); dialog.accept(); });
   await swipeRight(page);
+  assert.match(asked, /not saved/, 'a swipe asks first, like the tabs');
   assert.equal(await page.evaluate(() => document.documentElement.dataset.screen), 'schedule');
   await signOut(page);
 
@@ -306,7 +309,7 @@ test('asking for a change, withdrawing it, and a duty flagged after a day off ea
   await page.locator('form[data-act="availability-add"] input[name="date"]').fill(duty.date);
   await page.locator('form[data-act="availability-add"] button[type="submit"]').click();
   await page.locator('[data-act="availability-save"]').click();
-  await banner(page, 'flagged for your leader');
+  await banner(page, 'Your leader was told you cannot make');
   await tab(page, 'my');
   const key = duty.id + ':' + duty.duty;
   await page.locator('#view .duty-state', { hasText: 'Your leader was told you cannot make it.' }).waitFor();

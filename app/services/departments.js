@@ -9,7 +9,7 @@ import { fb, call, problem } from '../firebase.js';
 import { data, ui, session, nameOf, readJSON, writeJSON } from '../store.js';
 import { plural } from '../html.js';
 import { renderSoon } from '../render.js';
-import { notice } from '../ui/banners.js';
+import { notice, banner } from '../ui/banners.js';
 import { DEPARTMENTS, departmentNamed, dutyName } from '../config/duties.js';
 import { normalizeProfile, normalizeAvailability, availabilityOn, timeKey, dutiesFor, statusFor } from '../lib/availability.js';
 import { serviceId, upcoming } from '../lib/services.js';
@@ -485,7 +485,10 @@ export async function saveOwnAvailability(availability) {
     });
     (result.departments || []).forEach(item => store(item.profile));
     const marked = (result.replacements && result.replacements.marked) || [];
-    notice(marked.length ? 'Saved. Your leader was told you cannot make ' + flaggedList(marked) + '.' : 'Your availability was saved.');
+    // The duties a leader was told about stay on screen to read; a plain save
+    // is a short confirmation.
+    if (marked.length) banner('Saved. Your leader was told you cannot make ' + flaggedList(marked) + '.');
+    else notice('Your availability was saved.');
     return true;
   } catch (error) {
     if (code(error) === 'aborted') {
