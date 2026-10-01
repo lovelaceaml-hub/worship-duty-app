@@ -113,7 +113,13 @@ async function addServingMembers(db, { today, now = Date.now(), canonicalName, l
       if (haveUid.has(memberUid)) continue;
       const profile = newProfile(department, memberUid, name, record, today, now);
       if (!authz.profileForScheduling(profile)) { unmatched.add(name); continue; }
-      await db.collection('departments').doc(department).collection('members').doc(memberUid).set(profile);
+      // create() leaves alone a profile made since the read above (a leader's add).
+      try {
+        await db.collection('departments').doc(department).collection('members').doc(memberUid).create(profile);
+      } catch (error) {
+        if (error && (error.code === 6 || error.code === 'already-exists' || /ALREADY_EXISTS/.test(String(error.message)))) continue;
+        throw error;
+      }
       haveUid.add(memberUid);
       haveName.add(name);
       added.push({ department, name, status: profile.status });

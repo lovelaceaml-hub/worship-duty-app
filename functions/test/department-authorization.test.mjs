@@ -66,6 +66,11 @@ class FakeDoc {
   async set(value) {
     this.store.set(this.path.join('/'), clone(value));
   }
+
+  async create(value) {
+    if (this.store.has(this.path.join('/'))) throw Object.assign(new Error('6 ALREADY_EXISTS'), { code: 6 });
+    await this.set(value);
+  }
 }
 
 class FakeCollection {

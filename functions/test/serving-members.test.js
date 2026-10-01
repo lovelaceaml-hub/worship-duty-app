@@ -14,6 +14,10 @@ function fakeDb(docs) {
     collection: name => collectionRef(path + '/' + name),
     get: async () => ({ exists: store.has(path), data: () => store.get(path) }),
     set: async value => { store.set(path, value); },
+    create: async value => {
+      if (store.has(path)) throw Object.assign(new Error('6 ALREADY_EXISTS'), { code: 6 });
+      store.set(path, value);
+    },
     update: async value => { store.set(path, Object.assign({}, store.get(path), value)); }
   });
   const collectionRef = path => ({

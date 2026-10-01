@@ -26,7 +26,9 @@ const PROFILE_DECISION_FIELDS = Object.freeze([
   'schedulable',
   'availability'
 ]);
-const PROFILE_DECISION_SOURCES = new Set(['initial', 'history-seed', 'manual', 'import']);
+// 'schedule' is the nightly job's (serving-members.js); its entries are kept
+// like any other until a leader or member changes that field.
+const PROFILE_DECISION_SOURCES = new Set(['initial', 'history-seed', 'manual', 'import', 'schedule']);
 const PROFILE_DECISION_AUTHORITIES = new Set(['system', 'history-seed', 'member', 'leader', 'admin', 'import']);
 const ASSIGNMENT_COMMAND_FIELDS = new Set([
   'assignmentId',
@@ -302,6 +304,10 @@ function assignmentForSchedule(assignment, schedule) {
   return { ...assignment, serviceDate, serviceTime };
 }
 
+function alreadyExists(error) {
+  return !!error && (error.code === 6 || error.code === 'already-exists' || /ALREADY_EXISTS/.test(String(error.message)));
+}
+
 /* An assignment's duty in its stored spelling ('usher door' is Usher Door),
    so no second key in another spelling goes into a service. */
 function withExactDuty(assignment) {
@@ -335,21 +341,27 @@ function canonicalAssignments(assignments, nameMap) {
   return out;
 }
 
+/* The account a member uid signs in as. A name fix keeps the uid on the
+   account under the new name (its authUid) and leaves the old account
+   inactive, so an account that points at the uid comes first, and an
+   inactive or renamed one never counts. */
 async function readAccountForMemberUid(db, memberUid) {
   const accounts = db.collection('accounts');
+  const usable = data => data.active !== false && !data.renamedTo;
+  if (typeof accounts.where === 'function') {
+    const snapshot = await accounts.where('authUid', '==', memberUid).limit(3).get();
+    const linked = snapshot.docs.filter(document => usable(document.data() || {}));
+    if (linked.length === 1) return { id: linked[0].id, data: linked[0].data() || {} };
+  }
   const ids = [memberUid];
   if (memberUid.startsWith('member:')) ids.push(memberUid.slice('member:'.length));
   for (const id of ids) {
-    if (!id) continue;
+    if (!id || id.includes('/')) continue;
     const snapshot = await accounts.doc(id).get();
     if (!snapshot.exists) continue;
     const data = snapshot.data() || {};
     const expectedUid = String(data.authUid || `member:${snapshot.id}`);
-    if (expectedUid === memberUid) return { id: snapshot.id, data };
-  }
-  if (typeof accounts.where === 'function') {
-    const snapshot = await accounts.where('authUid', '==', memberUid).limit(2).get();
-    if (snapshot.size === 1) return { id: snapshot.docs[0].id, data: snapshot.docs[0].data() || {} };
+    if (expectedUid === memberUid && usable(data)) return { id: snapshot.id, data };
   }
   // A member on the member list who has never signed in has no account yet.
   // Their first sign-in makes one named after them, with this same uid.
@@ -534,10 +546,11 @@ function createDepartmentHandlers(options = {}) {
     if (existing.exists) throw errorWithCode('already-exists', 'The department member profile already exists.', { reason: 'profile-exists' });
     const at = now();
     const account = await readAccountForMemberUid(db, path.memberUid);
-    const accountName = String(account.data.memberName || account.data.name || account.data.member || account.id).trim();
+    const nameMap = await loadNameMap(db);
+    const accountName = canonicalName(account.data.memberName || account.data.name || account.data.member || account.id, nameMap);
     if (!accountName) throw errorWithCode('failed-precondition', 'The member account name is missing.', { reason: 'account-missing' });
     const suppliedName = String(data.memberName || data.member || '').trim();
-    if (suppliedName && suppliedName !== accountName) {
+    if (suppliedName && canonicalName(suppliedName, nameMap) !== accountName) {
       throw errorWithCode('invalid-argument', 'The member name does not match the verified account.', { reason: 'name-mismatch' });
     }
     const requestedRole = data.role == null ? 'member' : data.role;
@@ -546,6 +559,15 @@ function createDepartmentHandlers(options = {}) {
       : data.status;
     const availability = authz.normalizeAvailability(data.availability || {});
     if (!availability) throw errorWithCode('invalid-argument', 'The department member availability is invalid.');
+    // The same checks as an update: duty names trimmed, without repeats, and
+    // each one of the duties (in its stored spelling).
+    let eligibleDuties;
+    try {
+      eligibleDuties = authz.normalizeProfilePatch({ eligibleDuties: data.eligibleDuties || data.duties || [] }).eligibleDuties
+        .map(duty => authz.exactDuty(duty) || (() => { throw new TypeError(duty + ' is not one of the duties'); })());
+    } catch (error) {
+      throw errorWithCode('invalid-argument', error.message);
+    }
     const candidate = {
       memberUid: path.memberUid,
       uid: path.memberUid,
@@ -554,7 +576,7 @@ function createDepartmentHandlers(options = {}) {
       role: typeof requestedRole === 'string' ? requestedRole.trim().toLocaleLowerCase() : requestedRole,
       memberName: accountName,
       status: typeof requestedStatus === 'string' ? requestedStatus.trim().toLocaleLowerCase() : requestedStatus,
-      eligibleDuties: data.eligibleDuties || data.duties || [],
+      eligibleDuties: Array.from(new Set(eligibleDuties)),
       schedulable: data.schedulable ?? data.isSchedulable ?? false,
       availability,
       createdAt: at,
@@ -585,7 +607,14 @@ function createDepartmentHandlers(options = {}) {
     if (!authz.profileForScheduling(candidate)) {
       throw errorWithCode('invalid-argument', 'The department member profile is invalid.');
     }
-    await reference.set(candidate, { merge: false });
+    // create() fails if a profile appeared meanwhile (another leader, the
+    // nightly job), so two adds at once cannot overwrite each other.
+    try {
+      await reference.create(candidate);
+    } catch (error) {
+      if (alreadyExists(error)) throw errorWithCode('already-exists', 'The department member profile already exists.', { reason: 'profile-exists' });
+      throw error;
+    }
     return { ok: true, departmentId: path.department, memberUid: path.memberUid, profile: candidate };
   }
 
