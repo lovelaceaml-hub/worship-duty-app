@@ -8,8 +8,8 @@ import { isConfirmed, changedSinceConfirmed, totalTime } from './data.js';
 import { songNumber, minutes } from './catalog.js';
 import { dutyName } from '../config/duties.js';
 import { hasChoir, hasThanks } from '../lib/worship.js';
-import { serviceId, isUpcoming } from '../lib/services.js';
-import { shortDate, dayBadge, todayISO, clockTime } from '../lib/dates.js';
+import { serviceId, isUpcoming, serviceClock } from '../lib/services.js';
+import { shortDate, dayBadge, todayISO } from '../lib/dates.js';
 
 function songStatus(setlist) {
   const count = setlist ? (setlist.songs || []).length : 0;
@@ -40,15 +40,25 @@ export function roleLines(setlist, service) {
   return lines;
 }
 
-/* "Preparation Songs", then "Glory Song" (or "Glory & Thanks Song"), each
-   with its song ids; empty sections are left out. */
-export function songSections(setlist, service) {
+/* "Preparation Songs", then "Glory Song" and "Thanks Song", each with its
+   song ids; empty sections are left out. The Glory and Thanks songs have a
+   heading each, so a list with one of them never reads as complete. */
+export function songSections(setlist) {
   if (!setlist) return [];
-  const thanks = kindOf(setlist, service).thanks || !!setlist.thanksSong;
   return [
     { title: 'Preparation Songs', ids: (setlist.songs || []).filter(id => id !== setlist.glorySong && id !== setlist.thanksSong) },
-    { title: thanks ? 'Glory & Thanks Song' : 'Glory Song', ids: [setlist.glorySong, setlist.thanksSong].filter(Boolean) }
+    { title: 'Glory Song', ids: [setlist.glorySong].filter(Boolean) },
+    { title: 'Thanks Song', ids: [setlist.thanksSong].filter(Boolean) }
   ].filter(section => section.ids.length);
+}
+
+/* What a list still lacks before it is confirmed: "Glory song not chosen." */
+export function missingSongs(setlist, service) {
+  if (!setlist) return [];
+  const missing = [];
+  if (!setlist.glorySong) missing.push('Glory song not chosen.');
+  if (kindOf(setlist, service).thanks && !setlist.thanksSong) missing.push('Thanks song not chosen.');
+  return missing;
 }
 
 function roles(setlist, service) {
@@ -58,7 +68,7 @@ function roles(setlist, service) {
 
 /* The songs of a service, in the card's format. */
 function songList(setlist, service) {
-  return html`<div class="order">${songSections(setlist, service).map(section => html`<h4 class="order-head">${section.title}</h4>
+  return html`<div class="order">${songSections(setlist).map(section => html`<h4 class="order-head">${section.title}</h4>
     ${section.ids.map(id => planner.songById[id]).filter(Boolean).map(song => html`<div class="order-step"><span class="num">${songNumber(song)}</span>
       <span class="step">${song.title}</span><span class="who">${minutes(song.durationSec)}</span></div>`)}`)}</div>`;
 }
@@ -78,7 +88,8 @@ function songsShown(id, setlist) {
 export function serviceCard(service, setlist, { home = false } = {}) {
   const id = setlist ? setlist.id : serviceId(service);
   const date = service ? service.date : setlist.date;
-  const presider = (service && service.assignments && service.assignments.Presider) || (setlist && setlist.presider) || '';
+  // A scheduled service shows its Presider duty; a list for another date, the name it was made with.
+  const presider = (service ? (service.assignments || {}).Presider : setlist && setlist.presider) || '';
   const editable = canEdit(setlist || service);
   const songs = setlist ? setlist.songs || [] : [];
   const [statusClass, statusLabel] = songStatus(setlist);
@@ -109,7 +120,7 @@ export function serviceCard(service, setlist, { home = false } = {}) {
       ${presider ? html`<span class="presider"><span class="sr-only">Presider: </span>${nameOf(presider)}</span>` : ''}
       ${setlist && setlist.source === 'signal' ? html`<span class="tag">From Signal</span>` : ''}
     </div>
-    <p class="svc-meta"><span>${shortDate(date)}${badge ? ' · ' + badge : ''}${service && service.time ? ' · ' + clockTime(service.time) : ''}</span>
+    <p class="svc-meta"><span>${shortDate(date)}${badge ? ' · ' + badge : ''}${service ? ' · ' + serviceClock(service) : ''}</span>
       <span>${songs.length ? plural(songs.length, 'song') + ' · ' + minutes(totalTime(setlist)) + ' · ' : ''}<span class="song-state is-${statusClass}">${statusLabel}</span></span></p>
     ${service ? roles(setlist, service) : ''}
     <div class="button-row">${actions}</div>

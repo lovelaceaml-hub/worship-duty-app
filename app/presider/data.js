@@ -10,7 +10,7 @@ import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
 import { planner } from './state.js';
 import { canEdit } from './access.js';
-import { serviceId, isUpcoming, isInProgress } from '../lib/services.js';
+import { serviceId, isUpcoming, isInProgress, byStart } from '../lib/services.js';
 
 const lib = () => window.SongLib;
 
@@ -62,7 +62,8 @@ export function ensureSetlist(service, source = 'manual') {
   if (planner.setlists[id]) return id;
   const setlist = stamp({
     id, date: service.date, worshipType: service.worship || 'Sabbath Day', serviceLabel: service.service,
-    presider: (service.assignments || {}).Presider || ui.me || '', notes: '', songs: [], status: 'planned', sungAt: null, source
+    // Only the service's own Presider: a song editor who makes the list is not one.
+    presider: (service.assignments || {}).Presider || '', notes: '', songs: [], status: 'planned', sungAt: null, source
   });
   planner.setlists[id] = setlist;
   pending[id] = setlist;
@@ -78,11 +79,12 @@ export function ensureSetlist(service, source = 'manual') {
 }
 
 /* Every change to a list: wait for its creation, update it, or write it
-   whole if the document went missing. */
-function change(id, patch) {
+   whole if the document went missing. A `quiet` change (who presides) is
+   not a change to the songs, so it leaves updatedAt and a confirmation be. */
+function change(id, patch, { quiet = false } = {}) {
   const setlist = planner.setlists[id];
   if (!setlist) return;
-  if (patch.updatedAt == null) stamp(patch); // a confirm stamps its own, equal to confirmedAt
+  if (patch.updatedAt == null && !quiet) stamp(patch); // a confirm stamps its own, equal to confirmedAt
   Object.assign(setlist, patch);
   renderSoon();
   const ref = fb.doc(fb.db, 'setlists', id);
@@ -231,8 +233,7 @@ export async function removePastEntry(songId, service) {
 export function current(service) { return isUpcoming(service) || isInProgress(service); }
 
 export function myServices() {
-  return data.services.filter(service => current(service) && (service.assignments || {}).Presider === ui.me)
-    .sort((a, b) => a.date.localeCompare(b.date) || String(a.time).localeCompare(String(b.time)));
+  return data.services.filter(service => current(service) && (service.assignments || {}).Presider === ui.me).sort(byStart);
 }
 
 /* Each presider's own upcoming services get a song list as soon as they
@@ -243,7 +244,7 @@ function createMine() {
     const id = serviceId(service);
     const setlist = planner.setlists[id];
     if (!setlist) { ensureSetlist(service, 'schedule'); return; }
-    if (setlist.presider !== ui.me && canEdit(setlist)) change(id, { presider: ui.me });
+    if (setlist.presider !== ui.me && canEdit(setlist)) change(id, { presider: ui.me }, { quiet: true });
   });
 }
 
