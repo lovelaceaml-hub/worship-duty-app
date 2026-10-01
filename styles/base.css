@@ -362,10 +362,19 @@ button.service-head { cursor: pointer; }
 .duty-card-toggle { position: absolute; inset: 0; z-index: 0; border: 0; border-radius: inherit; background: transparent; }
 .duty-card-toggle:focus-visible { outline-offset: -3px; }
 .duty-card .duty-body button, .duty-card .request-form, .duty-card .duty-team { position: relative; z-index: 1; }
-.duty-date { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 58px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); line-height: 1; }
+.duty-date { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 62px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); line-height: 1; }
 .duty-date b { font-size: 23px; font-weight: 750; }
-.duty-date small { margin-top: 5px; color: var(--muted); font-size: 10.5px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
-.duty-body { min-width: 0; min-height: 58px; padding-left: 14px; border-left: 1px solid var(--hairline); display: flex; flex-direction: column; justify-content: center; }
+/* Month, day, weekday: duties across a month change stay apart. */
+.duty-date small { margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
+.duty-date small.duty-month { margin: 0 0 3px; color: inherit; font-weight: 750; }
+.duty-card.is-next { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.duty-card.is-next .duty-time { font-size: 18px; }
+.duty-count { margin: -6px 2px 14px; }
+.duty-state { margin: 0 0 4px 16px; color: var(--muted); font-size: 13px; }
+.duty-state .link { min-height: 32px; padding: 4px 2px; font-size: 13px; }
+.duty-availability { margin: 18px 2px; color: var(--muted); font-size: 14px; }
+.duty-availability .link { padding: 6px 2px; }
+.duty-body { min-width: 0; min-height: 62px; padding-left: 14px; border-left: 1px solid var(--hairline); display: flex; flex-direction: column; justify-content: center; }
 .duty-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; color: var(--heading); }
 .duty-time { font-size: 16px; font-weight: 750; white-space: nowrap; }
 .duty-worship { color: var(--muted); font-size: 14px; }
@@ -375,6 +384,9 @@ button.service-head { cursor: pointer; }
 .duty-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding-left: 16px; }
 .duty-divider { margin: 8px 0; border: 0; border-top: 1px solid var(--hairline); }
 .duty-team, .request-form { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+/* The team sits in the narrow column beside the date: names get more room. */
+.duty-team .duty-row { flex-wrap: wrap; padding-left: 8px; font-size: 14px; }
+.duty-team .duty-name { flex-basis: 96px; }
 .list-item { padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 13px; }
 .list-item:last-child { border-bottom: 0; }
 .list-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 650; }
@@ -521,9 +533,9 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
   .department-meta { grid-area: meta; }
   .department-go { grid-area: go; }
   .duty-card { grid-template-columns: 48px minmax(0, 1fr); gap: 0 12px; padding: 10px 12px 10px 10px; }
-  .duty-date { width: 48px; height: 54px; border-radius: 11px; }
+  .duty-date { width: 48px; height: 58px; border-radius: 11px; }
   .duty-date b { font-size: 21px; }
-  .duty-body { min-height: 54px; padding-left: 12px; }
+  .duty-body { min-height: 58px; padding-left: 12px; }
   .exception { grid-template-columns: 1fr auto; }
   .exception .link { grid-column: 1 / -1; justify-self: start; }
   /* A screen's section menu sits right under the header, one scrolling row. */

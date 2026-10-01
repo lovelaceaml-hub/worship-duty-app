@@ -111,7 +111,7 @@ test('a member asks for a change; their leader declines it and the member stays 
   await page.locator('#request-note').fill('Out of town.');
   await page.locator('form[data-act="request-send"] button[type="submit"]').click();
   await banner(page, 'Your request was sent to your leader.');
-  await page.locator('.tag', { hasText: 'Change asked' }).first().waitFor();
+  await page.locator('.duty-state', { hasText: 'Asked. You stay on this duty until your leader answers.' }).first().waitFor();
   const request = (await fakeDocs(page, 'requests/')).find(item => item.name === 'S. Naomi');
   assert.deepEqual([request.department, request.note, request.status], ['Usher Sisters', 'Out of town.', 'pending']);
 

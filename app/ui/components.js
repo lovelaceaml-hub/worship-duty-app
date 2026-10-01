@@ -14,7 +14,7 @@ export function isCurrent(service) {
   return isUpcoming(service) || isInProgress(service);
 }
 
-function nowTag(service) {
+export function nowTag(service) {
   return isInProgress(service) ? html`<span class="service-now">Now</span>` : '';
 }
 
