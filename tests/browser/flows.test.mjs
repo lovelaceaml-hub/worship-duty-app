@@ -279,7 +279,7 @@ test('a member sends feedback and an administrator reads it', async () => {
 test('the song planner shows how often songs were sung, adds a song and confirms the list', async () => {
   const { context, page, errors } = await as('B. Adam');
   await tab(page, 'my');
-  await page.locator('[data-act="open-songs"]', { hasText: 'Finish your songs' }).click();
+  await page.locator('[data-act="open-songs"]', { hasText: 'Plan your songs' }).click();
   const builder = page.locator('#song-root .builder');
   await builder.waitFor();
   await builder.locator('.total', { hasText: '2 songs' }).waitFor();
