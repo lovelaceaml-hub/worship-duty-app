@@ -8,7 +8,7 @@ import { data, ui, nameOf, canonical } from '../../store.js';
 import { renderSoon } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { statusChip, empty } from '../../ui/components.js';
-import { departmentOf } from '../../config/duties.js';
+import { departmentOf, dutyName } from '../../config/duties.js';
 import { shortDate, todayISO } from '../../lib/dates.js';
 import { isOpen, shownStatus, requestService } from '../../lib/requests.js';
 import { workload, suggestReplacements } from '../../lib/workload.js';
@@ -26,11 +26,11 @@ function openCard(request, stats) {
   const choices = service ? suggestReplacements(service, request.duty, roster(department), stats, { exclude: request.name, limit: 8 }) : [];
   const working = busy.has(request.id);
   return html`<article class="card request">
-    <div class="card-title-row"><h3 class="card-subtitle">${nameOf(request.name)} · ${request.duty}</h3>${statusChip('pending')}</div>
+    <div class="card-title-row"><h3 class="card-subtitle">${nameOf(request.name)} · ${dutyName(request.duty)}</h3>${statusChip('pending')}</div>
     <p class="hint">${request.worship} ${request.service}, ${shortDate(request.date)} · asked ${new Date(request.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
     ${request.note ? html`<blockquote class="note">${request.note}</blockquote>` : ''}
     <form class="request-answer" data-act="request-approve" data-id="${request.id}">
-      <label class="field"><span>Who takes ${request.duty}?</span>
+      <label class="field"><span>Who takes ${dutyName(request.duty)}?</span>
         <select name="uid"${working ? ' disabled' : ''}>
           <option value="">Leave it open for now</option>
           ${choices.map(profile => html`<option value="${profile.memberUid}">${nameOf(profile.memberName)}</option>`)}
@@ -55,7 +55,7 @@ export function render() {
     ${open.length ? open.map(request => openCard(request, stats)) : empty('No requests waiting.')}
     ${done.length ? html`<button type="button" class="link" data-act="expand" data-key="requests-done">${showDone ? 'Hide answered requests' : 'Show answered requests'}</button>
       ${showDone ? done.map(request => html`<div class="list-item">
-        <div class="list-item-head"><span>${nameOf(request.name)} · ${request.duty} · ${shortDate(request.date)}</span>${statusChip(shownStatus(request, data.services, canonical))}</div>
+        <div class="list-item-head"><span>${nameOf(request.name)} · ${dutyName(request.duty)} · ${shortDate(request.date)}</span>${statusChip(shownStatus(request, data.services, canonical))}</div>
         ${request.resolvedAt ? html`<p class="hint small">Answered ${new Date(request.resolvedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${request.resolvedByName ? ' by ' + nameOf(request.resolvedByName) : ''}</p>` : ''}
       </div>`) : ''}` : ''}`;
 }

@@ -26,6 +26,7 @@ const { createMembershipHandlers } = require('./membership');
 const { createSheets, accountEmail } = require('./sheets');
 const sheetSync = require('./sheet-sync');
 const { serviceYear } = require('./service-year');
+const { dutyName } = require('./names');
 
 initializeApp();
 const db = getFirestore();
@@ -596,7 +597,7 @@ exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
 /* The duty line in a notification: "Presider · Sabbath Day Morning ·
    Wednesday, July 1 at 9:00 AM". */
 function bodyFor(duty, svc) {
-  return duty + ' · ' + [svc.worship, svc.service].filter(Boolean).join(' ') + ' · ' +
+  return dutyName(duty) + ' · ' + [svc.worship, svc.service].filter(Boolean).join(' ') + ' · ' +
     longDate(svc.date) + (svc.time ? ' at ' + clockTime(svc.time) : '');
 }
 
@@ -689,7 +690,7 @@ async function noteSheetStatus(settings, error) {
 /* "Usher Door · Saturday, October 3 Morning", several joined, for one alert. */
 function dutyList(items) {
   const lines = items.slice().sort((a, b) => a.date.localeCompare(b.date))
-    .map(item => item.duty + ' · ' + longDate(item.date) + ' ' + item.service);
+    .map(item => dutyName(item.duty) + ' · ' + longDate(item.date) + ' ' + item.service);
   return lines.length > 4 ? lines.slice(0, 3).join('; ') + '; and ' + (lines.length - 3) + ' more' : lines.join('; ');
 }
 
@@ -821,7 +822,7 @@ exports.onRequestCreated = onDocumentCreated(
     const recipients = Array.from(new Set([scheduler].concat(leaders).map(canonicalMemberName)))
       .filter(name => name && name !== requester);
     if (!recipients.length) return;
-    const body = request.name + ' asks to change ' + request.duty + ' · ' + longDate(request.date) + ' ' + request.service +
+    const body = request.name + ' asks to change ' + dutyName(request.duty) + ' · ' + longDate(request.date) + ' ' + request.service +
       (request.note ? ' · "' + request.note + '"' : '');
     await sendToNames(recipients, 'Change request', () => body);
   });
@@ -837,7 +838,7 @@ exports.onRequestResolved = onDocumentUpdated(
     if (!(was.status === 'pending' && now.status !== was.status)) return;
     const title = now.status === 'approved' ? 'Your change request was approved'
       : now.status === 'declined' ? 'Your change request was declined' : 'Your change request was answered';
-    await sendToNames([now.name], title, () => now.duty + ' · ' + longDate(now.date) + ' ' + now.service);
+    await sendToNames([now.name], title, () => dutyName(now.duty) + ' · ' + longDate(now.date) + ' ' + now.service);
   });
 
 /* ---- 5. per-member .ics calendar feed ----

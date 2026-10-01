@@ -10,7 +10,7 @@ import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';
 import { render as redraw } from '../../render.js';
-import { DEPARTMENTS } from '../../config/duties.js';
+import { DEPARTMENTS, dutyName } from '../../config/duties.js';
 import { upcoming, past, nextService, serviceId, byStart, isUpcoming, departmentHasAssignments, assignedCount } from '../../lib/services.js';
 import { addMonths, monthName, clockTime, longDate, dayOfMonth, monthShort, weekdayShort, todayISO } from '../../lib/dates.js';
 import { canManageAnyDepartment } from '../../services/access.js';
@@ -137,9 +137,9 @@ export function dayHero(service) {
   </section>`;
 }
 
-/* "You serve here: Presider, Sermon" when the member has duties at it. */
+/* "You serve here: Presider, Opening Prayer" when the member has duties at it. */
 export function myDutiesAt(service) {
-  const duties = Object.entries(service.assignments || {}).filter(([, name]) => name && name === ui.me).map(([duty]) => duty);
+  const duties = Object.entries(service.assignments || {}).filter(([, name]) => name && name === ui.me).map(([duty]) => dutyName(duty));
   return duties.length ? html`<p class="my-duties-note">You serve here: <strong>${duties.join(', ')}</strong></p>` : '';
 }
 

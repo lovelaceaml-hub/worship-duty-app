@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { hasChoir, hasThanks, isFeast } from '../../app/lib/worship.js';
 import { nextService, upcoming, past, isUpcoming, isInProgress, dutiesOf, serviceId, startTime } from '../../app/lib/services.js';
 
 // 2026-09-14 is in Pacific daylight time (UTC minus 7).
@@ -90,4 +91,13 @@ test('service ids match the setlist ids the Signal ingest uses', () => {
   assert.equal(serviceId({ date: '2026-09-14', service: 'Early Morning' }), '2026-09-14_early-morning');
   const songLib = createRequire(import.meta.url)('../../song-lib.js');
   assert.equal(songLib.serviceIdFor('2026-09-14', 'Early Morning'), '2026-09-14_early-morning');
+});
+
+test('choir song and closing prayer only at Sabbath Day and Third Day; Thanks at Sabbath and feast mornings', () => {
+  assert.ok(hasChoir('Sabbath Day') && hasChoir('Third Day'));
+  for (const worship of ['Prayer Week', 'Preaching Week', 'Pentecost']) assert.ok(!hasChoir(worship), worship);
+  assert.ok(hasThanks('Sabbath Day', 'Morning'));
+  assert.ok(!hasThanks('Sabbath Day', 'Afternoon'));
+  assert.ok(hasThanks('Pentecost', 'Morning') && isFeast('Feast of Trumpets'));
+  for (const worship of ['Third Day', 'Prayer Week', 'Preaching Week']) assert.ok(!hasThanks(worship, 'Morning'), worship);
 });

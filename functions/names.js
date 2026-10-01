@@ -22,4 +22,12 @@ function cleanName(raw, nameMap = {}) {
   return (nameMap && nameMap[value]) || value;
 }
 
-module.exports = { BUILT_IN_NAME_MAP, cleanName };
+/* Names shown for duties whose stored name is older; the same map as
+   DUTY_NAMES in app/config/duties.js. */
+const DUTY_NAMES = Object.freeze({ Sermon: 'Opening Prayer', 'Prayer of Thanks': 'Thanks Prayer' });
+
+function dutyName(duty) {
+  return DUTY_NAMES[duty] || duty;
+}
+
+module.exports = { BUILT_IN_NAME_MAP, cleanName, DUTY_NAMES, dutyName };

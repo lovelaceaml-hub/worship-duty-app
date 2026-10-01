@@ -5,7 +5,7 @@ import { html } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, nameOf } from '../../store.js';
 import { empty } from '../../ui/components.js';
-import { departmentOf } from '../../config/duties.js';
+import { departmentOf, dutyName } from '../../config/duties.js';
 import { upcoming, serviceId } from '../../lib/services.js';
 import { shortDate, todayISO, addDays } from '../../lib/dates.js';
 import { workload, suggestReplacements, usualDuties } from '../../lib/workload.js';
@@ -20,11 +20,11 @@ function conflicts(stats) {
   const list = openConflicts().filter(item => shownFor(managedDepartment())(item.service));
   if (!list.length) return empty('No double duties to sort out.');
   return list.map(({ service, conflict }) => html`<article class="card">
-    <div class="card-title-row"><h3 class="card-subtitle">${nameOf(conflict.name)} · ${conflict.duties.join(' and ')}</h3></div>
+    <div class="card-title-row"><h3 class="card-subtitle">${nameOf(conflict.name)} · ${conflict.duties.map(dutyName).join(' and ')}</h3></div>
     <p class="hint">${service.worship} ${service.service}, ${shortDate(service.date)}</p>
     ${conflict.duties.filter(canEditDuty).map(duty => {
       const options = suggestReplacements(service, duty, roster(departmentOf(duty).name), stats, { exclude: conflict.name });
-      return html`<div class="suggest-row"><span class="suggest-label">${duty} could go to</span>
+      return html`<div class="suggest-row"><span class="suggest-label">${dutyName(duty)} could go to</span>
         ${options.length ? options.map(profile => html`<button type="button" class="ghost small" data-act="planning-assign"
           data-service="${serviceId(service)}" data-duty="${duty}" data-uid="${profile.memberUid}">${nameOf(profile.memberName)}</button>`)
           : html`<span class="hint">no one else is free</span>`}</div>`;

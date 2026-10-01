@@ -12,7 +12,7 @@ import { data, ui, feature, nameOf } from '../../store.js';
 import { render as redraw, renderSoon, goTo } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
-import { DEPARTMENTS, SERVICE_LABELS, WORSHIP_TYPES, DEFAULT_TIMES, departmentOf } from '../../config/duties.js';
+import { DEPARTMENTS, SERVICE_LABELS, WORSHIP_TYPES, DEFAULT_TIMES, departmentOf, dutyName } from '../../config/duties.js';
 import { serviceId, byStart, isUpcoming } from '../../lib/services.js';
 import { clockTime, todayISO, addMonths, monthName, longDate, weekdayShort, dayOfMonth } from '../../lib/dates.js';
 import { canTake } from '../../lib/availability.js';
@@ -87,7 +87,7 @@ function cell(service, duty, context) {
   const classes = ['plan-cell'];
   if (proposal) classes.push('is-proposed');
   if (unusual && !current && !proposal) classes.push('is-unusual');
-  const label = duty + ', ' + weekdayShort(service.date) + ' ' + dayOfMonth(service.date) + ' ' + service.service;
+  const label = dutyName(duty) + ', ' + weekdayShort(service.date) + ' ' + dayOfMonth(service.date) + ' ' + service.service;
   if (!isUpcoming(service) || !canEditDuty(duty)) {
     return html`<td class="${classes.concat('is-fixed').join(' ')}"><span class="plan-name">${current ? nameOf(current) : ''}</span></td>`;
   }
@@ -150,7 +150,7 @@ function grid(services, context) {
         ${services.map(service => html`<th scope="col" class="plan-head${isUpcoming(service) ? '' : ' is-past'}">${serviceHeading(service)}</th>`)}</tr></thead>
       <tbody>${departments.map(department => html`
         ${all ? html`<tr class="plan-group" style="--dept: ${department.color}"><th scope="rowgroup" colspan="${services.length + 1}"><span>${department.name}</span></th></tr>` : ''}
-        ${department.duties.map(duty => html`<tr><th scope="row">${duty}</th>${services.map(service => cell(service, duty, context))}</tr>`)}`)}
+        ${department.duties.map(duty => html`<tr><th scope="row">${dutyName(duty)}</th>${services.map(service => cell(service, duty, context))}</tr>`)}`)}
       </tbody>
     </table>
   </div>`;
@@ -164,7 +164,7 @@ function list(services, context) {
       ${serviceHeading(service)}
       ${open ? details(service) : html`<table class="plan-lines"><tbody>${departments.map(department => html`
         ${departments.length > 1 ? html`<tr class="plan-group" style="--dept: ${department.color}"><th scope="rowgroup" colspan="2"><span>${department.name}</span></th></tr>` : ''}
-        ${department.duties.map(duty => html`<tr><th scope="row">${duty}</th>${cell(service, duty, context)}</tr>`)}`)}
+        ${department.duties.map(duty => html`<tr><th scope="row">${dutyName(duty)}</th>${cell(service, duty, context)}</tr>`)}`)}
       </tbody></table>`}
     </section>`;
   })}</div>`;
@@ -188,7 +188,7 @@ function dutySelect(service, duty) {
       ${choices.map(profile => html`<option value="${profile.memberUid}"${currentProfile && currentProfile.memberUid === profile.memberUid ? ' selected' : ''}>${nameOf(profile.memberName)}</option>`)}`;
   }
   const others = people.filter(profile => !choices.includes(profile));
-  return html`<select data-change="assign" data-service="${serviceId(service)}" data-duty="${duty}" aria-label="${duty}"
+  return html`<select data-change="assign" data-service="${serviceId(service)}" data-duty="${duty}" aria-label="${dutyName(duty)}"
       class="${flagged ? 'is-flagged' : ''}"${busyNow || !canEditDuty(duty) ? ' disabled' : ''}>${options}</select>
     ${isAdmin() && others.length ? html`<details class="override">
       <summary>Assign someone else</summary>
@@ -210,9 +210,9 @@ function replacementPanel(service) {
     const department = departmentOf(duty).name;
     const suggestions = suggestReplacements(service, duty, roster(department), stats, { exclude: marker.memberName, limit: 5 });
     return html`<form class="card-note is-warning" data-act="replace-duty" data-service="${serviceId(service)}" data-duty="${duty}">
-      <p><strong>${nameOf(marker.memberName)}</strong> can no longer make ${duty}.</p>
+      <p><strong>${nameOf(marker.memberName)}</strong> can no longer make ${dutyName(duty)}.</p>
       <div class="inline-form">
-        <select name="uid" aria-label="Replacement for ${duty}"><option value="">Leave ${duty} open</option>
+        <select name="uid" aria-label="Replacement for ${dutyName(duty)}"><option value="">Leave ${dutyName(duty)} open</option>
           ${suggestions.map(profile => html`<option value="${profile.memberUid}">${nameOf(profile.memberName)}</option>`)}</select>
         <button type="submit" class="ghost small">Save</button>
       </div>
@@ -224,9 +224,9 @@ function doubleDutyNotes(service) {
   if (!feature('conflictWarnings')) return '';
   const acknowledge = conflict => canAcknowledgeConflict(Object.assign({}, conflict, { serviceId: serviceId(service), date: service.date, service: service.service }));
   return doubleDuties(service).filter(acknowledge).map(conflict => isMarkedOk(service, conflict)
-    ? html`<p class="card-note">${nameOf(conflict.name)} has ${conflict.duties.join(' and ')} (marked OK).
+    ? html`<p class="card-note">${nameOf(conflict.name)} has ${conflict.duties.map(dutyName).join(' and ')} (marked OK).
         <button type="button" class="link" data-act="double-duty" data-service="${serviceId(service)}" data-name="${conflict.name}" data-ok="false">Show the warning again</button></p>`
-    : html`<p class="card-note is-warning">${nameOf(conflict.name)} has ${conflict.duties.join(' and ')} in this service.
+    : html`<p class="card-note is-warning">${nameOf(conflict.name)} has ${conflict.duties.map(dutyName).join(' and ')} in this service.
         <button type="button" class="link" data-act="double-duty" data-service="${serviceId(service)}" data-name="${conflict.name}" data-ok="true">Mark OK</button></p>`);
 }
 
@@ -247,7 +247,7 @@ function details(service) {
     ${doubleDutyNotes(service)}
     ${departmentsShown().map(department => html`<div class="duty-group" style="--dept: ${department.color}">
       <h4 class="duty-group-name">${department.name}</h4>
-      <div class="field-grid">${department.duties.map(duty => html`<label class="field"><span>${duty}</span>${dutySelect(service, duty)}</label>`)}</div>
+      <div class="field-grid">${department.duties.map(duty => html`<label class="field"><span>${dutyName(duty)}</span>${dutySelect(service, duty)}</label>`)}</div>
     </div>`)}
     ${admin ? html`<div class="right"><button type="button" class="link danger" data-act="service-delete" data-service="${id}">Delete this service</button></div>` : ''}
   </div>`;
@@ -337,7 +337,7 @@ async function saveCell(service, duty, memberUid) {
   renderSoon();
   const result = await saveChanges([{ serviceId: serviceId(service), duty, memberUid, expectedMemberName: (service.assignments || {})[duty] || '' }]);
   busy.delete(key);
-  if (result.skipped.length && result.skipped[0].reason !== 'error') notice(duty + ' was not saved: ' + reasonText(result.skipped[0].reason) + '.', true);
+  if (result.skipped.length && result.skipped[0].reason !== 'error') notice(dutyName(duty) + ' was not saved: ' + reasonText(result.skipped[0].reason) + '.', true);
   renderSoon();
 }
 
@@ -499,7 +499,7 @@ defineActions({
       const uid = String(new FormData(form).get('uid') || '');
       try {
         await replaceDuty(service, form.dataset.duty, uid);
-        notice(uid ? 'Replacement saved.' : form.dataset.duty + ' is open now.');
+        notice(uid ? 'Replacement saved.' : dutyName(form.dataset.duty) + ' is open now.');
       } catch (error) {
         notice('That was not saved: ' + problem(error), true);
       }

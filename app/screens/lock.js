@@ -9,6 +9,7 @@ import { pendingInvite } from '../services/departments.js';
 import { byTitle } from '../lib/names.js';
 import { upcoming, nextService } from '../lib/services.js';
 import { longDate, clockTime } from '../lib/dates.js';
+import { dutyName } from '../config/duties.js';
 
 function box(title, body) {
   return html`<section class="card gate"><h2 class="gate-title">${title}</h2>${body}</section>`;
@@ -92,7 +93,7 @@ export const maintenance = {
           <h3>${longDate(service.date)} · ${service.service}</h3>
           <p class="hint">${service.worship || ''}${service.time ? ' at ' + clockTime(service.time) : ''}</p>
           ${Object.entries(service.assignments || {}).filter(([, name]) => name).map(([duty, name]) => html`
-            <div class="duty-row"><span class="duty-name">${duty}</span><span class="person">${nameOf(name)}</span></div>`)}
+            <div class="duty-row"><span class="duty-name">${dutyName(duty)}</span><span class="person">${nameOf(name)}</span></div>`)}
         </div>`)}</div>` : ''}
     </section>`;
   }

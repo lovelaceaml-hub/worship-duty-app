@@ -12,6 +12,7 @@ import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
 import { dutiesOf, upcoming, serviceId, startsAt } from '../lib/services.js';
 import { shortDate, clockTime, pacificNow } from '../lib/dates.js';
+import { dutyName } from '../config/duties.js';
 
 let baselineNext = false;
 
@@ -21,7 +22,7 @@ function pushActive() { return !!(fb.messaging && readText('wds-fcm-token')); }
 
 function describe(item) {
   const service = item.service;
-  return item.duty + ' · ' + [service.worship, service.service].filter(Boolean).join(' ') + ' · ' +
+  return dutyName(item.duty) + ' · ' + [service.worship, service.service].filter(Boolean).join(' ') + ' · ' +
     shortDate(service.date) + ', ' + clockTime(service.time);
 }
 

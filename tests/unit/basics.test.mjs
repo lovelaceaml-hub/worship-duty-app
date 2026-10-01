@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { displayName, canonicalName, byTitle, initials, BUILT_IN_NAME_MAP } from '../../app/lib/names.js';
 import { clockTime, dayBadge, addMonths, pacificNow } from '../../app/lib/dates.js';
 import { html, raw, esc } from '../../app/html.js';
-import { DEPARTMENTS, DEFAULT_TIMES } from '../../app/config/duties.js';
+import { DEPARTMENTS, DEFAULT_TIMES, DUTY_NAMES, dutyName } from '../../app/config/duties.js';
 import { FEATURES, featureOn } from '../../app/config/features.js';
 
 const require = createRequire(import.meta.url);
@@ -67,6 +67,13 @@ test('the server fills in the same usual service times as the app', () => {
 
 test('the server cleans Sheet names with the same list of old spellings as the app', () => {
   assert.deepEqual(require('../../functions/names.js').BUILT_IN_NAME_MAP, BUILT_IN_NAME_MAP);
+});
+
+test('Sermon shows as Opening Prayer and Prayer of Thanks as Thanks Prayer, the same on the server', () => {
+  assert.equal(dutyName('Sermon'), 'Opening Prayer');
+  assert.equal(dutyName('Prayer of Thanks'), 'Thanks Prayer');
+  assert.equal(dutyName('Usher Door'), 'Usher Door');
+  assert.deepEqual(require('../../functions/names.js').DUTY_NAMES, DUTY_NAMES);
 });
 
 test('the server has the same permissions.js as the browser', () => {

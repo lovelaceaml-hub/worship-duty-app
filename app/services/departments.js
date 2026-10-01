@@ -6,7 +6,7 @@ import { fb, call, problem } from '../firebase.js';
 import { data, session, nameOf, readJSON, writeJSON } from '../store.js';
 import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
-import { DEPARTMENTS, departmentOf } from '../config/duties.js';
+import { DEPARTMENTS, departmentOf, dutyName } from '../config/duties.js';
 import { normalizeProfile, normalizeAvailability, canTake, timeKey } from '../lib/availability.js';
 import { serviceId } from '../lib/services.js';
 
@@ -323,7 +323,7 @@ export async function assign(service, duty, profile, { override = false, reason 
   const busyKey = serviceId(service) + '::' + duty;
   if (departments.busy[busyKey]) return;
   if (!override && !canTake(profile, service, duty)) {
-    notice(nameOf(profile.memberName) + ' cannot take ' + duty + ' at this service.', true);
+    notice(nameOf(profile.memberName) + ' cannot take ' + dutyName(duty) + ' at this service.', true);
     return;
   }
   const conflict = Object.keys(service.assignments || {}).find(other => other !== duty && service.assignments[other] === profile.memberName);
@@ -337,7 +337,7 @@ export async function assign(service, duty, profile, { override = false, reason 
     if (override) Object.assign(payload, { override: true, overrideReason: reason });
     await call(override ? 'overrideDepartmentAssignment' : 'assignDepartmentDuty', payload);
     service.assignments = Object.assign({}, service.assignments, { [duty]: profile.memberName });
-    if (override) notice('Override recorded: ' + nameOf(profile.memberName) + ' is on ' + duty + '.');
+    if (override) notice('Override recorded: ' + nameOf(profile.memberName) + ' is on ' + dutyName(duty) + '.');
   } catch (error) {
     notice('The assignment was not saved: ' + problem(error), true);
   }
