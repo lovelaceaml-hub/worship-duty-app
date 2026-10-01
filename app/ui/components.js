@@ -2,30 +2,43 @@
 import { html } from '../html.js';
 import { DEPARTMENTS, dutyName } from '../config/duties.js';
 import { ui, feature, nameOf } from '../store.js';
-import { clockTime, longDate, dayBadge } from '../lib/dates.js';
+import { longDate, dayBadge } from '../lib/dates.js';
 import { doubleDuties, isMarkedOk } from '../lib/conflicts.js';
-import { serviceId } from '../lib/services.js';
+import { serviceId, serviceClock, isUpcoming, isInProgress } from '../lib/services.js';
 import { hasDuty } from '../lib/worship.js';
+
+/* Whether a service is still to come or under way: the Schedule and My
+   Duties keep a service until three hours after it starts (isInProgress),
+   and call it "Now" meanwhile. */
+export function isCurrent(service) {
+  return isUpcoming(service) || isInProgress(service);
+}
+
+export function nowTag(service) {
+  return isInProgress(service) ? html`<span class="service-now">Now</span>` : '';
+}
 
 function person(name) {
   const mine = !!ui.me && name === ui.me;
   return html`<span class="person${mine ? ' is-me' : ''}">${nameOf(name)}${mine ? ' (You)' : ''}</span>`;
 }
 
-/* A small "!" after a name that holds two duties in one service: red while
-   it needs a look, amber once a leader marked it OK. */
-function doubleDutyFlag(service, name) {
-  if (!feature('conflictWarnings') || !name) return '';
-  const conflict = doubleDuties(service).find(item => item.name === name);
+/* A small mark after a name that holds two duties in one service: "!" while
+   it needs a look, a check once a leader marked it OK. The words are there
+   for screen readers and touch, not only the color. An allowed pair (a
+   prayer with an usher duty) is not a double duty and gets no mark. */
+function doubleDutyFlag(service, conflicts, name) {
+  const conflict = conflicts.find(item => item.name === name);
   if (!conflict) return '';
   return isMarkedOk(service, conflict)
-    ? html`<span class="flag is-ok" title="Two duties, marked OK by a leader">!</span>`
-    : html`<span class="flag" title="Two duties in this service">!</span>`;
+    ? html`<span class="flag is-ok" title="Two duties, marked OK by a leader"><span aria-hidden="true">✓</span><span class="sr-only">Two duties, marked OK by a leader</span></span>`
+    : html`<span class="flag" title="Two duties in this service, needs a look"><span aria-hidden="true">!</span><span class="sr-only">Two duties in this service, needs a look</span></span>`;
 }
 
 /* Duty rows grouped by department. `only` limits them to one department. */
 export function dutyGroups(service, { only = '', showEmpty = feature('emptyDuties') } = {}) {
   const assignments = service.assignments || {};
+  const conflicts = feature('conflictWarnings') ? doubleDuties(service) : [];
   return DEPARTMENTS.filter(department => !only || only === 'All' || department.name === only).map(department => {
     const duties = department.duties.filter(duty => assignments[duty] || (showEmpty && hasDuty(service, duty)));
     if (!duties.length) return '';
@@ -33,7 +46,7 @@ export function dutyGroups(service, { only = '', showEmpty = feature('emptyDutie
       <h4 class="duty-group-name">${department.name}</h4>
       ${duties.map(duty => html`<div class="duty-row">
         <span class="duty-name">${dutyName(duty)}</span>
-        ${assignments[duty] ? html`${person(assignments[duty])}${doubleDutyFlag(service, assignments[duty])}` : html`<span class="person is-empty">Not filled</span>`}
+        ${assignments[duty] ? html`${person(assignments[duty])}${doubleDutyFlag(service, conflicts, assignments[duty])}` : html`<span class="person is-empty">Not filled</span>`}
       </div>`)}
     </div>`;
   });
@@ -44,18 +57,24 @@ function choirLine(service, only = 'All') {
   return html`<p class="choir-song">Choir · ${service.choirSong}</p>`;
 }
 
-function serviceHead(service) {
+/* `withDate` adds the service's date under its title, for a card shown
+   without a date heading above it. */
+function serviceHead(service, withDate) {
+  const title = html`<h3 class="service-title">${service.worship || 'Service'} <span class="service-label">${service.service}</span>${nowTag(service)}</h3>`;
+  const badge = withDate && !isInProgress(service) ? dayBadge(service.date) : '';
   return html`<div class="service-head">
-    <h3 class="service-title">${service.worship || 'Service'} <span class="service-label">${service.service}</span></h3>
-    <span class="service-time">${clockTime(service.time)}</span>
+    ${withDate ? html`<div class="service-name">${title}
+      <p class="service-date">${longDate(service.date)}${badge ? html` <span class="day-badge">${badge}</span>` : ''}</p></div>` : title}
+    <span class="service-time">${serviceClock(service)}</span>
   </div>`;
 }
 
-export function serviceCard(service, { only = 'All' } = {}) {
+export function serviceCard(service, { only = 'All', withDate = false } = {}) {
+  const groups = dutyGroups(service, { only });
   return html`<article class="card service-card" data-service="${serviceId(service)}">
-    ${serviceHead(service)}
+    ${serviceHead(service, withDate)}
     ${choirLine(service, only)}
-    ${dutyGroups(service, { only })}
+    ${groups.some(Boolean) ? groups : html`<p class="service-empty">Not planned yet.</p>`}
   </article>`;
 }
 
@@ -90,8 +109,10 @@ export function departmentSelect(id = 'department-filter') {
   </select>`;
 }
 
+/* One word per state, the same for members and leaders: a member who asked
+   for a change sees "Asked" on the duty and in their list. */
 export function statusChip(status) {
-  const labels = { pending: 'Waiting', approved: 'Approved', declined: 'Declined', completed: 'Done', new: 'New', done: 'Done' };
+  const labels = { pending: 'Asked', approved: 'Approved', declined: 'Declined', withdrawn: 'Withdrawn', completed: 'Done', past: 'Past', new: 'New', done: 'Done' };
   return html`<span class="status status-${status}">${labels[status] || status}</span>`;
 }
 

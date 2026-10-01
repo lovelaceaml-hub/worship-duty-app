@@ -93,9 +93,10 @@ test('the passcode and the PIN keep the app closed; a reset PIN is changed first
   await context.close();
 });
 
-test('the Schedule opens on the next service and moves on at its start minute', async () => {
+test('the Schedule opens on the next service, keeps it as Now while it runs, then moves on', async () => {
   // Tuesday 2026-07-07 has an 8:00 PM service; the next one is Saturday morning.
-  for (const [time, expected] of [['19:59', '2026-07-07_evening'], ['20:00', '2026-07-11_morning'], ['20:01', '2026-07-11_morning']]) {
+  // A service stays on as "Now" for three hours after it starts.
+  for (const [time, expected] of [['19:59', '2026-07-07_evening'], ['20:00', '2026-07-07_evening'], ['22:59', '2026-07-07_evening'], ['23:00', '2026-07-11_morning']]) {
     const { context, page, errors } = await as('B. Adam', { now: '2026-07-07T' + time + ':00-07:00' });
     assert.equal(await page.locator('.next-service .service-card').getAttribute('data-service'), expected, 'at ' + time);
     assert.deepEqual(errors, []);
@@ -110,7 +111,7 @@ test('a member asks for a change; their leader declines it and the member stays 
   await page.locator('#request-note').fill('Out of town.');
   await page.locator('form[data-act="request-send"] button[type="submit"]').click();
   await banner(page, 'Your request was sent to your leader.');
-  await page.locator('.tag', { hasText: 'Change asked' }).first().waitFor();
+  await page.locator('.duty-state', { hasText: 'Asked. You stay on this duty until your leader answers.' }).first().waitFor();
   const request = (await fakeDocs(page, 'requests/')).find(item => item.name === 'S. Naomi');
   assert.deepEqual([request.department, request.note, request.status], ['Usher Sisters', 'Out of town.', 'pending']);
 
@@ -251,7 +252,7 @@ test('a leader makes and cancels an invite link; a member opens one and joins', 
   await banner(page, 'You joined Media.');
   assert.deepEqual(await calls(page, 'acceptDepartmentInvitation'), [{ token }]);
   await openAccount(page, 'availability');
-  await page.locator('.availability', { hasText: 'Saved for Media.' }).waitFor();
+  await page.locator('.availability', { hasText: 'Applies to Media.' }).waitFor();
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -278,7 +279,7 @@ test('a member sends feedback and an administrator reads it', async () => {
 test('the song planner shows how often songs were sung, adds a song and confirms the list', async () => {
   const { context, page, errors } = await as('B. Adam');
   await tab(page, 'my');
-  await page.locator('[data-act="open-songs"]', { hasText: 'Finish your songs' }).click();
+  await page.locator('[data-act="open-songs"]', { hasText: 'Plan your songs' }).click();
   const builder = page.locator('#song-root .builder');
   await builder.waitFor();
   await builder.locator('.total', { hasText: '2 songs' }).waitFor();

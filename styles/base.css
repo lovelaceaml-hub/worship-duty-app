@@ -204,22 +204,28 @@ input[role="switch"]:disabled { opacity: 0.5; cursor: default; }
 /* ---- services and duties ---- */
 
 .date-heading { display: flex; align-items: center; gap: 12px; margin: 26px 2px 11px; font-size: 20px; letter-spacing: -0.01em; }
-.day-badge { padding: 3px 9px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.day-badge { padding: 3px 9px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .service-head { display: flex; width: 100%; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 8px; padding: 0 0 11px; border: 0; border-bottom: 1px solid var(--hairline); background: none; text-align: left; }
 button.service-head { cursor: pointer; }
 .service-title { color: var(--heading); font-size: 17px; font-weight: 700; }
 .service-label { color: var(--muted); font-size: 13px; font-weight: 500; }
 .service-label::before { content: "· "; }
 .service-time { color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.service-name { min-width: 0; }
+.service-date { margin-top: 3px; color: var(--muted); font-size: 13.5px; font-weight: 600; }
+.service-date .day-badge { margin-left: 6px; vertical-align: 1px; }
+/* "Now": a service under way, on the Schedule and My Duties. */
+.service-now { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 4px; background: var(--ok); color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; line-height: 1.4; text-transform: uppercase; vertical-align: 2px; }
+.service-empty { margin: 10px 0 2px; color: var(--faint); font-size: 13.5px; font-style: italic; }
 .service-card.is-open .service-head { margin-bottom: 12px; }
 .choir-song { margin: 4px 0 8px; color: var(--muted); font-size: 13px; }
 .duty-group { margin-top: 14px; }
-.duty-group-name { display: flex; align-items: center; gap: 9px; margin: 0 0 4px; color: var(--faint); font-size: 11px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.duty-group-name { display: flex; align-items: center; gap: 9px; margin: 0 0 4px; color: var(--faint); font-size: 12px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; }
 .duty-group-name::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dept, var(--accent)); }
 .duty-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0 4px 17px; font-size: 15px; }
 .duty-name { flex: 0 0 128px; color: var(--muted); font-size: 13px; }
 .person { font-weight: 650; }
-.person.is-me { padding: 2px 9px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.person.is-me { padding: 2px 9px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
 .person.is-empty { color: var(--faint); font-weight: 400; font-style: italic; font-size: 13px; }
 .flag { display: inline-grid; place-items: center; width: 17px; height: 17px; margin-left: 4px; border-radius: 50%; background: var(--brand-rose); color: #fff; font-size: 11px; font-weight: 800; line-height: 1; }
 .flag.is-ok { background: var(--warn); }
@@ -296,15 +302,23 @@ button.service-head { cursor: pointer; }
 .schedule-toolbar .month-nav { flex: 1 1 260px; }
 .schedule-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0 14px; }
 .schedule-filters select { flex: 0 1 220px; width: auto; }
+.schedule-filters .schedule-past { flex: none; margin-left: auto; }
+/* Navy keeps its tools in the toolbar, one row each. */
+.schedule-toolbar > .schedule-filters, .schedule-toolbar > .chips { flex: 1 1 100%; margin: 0; }
+.schedule-count { margin: 4px 2px 0; color: var(--muted); font-size: 14px; }
+.schedule-all .month-title { font-size: 18px; }
+.schedule-empty .link { display: inline-block; margin-top: 8px; text-align: center; }
 .search { position: relative; flex: 1 1 240px; }
 .search kbd { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--faint); font: 12px var(--font); }
 .day-strip, .day-rail { display: flex; gap: 8px; margin: 12px 0; padding: 2px; }
 .day-button { display: grid; flex: none; justify-items: center; gap: 2px; min-width: 62px; padding: 9px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
 .day-button.is-selected { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
-.day-weekday { font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.day-weekday { font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .day-number { font-size: 21px; font-weight: 750; line-height: 1.1; }
 .day-dots { display: flex; gap: 3px; min-height: 5px; }
 .day-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+/* A service the member serves at. */
+.day-button:not(.is-selected) .day-dots i.is-mine { background: var(--brand-rose); opacity: 1; }
 .time-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .time-buttons button { min-height: 42px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-weight: 700; }
 .time-buttons button span { color: var(--muted); font-weight: 500; }
@@ -329,9 +343,9 @@ button.service-head { cursor: pointer; }
 .calendar-day.is-outside { opacity: 0.4; }
 .calendar-day.is-selected { background: var(--accent); color: var(--on-accent); border-radius: 8px; }
 .calendar-date { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; }
-.calendar-you { padding: 0 4px; border-radius: 4px; background: var(--brand-rose); color: #fff; font-size: 9px; }
+.calendar-you { padding: 0 4px; border-radius: 4px; background: var(--brand-rose); color: #fff; font-size: 11px; }
 .calendar-services { display: grid; gap: 2px; }
-.calendar-service { overflow: hidden; padding: 1px 4px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 700; white-space: nowrap; }
+.calendar-service { overflow: hidden; padding: 1px 4px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .calendar-day.is-selected .calendar-service { background: color-mix(in srgb, #fff 20%, transparent); color: inherit; }
 .calendar-service.is-mine { box-shadow: inset 2px 0 0 var(--brand-rose); }
 .day-panel-title { margin: 0 0 8px; font-size: 18px; }
@@ -348,10 +362,19 @@ button.service-head { cursor: pointer; }
 .duty-card-toggle { position: absolute; inset: 0; z-index: 0; border: 0; border-radius: inherit; background: transparent; }
 .duty-card-toggle:focus-visible { outline-offset: -3px; }
 .duty-card .duty-body button, .duty-card .request-form, .duty-card .duty-team { position: relative; z-index: 1; }
-.duty-date { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 58px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); line-height: 1; }
+.duty-date { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 62px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); line-height: 1; }
 .duty-date b { font-size: 23px; font-weight: 750; }
-.duty-date small { margin-top: 5px; color: var(--muted); font-size: 10.5px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
-.duty-body { min-width: 0; min-height: 58px; padding-left: 14px; border-left: 1px solid var(--hairline); display: flex; flex-direction: column; justify-content: center; }
+/* Month, day, weekday: duties across a month change stay apart. */
+.duty-date small { margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
+.duty-date small.duty-month { margin: 0 0 3px; color: inherit; font-weight: 750; }
+.duty-card.is-next { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.duty-card.is-next .duty-time { font-size: 18px; }
+.duty-count { margin: -6px 2px 14px; }
+.duty-state { margin: 0 0 4px 16px; color: var(--muted); font-size: 13px; }
+.duty-state .link { min-height: 32px; padding: 4px 2px; font-size: 13px; }
+.duty-availability { margin: 18px 2px; color: var(--muted); font-size: 14px; }
+.duty-availability .link { padding: 6px 2px; }
+.duty-body { min-width: 0; min-height: 62px; padding-left: 14px; border-left: 1px solid var(--hairline); display: flex; flex-direction: column; justify-content: center; }
 .duty-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; color: var(--heading); }
 .duty-time { font-size: 16px; font-weight: 750; white-space: nowrap; }
 .duty-worship { color: var(--muted); font-size: 14px; }
@@ -361,6 +384,9 @@ button.service-head { cursor: pointer; }
 .duty-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding-left: 16px; }
 .duty-divider { margin: 8px 0; border: 0; border-top: 1px solid var(--hairline); }
 .duty-team, .request-form { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+/* The team sits in the narrow column beside the date: names get more room. */
+.duty-team .duty-row { flex-wrap: wrap; padding-left: 8px; font-size: 14px; }
+.duty-team .duty-name { flex-basis: 96px; }
 .list-item { padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 13px; }
 .list-item:last-child { border-bottom: 0; }
 .list-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 650; }
@@ -370,6 +396,12 @@ button.service-head { cursor: pointer; }
 .availability-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .availability-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; }
 .availability-row select { width: auto; min-height: 38px; padding: 6px 9px; font-size: 13px; }
+.availability-label { display: grid; }
+.availability-label small { color: var(--muted); font-size: 12px; font-weight: 500; }
+/* Shown while there are changes not saved. */
+.availability .availability-unsaved { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 16px; border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line)); background: var(--surface); }
+.availability-unsaved .button-row { margin: 0; }
+.availability-unsaved-text { color: var(--warn); font-size: 14px; font-weight: 700; }
 .exceptions { display: grid; gap: 7px; }
 .exception { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 .exception-status { color: var(--muted); font-size: 12px; font-weight: 750; }
@@ -507,9 +539,9 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
   .department-meta { grid-area: meta; }
   .department-go { grid-area: go; }
   .duty-card { grid-template-columns: 48px minmax(0, 1fr); gap: 0 12px; padding: 10px 12px 10px 10px; }
-  .duty-date { width: 48px; height: 54px; border-radius: 11px; }
+  .duty-date { width: 48px; height: 58px; border-radius: 11px; }
   .duty-date b { font-size: 21px; }
-  .duty-body { min-height: 54px; padding-left: 12px; }
+  .duty-body { min-height: 58px; padding-left: 12px; }
   .exception { grid-template-columns: 1fr auto; }
   .exception .link { grid-column: 1 / -1; justify-self: start; }
   /* A screen's section menu sits right under the header, one scrolling row. */
