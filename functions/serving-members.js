@@ -2,9 +2,11 @@
 
 /* Department membership from the schedule. Everyone who has served in a
    department's duties gets a profile in that department, able to take the
-   duties they have served in. Someone with no duty there in the last 35 days
-   and none coming up is added as inactive. Existing profiles are never
-   changed, so a leader who archives someone keeps them archived. */
+   department's duties (in Worship, only the duties they have served in).
+   Someone with no duty there in the last 35 days and none coming up is added
+   as inactive. Existing profiles are not changed, so a leader's choices stay;
+   the one exception is a profile this job added whose duties no leader has
+   touched, which gets every duty of its department (not Worship). */
 const authz = require('./department-auth.js');
 const permissions = require('./permissions.js');
 
@@ -39,9 +41,16 @@ function statusFor(record, today) {
   return record.last >= addDays(today, -RECENT_DAYS) ? 'active' : 'inactive';
 }
 
+/* Worship duties are different jobs, so only the ones served; the numbered
+   duties elsewhere (Usher Door, Parking #3...) are interchangeable. */
+function dutiesFor(department, record) {
+  const all = permissions.DEPARTMENT_DUTIES[department] || [];
+  return department === 'Worship' ? all.filter(duty => record.duties.has(duty)) : all.slice();
+}
+
 function newProfile(department, memberUid, name, record, today, at) {
   const status = statusFor(record, today);
-  const duties = (permissions.DEPARTMENT_DUTIES[department] || []).filter(duty => record.duties.has(duty));
+  const duties = dutiesFor(department, record);
   const initial = { source: 'schedule', authority: 'system', by: SYSTEM, at };
   return {
     memberUid, uid: memberUid, departmentId: department, department, role: 'member', memberName: name,
@@ -80,11 +89,23 @@ async function addServingMembers(db, { today, now = Date.now(), canonicalName, l
     .map(name => (canonicalName || (value => value))(String(name || '').trim())).filter(Boolean);
   const uidFor = uidResolver(accountsSnap.docs, memberList);
   const records = servingRecords(scheduleSnap.docs.map(document => document.data() || {}), canonicalName);
-  const added = [], unmatched = new Set();
-  for (const [department, people] of Object.entries(records)) {
+  const added = [], widened = [], unmatched = new Set();
+  for (const department of permissions.DEPARTMENTS) {
+    const people = records[department] || {};
     const existing = await db.collection('departments').doc(department).collection('members').get();
     const haveUid = new Set(), haveName = new Set();
-    existing.docs.forEach(document => { haveUid.add(document.id); haveName.add(String((document.data() || {}).memberName || '').trim()); });
+    for (const document of existing.docs) {
+      const profile = document.data() || {};
+      haveUid.add(document.id);
+      haveName.add(String(profile.memberName || '').trim());
+      const all = permissions.DEPARTMENT_DUTIES[department] || [];
+      const untouched = profile.provenance && profile.provenance.source === 'schedule' &&
+        ((profile.fieldAttribution || {}).eligibleDuties || {}).source === 'schedule';
+      if (department !== 'Worship' && untouched && (profile.eligibleDuties || []).length < all.length) {
+        await document.ref.update({ eligibleDuties: all.slice() });
+        widened.push({ department, name: profile.memberName });
+      }
+    }
     for (const [name, record] of Object.entries(people)) {
       if (haveName.has(name)) continue;
       const memberUid = uidFor(name);
@@ -98,9 +119,9 @@ async function addServingMembers(db, { today, now = Date.now(), canonicalName, l
       added.push({ department, name, status: profile.status });
     }
   }
-  const result = { added, unmatched: Array.from(unmatched).sort() };
-  if (logger && (added.length || unmatched.size)) {
-    logger.info('serving members added', { added: added.length, inactive: added.filter(item => item.status === 'inactive').length, unmatched: result.unmatched.length });
+  const result = { added, widened, unmatched: Array.from(unmatched).sort() };
+  if (logger && (added.length || widened.length || unmatched.size)) {
+    logger.info('serving members added', { added: added.length, inactive: added.filter(item => item.status === 'inactive').length, widened: widened.length, unmatched: result.unmatched.length });
   }
   return result;
 }

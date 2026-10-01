@@ -24,7 +24,9 @@ export function canonicalName(name, nameMap) {
 }
 
 function split(name) {
-  const match = String(name || '').trim().match(/^([A-Za-z])(?:\.|,)?\s*(.*)$/);
+  // A title is one letter followed by a dot, comma or space: "B. Anthony", "M.Chad".
+  // "Bridgette" has no title and shows as it is.
+  const match = String(name || '').trim().match(/^([A-Za-z])(?:[.,]\s*|\s+)(.*)$/);
   if (!match) return null;
   const words = match[2].trim().split(/\s+/).filter(Boolean);
   return { title: match[1].toUpperCase() + '.', first: (words[0] || '').replace(/[.,]+$/g, ''), words };

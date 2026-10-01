@@ -8,7 +8,8 @@
    duties, an administrator's override with a reason, and delete. */
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
-import { data, ui, feature, nameOf } from '../../store.js';
+import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';
+
 import { render as redraw, renderSoon, goTo } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
@@ -19,7 +20,7 @@ import { clockTime, todayISO, addMonths, monthName, longDate, weekdayShort, dayO
 import { canTake } from '../../lib/availability.js';
 import { openDoubleDuties, doubleDuties, isMarkedOk } from '../../lib/conflicts.js';
 import { workload, suggestReplacements, usualDuties } from '../../lib/workload.js';
-import { fill } from '../../lib/fill.js';
+import { fill, fillDuties, FILL_MODES } from '../../lib/fill.js';
 import { isAdmin, canCreateService, canEditDuty, canEditSongsFor, canAcknowledgeConflict } from '../../services/access.js';
 import { roster, profileOf, profileNamed, loadRoster, assign, unassign, departments as departmentState, legacyRoster } from '../../services/departments.js';
 import { addService, updateService, deleteService, markDoubleDuty } from '../../services/schedule.js';
@@ -28,6 +29,8 @@ import { saveChanges, reasonText } from '../../services/planner.js';
 import { fb, write, problem } from '../../firebase.js';
 import { managedDepartment } from './index.js';
 
+/* How Fill chooses (Auto, Rotation or Random), remembered on this device. */
+const fillMode = () => ui.plan.fillMode || readText('wds-fill-mode', 'auto');
 const find = id => data.services.find(service => serviceId(service) === id);
 const busy = new Set();
 const KEEP = '__current';
@@ -311,7 +314,9 @@ export function render() {
           <button type="button" class="icon-button" data-act="plan-month" data-step="1" aria-label="Next month">›</button>
         </div>
       </div>
-      ${canFill ? html`<button type="button" class="primary" data-act="plan-fill"${proposals || ui.plan.busy ? ' disabled' : ''}>Fill empty duties</button>` : ''}
+      ${canFill ? html`<div class="fill-controls">
+        <select data-change="plan-fill-mode" aria-label="How to fill">${FILL_MODES.map(([value, label]) => html`<option value="${value}"${fillMode() === value ? ' selected' : ''}>${label}</option>`)}</select>
+        <button type="button" class="primary" data-act="plan-fill"${proposals || ui.plan.busy ? ' disabled' : ''}>Fill empty duties</button></div>` : ''}
     </div>
     ${addForm()}
     <datalist id="worship-types">${WORSHIP_TYPES.map(type => html`<option>${type}</option>`)}</datalist>
@@ -379,16 +384,18 @@ defineActions({
       saveCell(service, duty, el.value);
     }
   },
+  'plan-fill-mode': el => { ui.plan.fillMode = el.value; writeText('wds-fill-mode', el.value); },
   'plan-fill': {
     allowed: () => departmentsShown().some(department => department.duties.some(canEditDuty)),
     run: () => {
       const departments = departmentsShown();
       if (departments.some(department => !roster(department.name).length)) { notice('The rosters are still loading. Try again in a moment.', true); return; }
       const editable = departments.flatMap(department => department.duties).filter(canEditDuty);
-      const usual = usualDuties(data.services);
+      const dutiesOf = fillDuties(data.services, todayISO());
       const services = data.services.filter(service => service.date.startsWith(month()) && isUpcoming(service));
       const stats = workload(data.services, data.members, todayISO());
-      const result = fill(services, service => usual(service).filter(duty => editable.includes(duty)), duty => roster(departmentOf(duty).name), stats);
+      const result = fill(services, service => dutiesOf(service).filter(duty => editable.includes(duty)), duty => roster(departmentOf(duty).name), stats,
+        { mode: fillMode(), history: data.services });
       ui.plan.proposals = {};
       result.proposals.forEach(item => { ui.plan.proposals[keyOf(item.serviceId, item.duty)] = { memberUid: item.memberUid, memberName: item.memberName }; });
       ui.plan.unfilled = result.unfilled.length;

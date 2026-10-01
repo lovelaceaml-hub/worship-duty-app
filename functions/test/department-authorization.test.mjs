@@ -301,6 +301,12 @@ test('date exceptions override recurring availability at DST boundary dates', ()
   assert.equal(authz.authorizeAssignment(leader, assignment({ serviceDate: '2026-11-01' }), fall).allowed, true);
 });
 
+test('a service time the member has not set counts as available', () => {
+  const unset = profile({ availability: { recurring: {}, exceptions: {} } });
+  assert.equal(authz.effectiveAvailability(unset, '2026-10-03', 'morning'), 'available');
+  assert.equal(authz.authorizeAssignment(leader, assignment({ serviceDate: '2026-10-03' }), unset).allowed, true);
+});
+
 test('administrator override is explicit, audited by the handler, and profile-neutral', async () => {
   const db = new FakeDb();
   const handlers = createDepartmentHandlers({ db, now: () => 500 });

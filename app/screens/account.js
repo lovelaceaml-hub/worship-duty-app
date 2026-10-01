@@ -48,7 +48,7 @@ function availability() {
     <h3 class="card-subtitle">Every week</h3>
     <div class="availability-grid">${SERVICE_LABELS.map(label => {
       const key = timeKey(label);
-      const on = current.recurring[key] === 'available';
+      const on = current.recurring[key] !== 'unavailable';
       return html`<label class="availability-row"><span>${label}</span>
         <select data-change="availability-week" data-key="${key}">
           <option value="available"${on ? ' selected' : ''}>Available</option>

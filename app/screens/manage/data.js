@@ -7,7 +7,7 @@ import { renderSoon } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { fb, write, problem } from '../../firebase.js';
 import { isAdmin } from '../../services/access.js';
-import { downloadBackup, importSheetNow, lastSheetImport, sheet, checkSheet, addServiceYear } from '../../services/data-tools.js';
+import { downloadBackup, importSheetNow, lastSheetImport, sheet, checkSheet, addServiceYear, renameMember } from '../../services/data-tools.js';
 import { todayISO } from '../../lib/dates.js';
 import { dutyName } from '../../config/duties.js';
 
@@ -73,8 +73,28 @@ function yearCard() {
   </section>`;
 }
 
+/* Names written without a title, such as "Bridgette", come first. */
+const untitled = name => !/^[A-Za-z][.,]\s*\S/.test(name) && !/^[A-Za-z]\s+\S/.test(name);
+
+function renameCard() {
+  const names = data.members.slice().sort((a, b) => (untitled(b) - untitled(a)) || a.localeCompare(b));
+  const missing = names.filter(untitled);
+  return html`<section class="card">
+    <h3 class="card-subtitle">Fix a member's name</h3>
+    <p class="hint">Changes the name everywhere: the member list, every service, departments, song lists and requests. The member keeps their sign-in and PIN, and no one gets a duty alert. If the correct name is already a member, the two become one.
+      ${missing.length ? html` ${plural(missing.length, 'name has', 'names have')} no title (B., S., D., M., E., P.) and ${missing.length === 1 ? 'is' : 'are'} listed first.` : ''}</p>
+    <form class="inline-form" data-act="member-rename">
+      <select name="from" aria-label="Current name" required><option value="">Current name</option>
+        ${names.map(name => html`<option value="${name}">${name}${untitled(name) ? ' (no title)' : ''}</option>`)}</select>
+      <input type="text" name="to" maxlength="80" placeholder="Correct name, e.g. S. Bridgette" aria-label="Correct name" required>
+      <button type="submit" class="primary"${sheet.renaming ? ' disabled' : ''}>${sheet.renaming ? 'Saving…' : 'Fix name'}</button>
+    </form>
+  </section>`;
+}
+
 export function render() {
   return html`
+    ${isAdmin() ? renameCard() : ''}
     ${importCard()}
     ${writeCard()}
     ${yearCard()}
@@ -97,6 +117,19 @@ async function saveSetting(fields, done) {
 }
 
 defineActions({
+  'member-rename': {
+    allowed: () => isAdmin(),
+    run: async form => {
+      const values = new FormData(form);
+      const from = String(values.get('from') || '');
+      const to = String(values.get('to') || '').trim().replace(/\s+/g, ' ');
+      if (!from || !to) return;
+      const merge = data.members.includes(to);
+      if (!confirm(merge ? '"' + to + '" is already a member. Make "' + from + '" and "' + to + '" one member, named "' + to + '"?'
+        : 'Change "' + from + '" to "' + to + '" everywhere?')) return;
+      if (await renameMember(from, to)) form.reset();
+    }
+  },
   'sheet-import': { allowed: () => isAdmin(), run: () => importSheetNow() },
   'sheet-url': {
     allowed: () => isAdmin(),

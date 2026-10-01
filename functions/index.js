@@ -28,6 +28,7 @@ const sheetSync = require('./sheet-sync');
 const { serviceYear } = require('./service-year');
 const { dutyName } = require('./names');
 const { addServingMembers } = require('./serving-members');
+const { renameMember: renameMemberEverywhere } = require('./rename-member');
 
 initializeApp();
 const db = getFirestore();
@@ -1077,11 +1078,33 @@ exports.servingMembers = onSchedule(
   async () => {
     try {
       const result = await addServingMembers(db, { today: pacificDate(), canonicalName: canonicalMemberName, logger });
-      logger.info('servingMembers: done', { added: result.added.length, unmatched: result.unmatched });
+      logger.info('servingMembers: done', { added: result.added.length, widened: result.widened.length, unmatched: result.unmatched });
     } catch (error) {
       logger.error('servingMembers: failed', { error: String(error && error.message || error) });
     }
   });
+
+/* Manage, Data, Fix a member's name. Administrators only. */
+exports.renameMember = onCall({ region: REGION }, async request => {
+  const actor = await callableActor(request);
+  if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
+    throw new HttpsError('permission-denied', 'Only an administrator can fix a name.');
+  }
+  const data = request.data || {};
+  try {
+    const result = await renameMemberEverywhere(db, {
+      from: data.from, to: data.to,
+      newAccount: async name => Object.assign(memberRoleRecord(name), {
+        pinHash: await hashPin(memberRoleRecord(name).mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN), active: true, roleVersion: 1
+      })
+    });
+    logger.info('renameMember', result);
+    return Object.assign({ ok: true }, result);
+  } catch (error) {
+    if (error && ['invalid-argument', 'not-found', 'already-exists'].includes(error.code)) throw new HttpsError(error.code, error.message);
+    throw error;
+  }
+});
 
 /* Manage, Data, Import now. Administrators only. */
 exports.syncSheetNow = onCall({ region: REGION }, async request => {
