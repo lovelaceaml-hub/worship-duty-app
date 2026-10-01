@@ -252,7 +252,7 @@ test('a leader makes and cancels an invite link; a member opens one and joins', 
   await banner(page, 'You joined Media.');
   assert.deepEqual(await calls(page, 'acceptDepartmentInvitation'), [{ token }]);
   await openAccount(page, 'availability');
-  await page.locator('.availability', { hasText: 'Saved for Media.' }).waitFor();
+  await page.locator('.availability', { hasText: 'Applies to Media.' }).waitFor();
   assert.deepEqual(errors, []);
   await context.close();
 });

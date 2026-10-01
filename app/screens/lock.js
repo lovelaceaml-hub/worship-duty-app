@@ -27,7 +27,7 @@ function error(text) {
 
 /* The new-PIN form, on the first-sign-in screen and in Settings. `extra`
    adds buttons after Save. */
-function pinForm(extra = '') {
+export function pinForm(extra = '') {
   const busy = ui.signIn.busy;
   return html`<form class="inline-form pin-form" data-act="change-pin">
       <input type="password" id="new-pin" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="6" autocomplete="new-password" aria-label="New PIN" placeholder="New PIN" required>
