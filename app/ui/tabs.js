@@ -1,7 +1,8 @@
 /* The main tabs: Schedule, My Duties, Presider, Manage. On phones they float
    at the bottom of the screen. A swipe left or right on the page moves to the
-   next or previous tab. A green dot on My Duties means a new duty; a red dot
-   on Manage means a request or double duty needs a look. */
+   next or previous tab. A green dot on My Duties means the member's duties
+   changed; a red dot on Manage means a request or double duty needs a look.
+   Availability and Settings open inside My Duties, so it stays marked. */
 import { ui } from '../store.js';
 import { accountView } from './header.js';
 
@@ -16,13 +17,13 @@ export function paintTabs({ inApp, presider, manager, newDuties, attention }) {
     const tab = button.dataset.tab;
     if (tab === 'songs') button.hidden = !presider;
     if (tab === 'manage') button.hidden = !manager;
-    const active = tab === ui.tab && !accountView();
+    const active = tab === ui.tab;
     button.classList.toggle('is-active', active);
-    if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
+    if (active) button.setAttribute('aria-current', accountView() ? 'true' : 'page'); else button.removeAttribute('aria-current');
     const dot = tab === 'my' ? newDuties && ui.tab !== 'my' : tab === 'manage' ? attention && ui.tab !== 'manage' : false;
     button.querySelector('.tab-dot').hidden = !dot;
-    const label = LABELS[tab] + (dot ? (tab === 'my' ? ', new duty' : ', needs a look') : '');
-    button.setAttribute('aria-label', label);
+    const label = LABELS[tab] + (dot ? (tab === 'my' ? ', duties changed' : ', needs a look') : '');
+    if (button.getAttribute('aria-label') !== label) button.setAttribute('aria-label', label);
   });
 }
 

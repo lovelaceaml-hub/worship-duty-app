@@ -3,12 +3,13 @@
    from the New Song list; Services lists every service; History shows what
    has been sung. */
 import { defineActions } from '../actions.js';
-import { data, ui, writeText } from '../store.js';
+import { data, ui, nameOf, writeText } from '../store.js';
 import { notice } from '../ui/banners.js';
+import { replaceMarkup } from '../ui/replace.js';
 import { planner, view, SECTIONS } from './state.js';
 import { canEdit, canManageSongs } from './access.js';
 import { loadSeed, loadPublished, songLine, statsFor } from './catalog.js';
-import { roleLines, songSections } from './cards.js';
+import { roleLines, songSections, missingSongs } from './cards.js';
 import { updateService } from '../services/schedule.js';
 import {
   listen, ensureSetlist, addSong, removeSong, moveSong, setSlot, clearSlot, confirmSongs,
@@ -23,9 +24,10 @@ const wired = new WeakSet();
 
 const BODIES = { home, library, services, history };
 
+/* Like the app's redraw, this keeps focus, unsaved fields and scrolling. */
 export function draw() {
   if (!root || !root.isConnected) return;
-  root.innerHTML = String(frame(BODIES[view.section]()));
+  replaceMarkup(root, String(frame(BODIES[view.section]())));
 }
 
 function findService(id) { return data.services.find(service => serviceId(service) === id) || null; }
@@ -84,12 +86,15 @@ export function mount(element) {
 
 /* ---- actions ---- */
 
-/* The service card as a Signal message: who prays, then each song list. */
+/* The service card as a Signal message: who presides and prays, then each
+   song list under its own heading. Each song line stays "* 003 Title". */
 function signalText(setlist) {
   const service = findService(setlist.id);
+  const presider = (service ? (service.assignments || {}).Presider : setlist.presider) || '';
   const head = [setlist.worshipType + ' ' + setlist.serviceLabel + ' - ' + shortDate(setlist.date)]
-    .concat(roleLines(setlist, service).filter(([, value]) => value).map(([label, value]) => label + ': ' + value));
-  const sections = songSections(setlist, service)
+    .concat([['Presider', presider ? nameOf(presider) : '']].concat(roleLines(setlist, service))
+      .filter(([, value]) => value).map(([label, value]) => label + ': ' + value));
+  const sections = songSections(setlist)
     .map(section => section.title + '\n\n' + section.ids.map(songLine).filter(Boolean).map(line => '* ' + line).join('\n'));
   return [head.join('\n')].concat(sections.length ? [sections.join('\n\n\n')] : []).join('\n\n');
 }
@@ -102,8 +107,12 @@ function downloadHistory() {
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' }));
   link.download = 'song-history-' + todayISO() + '.csv';
+  // Some browsers cancel a download whose link is not on the page or whose
+  // address is freed at once.
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(link.href);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 30000);
 }
 
 const listOf = el => planner.setlists[el.dataset.id];
@@ -111,7 +120,7 @@ const canEditList = el => !!listOf(el) && canEdit(listOf(el));
 
 defineActions({
   'song-section': el => { view.section = el.dataset.section; view.slot = null; view.runsheet = null; draw(); },
-  'song-scope': el => { view.scope = el.dataset.scope === 'all' ? 'all' : 'mine'; view.showPast = false; draw(); },
+  'song-scope': el => { view.scope = el.dataset.scope === 'all' ? 'all' : 'mine'; view.scopeChosen = true; view.showPast = false; draw(); },
   'song-toggle-past': () => { view.showPast = !view.showPast; draw(); },
   'song-toggle-songs': el => { view.songsShown[el.dataset.id] = el.getAttribute('aria-expanded') !== 'true'; draw(); },
   'song-runsheet': el => { view.runsheet = el.dataset.id; draw(); window.scrollTo({ top: 0 }); },
@@ -132,15 +141,7 @@ defineActions({
     }
   },
   'song-help-hide': () => { view.helpHidden = true; writeText('nss-help-dismissed', '1'); draw(); },
-  'song-search': el => {
-    view.search = el.value;
-    view.page = 0;
-    view.more = 0;
-    const caret = el.selectionStart;
-    draw();
-    const input = root && root.querySelector('[data-input="song-search"]');
-    if (input) { input.focus(); try { input.setSelectionRange(caret, caret); } catch (_error) { /* not a text field */ } }
-  },
+  'song-search': el => { view.search = el.value; view.page = 0; view.more = 0; draw(); },
   'song-category': el => { view.category = el.dataset.category; view.page = 0; view.more = 0; draw(); },
   'song-sort': el => { view.sort = el.value; view.page = 0; view.more = 0; draw(); },
   'song-page': el => { view.page = Number(el.dataset.page); view.more = 0; draw(); root.querySelector('.song-controls').scrollIntoView({ block: 'start' }); },
@@ -170,7 +171,15 @@ defineActions({
     }
   },
   'song-slot-cancel': () => { view.slot = null; draw(); },
-  'song-confirm': { allowed: canEditList, run: el => { confirmSongs(el.dataset.id); draw(); } },
+  'song-confirm': {
+    allowed: canEditList,
+    run: el => {
+      const missing = missingSongs(listOf(el), findService(el.dataset.id));
+      if (missing.length && !confirm(missing.join(' ') + ' Confirm these songs anyway?')) return;
+      confirmSongs(el.dataset.id);
+      draw();
+    }
+  },
   'song-mark-sung': {
     allowed: canEditList,
     run: el => { if (confirm('Mark these songs as sung? This adds one to each song’s count. Do this after the service.')) markSung(el.dataset.id); }

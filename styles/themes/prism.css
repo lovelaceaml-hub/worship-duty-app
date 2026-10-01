@@ -38,6 +38,7 @@ html[data-appearance="prism"] {
   --focus: #6a82ff;
   --radius: 16px;
   --radius-small: 9px;
+  --field-radius: 10px;
   --font: "Inter", "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --gutter: 44px;
   --page: 1638px;
@@ -174,7 +175,7 @@ html[data-appearance="prism"] .brand { gap: 12px; }
 html[data-appearance="prism"] .brand-mark { position: relative; width: 41px; height: 41px; background: var(--accent-fill); color: #fff; font-size: 15px; font-weight: 720; letter-spacing: -0.04em; }
 html[data-appearance="prism"] .brand-mark::after { content: ""; position: absolute; right: -2px; bottom: -2px; box-sizing: border-box; width: 13px; height: 13px; border: 3px solid var(--surface); border-radius: 50%; background: var(--badge-dot); }
 html[data-appearance="prism"] .brand-name { color: var(--ink); font-size: 14px; font-weight: 800; letter-spacing: 0.045em; line-height: 1.2; }
-html[data-appearance="prism"] .brand-screen { margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: 0.17em; line-height: 1.3; }
+html[data-appearance="prism"] .brand-screen { margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: 0.15em; line-height: 1.3; }
 html[data-appearance="prism"] .sync-status { min-height: 30px; padding: 4px 11px; border: 0; border-radius: 999px; background: var(--subtle); color: var(--muted); font-size: 11.5px; font-weight: 700; box-shadow: none; }
 html[data-appearance="prism"] .sync-status::before { width: 6px; height: 6px; }
 html[data-appearance="prism"] .sync-status.is-live { background: var(--ok-soft); color: var(--ok); }
@@ -193,7 +194,7 @@ html[data-appearance="prism"] .account-menu button:focus-visible { background: v
 html[data-appearance="prism"] .account-menu .account-sign-out { border-top-color: var(--hairline); border-radius: 0 0 12px 12px; color: var(--danger); }
 html[data-appearance="prism"] .account-menu .account-sign-out:hover,
 html[data-appearance="prism"] .account-menu .account-sign-out:focus-visible { background: var(--danger-soft); color: var(--danger); }
-html[data-appearance="prism"] .account-who { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+html[data-appearance="prism"] .account-who { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 
 /* ---- main tabs: a pill group in the header row on wider screens ---- */
 
@@ -271,7 +272,7 @@ html[data-appearance="prism"] .empty { margin: 14px 0; padding: 34px 24px; borde
 html[data-appearance="prism"] .note { border-left-color: var(--accent-fill); }
 html[data-appearance="prism"] .tag { padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; }
 html[data-appearance="prism"] .tag.is-done { background: var(--ok-soft); color: var(--ok); }
-html[data-appearance="prism"] .status { padding: 4px 9px; border-radius: 6px; font-size: 10.5px; letter-spacing: 0.06em; }
+html[data-appearance="prism"] .status { padding: 4px 9px; border-radius: 6px; font-size: 12px; letter-spacing: 0.05em; }
 html[data-appearance="prism"] .card-note { padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--subtle); color: var(--muted); font-size: 13px; }
 html[data-appearance="prism"] .card-note.is-warning { border-color: color-mix(in srgb, var(--warn) 22%, var(--line)); background: var(--warn-soft); color: var(--warn); }
 
@@ -300,7 +301,7 @@ html[data-appearance="prism"] input[type=date],
 html[data-appearance="prism"] input[type=time],
 html[data-appearance="prism"] input[type=url],
 html[data-appearance="prism"] select,
-html[data-appearance="prism"] textarea { border-color: var(--field-line); border-radius: 10px; background: var(--surface); color: var(--ink); font-weight: 500; }
+html[data-appearance="prism"] textarea { font-weight: 500; }
 html[data-appearance="prism"] input:focus,
 html[data-appearance="prism"] select:focus,
 html[data-appearance="prism"] textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
@@ -345,8 +346,6 @@ html[data-appearance="prism"] .sections { gap: 6px; margin: -6px -6px 22px; padd
 html[data-appearance="prism"] .sections button { min-height: 40px; padding: 9px 15px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 13.5px; font-weight: 650; }
 html[data-appearance="prism"] .sections button:hover { background: var(--pill); color: var(--accent); }
 html[data-appearance="prism"] .sections button.is-active { background: var(--accent-fill); color: #fff; }
-html[data-appearance="prism"] .sections .count,
-html[data-appearance="prism"] .subnav-top .count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 5px; padding: 0 5px; border-radius: 9px; background: var(--brand-rose); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
 
 /* ---- services and duties ---- */
 
@@ -370,7 +369,6 @@ html[data-appearance="prism"] .person.is-empty { color: var(--faint); font-weigh
 html[data-appearance="prism"] .flag { background: var(--brand-rose); }
 html[data-appearance="prism"] .flag.is-ok { background: var(--flag-ok); }
 html[data-appearance="prism"] .override summary { color: var(--warn); }
-html[data-appearance="prism"] .suggest-label { color: var(--muted); }
 
 /* Manage's open service: the service details in a quiet panel, then one
    bordered group per department. */
@@ -380,10 +378,8 @@ html[data-appearance="prism"] .service-editor .duty-group-name { margin-bottom: 
 
 /* On wide screens a service's departments sit side by side. */
 @media (min-width: 900px) {
-  html[data-appearance="prism"] .month-list .service-card,
-  html[data-appearance="prism"] .manage-section .service-card:not(.is-open) { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 32px; align-items: start; }
-  html[data-appearance="prism"] .month-list .service-card > :not(.duty-group),
-  html[data-appearance="prism"] .manage-section .service-card:not(.is-open) > :not(.duty-group) { grid-column: 1 / -1; }
+  html[data-appearance="prism"] .month-list .service-card { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 32px; align-items: start; }
+  html[data-appearance="prism"] .month-list .service-card > :not(.duty-group) { grid-column: 1 / -1; }
   html[data-appearance="prism"] .service-editor .field-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
   html[data-appearance="prism"] .duty-team { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 32px; align-items: start; }
   /* Single fields and pickers keep a readable width on wide screens. */
@@ -408,7 +404,6 @@ html[data-appearance="prism"] .schedule-toolbar > .segmented { order: 5; margin:
 html[data-appearance="prism"] .schedule-filters { gap: 10px 14px; margin: 0 0 22px; padding: 14px 22px 16px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 17px 17px; background: var(--surface); box-shadow: var(--shadow); }
 html[data-appearance="prism"] .schedule-filters .search { flex: 1 1 320px; max-width: 480px; }
 html[data-appearance="prism"] .schedule-filters select { flex: 0 1 230px; }
-html[data-appearance="prism"] .schedule-filters .check { margin-left: auto; color: var(--muted); font-size: 13px; }
 html[data-appearance="prism"] .search::before { content: ""; position: absolute; top: 50%; left: 13px; width: 16px; height: 16px; transform: translateY(-50%); background: var(--faint); -webkit-mask: var(--icon-search) center / contain no-repeat; mask: var(--icon-search) center / contain no-repeat; pointer-events: none; }
 html[data-appearance="prism"] .search input { padding-left: 38px; padding-right: 38px; border-color: transparent; background: var(--canvas); }
 html[data-appearance="prism"] .search input:focus { border-color: var(--accent); background: var(--surface); }
@@ -436,10 +431,10 @@ html[data-appearance="prism"] .calendar-day.is-selected:focus-visible { outline-
 /* A faint ring in the corner of the chosen day, as Prism drew it. */
 html[data-appearance="prism"] .calendar-day.is-selected::after { content: ""; position: absolute; right: -70px; bottom: -75px; z-index: -1; width: 130px; height: 130px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 50%; }
 html[data-appearance="prism"] .calendar-date { gap: 4px; font-size: 13.5px; font-weight: 600; line-height: 1.2; }
-html[data-appearance="prism"] .calendar-you { padding: 1px 5px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 9.5px; font-weight: 750; line-height: 1.5; }
+html[data-appearance="prism"] .calendar-you { padding: 1px 5px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 750; line-height: 1.5; }
 html[data-appearance="prism"] .calendar-day.is-selected .calendar-you { background: #fff; color: var(--accent-fill); }
 html[data-appearance="prism"] .calendar-services { gap: 4px; margin-top: 4px; }
-html[data-appearance="prism"] .calendar-service { display: flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 5px; background: var(--morning-bg); color: var(--morning-ink); font-size: 10.5px; font-weight: 650; line-height: 1.4; }
+html[data-appearance="prism"] .calendar-service { display: flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 5px; background: var(--morning-bg); color: var(--morning-ink); font-size: 11px; font-weight: 650; line-height: 1.4; }
 html[data-appearance="prism"] .calendar-service::before { content: ""; flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--morning-dot); }
 html[data-appearance="prism"] .calendar-service.is-afternoon { background: var(--afternoon-bg); color: var(--afternoon-ink); }
 html[data-appearance="prism"] .calendar-service.is-afternoon::before { background: var(--afternoon-dot); }
@@ -501,24 +496,21 @@ html[data-appearance="prism"] .day-panel .edit-link::after { content: ""; flex: 
 }
 @media (max-width: 1000px) {
   html[data-appearance="prism"] .calendar-day { min-height: 92px; padding: 8px 5px; }
-  html[data-appearance="prism"] .calendar-service { font-size: 10px; }
+  html[data-appearance="prism"] .calendar-service { font-size: 11px; }
   html[data-appearance="prism"] .calendar-service::before { display: none; }
 }
 
 /* ---- My Duties ---- */
 
-/* The notification and calendar buttons at the top of My Duties sit in one
-   card with their "How this works" note, as Prism's reminders panel did. */
-html[data-appearance="prism"][data-screen="my"] #view > .button-row:first-child { margin: 0; padding: 18px 20px 4px; border: 1px solid var(--line); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; background: var(--surface); }
-html[data-appearance="prism"][data-screen="my"] #view > .button-row:first-child + .help { margin: 0 0 16px; padding: 2px 20px 10px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--radius) var(--radius); background: var(--surface); }
 html[data-appearance="prism"] .song-prompt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; margin: 0 0 16px; padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
 html[data-appearance="prism"] .song-prompt .hint { flex: 1 1 260px; margin: 0; }
 html[data-appearance="prism"] .duty-card { gap: 0 16px; margin-bottom: 12px; padding: 14px 18px 14px 14px; border-radius: 15px; }
 html[data-appearance="prism"] .duty-card:hover { border-color: color-mix(in srgb, var(--accent) 22%, var(--line)); }
+html[data-appearance="prism"] .duty-card.is-next { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 html[data-appearance="prism"] .duty-card-toggle:focus-visible { outline-offset: -3px; }
 html[data-appearance="prism"] .duty-date { border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); color: var(--accent); }
 html[data-appearance="prism"] .duty-date b { font-size: 24px; font-weight: 650; letter-spacing: -0.04em; }
-html[data-appearance="prism"] .duty-date small { color: var(--faint); font-size: 10px; font-weight: 700; }
+html[data-appearance="prism"] .duty-date small { color: var(--faint); font-size: 12px; font-weight: 700; }
 html[data-appearance="prism"] .duty-body { border-left-color: var(--line); }
 html[data-appearance="prism"] .duty-when { color: var(--ink); }
 html[data-appearance="prism"] .duty-time { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
@@ -585,7 +577,7 @@ html[data-appearance="prism"] .appearance-choice[aria-pressed="true"] { border-c
 /* ---- Presider: the song planner ---- */
 
 html[data-appearance="prism"] #song-root .planner-head { align-items: center; gap: 8px 12px; margin: 0 0 16px; padding: 12px 16px; border-radius: 12px; background: var(--note-bg); }
-html[data-appearance="prism"] #song-root .planner-role { padding: 4px 8px; border-radius: 6px; background: var(--surface); color: var(--accent); font-size: 10px; letter-spacing: 0.12em; }
+html[data-appearance="prism"] #song-root .planner-role { padding: 4px 8px; border-radius: 6px; background: var(--surface); color: var(--accent); font-size: 11px; letter-spacing: 0.12em; }
 html[data-appearance="prism"] #song-root .planner-name { font-size: 16px; }
 html[data-appearance="prism"] #song-root .planner-next { margin-left: auto; color: var(--muted); }
 html[data-appearance="prism"] #song-root .planner-sections { justify-content: flex-start; gap: 8px; margin: 0 0 22px; padding: 0 0 12px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
@@ -597,7 +589,7 @@ html[data-appearance="prism"] #song-root .svc-title { font-size: 16px; letter-sp
 html[data-appearance="prism"] #song-root .presider { border-radius: 6px; }
 html[data-appearance="prism"] #song-root .svc-role span { color: var(--muted); }
 html[data-appearance="prism"] #song-root .order { padding: 12px 16px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
-html[data-appearance="prism"] #song-root .order-head { color: var(--accent); font-size: 10.5px; letter-spacing: 0.1em; }
+html[data-appearance="prism"] #song-root .order-head { color: var(--accent); font-size: 11px; letter-spacing: 0.1em; }
 html[data-appearance="prism"] #song-root .order-step { border-bottom-color: var(--line); font-size: 14px; }
 html[data-appearance="prism"] #song-root .order-step:last-child { border-bottom: 0; }
 html[data-appearance="prism"] #song-root .order-step .num,
@@ -649,7 +641,7 @@ html[data-appearance="prism"] #song-root .pager { padding: 6px; border: 1px soli
   html[data-appearance="prism"] .brand-mark { width: 38px; height: 38px; font-size: 14px; }
   html[data-appearance="prism"] .brand-mark::after { width: 12px; height: 12px; }
   html[data-appearance="prism"] .brand-name { font-size: 14px; }
-  html[data-appearance="prism"] .brand-screen { font-size: 9.5px; letter-spacing: 0.15em; }
+  html[data-appearance="prism"] .brand-screen { font-size: 11px; letter-spacing: 0.12em; }
   html[data-appearance="prism"] .brand { min-height: 40px; }
   html[data-appearance="prism"] .sync-status { width: 20px; height: 20px; min-height: 0; padding: 0; justify-content: center; overflow: hidden; background: none; color: transparent; font-size: 0; }
   html[data-appearance="prism"] .sync-status.is-live { background: none; color: transparent; }
@@ -678,18 +670,18 @@ html[data-appearance="prism"] #song-root .pager { padding: 6px; border: 1px soli
   html[data-appearance="prism"] .picker { padding: 14px 16px; }
   html[data-appearance="prism"] .picker select { max-width: none; }
   html[data-appearance="prism"] .gate { margin-top: 24px; padding: 28px 20px 24px; }
-  html[data-appearance="prism"] .sticky-actions { bottom: calc(84px + env(safe-area-inset-bottom)); padding-right: 64px; }
 
-  /* Everything a finger taps is at least 40px tall. */
+  /* Everything a finger taps is at least 44px tall. */
   html[data-appearance="prism"] .primary.small,
   html[data-appearance="prism"] .ghost.small,
   html[data-appearance="prism"] .link,
-  html[data-appearance="prism"] .segmented button { min-height: 40px; }
-  html[data-appearance="prism"] .request-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; }
+  html[data-appearance="prism"] .chip,
+  html[data-appearance="prism"] .segmented button { min-height: 44px; }
+  html[data-appearance="prism"] .request-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
   html[data-appearance="prism"] .duty-line { min-height: 42px; }
   html[data-appearance="prism"] .availability-row select { min-height: 40px; }
-  html[data-appearance="prism"] #song-root .set-row .icon-button { min-width: 40px; min-height: 40px; }
-  html[data-appearance="prism"] #song-root .add { top: 8px; width: 40px; height: 40px; }
+  html[data-appearance="prism"] #song-root .set-row .icon-button { min-width: 44px; min-height: 44px; }
+  html[data-appearance="prism"] #song-root .add { top: 6px; width: 44px; height: 44px; }
   html[data-appearance="prism"] #song-root .song-row { min-height: 56px; padding-right: 60px; }
 
   /* Schedule toolbar: title and arrows, then Next service and the view switch. */
@@ -697,13 +689,12 @@ html[data-appearance="prism"] #song-root .pager { padding: 6px; border: 1px soli
   html[data-appearance="prism"] .month-title { grid-area: title; font-size: 22px; }
   html[data-appearance="prism"] .month-count { grid-area: count; margin: 0; font-size: 12px; }
   html[data-appearance="prism"] .month-buttons { grid-area: buttons; margin: 0; }
-  html[data-appearance="prism"] .month-buttons .icon-button { width: 40px; min-width: 40px; min-height: 40px; }
+  html[data-appearance="prism"] .month-buttons .icon-button { width: 44px; min-width: 44px; min-height: 44px; }
   html[data-appearance="prism"] .schedule-toolbar > .ghost { grid-area: next; justify-self: start; margin-top: 12px; }
   html[data-appearance="prism"] .schedule-toolbar > .segmented { grid-area: view; margin-top: 12px; }
   html[data-appearance="prism"] .schedule-filters { gap: 10px; margin-bottom: 16px; padding: 12px 14px 14px; border-radius: 0 0 14px 14px; }
   html[data-appearance="prism"] .schedule-filters .search { flex: 1 0 100%; max-width: none; }
   html[data-appearance="prism"] .schedule-filters select { flex: 1 1 150px; min-width: 0; }
-  html[data-appearance="prism"] .schedule-filters .check { margin-left: 0; }
   html[data-appearance="prism"] .search kbd { display: none; }
   html[data-appearance="prism"] .search input { padding-right: 12px; }
 
@@ -715,7 +706,7 @@ html[data-appearance="prism"] #song-root .pager { padding: 6px; border: 1px soli
   html[data-appearance="prism"] .calendar-grid > .calendar-day:nth-last-child(7) { border-bottom-left-radius: 13px; }
   html[data-appearance="prism"] .calendar-grid > .calendar-day:last-child { border-bottom-right-radius: 13px; }
   html[data-appearance="prism"] .calendar-date { flex-direction: column; justify-content: flex-start; gap: 3px; font-size: 13.5px; }
-  html[data-appearance="prism"] .calendar-you { padding: 0 4px; font-size: 9px; line-height: 14px; }
+  html[data-appearance="prism"] .calendar-you { padding: 0 4px; font-size: 11px; line-height: 14px; }
   html[data-appearance="prism"] .calendar-services { display: flex; flex-direction: row; justify-content: center; gap: 3px; margin: 0; }
   html[data-appearance="prism"] .calendar-service { width: 5px; height: 5px; padding: 0; border-radius: 50%; background: #b4c1d8; color: transparent; font-size: 0; box-shadow: none; }
   html[data-appearance="prism"] .calendar-service.is-afternoon,
@@ -754,7 +745,10 @@ html[data-appearance="prism"] #song-root .pager { padding: 6px; border: 1px soli
 /* ---- dark mode: colors the tokens cannot reach ---- */
 
 @media (prefers-color-scheme: dark) {
-  html[data-appearance="prism"] .duty-group-name { color: color-mix(in srgb, var(--dept, #aebbd3) 45%, #ffffff); }
+  /* Department colors are dark: on a dark card their names and dots are lightened. */
+  html[data-appearance="prism"] :is(.duty-group-name, .plan-group span) { color: color-mix(in srgb, var(--dept, #aebbd3) 45%, #ffffff); }
+  html[data-appearance="prism"] :is(.duty-group-name, .department-row)::before,
+  html[data-appearance="prism"] .duty-line .dot { background: color-mix(in srgb, var(--dept, #aebbd3) 60%, #ffffff); }
   html[data-appearance="prism"] .calendar-day.is-selected::after { border-color: rgba(255, 255, 255, 0.12); }
   html[data-appearance="prism"] .tab.is-active { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
   html[data-appearance="prism"] .feedback-button { border-color: rgba(255, 255, 255, 0.2); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }

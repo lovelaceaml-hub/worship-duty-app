@@ -1,7 +1,9 @@
 /* The Presider song planner. Loaded with the planner; uses the same tokens
    as base.css, so every appearance restyles it through its own tokens. */
 
-#song-root { --row-gap: 10px; }
+/* The planner's columns follow its own width (container queries below), so
+   a narrow page, such as Original's on a computer, stacks them. */
+#song-root { --row-gap: 10px; container-type: inline-size; }
 #song-root .planner-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 4px 2px 10px; }
 #song-root .planner-role { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
 #song-root .planner-name { color: var(--heading); font-size: 18px; font-weight: 750; }
@@ -33,7 +35,6 @@
 #song-root .order-head:first-child { margin-top: 0; }
 #song-root .order-step { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--hairline); font-size: 14.5px; }
 #song-root .order-step .num { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
-#song-root .order-step .step-note { color: var(--muted); }
 #song-root .order-step .who { color: var(--heading); font-weight: 650; }
 #song-root .runsheet { font-size: 17px; }
 #song-root .runsheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 4px; }
@@ -58,6 +59,7 @@
 #song-root .confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding: 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; }
 #song-root .confirm.is-changed { background: var(--danger-soft); color: var(--danger); }
 #song-root .confirm.is-done { display: block; background: var(--ok-soft); color: var(--ok); font-weight: 650; }
+#song-root .confirm-missing { display: block; margin-top: 4px; }
 #song-root .song-controls { display: grid; gap: 10px; }
 #song-root .song-controls .chips { margin: 0; }
 #song-root .sort { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 650; }
@@ -68,6 +70,8 @@
 #song-root .song:last-child { border-bottom: 0; }
 #song-root .song-row { display: grid; grid-template-columns: 44px 10px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 50px; padding: 8px 56px 8px 12px; border: 0; background: none; font-size: 14.5px; text-align: left; }
 #song-root .song-row.is-static { padding-right: 12px; border-bottom: 1px solid var(--hairline); cursor: default; }
+/* Room for the + button only where there is one (a list is open). */
+#song-root .song:not(:has(> .add)) > .song-row { padding-right: 12px; }
 #song-root .song-row.is-static:last-child { border-bottom: 0; }
 #song-root .song-row .num { color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 #song-root .song-row .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -78,12 +82,12 @@
 #song-root .add-count { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--brand-rose); color: #fff; font-size: 10px; }
 #song-root .song-detail { padding: 0 12px 12px 64px; font-size: 13.5px; }
 #song-root .song-detail .plain-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-#song-root .bar-row { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 5px 0; font-size: 13.5px; }
+#song-root .bar-row { display: grid; grid-template-columns: 100px minmax(0, 1fr) 4.5em; align-items: center; gap: 10px; padding: 5px 0; font-size: 13.5px; }
 #song-root .bar { height: 8px; overflow: hidden; border-radius: 4px; background: var(--hairline); }
 #song-root .bar span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
-#song-root .bar-row .hint { margin: 0; }
+#song-root .bar-row .hint { margin: 0; text-align: right; }
 
-@media (min-width: 900px) {
+@container (min-width: 820px) {
   #song-root .library { grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.4fr); align-items: start; }
   #song-root .library-set { position: sticky; top: 70px; }
   /* The list being built sits in the narrower column; the total shows the time. */
@@ -94,4 +98,19 @@
   #song-root .song-detail { padding-left: 12px; }
   #song-root .set-row { grid-template-columns: 40px minmax(0, 1fr) auto auto; }
   #song-root .set-row .time { display: none; }
+  /* Song titles get their own line; length and times sung sit under them. */
+  #song-root .song-row { grid-template-columns: 40px 8px auto auto minmax(0, 1fr); grid-template-areas: "num dot title title title" ". . time times ."; gap: 1px 8px; min-height: 58px; padding-top: 9px; padding-bottom: 9px; }
+  #song-root .song-row .num { grid-area: num; }
+  #song-root .song-row .dot { grid-area: dot; }
+  #song-root .song-row .title { grid-area: title; overflow: visible; white-space: normal; line-height: 1.35; }
+  #song-root .song-row .time { grid-area: time; }
+  #song-root .song-row .times { grid-area: times; }
+  #song-root .song-row.is-static { grid-template-areas: "num dot title title title" ". . times time ."; }
+}
+/* Fingers need 44px. */
+@media (pointer: coarse) {
+  #song-root .set-row .icon-button, #song-root .slot-tag { min-height: 44px; }
+  #song-root .set-row .icon-button { min-width: 44px; }
+  #song-root .add { top: 3px; width: 44px; height: 44px; }
+  #song-root .sort select { min-height: 44px; }
 }

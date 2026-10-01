@@ -5,7 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { hasChoir, hasThanks, isFeast, hasDuty } from '../../app/lib/worship.js';
-import { nextService, upcoming, past, isUpcoming, isInProgress, dutiesOf, serviceId, startTime, serviceClock } from '../../app/lib/services.js';
+import { nextService, upcoming, past, isUpcoming, isInProgress, dutiesOf, serviceId, startTime, serviceClock, byStart, nextChange } from '../../app/lib/services.js';
+import { pacificNow } from '../../app/lib/dates.js';
 
 // 2026-09-14 is in Pacific daylight time (UTC minus 7).
 const pacific = (date, time) => new Date(date + 'T' + time + ':00-07:00');
@@ -71,6 +72,50 @@ test('upcoming and past split at the start minute', () => {
   assert.equal(isUpcoming(earlyAndEvening[2], pacific('2026-09-14', '21:00')), true);
 });
 
+test('on the Sunday the clocks fall back, a 10:00 service starts at 18:00 UTC', () => {
+  const service = { date: '2026-11-01', service: 'Morning', time: '10:00' };
+  assert.equal(isUpcoming(service, new Date('2026-11-01T17:59:00Z')), true);
+  assert.equal(isUpcoming(service, new Date('2026-11-01T18:00:00Z')), false);
+  const spring = { date: '2027-03-14', service: 'Morning', time: '10:00' };
+  assert.equal(isUpcoming(spring, new Date('2027-03-14T16:59:00Z')), true);
+  assert.equal(isUpcoming(spring, new Date('2027-03-14T17:00:00Z')), false);
+});
+
+test('a list is checked against one clock reading, given as a Date or a wall time', () => {
+  const wall = pacificNow(pacific('2026-09-14', '19:30')).wall;
+  assert.deepEqual(upcoming(earlyAndEvening, wall).map(s => s.service), ['Morning']);
+  assert.equal(nextService(earlyAndEvening, wall).date, '2026-09-15');
+  assert.equal(isInProgress(earlyAndEvening[1], wall), true);
+});
+
+test('rows without a valid date sort last and never upset the order of the others', () => {
+  const valid = [
+    { date: '2026-09-15', service: 'Morning', time: '09:00' },
+    { date: '2026-09-14', service: 'Evening', time: '19:30' },
+    { date: '2026-09-14', service: 'Early Morning', time: '05:00' }
+  ];
+  const broken = [{ date: '', service: 'Morning' }, { service: 'Evening' }, { date: 'soon', service: 'Mystery' }];
+  for (let round = 0; round < 50; round++) {
+    const mixed = valid.concat(broken).map(item => [Math.random(), item]).sort((a, b) => a[0] - b[0]).map(pair => pair[1]);
+    const sorted = mixed.sort(byStart);
+    assert.deepEqual(sorted.slice(0, 3).map(s => s.date + ' ' + s.service), ['2026-09-14 Early Morning', '2026-09-14 Evening', '2026-09-15 Morning']);
+  }
+  // At the same start, an unknown label comes after the known ones.
+  const same = [{ date: '2026-09-14', time: '10:00', service: 'Bible Seminar' }, { date: '2026-09-14', time: '10:00', service: 'Morning' }];
+  assert.deepEqual(same.sort(byStart).map(s => s.service), ['Morning', 'Bible Seminar']);
+  const withDuty = valid.concat(broken).map(service => Object.assign({ assignments: { Presider: 'B. Adam' } }, service));
+  assert.deepEqual(dutiesOf('B. Adam', withDuty).slice(0, 3).map(item => item.service.date), ['2026-09-14', '2026-09-14', '2026-09-15']);
+});
+
+test('the next moment the screens change: a start, the end of three hours in progress, or midnight', () => {
+  const wall = (date, time) => Date.parse(date + 'T' + time + ':00Z');
+  assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '04:00')), wall('2026-09-14', '05:00'));
+  assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '05:00')), wall('2026-09-14', '08:00'), 'the early service stops being in progress');
+  assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '08:00')), wall('2026-09-14', '19:30'));
+  assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '22:30')), wall('2026-09-15', '00:00'), 'midnight');
+  assert.equal(nextChange([], pacific('2026-09-14', '12:00')), wall('2026-09-15', '00:00'));
+});
+
 test('the Presider planner keeps a service in progress for three hours after it starts', () => {
   const evening = earlyAndEvening[1];
   assert.equal(isInProgress(evening, pacific('2026-09-14', '19:29')), false);
@@ -102,6 +147,16 @@ test('choir song and closing prayer only at Sabbath Day and Third Day; Thanks at
   assert.ok(!hasThanks('Sabbath Day', 'Afternoon'));
   assert.ok(hasThanks('Pentecost', 'Morning') && isFeast('Feast of Trumpets'));
   for (const worship of ['Third Day', 'Prayer Week', 'Preaching Week']) assert.ok(!hasThanks(worship, 'Morning'), worship);
+});
+
+test('worship names and labels are read without extra spaces and whatever their capitals', () => {
+  assert.ok(hasChoir('Sabbath day') && hasChoir(' Third  Day '));
+  assert.ok(!isFeast('sabbath day ') && !isFeast('PRAYER WEEK') && !isFeast('  '));
+  assert.ok(hasThanks('Sabbath day', 'morning') && hasThanks(' Pentecost', 'Morning '));
+  assert.ok(hasDuty({ worship: 'Sabbath day ', service: 'Morning' }, 'Closing Prayer'));
+  assert.ok(hasDuty({ worship: 'sabbath day', service: 'morning' }, 'Prayer of Thanks'));
+  assert.ok(!hasDuty({ worship: 'third day', service: 'Morning' }, 'Prayer of Thanks'));
+  assert.ok(hasDuty({ worship: '  ', service: 'Evening' }, 'Closing Prayer'), 'a blank name is Sabbath Day');
 });
 
 test('Thanks Prayer and Closing Prayer are duties only at services that have them', () => {

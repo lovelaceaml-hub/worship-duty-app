@@ -8,6 +8,7 @@ import { defineActions } from '../actions.js';
 import { readJSON, writeJSON } from '../store.js';
 import { render } from '../render.js';
 import { notice } from '../ui/banners.js';
+import { newerRelease } from '../release.js';
 import { APPEARANCES, DEFAULT_APPEARANCE, stylesheetFor } from './registry.js';
 
 const KEY = 'wds-design-gallery-v1';
@@ -51,6 +52,13 @@ export function applySavedAppearance() {
 
 async function useAppearance(id) {
   if (!APPEARANCES[id] || forcedOriginal) return;
+  // A page from before a release reloads into the new one with this choice,
+  // rather than mixing the new stylesheet with its own screens.
+  if (stylesheetFor(id) && await newerRelease()) {
+    writeJSON(KEY, Object.assign(saved(), { mode: id, seen: true, version: 2 }));
+    location.reload();
+    return;
+  }
   try {
     await loadStylesheet(id);
   } catch (error) {
