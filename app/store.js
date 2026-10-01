@@ -31,7 +31,7 @@ export const loaded = { schedule: false, members: false, settings: false, roster
 export const ui = {
   tab: 'schedule',      // schedule, my, songs, manage
   account: '',          // '', 'availability', 'settings' (views inside My Duties)
-  manage: 'departments',// Manage section
+  manage: '',           // Manage section ('' until picked: Requests when some wait, else the month plan)
   manageDepartment: '', // department picked in Manage ('All' for administrators)
   departmentView: null, // { department, uid } while a member's profile is open
   me: '',               // signed-in member name
@@ -40,10 +40,14 @@ export const ui = {
   showPast: false,
   departmentFilter: 'All',
   schedule: { month: '', date: '', service: '', mode: 'day', query: '', chosen: false },
-  // Manage, Services: the month shown, the service whose details are open,
-  // Fill's proposals ('serviceId|duty' -> { memberUid, memberName }) and the
-  // duties it could not fill ('serviceId|duty' -> reason, see lib/fill.js).
-  plan: { month: '', open: '', proposals: {}, unfilled: {}, busy: false, scroll: false, adding: false, fillMode: '' },
+  // Manage, month plan: the month shown and the service whose details are
+  // open; Fill's proposals ('serviceId|duty' -> { memberUid, memberName })
+  // with the { department, month } they belong to, the duties Fill could not
+  // fill ('serviceId|duty' -> reason, see lib/fill.js) and the ones the last
+  // save skipped (-> { reason, memberName }); single duties being saved
+  // (-> the name going on); Fill reading the lists (filling) and what to
+  // scroll to after a redraw. See services/planner.js.
+  plan: { month: '', open: '', proposals: {}, scope: null, unfilled: {}, skipped: {}, saving: {}, busy: false, filling: false, scroll: false, scrollTo: '', adding: false, fillMode: '' },
   requestDraft: null,   // { key, note } while a member writes a change request
   availabilityDraft: null, // the member's availability while they edit it
   availabilityChanged: false,

@@ -232,56 +232,115 @@ button.service-head { cursor: pointer; }
 .suggest-label { min-width: 110px; color: var(--muted); }
 .add-service { align-items: center; }
 
-/* ---- the month planner (Manage, Services) ---- */
+/* ---- the month planner (Manage, Month plan) ---- */
 
-.plan-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 8px 0 12px; }
+.plan-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 8px 0 4px; }
 .plan-toolbar .month-nav { flex: 1 1 260px; }
 .fill-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.fill-controls select { width: auto; min-height: 42px; }
+.fill-mode { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.fill-mode select { width: auto; min-height: 42px; }
+.fill-hint { margin: 2px 2px 10px; }
+.plan-status { margin: 8px 0; }
+.plan-status p { margin: 0; }
+.plan-status .ghost { margin-top: 8px; }
 .plan-add { margin: 0 0 12px; font-size: 13.5px; }
 .plan-add summary { color: var(--accent); font-weight: 700; cursor: pointer; }
-.plan-scroll { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+/* What the marks mean, once, above the month. */
+.plan-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 2px 10px; padding: 0; list-style: none; color: var(--muted); font-size: 12.5px; }
+.plan-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.plan-key { display: inline-block; width: 16px; height: 16px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); }
+.plan-key.is-empty { background: var(--warn-soft); box-shadow: inset 3px 0 0 var(--warn); }
+.plan-key.is-proposed { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.plan-key.is-flagged { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
+.plan-key.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
+.plan-key.is-none { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 5px); }
+/* The grid scrolls sideways inside its box (positioned, so nothing in it
+   widens the page), with a scrollbar for mouse users. On a computer the
+   page takes the window's width while the grid is on it. */
+.plan-scroll { position: relative; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+@media (hover: hover) and (pointer: fine) {
+  .plan-scroll.scroll-x { scrollbar-width: thin; scrollbar-color: var(--field-line) transparent; }
+  .plan-scroll.scroll-x::-webkit-scrollbar { display: block; height: 10px; }
+  .plan-scroll.scroll-x::-webkit-scrollbar-thumb { border-radius: 5px; background: var(--field-line); }
+}
+@media (min-width: 900px) {
+  .app:has(.plan-grid) { max-width: 1600px; }
+}
 .plan-grid { border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .plan-grid th, .plan-grid td { padding: 0; border-right: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface); }
+.plan-grid td.plan-cell { min-width: 112px; vertical-align: top; }
 .plan-grid thead th { position: sticky; top: 0; z-index: 2; vertical-align: bottom; }
 .plan-grid tbody th[scope="row"], .plan-grid .plan-corner { position: sticky; left: 0; z-index: 1; padding: 6px 12px; color: var(--heading); font-weight: 650; text-align: left; white-space: nowrap; }
 .plan-grid .plan-corner { z-index: 3; color: var(--muted); font-size: 12px; font-weight: 700; }
-.plan-service { display: grid; gap: 1px; width: 100%; min-width: 96px; padding: 8px 10px; border: 0; background: none; color: var(--heading); font-size: 12px; line-height: 1.3; text-align: left; }
+.plan-service { display: grid; gap: 1px; width: 100%; min-width: 112px; padding: 8px 10px; border: 0; background: none; color: var(--heading); font-size: 12px; line-height: 1.3; text-align: left; }
 .plan-service b { font-size: 13.5px; }
 .plan-service span { color: var(--muted); }
-.plan-service .plan-flag { color: var(--warn); font-weight: 700; }
+.plan-service .plan-count { font-weight: 700; }
+.plan-service .plan-count.is-empty { color: var(--warn); }
+.plan-service .plan-count.is-look { color: var(--danger); }
 .plan-service[aria-expanded="true"] { background: var(--accent-soft); }
 .plan-head.is-past .plan-service, .plan-day.is-past .plan-service { opacity: 0.6; }
 .plan-grid .plan-group th { padding: 14px 12px 4px; border-right: 0; text-align: left; }
 .plan-group span { color: var(--dept, var(--muted)); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 /* The label spans the whole row, so it is the label that stays in view. */
 .plan-grid .plan-group span { position: sticky; left: 12px; }
-.plan-grid .plan-cell select, .plan-lines .plan-cell select {
-  width: 100%; min-width: 96px; min-height: 0; height: 38px; padding: 0 8px; border: 0; border-radius: 0; box-shadow: none;
-  background-color: transparent; color: var(--ink); font-size: 13px; text-overflow: ellipsis;
-}
-.plan-grid .plan-cell select:focus, .plan-lines .plan-cell select:focus { border: 0; box-shadow: none; }
-.plan-grid .plan-cell select:focus-visible, .plan-lines .plan-cell select:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
-.plan-cell.is-unusual { background: color-mix(in srgb, var(--canvas) 70%, var(--surface)); }
-.plan-cell.is-proposed { background: var(--accent-soft); }
-.plan-grid .plan-cell.is-proposed select, .plan-lines .plan-cell.is-proposed select { color: var(--accent); font-weight: 700; }
-.plan-grid .plan-cell.is-flagged select, .plan-lines .plan-cell.is-flagged select { color: var(--danger); font-weight: 700; }
-.plan-cell.is-busy { opacity: 0.55; }
-.plan-cell.is-unfilled { background: var(--warn-soft); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--warn) 45%, transparent); }
+.plan-context th[scope="row"] { color: var(--muted); font-weight: 600; }
+/* One duty: the name as it shows (long names wrap), with its select laid
+   over it, then one short line saying why when something needs saying. */
+.plan-pick { position: relative; display: block; }
+.plan-pick select { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.plan-pick:focus-within { outline: 3px solid var(--focus); outline-offset: -3px; }
+.plan-value { display: block; min-height: 38px; padding: 9px 22px 9px 9px; color: var(--ink); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.plan-pick .plan-value::after { content: "\25BE"; position: absolute; top: 10px; right: 8px; color: var(--faint); font-size: 11px; }
+.plan-name .plan-value { padding-right: 9px; color: var(--muted); }
+.plan-note { display: block; padding: 0 9px 8px; font-size: 11.5px; font-weight: 650; line-height: 1.3; }
+.plan-note.is-danger { color: var(--danger); }
+.plan-note.is-warn { color: var(--warn); }
+.plan-note.is-calm { color: var(--ok); }
+.plan-note.is-quiet { color: var(--faint); }
+.plan-cell.is-empty { background: var(--warn-soft); box-shadow: inset 3px 0 0 var(--warn); }
+.plan-cell.is-empty .plan-value, .plan-cell.is-unusual .plan-value { font-style: italic; font-weight: 400; }
+.plan-cell.is-empty .plan-value { color: var(--warn); }
+.plan-cell.is-unusual .plan-value { color: var(--faint); }
+.plan-cell.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
+.plan-cell.is-proposed { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.plan-cell.is-proposed .plan-value { color: var(--accent); font-weight: 700; }
+.plan-cell.is-proposed.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
+.plan-cell.is-flagged { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
+.plan-cell.is-flagged .plan-value { color: var(--danger); font-weight: 700; }
+.plan-cell.is-unfilled { box-shadow: inset 3px 0 0 var(--warn), inset 0 0 0 2px color-mix(in srgb, var(--warn) 45%, transparent); }
+.plan-cell.is-busy { opacity: 0.6; }
 .plan-cell.is-none { background: repeating-linear-gradient(135deg, transparent 0 6px, var(--hairline) 6px 7px); }
-.plan-name { display: block; padding: 10px; color: var(--muted); white-space: nowrap; }
 .plan-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-top: 12px; font-size: 13.5px; }
+.plan-actions > span { flex: 1 1 280px; }
 .plan-actions .button-row { margin: 0; }
 .plan-days { display: grid; gap: 10px; }
 .plan-day { padding: 4px 14px 8px; }
-.plan-day .plan-service { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 8px 0; font-size: 13px; }
+.plan-day.is-collapsed { padding-bottom: 4px; }
+.plan-day .plan-service { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-height: 44px; padding: 8px 0; font-size: 13px; }
 .plan-day .plan-service b { font-size: 15px; }
-.plan-day .plan-service .plan-flag { margin-left: auto; }
+.plan-day .plan-service .plan-count:first-of-type { margin-left: auto; }
+.plan-praying { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
 .plan-lines { width: 100%; border-collapse: collapse; }
-.plan-lines th[scope="row"] { width: 44%; padding: 0 8px 0 0; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: left; }
+.plan-lines th[scope="row"] { width: 40%; padding: 0 8px 0 0; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: left; vertical-align: top; padding-top: 12px; }
 .plan-lines th, .plan-lines td { border-top: 1px solid var(--hairline); }
-.plan-lines .plan-group th { padding: 12px 0 2px; border-top: 0; }
-.plan-lines .plan-cell select { height: 42px; padding: 0 4px; font-size: 16px; }
+.plan-lines .plan-value { min-height: 44px; padding: 11px 24px 11px 8px; font-size: 15px; }
+.plan-lines .plan-pick .plan-value::after { top: 13px; }
+/* A duty in a service's details: the same control, in a field's box. */
+.plan-field .plan-pick, .plan-field .plan-name { display: block; border: 1px solid var(--field-line); border-radius: 8px; background: var(--surface); }
+.plan-field .plan-value { min-height: 44px; padding: 11px 26px 11px 12px; font-size: 15px; }
+.plan-field .plan-pick .plan-value::after { top: 14px; right: 10px; }
+.plan-field .plan-note { padding: 4px 2px 0; }
+.plan-field.is-empty .plan-pick { border-color: color-mix(in srgb, var(--warn) 45%, var(--surface)); background: var(--warn-soft); }
+.plan-field.is-empty .plan-value { color: var(--warn); font-style: italic; font-weight: 400; }
+.plan-field.is-unusual .plan-value { color: var(--faint); font-style: italic; font-weight: 400; }
+.plan-field.is-paired .plan-pick { box-shadow: inset 3px 0 0 var(--ok); }
+.plan-field.is-proposed .plan-pick { border-color: var(--accent); background: var(--accent-soft); }
+.plan-field.is-proposed .plan-value { color: var(--accent); font-weight: 700; }
+.plan-field.is-flagged .plan-pick { border-color: var(--danger); background: var(--danger-soft); }
+.plan-field.is-flagged .plan-value { color: var(--danger); font-weight: 700; }
+.plan-field.is-busy { opacity: 0.6; }
+.plan-detail { scroll-margin-top: 72px; }
 .plan-day .plan-detail { padding-top: 4px; }
 .sheet-check { margin-top: 10px; font-size: 13.5px; }
 
@@ -393,7 +452,7 @@ button.service-head { cursor: pointer; }
 .conflict-head .link { flex: none; white-space: nowrap; }
 .open-duty { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0; padding: 6px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
 .open-duty:last-child { border-bottom: 0; }
-.open-duty-when { min-width: 140px; color: var(--heading); font-weight: 650; }
+.open-duty-when { min-width: 140px; min-height: 0; padding: 0; color: var(--heading); font-weight: 650; }
 
 /* Departments: one row each, name then who leads it. */
 .department-list { padding: 4px 0; }
@@ -406,16 +465,26 @@ button.service-head { cursor: pointer; }
 .list { display: grid; }
 .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
 .list-row:last-child { border-bottom: 0; }
-.member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--line); border-bottom: 0; background: var(--surface); }
+/* The roster: each member one row that opens their profile. */
+.member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 11px 14px; border: 1px solid var(--line); border-bottom: 0; background: var(--surface); color: inherit; font: inherit; text-align: left; }
 .member-row:first-child { border-radius: 9px 9px 0 0; }
 .member-row:last-child { border-bottom: 1px solid var(--line); border-radius: 0 0 9px 9px; }
 .member-row:only-child { border-radius: 9px; }
+.member-row:hover { background: var(--accent-soft); }
 .member-row.is-inactive { background: var(--canvas); }
-.member-row .button-row { margin: 0; }
-.member-open { display: grid; gap: 2px; min-width: 0; padding: 0; border: 0; background: none; text-align: left; }
+.member-open { display: grid; gap: 2px; min-width: 0; }
 .member-name { font-weight: 750; }
 .member-open .hint { margin: 0; }
-.member-open .tag { justify-self: start; }
+.member-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.member-tags:empty { display: none; }
+.member-tags .tag.is-warning { background: var(--warn-soft); color: var(--warn); }
+.member-go { color: var(--faint); font-size: 22px; line-height: 1; }
+/* A member's profile. */
+.profile-status { background: var(--ok-soft); color: var(--ok); vertical-align: middle; }
+.profile-status.is-inactive { border: 1px solid var(--line); background: var(--canvas); color: var(--muted); }
+.profile-actions { margin: 0 0 12px; }
+.profile-covers { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+.profile-save > span { flex: 1 1 160px; color: var(--muted); font-size: 13px; }
 .invite { margin: 10px 0; padding: 12px; border: 1px dashed var(--line); border-radius: 10px; }
 .invite input { font-size: 13px; }
 .invite .button-row { margin-top: 8px; }
