@@ -150,22 +150,29 @@ function memoryDb(docs = {}, { live = false } = {}) {
       commit: () => { writes.forEach(check); writes.forEach(apply); }
     };
   }
+  // Transactions run one after another, as Firestore's locking makes them
+  // appear to: two that read the same document never both commit stale.
+  let queue = Promise.resolve();
   return {
     store,
     collection,
     doc: path => ref(path),
-    async runTransaction(work) {
-      const pending = writeSet();
-      const result = await work({
-        getAll: (...refs) => Promise.all(refs.map(item => item.get())),
-        get: item => item.get(),
-        set: (item, value, options) => { pending.set(item, value, options); },
-        update: (item, value) => { pending.update(item, value); },
-        create: (item, value) => { pending.create(item, value); },
-        delete: item => { pending.delete(item); }
+    runTransaction(work) {
+      const run = queue.then(async () => {
+        const pending = writeSet();
+        const result = await work({
+          getAll: (...refs) => Promise.all(refs.map(item => item.get())),
+          get: item => item.get(),
+          set: (item, value, options) => { pending.set(item, value, options); },
+          update: (item, value) => { pending.update(item, value); },
+          create: (item, value) => { pending.create(item, value); },
+          delete: item => { pending.delete(item); }
+        });
+        pending.commit();
+        return result;
       });
-      pending.commit();
-      return result;
+      queue = run.catch(() => {});
+      return run;
     },
     batch() {
       const pending = writeSet();

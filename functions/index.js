@@ -26,10 +26,11 @@ const { createMembershipHandlers } = require('./membership');
 const { createSheets, accountEmail } = require('./sheets');
 const sheetSync = require('./sheet-sync');
 const { serviceYear } = require('./service-year');
-const { dutyName } = require('./names');
+const { dutyName, canonicalName, usableMemberName } = require('./names');
 const { addServingMembers } = require('./serving-members');
 const { setDutyDefault } = require('./duty-defaults');
 const { renameMember: renameMemberEverywhere } = require('./rename-member');
+const appDocs = require('./app-docs');
 
 initializeApp();
 const db = getFirestore();
@@ -43,19 +44,8 @@ const departmentHandlers = createDepartmentHandlers({
 const workflowHandlers = createWorkflowHandlers({ db, now: () => Date.now(), logger });
 const membershipHandlers = createMembershipHandlers({ db, now: () => Date.now() });
 
-const MEMBER_ALIASES = Object.freeze({
-  'D. Chloe': 'M. Chloe',
-  'B,James': 'B. James',
-  'BJason': 'B. Jason',
-  'S. Melisaa': 'S. Melissa',
-  'S. Monica C.': 'S. Monica C',
-  'S. Monica S.': 'S. Monica S'
-});
-
-function canonicalMemberName(name) {
-  const value = String(name == null ? '' : name).trim();
-  return MEMBER_ALIASES[value] || value;
-}
+const loadNameMap = () => appDocs.loadNameMap(db);
+const runtimePermissionConfig = () => appDocs.runtimePermissionConfig(db);
 
 function scheduleServiceTimeKey(service) {
   return String(service && (service.serviceTime || service.service || service.time) || '')
@@ -140,14 +130,16 @@ async function reconcileScheduleAssignmentProjection(serviceId, before, after) {
   if (writes) await batch.commit();
 }
 
-function memberRoleRecord(name) {
-  const memberName = canonicalMemberName(name);
+/* What the leader settings (app/leaderConfig, see runtimePermissionConfig)
+   give a member who has no roles stored yet: their roles, the departments
+   they lead, and whether they must choose their own PIN. */
+function memberRoleRecord(memberName, config) {
   const actor = { name: memberName };
-  const admin = permissions.isAdmin(actor, PERMISSION_CONFIG);
-  const globalLeaderManager = permissions.isGlobalManager(actor, PERMISSION_CONFIG);
-  const departments = permissions.departmentsForLeader(actor, PERMISSION_CONFIG);
+  const admin = permissions.isAdmin(actor, config);
+  const globalLeaderManager = permissions.isGlobalManager(actor, config);
+  const departments = permissions.departmentsForLeader(actor, config);
   const departmentLeader = departments.length > 0 && !admin;
-  const songEditor = permissions.canEditSongs(actor, {}, PERMISSION_CONFIG);
+  const songEditor = permissions.canEditSongs(actor, {}, config);
   const roles = [];
   if (admin) roles.push('admin');
   if (globalLeaderManager) roles.push('globalLeaderManager');
@@ -175,22 +167,17 @@ function memberRoleRecord(name) {
   };
 }
 
-function listFromMemberDocument(data) {
-  if (!data || typeof data !== 'object') return [];
-  if (Array.isArray(data.list)) return data.list;
-  if (Array.isArray(data.members)) return data.members;
-  return [];
-}
-
 /* The departments a member belongs to: the name lists in app/departments,
    plus any department where they have an active profile (members added in
-   Manage by name search or invite link). */
-async function departmentsForMember(name) {
+   Manage by name search or invite link). Only the PIN reset check uses this.
+   It is never stored or put into a sign-in token, where `departments` means
+   the departments someone leads. */
+async function departmentsForMember(name, nameMap) {
   const found = new Set();
   const listSnap = await db.collection('app').doc('departments').get().catch(() => null);
   const lists = listSnap && listSnap.exists ? (listSnap.data().map || {}) : {};
   Object.entries(lists).forEach(([department, names]) => {
-    if (Array.isArray(names) && names.map(canonicalMemberName).includes(name)) found.add(department);
+    if (Array.isArray(names) && names.some(item => canonicalName(item, nameMap) === name)) found.add(department);
   });
   await Promise.all(permissions.DEPARTMENTS.map(async department => {
     const profiles = await db.collection('departments').doc(department).collection('members')
@@ -200,137 +187,162 @@ async function departmentsForMember(name) {
   return Array.from(found);
 }
 
-async function decorateMember(record) {
+/* An account as sign-in sees it. The roles and led departments stored on an
+   account are its own, even when empty: removing someone's last role in
+   Manage, Leaders stores []. Only an account that has never had them written
+   gets them from the leader settings, and membership never counts as
+   leading. */
+async function decorateMember(record, context) {
   if (!record || typeof record !== 'object') return null;
   const next = Object.assign({}, record);
-  const name = canonicalMemberName(next.name || next.memberName || next.id || next.memberId);
+  const name = canonicalName(next.name || next.memberName || next.id || next.memberId, context.nameMap);
   if (!name) return null;
   next.id = String(next.id || next.memberId || name);
   next.memberId = String(next.memberId || next.id);
   next.name = name;
   next.memberName = name;
-  if (!Array.isArray(next.departments) || !next.departments.length) {
-    next.departments = await departmentsForMember(name);
-  }
-  if (!Array.isArray(next.roles) || !next.roles.length) {
-    const defaults = memberRoleRecord(name);
-    next.roles = defaults.roles;
-    if (!next.role) next.role = defaults.role;
-    if (next.globalLeaderManager === undefined) next.globalLeaderManager = defaults.globalLeaderManager;
-  }
-  if (next.mustChangePin === undefined) {
-    const defaults = memberRoleRecord(name);
-    next.mustChangePin = defaults.mustChangePin;
+  if (!Array.isArray(next.roles) || !Array.isArray(next.departments) || next.mustChangePin === undefined) {
+    const defaults = memberRoleRecord(name, await context.config());
+    if (!Array.isArray(next.roles)) {
+      next.roles = defaults.roles;
+      if (!next.role) next.role = defaults.role;
+      if (next.globalLeaderManager === undefined) next.globalLeaderManager = defaults.globalLeaderManager;
+    }
+    if (!Array.isArray(next.departments)) next.departments = defaults.departments;
+    if (next.mustChangePin === undefined) next.mustChangePin = defaults.mustChangePin;
   }
   return next;
 }
 
+const LOCK_AFTER_ATTEMPTS = 5;
+const LOCK_MS = 15 * 60 * 1000;
+
 function createFirestoreMemberStore() {
   const accounts = db.collection('accounts');
-  const appMembers = db.collection('app').doc('members');
+
+  /* What one lookup reads: the name map, and the leader settings only when
+     an account needs them. */
+  function lookup(nameMap) {
+    let config = null;
+    return { nameMap, config: () => config || (config = runtimePermissionConfig()) };
+  }
 
   async function accountById(id) {
-    const requested = canonicalMemberName(id);
-    if (!requested) return null;
+    const nameMap = await loadNameMap();
+    const requested = canonicalName(id, nameMap);
+    if (!usableMemberName(requested)) return null;
+    const context = lookup(nameMap);
     const snapshot = await accounts.doc(requested).get();
-    if (snapshot.exists) return decorateMember(Object.assign({ id: snapshot.id }, snapshot.data()));
+    if (snapshot.exists) return decorateMember(Object.assign({ id: snapshot.id }, snapshot.data()), context);
     const query = await accounts.where('memberId', '==', requested).limit(1).get();
     if (!query.empty) {
       const document = query.docs[0];
-      return decorateMember(Object.assign({ id: document.id }, document.data()));
+      return decorateMember(Object.assign({ id: document.id }, document.data()), context);
     }
-    const membersSnapshot = await appMembers.get();
-    const names = listFromMemberDocument(membersSnapshot.exists ? membersSnapshot.data() : null)
-      .map(canonicalMemberName);
-    if (!names.includes(requested)) return null;
-    const defaults = memberRoleRecord(requested);
+    if (!(await appDocs.loadMemberNames(db, nameMap)).includes(requested)) return null;
+    // The first sign-in of someone on the member list makes their account,
+    // with the shared starting PIN (0000 for leaders, who must change it).
+    const defaults = memberRoleRecord(requested, await context.config());
     defaults.pinHash = await hashPin(defaults.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN);
     defaults.active = true;
     defaults.roleVersion = 1;
-    await accounts.doc(requested).set(defaults, { merge: true });
+    try {
+      await accounts.doc(requested).create(defaults);
+    } catch (error) {
+      if (!alreadyExists(error)) throw error;
+      const made = await accounts.doc(requested).get();
+      return decorateMember(Object.assign({ id: made.id }, made.data()), context);
+    }
     return defaults;
   }
 
   async function findByName(name) {
-    const requested = canonicalMemberName(name);
-    if (!requested) return null;
-    const direct = await accountById(requested);
+    const direct = await accountById(name);
     if (direct) return direct;
+    const nameMap = await loadNameMap();
+    const requested = canonicalName(name, nameMap);
+    if (!requested) return null;
     const query = await accounts.where('name', '==', requested).limit(1).get();
-    if (!query.empty) {
-      const document = query.docs[0];
-      return decorateMember(Object.assign({ id: document.id }, document.data()));
-    }
-    return accountById(requested);
+    if (query.empty) return null;
+    const document = query.docs[0];
+    return decorateMember(Object.assign({ id: document.id }, document.data()), lookup(nameMap));
   }
 
   return {
     getById: accountById,
     findByName,
+    /* Writes only what a PIN change or reset sets. Roles, departments and
+       names are never written back from a sign-in. */
     async update(id, patch) {
-      const memberId = canonicalMemberName(id);
+      const memberId = String(id == null ? '' : id).trim();
       if (!memberId) throw new Error('Member id is required.');
-      const current = await accountById(memberId) || memberRoleRecord(memberId);
-      const safePatch = Object.assign({}, patch);
-      await accounts.doc(memberId).set(Object.assign({}, current, safePatch, {
-        id: memberId,
-        memberId,
-        name: canonicalMemberName(current.name || memberId),
-        memberName: canonicalMemberName(current.memberName || current.name || memberId)
-      }), { merge: true });
+      await accounts.doc(memberId).set(Object.assign({}, patch), { merge: true });
     },
-    async assertCanAttempt(id) {
-      const snapshot = await accounts.doc(canonicalMemberName(id)).get();
-      const data = snapshot.exists ? snapshot.data() : {};
-      if (Number(data.loginLockedUntil || 0) > Date.now()) {
-        const error = new Error('Too many attempts. Try again later.');
-        error.code = 'resource-exhausted';
-        throw error;
-      }
-    },
-    async recordFailedAttempt(id) {
-      const ref = accounts.doc(canonicalMemberName(id));
+    /* One sign-in attempt, counted before the PIN is checked and in one
+       transaction, so attempts made at the same moment cannot all slip past
+       the limit. The fifth in a row locks the account for 15 minutes; a
+       correct PIN clears the count (clearFailedAttempts). */
+    async beginAttempt(id) {
+      const reference = accounts.doc(String(id));
       await db.runTransaction(async transaction => {
-        const snapshot = await transaction.get(ref);
-        const data = snapshot.exists ? snapshot.data() : {};
+        const snapshot = await transaction.get(reference);
+        const data = snapshot.exists ? snapshot.data() || {} : {};
+        const now = Date.now();
+        if (Number(data.loginLockedUntil || 0) > now) {
+          throw Object.assign(new Error('Too many attempts. Try again later.'), { code: 'resource-exhausted', details: { reason: 'locked' } });
+        }
         const attempts = Number(data.failedLoginAttempts || 0) + 1;
-        transaction.set(ref, {
+        transaction.set(reference, {
           failedLoginAttempts: attempts,
-          loginLockedUntil: attempts >= 5 ? Date.now() + 15 * 60 * 1000 : 0
+          loginLockedUntil: attempts >= LOCK_AFTER_ATTEMPTS ? now + LOCK_MS : 0
         }, { merge: true });
       });
     },
     async clearFailedAttempts(id) {
-      await accounts.doc(canonicalMemberName(id)).set({ failedLoginAttempts: 0, loginLockedUntil: 0 }, { merge: true });
+      await accounts.doc(String(id)).set({ failedLoginAttempts: 0, loginLockedUntil: 0 }, { merge: true });
     }
   };
 }
 
+function alreadyExists(error) {
+  return !!error && (error.code === 6 || error.code === 'already-exists' || /ALREADY_EXISTS/.test(String(error.message)));
+}
+
+function refusal(code, reason, message) {
+  return Object.assign(new Error(message), { code, details: { reason } });
+}
+
+/* Who may reset whose PIN. An administrator: anyone's. A leader manager or a
+   department leader: only someone who is not an administrator, leader
+   manager, department leader or song editor, and a department leader only
+   in a department they lead. */
 function memberPermissionAdapter() {
   return {
     async assertActorCanAct({ actor, action, target }) {
       const identity = Object.assign({}, actor && actor.token, { uid: actor && actor.uid });
-      if (action === 'member.pin.reset') {
-        const config = await runtimePermissionConfig();
-        if (permissions.isAdmin(identity, config) || permissions.isGlobalManager(identity, config)) return true;
-        const targetIdentity = { name: canonicalMemberName(target && (target.name || target.memberName || target.id)), roles: target && target.roles };
-        const privilegedTarget = permissions.isAdmin(targetIdentity, config) ||
-          permissions.isGlobalManager(targetIdentity, config) ||
-          permissions.departmentsForLeader(targetIdentity, config).length > 0 ||
-          permissions.canEditSongs(targetIdentity, {}, config);
-        const memberships = await departmentsForMember(targetIdentity.name);
-        const scopedTarget = Object.assign({}, targetIdentity, { departments: memberships });
-        if (privilegedTarget || !permissions.canResetPin(identity, scopedTarget, config)) {
-          const error = new Error('You are not allowed to perform this action.');
-          error.code = 'permission-denied';
-          throw error;
-        }
-        return true;
+      const config = await runtimePermissionConfig();
+      if (action !== 'member.pin.reset') {
+        if (permissions.canManageLeaders(identity, config)) return true;
+        throw refusal('permission-denied', 'not-allowed', 'You are not allowed to perform this action.');
       }
-      if (permissions.canManageLeaders(identity, PERMISSION_CONFIG)) return true;
-      const error = new Error('You are not allowed to perform this action.');
-      error.code = 'permission-denied';
-      throw error;
+      if (permissions.isAdmin(identity, config)) return true;
+      const nameMap = await loadNameMap();
+      const targetName = canonicalName(target && (target.name || target.memberName || target.id), nameMap);
+      const targetIdentity = { name: targetName };
+      const privilegedTarget = Boolean(target && (target.privileged || target.songEditor)) ||
+        permissions.isAdmin(targetIdentity, config) ||
+        permissions.isGlobalManager(targetIdentity, config) ||
+        permissions.departmentsForLeader(targetIdentity, config).length > 0 ||
+        permissions.canEditSongs(targetIdentity, {}, config);
+      if (privilegedTarget) {
+        throw refusal('permission-denied', 'privileged-target', 'Only an administrator can reset the PIN of an administrator, a leader or a song editor.');
+      }
+      if (permissions.isGlobalManager(identity, config)) return true;
+      const memberships = await departmentsForMember(targetName, nameMap);
+      if (!permissions.canResetPin(identity, { name: targetName, departments: memberships }, config)) {
+        throw refusal('permission-denied', 'cross-department', 'Only a leader of one of their departments or an administrator can reset this PIN.');
+      }
+      return true;
     }
   };
 }
@@ -358,14 +370,37 @@ function exposeMemberAuthCallable(handler) {
       const message = code === 'internal'
         ? 'The member authentication service is unavailable.'
         : String(error.message || 'The requested authentication action failed.');
-      throw new HttpsError(code, message);
+      const details = error && error.details && typeof error.details === 'object' ? error.details : undefined;
+      throw new HttpsError(code, message, details);
     }
   });
 }
 
 exports.verifyMemberPin = exposeMemberAuthCallable(memberAuthCallables.verifyMemberPin);
-exports.changeMemberPin = exposeMemberAuthCallable(memberAuthCallables.changeMemberPin);
-exports.resetMemberPin = exposeMemberAuthCallable(memberAuthCallables.resetMemberPin);
+
+/* Changing one's own PIN needs a session that is still current (not ended by
+   a reset or a role change), but not a changed PIN: this is how one is set. */
+exports.changeMemberPin = exposeMemberAuthCallable(async request => {
+  await readCurrentAccount(request);
+  return memberAuthCallables.changeMemberPin(request);
+});
+
+/* A leader or an administrator resets someone's PIN to 0000. Their own
+   account must be current with its PIN changed, and every reset is recorded
+   in audit (who, whom, when), as overrides and role changes are. */
+exports.resetMemberPin = exposeMemberAuthCallable(async request => {
+  const actor = await callableActor(request);
+  const result = await memberAuthCallables.resetMemberPin({ data: request.data, auth: actor });
+  try {
+    await db.collection('audit').add({
+      action: 'member-pin-reset', actor: actor.memberName || actor.uid, actorUid: actor.uid,
+      target: result.memberId, targetMemberId: result.memberId, timestamp: Date.now()
+    });
+  } catch (error) {
+    logger.error('Reset audit record failed', { error: String(error && error.message || error) });
+  }
+  return result;
+});
 
 function exposeDepartmentCallable(handler) {
   return onCall({ region: REGION }, async request => {
@@ -525,29 +560,20 @@ async function callableActor(request) {
   }, token);
 }
 
-async function runtimePermissionConfig() {
-  const snapshot = await db.collection('app').doc('leaderConfig').get();
-  return snapshot.exists
-    ? Object.assign({}, snapshot.data(), {
-      admin: PERMISSION_CONFIG.admin,
-      globalLeaderManager: PERMISSION_CONFIG.globalLeaderManager
-    })
-    : PERMISSION_CONFIG;
-}
-
 exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
   const actor = await callableActor(request);
   const data = request.data || {};
   const roleType = data.roleType === 'songEditor' ? 'songEditor' : 'departmentLeader';
-  const department = String(data.department || '').trim();
-  const memberName = canonicalMemberName(data.memberName);
+  const department = permissions.DEPARTMENTS.includes(String(data.department || '').trim()) ? String(data.department).trim() : '';
+  const nameMap = await loadNameMap();
+  const memberName = canonicalName(data.memberName, nameMap);
   const enabled = data.enabled === true;
   const current = await runtimePermissionConfig();
-  if (!memberName || (roleType === 'departmentLeader' && !department)) {
-    throw new HttpsError('invalid-argument', 'A valid role target is required.');
+  if (!usableMemberName(memberName) || (roleType === 'departmentLeader' && !department)) {
+    throw new HttpsError('invalid-argument', 'A valid role target is required.', { reason: 'invalid-input' });
   }
   if (!permissions.canManageLeaders(actor, current)) {
-    throw new HttpsError('permission-denied', 'Only global leader managers can change role assignments.');
+    throw new HttpsError('permission-denied', 'Only global leader managers can change role assignments.', { reason: 'not-allowed' });
   }
   const next = {
     admin: Array.from(PERMISSION_CONFIG.admin),
@@ -560,10 +586,10 @@ exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
     : Array.from(next.departmentLeaders[department] || []);
   const updated = enabled
     ? Array.from(new Set(list.concat(memberName))).sort()
-    : list.filter(name => canonicalMemberName(name) !== memberName);
+    : list.filter(name => canonicalName(name, nameMap) !== memberName);
   if (roleType === 'songEditor') next.songEditors = updated;
   else next.departmentLeaders[department] = updated;
-  const actorName = canonicalMemberName(actor.memberName || actor.name || actor.uid);
+  const actorName = canonicalName(actor.memberName || actor.name || actor.uid, nameMap);
   await db.collection('app').doc('leaderConfig').set(next, { merge: false });
   const memberActor = { name: memberName };
   const departments = permissions.departmentsForLeader(memberActor, next);
@@ -817,7 +843,8 @@ exports.onRequestCreated = onDocumentCreated(
   async event => {
     const request = event.data && event.data.exists ? event.data.data() || {} : null;
     if (!request) return;
-    const [settingsSnap, config] = await Promise.all([db.collection('app').doc('settings').get(), runtimePermissionConfig()]);
+    const [settingsSnap, config, nameMap] = await Promise.all([db.collection('app').doc('settings').get(), runtimePermissionConfig(), loadNameMap()]);
+    const canonicalMemberName = name => canonicalName(name, nameMap);
     const scheduler = (settingsSnap.exists && settingsSnap.data().schedulerName) || '';
     const department = request.department || permissions.departmentForDuty(request.duty);
     const leaders = ((config.departmentLeaders || {})[department] || []);
@@ -854,7 +881,7 @@ exports.onFeedbackDone = onDocumentUpdated(
     const was = before.data() || {}, now = after.data() || {};
     if (was.status === 'done' || now.status !== 'done' || !now.name) return;
     const message = String(now.message || '').replace(/\s+/g, ' ').trim();
-    await sendToNames([canonicalMemberName(now.name)], 'Your feedback was marked done',
+    await sendToNames([canonicalName(now.name, await loadNameMap())], 'Your feedback was marked done',
       () => '"' + (message.length > 80 ? message.slice(0, 77) + '…' : message) + '" Thank you for sending it.');
   });
 
@@ -1081,7 +1108,8 @@ exports.servingMembers = onSchedule(
   { schedule: '30 3 * * *', timeZone: TZ, region: REGION },
   async () => {
     try {
-      const result = await addServingMembers(db, { today: pacificDate(), canonicalName: canonicalMemberName, logger });
+      const nameMap = await loadNameMap();
+      const result = await addServingMembers(db, { today: pacificDate(), canonicalName: name => canonicalName(name, nameMap), logger });
       logger.info('servingMembers: done', { added: result.added.length, widened: result.widened.length, unmatched: result.unmatched });
     } catch (error) {
       logger.error('servingMembers: failed', { error: String(error && error.message || error) });
@@ -1098,9 +1126,10 @@ exports.renameMember = onCall({ region: REGION }, async request => {
   try {
     const result = await renameMemberEverywhere(db, {
       from: data.from, to: data.to,
-      newAccount: async name => Object.assign(memberRoleRecord(name), {
-        pinHash: await hashPin(memberRoleRecord(name).mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN), active: true, roleVersion: 1
-      })
+      newAccount: async name => {
+        const record = memberRoleRecord(name, await runtimePermissionConfig());
+        return Object.assign(record, { pinHash: await hashPin(record.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN), active: true, roleVersion: 1 });
+      }
     });
     logger.info('renameMember', result);
     return Object.assign({ ok: true }, result);
