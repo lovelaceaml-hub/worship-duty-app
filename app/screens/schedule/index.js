@@ -231,14 +231,9 @@ function choose(changes) {
 /* Search waits for a pause in typing, then redraws with the field blurred
    (a focused field pauses redraws) and puts the caret back. */
 let searchTimer = 0;
+/* The redraw keeps the search box focused with its caret (ui/replace.js). */
 function applySearch() {
-  const input = document.getElementById('schedule-search');
-  const focused = !!input && input === document.activeElement;
-  const caret = focused ? input.selectionStart : 0;
-  if (focused) input.blur();
   redraw();
-  const next = document.getElementById('schedule-search');
-  if (focused && next) { next.focus(); try { next.setSelectionRange(caret, caret); } catch (_error) { /* not a text field */ } }
 }
 
 defineActions({

@@ -152,6 +152,7 @@ p { margin: 0; }
 .plain-list { margin: 8px 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
 .plain-list li { margin: 3px 0; }
 .dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.duty-line .dot { background: var(--dept, var(--accent)); }
 .tag { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
 .tag.is-done { background: var(--ok-soft); color: var(--ok); }
 .status { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -597,6 +598,7 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
 @media (pointer: coarse) {
   .primary.small, .ghost.small, .link, .chip, .help summary, .segmented button { min-height: 44px; }
   .icon-button { min-width: 44px; min-height: 44px; }
+  .request-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
 }
 @media (min-width: 900px) {
   .schedule-calendar .schedule-body { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); align-items: start; }

@@ -6,9 +6,9 @@
    service. Notifications and the calendar link sit in a quiet card at the end. */
 import { html, raw, plural } from '../html.js';
 import { defineActions } from '../actions.js';
-import { data, session, ui, feature, canonical } from '../store.js';
+import { data, session, ui, feature, canonical, loaded } from '../store.js';
 import { render as redraw, goTo } from '../render.js';
-import { notice } from '../ui/banners.js';
+import { banner } from '../ui/banners.js';
 import { dutyGroups, statusChip, empty, isCurrent, nowTag } from '../ui/components.js';
 import { dutiesOf, serviceId, serviceClock, isUpcoming, isInProgress } from '../lib/services.js';
 import { longDate, dayBadge, dayOfMonth, monthShort, weekdayShort, shortDate, addDays, todayISO } from '../lib/dates.js';
@@ -186,7 +186,7 @@ function availabilityLink() {
 
 function dutyLine(item, open) {
   const id = serviceId(item.service);
-  return html`<div class="duty-line"><span class="dot" style="background: ${item.department.color}"></span><span class="duty-title">${dutyName(item.duty)}</span>${requestControl(item)}</div>
+  return html`<div class="duty-line"><span class="dot" style="--dept: ${item.department.color}"></span><span class="duty-title">${dutyName(item.duty)}</span>${requestControl(item)}</div>
     ${dutyState(item)}
     ${open && item.duty === 'Presider' && feature('songPicker') ? html`<div class="duty-extra">${songTag(id)}
       <button type="button" class="link" data-act="open-songs" data-service="${id}" data-from="card">${songLabel(id)}</button></div>` : ''}
@@ -234,7 +234,8 @@ export function render() {
       ${songPrompt(duties)}
       ${requests.waiting ? requests.card : ''}
       ${rest.map(day => dayCard(day, duties))}`
-      : empty('You have no upcoming duties. They show up here as soon as one is assigned to you.')}
+      : loaded.schedule ? empty('You have no upcoming duties. They show up here as soon as one is assigned to you.')
+        : empty('Loading the schedule…')}
     ${requests.waiting ? '' : requests.card}
     ${recent()}
     ${availabilityLink()}
@@ -253,9 +254,9 @@ defineActions({
   'calendar-subscribe': () => { location.href = calendarUrl('webcal:'); },
   'calendar-copy': () => {
     const url = calendarUrl('https:');
-    const done = () => notice('Calendar link copied. In Google Calendar, add it under Other calendars, From URL.');
-    if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, () => notice('Your calendar link: ' + url));
-    else notice('Your calendar link: ' + url);
+    const done = () => banner('Calendar link copied. In Google Calendar, add it under Other calendars, From URL.');
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, () => banner('Your calendar link: ' + url));
+    else banner('Your calendar link: ' + url);
   },
   'clear-updates': () => { clearRecentUpdates(); redraw(); },
   'open-songs': {

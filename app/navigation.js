@@ -24,7 +24,7 @@ defineActions({
       if (heading) heading.focus({ preventScroll: true });
     }
   },
-  'sign-out': { public: true, run: () => signOut() },
+  'sign-out': { public: true, run: () => { if (mayLeave('sign-out')) signOut(); } },
   reload: { public: true, run: () => location.reload() },
   expand: { public: true, run: el => { ui.expanded[el.dataset.key] = !ui.expanded[el.dataset.key]; render(); } }
 });

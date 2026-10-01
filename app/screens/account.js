@@ -7,7 +7,7 @@
 import { html } from '../html.js';
 import { defineActions } from '../actions.js';
 import { ui } from '../store.js';
-import { render as redraw } from '../render.js';
+import { render as redraw, setLeaveGuard } from '../render.js';
 import { empty } from '../ui/components.js';
 import { accountView } from '../ui/header.js';
 import { notifyControls } from './my-duties.js';
@@ -158,17 +158,15 @@ function change(update) {
   redraw();
 }
 
-/* Leaving Availability with changes not saved asks first; leaving anyway
-   drops them. A reload or closing the app asks through the browser. */
-const LEAVING = '[data-act="tab"], [data-act="home"], [data-act="account"], [data-act="sign-out"]';
-document.addEventListener('click', event => {
-  const control = event.target.closest(LEAVING);
-  if (!control || !unsaved() || accountView() !== 'availability') return;
-  if (control.dataset.act === 'account' && control.dataset.view === 'availability') return;
-  if (confirm('Your availability changes are not saved. Leave without saving them?')) { discard(); return; }
-  event.preventDefault();
-  event.stopImmediatePropagation();
-}, true);
+/* Leaving Availability with changes not saved asks first (tabs, swipes,
+   the logo, the account menu, signing out); leaving anyway drops them. A
+   reload or closing the app asks through the browser. */
+setLeaveGuard((_tab, options = {}) => {
+  if (!unsaved() || accountView() !== 'availability' || options.account === 'availability') return true;
+  if (!confirm('Your availability changes are not saved. Leave without saving them?')) return false;
+  discard();
+  return true;
+});
 window.addEventListener('beforeunload', event => {
   if (!unsaved()) return;
   event.preventDefault();
