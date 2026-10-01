@@ -599,6 +599,22 @@ function authorizeAssignmentOverride(actor, assignmentInput, profile) {
   return decision(true, '', { assignment, authorization: 'administrator-override' });
 }
 
+/* The stored spelling of a duty ('usher door' is 'Usher Door'), or '' for a
+   name that is no duty. Duty names are schedule keys, so only these go in. */
+function exactDuty(duty) {
+  const wanted = String(duty == null ? '' : duty).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  if (!wanted) return '';
+  return Object.keys(permissions.DUTY_TO_DEPARTMENT).find(name => name.toLocaleLowerCase() === wanted) || '';
+}
+
+/* A service's time key for availability ("morning" for a Morning service):
+   its label, slugged. The app's timeKey() in app/lib/availability.js gives
+   the same. */
+function serviceTimeKey(service) {
+  return String(service && (service.serviceTime || service.service || service.time) || '')
+    .toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 function profilePath(department, memberUid) {
   return `departments/${departmentId(department)}/members/${uid(memberUid)}`;
 }
@@ -643,6 +659,8 @@ module.exports = {
   canAssignDepartmentDuty: authorizeAssignment,
   canOverrideAssignment: authorizeAssignmentOverride,
   departmentForDuty: permissions.departmentForDuty,
+  exactDuty,
+  serviceTimeKey,
   profilePath,
   assignmentPath
 };

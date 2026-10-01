@@ -36,6 +36,13 @@ function serviceStart(service) {
   return pacificTime(service.date, time);
 }
 
+/* Whether a service has started by `now` (epoch milliseconds). A service
+   without a valid date has not. */
+function hasStarted(service, now = Date.now()) {
+  const start = serviceStart(service);
+  return Number.isFinite(start) && start <= now;
+}
+
 /* "Wednesday, July 1" */
 function longDate(iso) {
   return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: TIME_ZONE });
@@ -49,4 +56,4 @@ function clockTime(time) {
   return (hour % 12 || 12) + ':' + minutes + ' ' + (hour >= 12 ? 'PM' : 'AM');
 }
 
-module.exports = { TIME_ZONE, pacificDate, pacificTime, serviceStart, longDate, clockTime };
+module.exports = { TIME_ZONE, pacificDate, pacificTime, serviceStart, hasStarted, longDate, clockTime };
