@@ -315,6 +315,22 @@ test('asking for a change, withdrawing it, and a duty flagged after a day off ea
   await context.close();
 });
 
+test('the change request form takes the keyboard focus and gives it back on Cancel', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  await tab(page, 'my');
+  const button = page.locator('[data-act="request-open"]').first();
+  const key = await button.getAttribute('data-key');
+  await button.focus();
+  await page.keyboard.press('Enter');
+  await page.locator('#request-note').waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'request-note');
+  await page.locator('form[data-act="request-send"] [data-act="request-cancel"]').click();
+  await page.locator('#request-note').waitFor({ state: 'detached' });
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.key), key);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a leader\'s own request in a department they do not lead stays on their screen', async () => {
   const { context, page, errors } = await as('E. Joseph');
   await editService(page, '2026-07-14_evening', { assignments: { 'Usher #1': 'E. Joseph' } });

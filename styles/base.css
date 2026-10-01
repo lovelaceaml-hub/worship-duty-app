@@ -399,7 +399,7 @@ button.service-head { cursor: pointer; }
 .availability-label { display: grid; }
 .availability-label small { color: var(--muted); font-size: 12px; font-weight: 500; }
 /* Shown while there are changes not saved. */
-.availability-unsaved { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 16px; border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line)); background: var(--surface); }
+.availability .availability-unsaved { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 16px; border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line)); background: var(--surface); }
 .availability-unsaved .button-row { margin: 0; }
 .availability-unsaved-text { color: var(--warn); font-size: 14px; font-weight: 700; }
 .exceptions { display: grid; gap: 7px; }
