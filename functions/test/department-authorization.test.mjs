@@ -639,3 +639,19 @@ test('assigned leaders can add department members without granting a role', asyn
     error => error.code === 'failed-precondition'
   );
 });
+
+test('a member on the member list who has never signed in can be added under the uid their first sign-in gives them', async () => {
+  const db = new FakeDb();
+  const handlers = createDepartmentHandlers({ db, now: () => 900 });
+  await db.collection('app').doc('members').set({ list: ['S. Example', 'B. Example'] });
+  const result = await handlers.createDepartmentProfile({
+    auth: leader,
+    data: { departmentId: 'Translation', memberUid: 'member:S. Example', memberName: 'S. Example', eligibleDuties: ['Translation #1'], schedulable: true }
+  });
+  assert.equal(result.profile.memberUid, 'member:S. Example');
+  assert.equal(result.profile.memberName, 'S. Example');
+  await assert.rejects(
+    handlers.createDepartmentProfile({ auth: leader, data: { departmentId: 'Translation', memberUid: 'member:Not Listed', memberName: 'Not Listed' } }),
+    error => error.code === 'not-found'
+  );
+});

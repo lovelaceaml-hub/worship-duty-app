@@ -14,7 +14,7 @@ import { longDate, todayISO, shortDate } from '../../lib/dates.js';
 import { managedDepartments, canManageDepartment, canResetPin, leadersOf } from '../../services/access.js';
 import {
   departments as state, roster, loadRoster, draftOf, hasDraft, editDraft, dropDraft, saveProfile, setStatus,
-  searchMembers, addMember, resetPin, createInvite, cancelInvite, activeInvites, inviteLink
+  searchMembers, addMember, addByName, missingMembers, resetPin, createInvite, cancelInvite, activeInvites, inviteLink
 } from '../../services/departments.js';
 import { managedDepartment } from './index.js';
 
@@ -42,7 +42,7 @@ function searchPanel(department) {
   let results = '';
   if (search && search.busy) results = html`<p class="hint">Searching…</p>`;
   else if (search && search.error) results = html`<p class="form-error">${search.error}</p>`;
-  else if (search && search.done && !search.members.length) results = html`<p class="hint">No member has that name. Check the spelling. Someone who has never signed in cannot be added yet.</p>`;
+  else if (search && search.done && !search.members.length) results = html`<p class="hint">No member has that name. Check the spelling, or check they are on the member list in Manage, Data.</p>`;
   else if (search) {
     results = html`<div class="list">${search.members.map(member => {
       const already = roster(department).some(profile => profile.memberUid === member.memberUid);
@@ -79,6 +79,21 @@ function searchPanel(department) {
   </section>`;
 }
 
+/* People serving in this department who are not on its list yet. */
+function missingPanel(department) {
+  const missing = missingMembers(department, todayISO());
+  if (!missing.length) return '';
+  return html`<section class="card missing-members">
+    <div class="card-title-row"><h3 class="card-subtitle">Not on the list yet <span class="count">${missing.length}</span></h3>
+      <button type="button" class="primary small" data-act="department-add-missing" data-department="${department}"${state.addingAll ? ' disabled' : ''}>${state.addingAll ? 'Adding…' : 'Add all'}</button></div>
+    <p class="hint">They serve in ${department} duties or were on its old list, but are not members here, so the planner cannot offer them.</p>
+    <div class="list">${missing.map(item => html`<div class="list-row">
+      <span><strong>${nameOf(item.name)}</strong> <span class="hint">${item.duties.length ? item.duties.map(dutyName).join(', ') : 'Any ' + department + ' duty'}</span></span>
+      <button type="button" class="ghost small" data-act="department-add-name" data-department="${department}" data-name="${item.name}"
+        data-duties="${item.duties.join('|')}"${state.addingAll ? ' disabled' : ''}>Add</button></div>`)}</div>
+  </section>`;
+}
+
 function memberRow(department, profile, canEdit) {
   const summary = [profile.schedulable ? 'Can be scheduled' : 'Not scheduled',
     plural(profile.eligibleDuties.length, 'duty', 'duties')].join(' · ');
@@ -110,6 +125,7 @@ function departmentRoster(department) {
   return html`${back}
     <h2 class="screen-title">${department}</h2>
     <p class="hint"><strong>Leaders:</strong> ${leadersOf(department).map(nameOf).join(', ') || 'none set'}</p>
+    ${canEdit ? missingPanel(department) : ''}
     ${canEdit ? searchPanel(department) : ''}
     <h3 class="section-heading">Members <span class="count">${active.length}</span></h3>
     ${active.length ? html`<div class="list">${active.map(profile => memberRow(department, profile, canEdit))}</div>` : empty('No members yet.')}
@@ -229,6 +245,25 @@ defineActions({
   'department-add': {
     allowed: editing,
     run: el => addMember(el.dataset.department, { memberUid: el.dataset.uid, memberName: el.dataset.name })
+  },
+  'department-add-name': {
+    allowed: editing,
+    run: el => addByName(el.dataset.department, el.dataset.name, el.dataset.duties ? el.dataset.duties.split('|') : [])
+  },
+  'department-add-missing': {
+    allowed: editing,
+    run: async el => {
+      const department = el.dataset.department;
+      const missing = missingMembers(department, todayISO());
+      if (!missing.length || !confirm('Add ' + plural(missing.length, 'person', 'people') + ' to ' + department + '?')) return;
+      state.addingAll = true;
+      redraw();
+      let added = 0;
+      for (const item of missing) if (await addByName(department, item.name, item.duties, { quiet: true })) added += 1;
+      state.addingAll = false;
+      notice(plural(added, 'person', 'people') + ' added to ' + department + '.');
+      redraw();
+    }
   },
   'department-status': { allowed: editing, run: el => setStatus(managedDepartment(), el.dataset.uid, el.dataset.status) },
   'department-reset-pin': {

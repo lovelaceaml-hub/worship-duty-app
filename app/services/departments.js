@@ -156,22 +156,56 @@ export async function setStatus(department, uid, status) {
   await saveProfile(department, uid);
 }
 
-export async function addMember(department, member) {
+export async function addMember(department, member, { eligibleDuties = [], quiet = false } = {}) {
   const search = departments.search;
   if (search) search.adding = true;
   renderSoon();
+  let added = false;
   try {
     const result = await call('createDepartmentProfile', {
       departmentId: department, memberUid: member.memberUid, memberName: member.memberName,
-      status: 'active', eligibleDuties: [], schedulable: false, availability: { recurring: {}, exceptions: {} }
+      status: 'active', eligibleDuties, schedulable: eligibleDuties.length > 0, availability: { recurring: {}, exceptions: {} }
     });
     if (!result || !store(result.profile)) throw new Error('The new profile did not come back.');
-    notice(nameOf(member.memberName) + ' was added to ' + department + '.');
+    added = true;
+    if (!quiet) notice(nameOf(member.memberName) + ' was added to ' + department + '.');
   } catch (error) {
     notice(nameOf(member.memberName) + ' was not added: ' + problem(error), true);
   }
   if (search) search.adding = false;
   renderSoon();
+  return added;
+}
+
+/* People who serve in a department's duties (the last six months and
+   coming up) or are on its old name list, but have no profile in it, so the
+   planner cannot offer them. Each comes with the duties they have held. */
+export function missingMembers(department, today) {
+  const own = (DEPARTMENTS.find(item => item.name === department) || { duties: [] }).duties;
+  const since = new Date(new Date(today + 'T12:00:00').getTime() - 182 * 864e5).toISOString().slice(0, 10);
+  const held = {};
+  legacyRoster(department).forEach(name => { held[name] = held[name] || new Set(); });
+  data.services.filter(service => service.date >= since).forEach(service => own.forEach(duty => {
+    const name = (service.assignments || {})[duty];
+    if (name) (held[name] = held[name] || new Set()).add(duty);
+  }));
+  return Object.keys(held).filter(name => name && !profileNamed(department, name))
+    .map(name => ({ name, duties: own.filter(duty => held[name].has(duty)) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/* Add someone by name: find their account (or their place on the member
+   list) with the member search, then add them able to take `duties`, or
+   every duty of the department when they have held none yet. */
+export async function addByName(department, name, duties, options = {}) {
+  let found = null;
+  try {
+    const result = await call('searchDepartmentCandidates', { departmentId: department, query: name.slice(0, 160), page: 1 });
+    found = ((result && result.members) || []).find(member => member.memberName === name) || null;
+  } catch (_error) { /* reported below */ }
+  if (!found) { notice(nameOf(name) + ' is not on the member list, so they were not added.', true); return false; }
+  const own = (DEPARTMENTS.find(item => item.name === department) || { duties: [] }).duties;
+  return addMember(department, found, Object.assign({ eligibleDuties: duties.length ? duties : own }, options));
 }
 
 export async function searchMembers(department, query, page = 1) {
