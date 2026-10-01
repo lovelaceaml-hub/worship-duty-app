@@ -54,28 +54,6 @@ const PROFILE_ALLOWED_FIELDS = Object.freeze([
   'decisions'
 ]);
 
-const ASSIGNMENT_FIELDS = Object.freeze([
-  'id',
-  'department',
-  'departmentId',
-  'memberUid',
-  'uid',
-  'memberName',
-  'duty',
-  'serviceId',
-  'serviceDate',
-  'date',
-  'serviceTime',
-  'time',
-  'override',
-  'authorization',
-  'overrideReason',
-  'assignedAt',
-  'assignedByUid',
-  'assignedBy',
-  'profileId'
-]);
-
 const ASSIGNMENT_INPUT_FIELDS = Object.freeze([
   'assignmentId',
   'department',
@@ -363,12 +341,6 @@ function authorizeProfileUpdate(actor, before, after) {
   return decision(false, 'profile-write-not-authorized');
 }
 
-function authorizeProfileDelete(actor, profile) {
-  if (!isAdministrator(actor)) return decision(false, 'administrator-required');
-  if (!profileIdentity(profile)) return decision(false, 'invalid-profile-identity');
-  return decision(true, '');
-}
-
 function normalizeProfilePatch(patch) {
   if (!isPlainObject(patch)) throw new TypeError('patch must be a plain object');
   const aliases = { duties: 'eligibleDuties', isSchedulable: 'schedulable' };
@@ -599,12 +571,24 @@ function authorizeAssignmentOverride(actor, assignmentInput, profile) {
   return decision(true, '', { assignment, authorization: 'administrator-override' });
 }
 
-function profilePath(department, memberUid) {
-  return `departments/${departmentId(department)}/members/${uid(memberUid)}`;
+/* The stored spelling of a duty ('usher door' is 'Usher Door'), or '' for a
+   name that is no duty. Duty names are schedule keys, so only these go in. */
+function exactDuty(duty) {
+  const wanted = String(duty == null ? '' : duty).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  if (!wanted) return '';
+  return Object.keys(permissions.DUTY_TO_DEPARTMENT).find(name => name.toLocaleLowerCase() === wanted) || '';
 }
 
-function assignmentPath(assignmentId) {
-  return `departmentAssignments/${text(assignmentId, { max: 240, path: 'assignmentId' })}`;
+/* A service's time key for availability ("morning" for a Morning service):
+   its label, slugged. The app's timeKey() in app/lib/availability.js gives
+   the same. */
+function serviceTimeKey(service) {
+  return String(service && (service.serviceTime || service.service || service.time) || '')
+    .toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function profilePath(department, memberUid) {
+  return `departments/${departmentId(department)}/members/${uid(memberUid)}`;
 }
 
 module.exports = {
@@ -612,7 +596,6 @@ module.exports = {
   PROFILE_METADATA_FIELDS,
   PROFILE_IDENTITY_FIELDS,
   PROFILE_ALLOWED_FIELDS,
-  ASSIGNMENT_FIELDS,
   ASSIGNMENT_INPUT_FIELDS,
   profileIdentity,
   profileIdentityMatches,
@@ -621,18 +604,11 @@ module.exports = {
   isAuthenticated,
   isCurrentRoleVersion,
   isAdministrator,
-  isAdmin: isAdministrator,
   isMemberActor,
   managesDepartment,
-  canManageDepartment: managesDepartment,
   authorizeProfileRead,
   authorizeProfileCreate,
   authorizeProfileUpdate,
-  authorizeProfileDelete,
-  canReadProfile: authorizeProfileRead,
-  canCreateProfile: authorizeProfileCreate,
-  canUpdateProfile: authorizeProfileUpdate,
-  canDeleteProfile: authorizeProfileDelete,
   normalizeProfilePatch,
   normalizeAvailability: normalizedAvailability,
   normalizeAssignment,
@@ -640,9 +616,8 @@ module.exports = {
   effectiveAvailability,
   authorizeAssignment,
   authorizeAssignmentOverride,
-  canAssignDepartmentDuty: authorizeAssignment,
-  canOverrideAssignment: authorizeAssignmentOverride,
   departmentForDuty: permissions.departmentForDuty,
-  profilePath,
-  assignmentPath
+  exactDuty,
+  serviceTimeKey,
+  profilePath
 };

@@ -13,19 +13,28 @@ function pacificDate(date = new Date()) {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+const PACIFIC_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: TIME_ZONE, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit'
+});
+
+/* How far Pacific wall-clock time is from UTC at an instant, in ms. */
+function pacificOffset(instant) {
+  const parts = {};
+  PACIFIC_PARTS.formatToParts(new Date(instant)).forEach(part => { parts[part.type] = part.value; });
+  return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute, +parts.second) - instant;
+}
+
 /* A Pacific date and HH:MM time as epoch milliseconds, daylight saving
-   included. */
+   included. The offset is taken at the time itself, not at the same wall
+   clock in UTC: on the Sundays the clocks change, an early-morning time is
+   on the other side of the change from that UTC instant. */
 function pacificTime(dateIso, time) {
   const [year, month, day] = dateIso.split('-').map(Number);
   const [hour, minute] = time.split(':').map(Number);
-  const asUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
-  const parts = {};
-  new Intl.DateTimeFormat('en-US', {
-    timeZone: TIME_ZONE, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).formatToParts(new Date(asUtc)).forEach(part => { parts[part.type] = part.value; });
-  const asPacific = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute, +parts.second);
-  return asUtc - (asPacific - asUtc);
+  const wallClock = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const guess = wallClock - pacificOffset(wallClock);
+  return wallClock - pacificOffset(guess);
 }
 
 /* A service's start, using its label's usual time when it has none. NaN
@@ -34,6 +43,13 @@ function serviceStart(service) {
   if (!service || !/^\d{4}-\d{2}-\d{2}$/.test(service.date || '')) return NaN;
   const time = /^\d{2}:\d{2}$/.test(service.time || '') ? service.time : (DEFAULT_TIMES[service.service] || '12:00');
   return pacificTime(service.date, time);
+}
+
+/* Whether a service has started by `now` (epoch milliseconds). A service
+   without a valid date has not. */
+function hasStarted(service, now = Date.now()) {
+  const start = serviceStart(service);
+  return Number.isFinite(start) && start <= now;
 }
 
 /* "Wednesday, July 1" */
@@ -49,4 +65,4 @@ function clockTime(time) {
   return (hour % 12 || 12) + ':' + minutes + ' ' + (hour >= 12 ? 'PM' : 'AM');
 }
 
-module.exports = { TIME_ZONE, pacificDate, pacificTime, serviceStart, longDate, clockTime };
+module.exports = { TIME_ZONE, DEFAULT_TIMES, pacificDate, pacificTime, serviceStart, hasStarted, longDate, clockTime };

@@ -19,6 +19,7 @@ const brother = (name, extra = {}) => ({
   availability: { recurring: {}, exceptions: {} }, ...extra
 });
 const leader = { uid: 'uid-leader', token: { uid: 'uid-leader', roles: ['departmentLeader'], departments: ['Usher Brothers'], memberUid: 'uid-leader', memberName: 'D. Chris' } };
+const admin = { uid: 'uid-admin', token: { uid: 'uid-admin', roles: ['admin'], memberUid: 'uid-admin', memberName: 'B. Anthony' } };
 const SERVICE = 'schedule/2026-10-03_morning';
 
 /* B. Adam gives the Closing Prayer, B. Eli ushers, E. Joseph presides and
@@ -85,19 +86,22 @@ test('a leader hands a duty to someone praying there without a double-duty quest
   assert.equal(service.conflictOk, undefined, 'nothing to mark OK');
 });
 
-test('a real double duty needs the leader to say so, and the mark lists exactly the duties held', async () => {
+test('a real double duty is refused for a leader; an administrator may make one knowingly, marked with exactly the duties held', async () => {
   const { db, workflows, assignments } = setup({ 'Usher #2': 'B. Adam', 'Usher #1': 'B. Eli' }, {
     conflictOk: { 'B. Adam': ['Presider', 'Usher #2'] } // an old mark for duties he no longer holds
   });
-  const answer = acknowledgeConflict => workflows.resolveDutyAttention({ auth: leader, data: Object.assign({
+  const answer = (auth, acknowledgeConflict) => workflows.resolveDutyAttention({ auth, data: Object.assign({
     departmentId: 'Usher Brothers', serviceId: '2026-10-03_morning', duty: 'Usher #1', replacementMemberUid: 'uid-B. Adam'
   }, acknowledgeConflict ? { acknowledgeConflict } : {}) });
-  await assert.rejects(answer(false), error => error.code === 'failed-precondition' &&
-    error.details && error.details.reason === 'conflict' && error.details.duties.join() === 'Usher #2');
+  for (const acknowledged of [false, true]) {
+    await assert.rejects(answer(leader, acknowledged), error => error.code === 'failed-precondition' &&
+      error.details && error.details.reason === 'already-serving' && error.details.duties.join() === 'Usher #2');
+  }
   assert.equal(assignments()['Usher #1'], 'B. Eli', 'nothing changed');
-  await answer(true);
+  await answer(admin, true);
   assert.equal(assignments()['Usher #1'], 'B. Adam');
-  assert.deepEqual(db.store.get(SERVICE).conflictOk, { 'B. Adam': ['Usher #2', 'Usher #1'] });
+  // In the app's duty order, as isMarkedOk in app/lib/conflicts.js compares.
+  assert.deepEqual(db.store.get(SERVICE).conflictOk, { 'B. Adam': ['Usher #1', 'Usher #2'] });
 });
 
 test('a change request is approved with a replacement, approved open, or declined', async () => {
@@ -117,7 +121,7 @@ test('a change request is approved with a replacement, approved open, or decline
   const declined = await answer('r3', 'Lobby Security', 'declined');
   assert.deepEqual([declined.requestStatus, assignments()['Lobby Security']], ['declined', 'B. Eli']);
   assert.deepEqual(['r1', 'r2', 'r3'].map(id => db.store.get('requests/' + id).status), ['approved', 'approved', 'declined']);
-  await assert.rejects(answer('r1', 'Usher #1', 'approved'), error => error.code === 'failed-precondition' && /no longer pending/.test(error.message));
+  await assert.rejects(answer('r1', 'Usher #1', 'approved'), error => error.code === 'failed-precondition' && error.details.reason === 'request-closed');
   db.store.set('requests/r4', request('r4', 'Usher #2', 'E. Joseph'));
-  await assert.rejects(answer('r4', 'Usher #1', 'approved'), error => error.code === 'failed-precondition' && /does not match/.test(error.message));
+  await assert.rejects(answer('r4', 'Usher #1', 'approved'), error => error.code === 'failed-precondition' && error.details.reason === 'request-mismatch');
 });

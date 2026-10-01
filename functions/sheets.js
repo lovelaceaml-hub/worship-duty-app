@@ -17,11 +17,16 @@ function sheetIdFrom(value) {
   return match ? match[1] : '';
 }
 
+/* A request the API refused for its per-minute quota (429) was not carried
+   out, so it is tried again, after a growing pause. Other failures are not:
+   a structural change (inserting a row) might have happened already. */
+const RETRY = Object.freeze({ retry: 3, statusCodesToRetry: [[429, 429]], httpMethodsToRetry: ['GET', 'POST'], noResponseRetries: 0 });
+
 async function googleRequest(options) {
   auth = auth || new GoogleAuth({ scopes: [SCOPE] });
   const client = await auth.getClient();
   try {
-    return (await client.request(options)).data;
+    return (await client.request(Object.assign({ retry: true, retryConfig: Object.assign({}, RETRY) }, options))).data;
   } catch (error) {
     throw await explain(error);
   }

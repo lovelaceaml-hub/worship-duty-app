@@ -8,6 +8,7 @@ const pbkdf2Async = promisify(crypto.pbkdf2);
 
 const DEFAULT_PIN = '0000';
 const ORDINARY_DEFAULT_PIN = '2217';
+const SHARED_PINS = new Set([DEFAULT_PIN, ORDINARY_DEFAULT_PIN]);
 const PIN_PATTERN = /^[0-9]{4,6}$/;
 const HASH_PREFIX = 'pin';
 const HASH_VERSION = 1;
@@ -51,9 +52,10 @@ const SONG_EDITOR_ROLES = new Set([
 
 const GENERIC_LOGIN_MESSAGE = 'The member name or PIN is not correct.';
 
-function authError(code, message) {
+function authError(code, message, reason) {
   const error = new Error(message);
   error.code = code;
+  if (reason) error.details = { reason };
   return error;
 }
 
@@ -575,10 +577,11 @@ function createMemberAuthService(dependencies = {}) {
     }
 
     const storedHash = memberPinHash(member);
-    if (typeof memberStore.assertCanAttempt === 'function') await memberStore.assertCanAttempt(member.id);
+    // The attempt is counted (and a locked account refused) before the PIN
+    // is checked, so a burst of guesses cannot all be tried.
+    if (typeof memberStore.beginAttempt === 'function') await memberStore.beginAttempt(member.id);
     const valid = storedHash && await verifyPin(input.pin, storedHash);
     if (!valid) {
-      if (typeof memberStore.recordFailedAttempt === 'function') await memberStore.recordFailedAttempt(member.id);
       audit(logger, 'verify', 'denied', null, member);
       throw authError('unauthenticated', GENERIC_LOGIN_MESSAGE);
     }
@@ -611,6 +614,10 @@ function createMemberAuthService(dependencies = {}) {
       throw authError('permission-denied', 'A PIN may only be changed by its owner. Use reset for another account.');
     }
 
+    // The shared starting PINs are known to every member.
+    if (SHARED_PINS.has(input.newPin)) {
+      throw authError('invalid-argument', 'That PIN is too easy to guess. Choose a different one.', 'pin-too-common');
+    }
     const pinHash = await hashPin(input.newPin);
     await updateMember(memberStore, member, { pinHash, mustChangePin: false });
     const nextClaims = sessionClaims(Object.assign({}, member, { pinHash, mustChangePin: false }));
@@ -634,11 +641,25 @@ function createMemberAuthService(dependencies = {}) {
       audit(logger, 'reset', 'denied', actor, member);
       throw error;
     }
+    // A reset also lifts a lockout (the member is usually locked out when
+    // they ask) and ends the member's open sessions: a new role version
+    // makes every older sign-in token stale, and their refresh tokens are
+    // revoked, so a lost phone stops working.
     const pinHash = await hashPin(DEFAULT_PIN);
-    await updateMember(memberStore, member, { pinHash, mustChangePin: true });
+    const roleVersion = Number(member.roleVersion || 1) + 1;
+    await updateMember(memberStore, member, {
+      pinHash, mustChangePin: true, failedLoginAttempts: 0, loginLockedUntil: 0, roleVersion
+    });
+    if (auth && typeof auth.revokeRefreshTokens === 'function') {
+      try {
+        await auth.revokeRefreshTokens(cleanText(member.authUid) || `member:${member.id}`);
+      } catch (_error) {
+        // A member who never signed in has no sessions to end.
+      }
+    }
 
     if (member.authUid && auth && typeof auth.setCustomUserClaims === 'function') {
-      const nextClaims = sessionClaims(Object.assign({}, member, { mustChangePin: true }));
+      const nextClaims = sessionClaims(Object.assign({}, member, { mustChangePin: true, roleVersion }));
       await auth.setCustomUserClaims(member.authUid, nextClaims);
     }
     audit(logger, 'reset', 'success', actor, member);

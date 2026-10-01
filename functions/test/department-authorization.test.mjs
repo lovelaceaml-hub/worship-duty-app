@@ -66,6 +66,11 @@ class FakeDoc {
   async set(value) {
     this.store.set(this.path.join('/'), clone(value));
   }
+
+  async create(value) {
+    if (this.store.has(this.path.join('/'))) throw Object.assign(new Error('6 ALREADY_EXISTS'), { code: 6 });
+    await this.set(value);
+  }
 }
 
 class FakeCollection {
@@ -82,6 +87,19 @@ class FakeCollection {
     const id = `audit-${this.store.nextAudit++}`;
     await this.doc(id).set(value);
     return { id };
+  }
+
+  where(field, op, value) {
+    const compare = { '==': (a, b) => a === b, '>=': (a, b) => a >= b };
+    const query = {
+      limit: () => query,
+      get: async () => {
+        const all = await this.get();
+        const docs = all.docs.filter(document => compare[op]((document.data() || {})[field], value));
+        return { docs, empty: docs.length === 0, size: docs.length };
+      }
+    };
+    return query;
   }
 
   async get() {
@@ -117,6 +135,9 @@ class FakeDb {
     const transaction = {
       get(reference) {
         return reference.get();
+      },
+      getAll(...references) {
+        return Promise.all(references.map(reference => reference.get()));
       },
       set(reference, value, options = {}) {
         writes.push(['set', reference, clone(value), options]);
@@ -354,7 +375,7 @@ test('administrator override is explicit, audited by the handler, and profile-ne
         ...assignment({ duty: 'Sermon', override: true, overrideReason: 'Emergency coverage' })
       }
     }),
-    error => error.code === 'failed-precondition' && /duty-department-mismatch/.test(error.message)
+    error => error.code === 'failed-precondition' && error.details.reason === 'duty-department-mismatch'
   );
 });
 
@@ -390,7 +411,7 @@ test('callable handlers share the same boundary for availability and normal assi
       auth: leader,
       data: assignment()
     }),
-    error => error.code === 'failed-precondition' && /target-unavailable/.test(error.message)
+    error => error.code === 'failed-precondition' && error.details.reason === 'target-unavailable'
   );
 
   await handlers.updateMemberAvailability({
@@ -481,18 +502,18 @@ test('assignment handlers bind profile and availability checks to an existing sc
       auth: leader,
       data: assignment({ serviceId: 'service-existing', serviceDate: '2026-09-21' })
     }),
-    error => error.code === 'failed-precondition' && /does not match/.test(error.message)
+    error => error.code === 'aborted' && error.details.reason === 'changed'
   );
   await assert.rejects(
     handlers.assignDepartmentDuty({
       auth: leader,
       data: assignment({ serviceId: 'service-existing', memberName: 'Spoofed Example' })
     }),
-    error => error.code === 'invalid-argument' && /verified profile/.test(error.message)
+    error => error.code === 'invalid-argument' && error.details.reason === 'name-mismatch'
   );
   await assert.rejects(
     handlers.assignDepartmentDuty({ auth: leader, data: assignment({ serviceId: 'service-existing' }) }),
-    error => error.code === 'failed-precondition' && /already serving/.test(error.message)
+    error => error.code === 'failed-precondition' && error.details.reason === 'already-serving'
   );
 });
 

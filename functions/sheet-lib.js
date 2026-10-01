@@ -91,15 +91,29 @@ const SHEET_MONTHS = {
   jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
 };
 
+const SHEET_WEEKDAYS = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function weekdayOf(word) {
+  const value = SHEET_WEEKDAYS[String(word || '').slice(0, 3).toLowerCase()];
+  return value == null ? null : value;
+}
+
+/* "Sat, May 02", "Sat May 02" or "May 02" -> { month, day, weekday }, the
+   weekday (0 Sunday to 6 Saturday) null when the cell has none. */
 function parseSheetDate(raw) {
   if (!raw) return null;
-  // A weekday prefix is optional. Remove it only when it has a comma, so the
-  // valid no-weekday form "May 02" is not mistaken for a weekday prefix.
-  let cleaned = String(raw).trim().replace(/^[a-z]+,\s*/i, '');
+  // A weekday prefix is optional. Take it off only when it has a comma, so
+  // the valid no-weekday form "May 02" is not mistaken for a weekday prefix.
+  let cleaned = String(raw).trim();
+  let weekdayWord = '';
+  const comma = cleaned.match(/^([a-z]+),\s*(.*)$/i);
+  if (comma) { weekdayWord = comma[1]; cleaned = comma[2]; }
   const parts = cleaned.split(/\s+/);
   // Also accept a space-only weekday prefix such as "Sat May 02". The
   // second token must be a known month, which keeps "May 02" untouched.
   if (parts.length === 3 && SHEET_MONTHS[parts[1].slice(0, 3).toLowerCase()] != null) {
+    weekdayWord = parts[0];
     cleaned = parts.slice(1).join(' ');
   }
   const m = cleaned.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
@@ -108,10 +122,26 @@ function parseSheetDate(raw) {
   if (mon == null) return null;
   const day = parseInt(m[2], 10);
   if (!isValidMonthDay(mon, day)) return null;
-  return { month: mon, day: day };
+  const weekday = weekdayWord ? weekdayOf(weekdayWord) : null;
+  if (weekdayWord && weekday == null) return null;
+  return { month: mon, day: day, weekday };
 }
 
-function inferYearISO(month, day, today) {
+/* The weekday a worship always falls on: Sabbath Day services are on
+   Saturdays and Third Day services on Tuesdays. null for any other. */
+function worshipWeekday(worship) {
+  const value = String(worship || '').trim().toLowerCase();
+  if (/^sabbath/.test(value)) return 6;
+  if (/^third day/.test(value)) return 2;
+  return null;
+}
+
+/* The year of a month and day with no year: last year, this year or next.
+   A weekday decides it (only one of the three falls on that weekday), so a
+   row from January read in October stays in this January, and next year's
+   rows stay next year's. Without a weekday, the closest of the three. null
+   when no year fits. */
+function inferYearISO(month, day, today, weekday = null) {
   if (!isValidMonthDay(month, day)) return null;
   const base = today && typeof today.getTime === 'function' && !Number.isNaN(today.getTime())
     ? today : new Date();
@@ -121,6 +151,7 @@ function inferYearISO(month, day, today) {
   [y0 - 1, y0, y0 + 1].forEach(y => {
     if (!isCalendarDate(y, month, day)) return;
     const d = new Date(y, month, day, 12, 0, 0);
+    if (weekday != null && d.getDay() !== weekday) return;
     const diff = Math.abs(d.getTime() - nowT);
     if (diff < bestDiff) { bestDiff = diff; best = d; }
   });
@@ -162,6 +193,12 @@ function sheetRowsToServices(rows, today) {
   const duplicateWarnings = new Set();
   const unknownDuties = new Set();
   const membersSeen = new Set();
+  const skippedDates = new Set();
+  const skipDate = (rawDate, why) => {
+    if (skippedDates.has(rawDate)) return;
+    skippedDates.add(rawDate);
+    result.warnings.push('Rows for "' + rawDate + '" were skipped: ' + why);
+  };
 
   /* Duplicate policy: source rows are applied in order, preserving the
      existing last-row-wins behavior. A duplicate is warned once per exact
@@ -182,8 +219,17 @@ function sheetRowsToServices(rows, today) {
     if (!rawDate || !serviceLabel || !duty) continue;
     const md = parseSheetDate(rawDate);
     if (!md) continue;
-    const iso = inferYearISO(md.month, md.day, today);
-    if (!iso) continue;
+    const worshipDay = worshipWeekday(iWorship >= 0 ? cell(iWorship) : '');
+    if (md.weekday != null && worshipDay != null && md.weekday !== worshipDay) {
+      skipDate(rawDate, cell(iWorship) + ' is on a ' + WEEKDAY_NAMES[worshipDay] + '.');
+      continue;
+    }
+    const weekday = md.weekday != null ? md.weekday : worshipDay;
+    const iso = inferYearISO(md.month, md.day, today, weekday);
+    if (!iso) {
+      skipDate(rawDate, 'it is not a ' + WEEKDAY_NAMES[weekday] + ' last year, this year or next year.');
+      continue;
+    }
     const isChoirSong = duty === 'Choir Song';
     if (!isChoirSong && !valid[duty]) {
       if (!unknownDuties.has(duty)) {
@@ -230,10 +276,15 @@ function sheetRowsToServices(rows, today) {
 
 /* Merge policy, mirroring the app's mergeSheetServices: new services are
    created whole; existing ones change field-by-field, and only duties the
-   sheet mentions are touched (in-app-only duties are preserved). Instead of
-   writing, returns { creates: [{id, svc}], updates: [{id, patch}] } so the
-   caller controls Firestore I/O and can count zero-write runs. */
-function planMerge(sheetServices, existingById) {
+   sheet mentions are touched (in-app-only duties are preserved). An update
+   names only the duties that changed, so a merge write leaves every other
+   duty as it is in the app at that moment, even one changed while the
+   import ran. With patchTime false an existing service keeps its time: the
+   Sheet only has each label's usual time, so it would undo a time set in the
+   app. Instead of writing, returns { creates: [{id, svc}], updates:
+   [{id, patch}] } so the caller controls Firestore I/O and can count
+   zero-write runs. */
+function planMerge(sheetServices, existingById, { patchTime = true } = {}) {
   const creates = [], updates = [];
   (Array.isArray(sheetServices) ? sheetServices : []).forEach(sheetSvc => {
     if (!sheetSvc || typeof sheetSvc !== 'object') return;
@@ -254,7 +305,7 @@ function planMerge(sheetServices, existingById) {
       return;
     }
     const patch = {};
-    if (sheetSvc.time && existing.time !== sheetSvc.time) patch.time = sheetSvc.time;
+    if (patchTime && sheetSvc.time && existing.time !== sheetSvc.time) patch.time = sheetSvc.time;
     if (sheetSvc.worship && existing.worship !== sheetSvc.worship) patch.worship = sheetSvc.worship;
     // A Choir Song row is authoritative for this exact date/service. Its
     // presence marker lets a blank row clear a stale synced song, while a
@@ -273,9 +324,7 @@ function planMerge(sheetServices, existingById) {
         assignmentsChanged = true;
       }
     });
-    if (assignmentsChanged) {
-      patch.assignments = Object.assign({}, existingAssignments, changedAssignments);
-    }
+    if (assignmentsChanged) patch.assignments = changedAssignments;
     if (Object.keys(patch).length) updates.push({ id: id, patch: patch });
   });
   return { creates: creates, updates: updates };
@@ -283,6 +332,6 @@ function planMerge(sheetServices, existingById) {
 
 module.exports = {
   CATEGORIES, DEFAULT_SHEET_URL,
-  parseCSV, parseSheetDate, inferYearISO, parseSheetTime,
+  parseCSV, parseSheetDate, inferYearISO, worshipWeekday, parseSheetTime,
   sheetRowsToServices, planMerge, svcId, dutyCategory
 };

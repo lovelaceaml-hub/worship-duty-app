@@ -35,9 +35,13 @@ const {
   errorWithCode,
   rejectDecision,
   assignmentIdFor,
-  profileWithPatch
+  profileWithPatch,
+  authorizationCandidate
 } = require('./department-handlers.js');
-const { pacificDate, serviceStart } = require('./time.js');
+const { serviceStart, hasStarted } = require('./time.js');
+const { canonicalName } = require('./names.js');
+const { loadNameMap } = require('./app-docs.js');
+const replacements = require('./replacements.js');
 
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 // Release day. The automatic recorder only ever considers services on or after
@@ -52,6 +56,19 @@ function plainObject(value) {
 
 function displayName(actor) {
   return actor.token.memberName || actor.token.member || actor.uid;
+}
+
+/* Duties in the app's order (app/config/duties.js ALL_DUTIES). */
+const DUTY_ORDER = Object.values(permissions.DEPARTMENT_DUTIES).flat();
+function dutyOrder(duties) {
+  return Array.from(new Set(duties)).sort((a, b) => DUTY_ORDER.indexOf(a) - DUTY_ORDER.indexOf(b));
+}
+
+/* A service's assignments with every name in its current spelling. */
+function canonicalAssignments(assignments, canonical) {
+  const out = {};
+  Object.keys(assignments || {}).forEach(duty => { out[duty] = canonical(assignments[duty]); });
+  return out;
 }
 
 function text(value, max) {
@@ -110,20 +127,21 @@ function createWorkflowHandlers(options = {}) {
     });
 
     const at = now();
-    const today = pacificDate(new Date(at));
+    const nameMap = await loadNameMap(db);
+    const canonical = name => canonicalName(name, nameMap);
+    const services = await replacements.upcomingServices(db, at);
     let highestRevision = 0;
     const departmentsOut = [];
-    const marked = [];
-    const cleared = [];
+    let flagged = { marked: [], cleared: [] };
 
     await db.runTransaction(async transaction => {
-      /* ---- reads: profiles, then per-department assignment queries and
-         the schedule docs they touch ---- */
+      /* ---- reads: profiles, then the upcoming services where the member
+         holds a duty of one of these departments ---- */
       const profileRefs = entries.map(entry => profileRef(db, entry.departmentId, memberUid));
       const profileSnapshots = await Promise.all(profileRefs.map(reference => transaction.get(reference)));
       profileSnapshots.forEach((snapshot, index) => {
         if (!snapshot.exists) {
-          throw errorWithCode('not-found', `The department member profile was not found: ${entries[index].departmentId}.`);
+          throw errorWithCode('not-found', `The department member profile was not found: ${entries[index].departmentId}.`, { reason: 'profile-missing' });
         }
       });
 
@@ -138,108 +156,49 @@ function createWorkflowHandlers(options = {}) {
         });
         const next = profileWithPatch(before, entry.patch, actor, at);
         next.revision = nextRevision(before);
-        const authorizationCandidate = { ...next };
-        if (Object.prototype.hasOwnProperty.call(before, 'attribution')) {
-          authorizationCandidate.attribution = before.attribution;
-        } else {
-          delete authorizationCandidate.attribution;
-        }
-        if (Object.prototype.hasOwnProperty.call(before, 'fieldAttribution')) {
-          authorizationCandidate.fieldAttribution = before.fieldAttribution;
-        } else {
-          delete authorizationCandidate.fieldAttribution;
-        }
-        const result = authz.authorizeProfileUpdate(actor, before, authorizationCandidate);
-        rejectDecision(result);
+        rejectDecision(authz.authorizeProfileUpdate(actor, before, authorizationCandidate(before, next)));
         return { departmentId: entry.departmentId, reference: profileRefs[index], before, next };
       });
 
-      const assignmentQuerySnapshots = await Promise.all(candidates.map(candidate =>
-        transaction.get(db.collection('departmentAssignments')
-          .where('departmentId', '==', candidate.departmentId)
-          .where('memberUid', '==', memberUid))
-      ));
+      const serviceIds = new Set();
+      candidates.forEach(candidate => replacements.servicesHolding(services, candidate.departmentId,
+        canonical(candidate.next.memberName || candidate.next.member), canonical).forEach(id => serviceIds.add(id)));
+      const ids = Array.from(serviceIds);
+      const scheduleSnapshots = ids.length ? await transaction.getAll(...ids.map(id => db.collection('schedule').doc(id))) : [];
+      const byId = {};
+      ids.forEach((id, index) => { byId[id] = scheduleSnapshots[index].exists ? scheduleSnapshots[index].data() || {} : null; });
 
-      const relevantByDepartment = candidates.map((candidate, index) => {
-        const records = assignmentQuerySnapshots[index].docs
-          .map(document => document.data() || {})
-          .filter(record => record.serviceId && record.serviceDate >= today);
-        return { candidate, records };
-      });
-
-      const scheduleIds = new Set();
-      relevantByDepartment.forEach(({ records }) => records.forEach(record => scheduleIds.add(record.serviceId)));
-      const scheduleRefs = Array.from(scheduleIds).map(id => db.collection('schedule').doc(id));
-      const scheduleSnapshots = await Promise.all(scheduleRefs.map(reference => transaction.get(reference)));
-      const scheduleById = {};
-      scheduleRefs.forEach((reference, index) => {
-        scheduleById[reference.id] = { reference, snapshot: scheduleSnapshots[index] };
-      });
-
-      /* ---- writes: profiles, then needs-replacement markers ---- */
-      relevantByDepartment.forEach(({ candidate }) => {
+      /* ---- writes: profiles, then one write per service for its flags ---- */
+      candidates.forEach(candidate => {
         transaction.set(candidate.reference, candidate.next, { merge: false });
         if (candidate.next.revision > highestRevision) highestRevision = candidate.next.revision;
         departmentsOut.push({ departmentId: candidate.departmentId, revision: candidate.next.revision, profile: candidate.next });
       });
-
-      /* Firestore forbids a second write to the same document reference
-         within one transaction, and two different duties (even across
-         departments) can land on the same schedule document, so every
-         needsReplacement change for a given service is accumulated here
-         and written with exactly one transaction.set per document. */
-      const needsReplacementPatchByServiceId = new Map();
-      const patchFor = serviceId => {
-        if (!needsReplacementPatchByServiceId.has(serviceId)) needsReplacementPatchByServiceId.set(serviceId, {});
-        return needsReplacementPatchByServiceId.get(serviceId);
-      };
-
-      relevantByDepartment.forEach(({ candidate, records }) => {
-        records.forEach(record => {
-          const entry = scheduleById[record.serviceId];
-          if (!entry || !entry.snapshot.exists) return;
-          const scheduleData = entry.snapshot.data() || {};
-          const assignments = scheduleData.assignments || {};
-          if (String(assignments[record.duty] || '') !== String(record.memberName || '')) return;
-          const scheduled = authz.profileForScheduling(candidate.next);
-          if (!scheduled) return;
-          const effective = authz.effectiveAvailability(scheduled, record.serviceDate, record.serviceTime);
-          const needsReplacement = scheduleData.needsReplacement || {};
-          const existingMarker = needsReplacement[record.duty];
-          if (effective === 'unavailable' && !existingMarker) {
-            patchFor(record.serviceId)[record.duty] = {
-              memberName: record.memberName || '',
-              memberUid,
-              departmentId: candidate.departmentId,
-              reason: 'unavailable',
-              since: at,
-              markedByUid: actor.uid
-            };
-            marked.push({ serviceId: record.serviceId, duty: record.duty });
-          } else if (effective === 'available' && existingMarker &&
-              existingMarker.reason === 'unavailable' && existingMarker.memberUid === memberUid) {
-            patchFor(record.serviceId)[record.duty] = deleteField();
-            cleared.push({ serviceId: record.serviceId, duty: record.duty });
-          }
-        });
-      });
-
-      needsReplacementPatchByServiceId.forEach((patch, serviceId) => {
-        const entry = scheduleById[serviceId];
-        transaction.set(entry.reference, { needsReplacement: patch }, { merge: true });
-      });
+      flagged = replacements.writeFlags(transaction, db, candidates.flatMap(candidate => replacements.flagChanges({
+        profile: candidate.next, departmentId: candidate.departmentId, memberUid, byId, canonical, at, markedByUid: actor.uid
+      })));
     });
 
     return {
       ok: true,
       revision: highestRevision,
       departments: departmentsOut,
-      replacements: { marked, cleared }
+      replacements: flagged
     };
   }
 
   /* ================= 2. atomic request / assignment resolution ================= */
 
+  /* A leader answers a change request or a flagged duty, in one step:
+     - a request (requestId): approve and hand the duty to someone, approve
+       and leave it open, or decline. Approving needs the service and needs
+       the member who asked to still hold the duty (not-holder otherwise);
+       declining works even when the service was moved, deleted or has
+       started, so a stale request can always be closed;
+     - a flagged duty (no requestId): hand it to someone, leave it open, or
+       keep the member on it (decision 'keep'), which removes the flag.
+     A service that has started is not changed (service-started). Names are
+     compared in their current spelling. */
   async function resolveDutyAttention(request) {
     const actor = requestActor(request);
     const data = inputData(request);
@@ -252,89 +211,130 @@ function createWorkflowHandlers(options = {}) {
 
     const departmentId = text(data.departmentId);
     const serviceId = text(data.serviceId);
-    const duty = text(data.duty);
-    if (!departmentId) throw errorWithCode('invalid-argument', 'departmentId is required.');
+    const duty = authz.exactDuty(data.duty);
+    if (!permissions.DEPARTMENTS.includes(departmentId)) throw errorWithCode('invalid-argument', 'departmentId is required.');
     if (!serviceId) throw errorWithCode('invalid-argument', 'serviceId is required.');
-    if (!duty) throw errorWithCode('invalid-argument', 'duty is required.');
+    if (!duty) throw errorWithCode('invalid-argument', 'duty must be one of the duties.');
     if (authz.departmentForDuty(duty) !== departmentId) {
-      throw errorWithCode('failed-precondition', 'Department authorization denied: duty-department-mismatch.');
+      throw errorWithCode('failed-precondition', 'That duty belongs to another department.', { reason: 'duty-department-mismatch' });
     }
     const requestId = data.requestId == null ? '' : text(data.requestId);
-    if (requestId && data.decision == null) {
-      throw errorWithCode('invalid-argument', 'decision is required when requestId is present.');
-    }
-    if (!requestId && data.decision != null) {
-      throw errorWithCode('invalid-argument', 'decision is not allowed without requestId.');
-    }
     const decision = data.decision == null ? null : text(data.decision);
-    if (decision != null && decision !== 'approved' && decision !== 'declined') {
-      throw errorWithCode('invalid-argument', "decision must be 'approved' or 'declined'.");
+    if (requestId && decision !== 'approved' && decision !== 'declined') {
+      throw errorWithCode('invalid-argument', "decision must be 'approved' or 'declined' for a request.");
     }
-    const hasReplacement = Object.prototype.hasOwnProperty.call(data, 'replacementMemberUid') &&
-      data.replacementMemberUid != null;
-    if (hasReplacement && decision === 'declined') {
-      throw errorWithCode('invalid-argument', 'replacementMemberUid is not allowed with decision: declined.');
+    if (!requestId && decision != null && decision !== 'keep') {
+      throw errorWithCode('invalid-argument', "Without a request, decision may only be 'keep'.");
     }
+    const hasReplacement = data.replacementMemberUid != null;
     const replacementMemberUid = hasReplacement ? text(data.replacementMemberUid) : '';
-    const acknowledgeConflict = data.acknowledgeConflict === true;
+    if (hasReplacement && (!replacementMemberUid || decision === 'declined' || decision === 'keep')) {
+      throw errorWithCode('invalid-argument', 'replacementMemberUid is only allowed when the duty goes to someone.');
+    }
+    // Only an administrator may knowingly make a double duty; for a leader
+    // the double-duty rule holds here as on every other path.
+    const acknowledgeConflict = data.acknowledgeConflict === true && authz.isAdministrator(actor);
     const expectedRevision = data.expectedRevision;
     const expectedMemberName = data.expectedMemberName;
 
     if (!authz.isAdministrator(actor) && !authz.managesDepartment(actor, departmentId)) {
-      throw errorWithCode('permission-denied', 'Department authorization denied: profile-write-not-authorized.');
+      throw errorWithCode('permission-denied', 'You do not lead that department.', { reason: 'cross-department' });
     }
 
+    const nameMap = await loadNameMap(db);
+    const canonical = name => canonicalName(name, nameMap);
     const scheduleReference = db.collection('schedule').doc(serviceId);
     const requestReference = requestId ? db.collection('requests').doc(requestId) : null;
+    const resolution = status => Object.assign({
+      status, resolvedAt: now(), resolvedByUid: actor.uid, resolvedByName: displayName(actor), resolvedBy: actor.uid
+    });
 
     let revisionValue;
     let record = null;
     let memberName = '';
     let requestStatus = null;
+    let kept = false;
 
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
-      if (!scheduleSnapshot.exists) throw errorWithCode('not-found', 'The schedule service was not found.');
-      const scheduleData = scheduleSnapshot.data() || {};
-
       const requestSnapshot = requestReference ? await transaction.get(requestReference) : null;
+      let requestData = null;
       if (requestReference) {
-        if (!requestSnapshot.exists) throw errorWithCode('not-found', 'The request was not found.');
-        const requestData = requestSnapshot.data() || {};
+        if (!requestSnapshot.exists) throw errorWithCode('not-found', 'The request was not found.', { reason: 'request-missing' });
+        requestData = requestSnapshot.data() || {};
         if (requestData.status !== 'pending') {
-          throw errorWithCode('failed-precondition', 'The request is no longer pending.');
-        }
-        if (requestData.svcId !== serviceId || requestData.duty !== duty) {
-          throw errorWithCode('failed-precondition', 'The request does not match this service and duty.');
+          throw errorWithCode('failed-precondition', 'The request was already answered or withdrawn.', { reason: 'request-closed', status: String(requestData.status || '') });
         }
         const requestDepartment = requestData.department || requestData.departmentId || '';
-        if (requestDepartment && requestDepartment !== departmentId) {
-          throw errorWithCode('failed-precondition', 'The request does not match this department.');
+        if (requestData.svcId !== serviceId || authz.exactDuty(requestData.duty) !== duty ||
+            (requestDepartment && requestDepartment !== departmentId)) {
+          throw errorWithCode('failed-precondition', 'The request does not match this service and duty.', { reason: 'request-mismatch' });
         }
+      }
+
+      if (decision === 'declined') {
+        // Declining closes the request and leaves the duty as it is, so it
+        // works for a service that was moved, deleted or has started.
+        const scheduleData = scheduleSnapshot.exists ? scheduleSnapshot.data() || {} : {};
+        memberName = String((scheduleData.assignments || {})[duty] || '');
+        revisionValue = currentRevision({ revision: (scheduleData.assignmentRevisions || {})[duty] });
+        transaction.set(requestReference, resolution('declined'), { merge: true });
+        requestStatus = 'declined';
+        return;
+      }
+
+      if (!scheduleSnapshot.exists) {
+        throw errorWithCode('not-found', requestReference
+          ? 'That service was moved or deleted. Decline the request to close it.'
+          : 'That service was moved or deleted.', { reason: 'service-missing' });
+      }
+      const scheduleData = scheduleSnapshot.data() || {};
+      if (hasStarted(scheduleData, now())) {
+        throw errorWithCode('failed-precondition', 'That service has already started. Its duties stay as they are.', { reason: 'service-started' });
       }
 
       /* Same derivation as assignmentForSchedule in department-handlers.js:
          the slot's serviceTime is a slug of the schedule's service label,
          not a clock time. */
       const slotServiceDate = String(scheduleData.date || '').trim();
-      const slugSource = scheduleData.serviceTime || scheduleData.service || scheduleData.time || '';
-      const slotServiceTime = String(slugSource).toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const slotServiceTime = authz.serviceTimeKey(scheduleData);
       if (!slotServiceDate || !slotServiceTime) {
-        throw errorWithCode('failed-precondition', 'The schedule service identity is incomplete.');
+        throw errorWithCode('failed-precondition', 'The schedule service identity is incomplete.', { reason: 'invalid-service' });
       }
 
       const assignmentRevisions = scheduleData.assignmentRevisions || {};
       const assignments = scheduleData.assignments || {};
       const currentMemberName = String(assignments[duty] || '');
+      const holder = canonical(currentMemberName);
       memberName = currentMemberName;
+      const flag = (scheduleData.needsReplacement || {})[duty];
+
+      if (decision === 'keep') {
+        const expected = flag ? flag.memberName : expectedMemberName;
+        if (expected != null && canonical(expected) !== holder) {
+          throw errorWithCode('failed-precondition', 'That member is no longer on that duty.', { reason: 'not-holder', memberName: currentMemberName });
+        }
+        if (flag) transaction.set(scheduleReference, { needsReplacement: { [duty]: deleteField() } }, { merge: true });
+        revisionValue = currentRevision({ revision: assignmentRevisions[duty] });
+        kept = true;
+        return;
+      }
 
       assertFresh({
         expectedRevision,
-        expectedWitness: expectedMemberName,
+        expectedWitness: expectedMemberName == null ? undefined : canonical(expectedMemberName),
         currentRevision: currentRevision({ revision: assignmentRevisions[duty] }),
-        currentWitness: currentMemberName,
+        currentWitness: holder,
         details: { memberName: currentMemberName }
       });
+
+      // An approval acts for the member who asked: once someone else holds
+      // the duty, the request can only be closed (declined).
+      if (requestData && (!holder || holder !== canonical(requestData.name))) {
+        throw errorWithCode('failed-precondition', 'The member who asked is no longer on that duty. Decline the request to close it.', {
+          reason: 'not-holder', memberName: currentMemberName
+        });
+      }
 
       const slotAssignment = {
         departmentId, memberUid: '', memberName: '', duty,
@@ -343,25 +343,10 @@ function createWorkflowHandlers(options = {}) {
       const slotReference = db.collection('departmentAssignments').doc(assignmentIdFor(slotAssignment));
       const slotSnapshot = await transaction.get(slotReference);
 
-      if (decision === 'declined') {
-        revisionValue = currentRevision({ revision: assignmentRevisions[duty] });
-        if (requestReference) {
-          transaction.set(requestReference, {
-            status: 'declined',
-            resolvedAt: now(),
-            resolvedByUid: actor.uid,
-            resolvedByName: displayName(actor),
-            resolvedBy: actor.uid
-          }, { merge: true });
-          requestStatus = 'declined';
-        }
-        return;
-      }
-
       if (hasReplacement) {
         const replacementReference = profileRef(db, departmentId, replacementMemberUid);
         const replacementSnapshot = await transaction.get(replacementReference);
-        if (!replacementSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.');
+        if (!replacementSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.', { reason: 'profile-missing' });
         const profile = replacementSnapshot.data() || {};
 
         let normalized;
@@ -377,10 +362,10 @@ function createWorkflowHandlers(options = {}) {
         rejectDecision(result);
 
         const targetName = String(profile.memberName || profile.member || '');
-        const conflictDuties = permissions.blockingDuties(assignments, targetName, duty);
+        const conflictDuties = permissions.blockingDuties(canonicalAssignments(assignments, canonical), canonical(targetName), duty);
         if (conflictDuties.length && !acknowledgeConflict) {
           throw errorWithCode('failed-precondition', 'The member already serves in this service.', {
-            reason: 'conflict', duties: conflictDuties
+            reason: 'already-serving', duties: conflictDuties
           });
         }
 
@@ -395,31 +380,25 @@ function createWorkflowHandlers(options = {}) {
         /* One combined write to the schedule document: Firestore forbids a
            second set/update on the same document reference within a
            transaction, so assignments, assignmentRevisions, the
-           needsReplacement clear, and any conflictOk merge all land in a
+           needsReplacement clear, and any conflictOk mark all land in a
            single merge:true set. */
         const scheduleUpdate = {
           assignments: { [duty]: record.memberName },
           assignmentRevisions: { [duty]: revisionValue }
         };
-        if (scheduleData.needsReplacement && scheduleData.needsReplacement[duty]) {
-          scheduleUpdate.needsReplacement = { [duty]: deleteField() };
-        }
-        if (conflictDuties.length && acknowledgeConflict) {
-          // The mark lists exactly the duties the person holds now; an older
-          // mark for other duties no longer counts (app/lib/conflicts.js).
-          scheduleUpdate.conflictOk = { [targetName]: [...conflictDuties, duty] };
+        if (flag) scheduleUpdate.needsReplacement = { [duty]: deleteField() };
+        if (conflictDuties.length) {
+          // The mark lists exactly the duties the person holds now, in the
+          // app's duty order, which is what isMarkedOk (app/lib/conflicts.js)
+          // compares; an older mark for other duties no longer counts.
+          scheduleUpdate.conflictOk = { [targetName]: dutyOrder([...conflictDuties, duty]) };
         }
         transaction.set(scheduleReference, scheduleUpdate, { merge: true });
 
         if (requestReference) {
-          transaction.set(requestReference, {
-            status: 'approved',
-            resolvedAt: now(),
-            resolvedByUid: actor.uid,
-            resolvedByName: displayName(actor),
-            resolvedBy: actor.uid,
-            assignmentId: record.id
-          }, { merge: true });
+          transaction.set(requestReference, Object.assign(resolution('approved'), {
+            assignmentId: record.id, replacementName: record.memberName
+          }), { merge: true });
           requestStatus = 'approved';
         }
         return;
@@ -432,33 +411,24 @@ function createWorkflowHandlers(options = {}) {
         assignments: { [duty]: '' },
         assignmentRevisions: { [duty]: revisionValue }
       };
-      if (scheduleData.needsReplacement && scheduleData.needsReplacement[duty]) {
-        scheduleUpdate.needsReplacement = { [duty]: deleteField() };
-      }
+      if (flag) scheduleUpdate.needsReplacement = { [duty]: deleteField() };
       transaction.set(scheduleReference, scheduleUpdate, { merge: true });
       if (requestReference) {
-        transaction.set(requestReference, {
-          status: 'approved',
-          resolvedAt: now(),
-          resolvedByUid: actor.uid,
-          resolvedByName: displayName(actor),
-          resolvedBy: actor.uid,
-          assignmentId: null
-        }, { merge: true });
+        transaction.set(requestReference, Object.assign(resolution('approved'), { assignmentId: null }), { merge: true });
         requestStatus = 'approved';
       }
     });
 
-    return {
+    return Object.assign({
       ok: true,
       revision: revisionValue,
       serviceId,
       duty,
-      memberName: record ? record.memberName : (decision === 'declined' ? memberName : ''),
+      memberName: record ? record.memberName : (decision === 'declined' || kept ? memberName : ''),
       assignment: record,
       requestId: requestId || null,
       requestStatus
-    };
+    }, kept ? { kept: true } : {});
   }
 
   /* ============================ 4.3 automatic recorder ============================ */
