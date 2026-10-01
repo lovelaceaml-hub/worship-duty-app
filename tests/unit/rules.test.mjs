@@ -1,12 +1,13 @@
 /* The app's scheduling rules: double duties, availability, suggestions for
-   a replacement, which duties a service usually has filled, and when a
-   change request is still open. Fill has its own file, fill.test.mjs. */
+   a replacement, and when a change request is still open. Fill, and which
+   duties a service usually has (fillDuties), have their own file,
+   fill.test.mjs. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { doubleDuties, openDoubleDuties, canAlsoServe, otherDuties, prayerOf } from '../../app/lib/conflicts.js';
 import { availabilityOn, canTake, normalizeProfile, timeKey, timeLabel } from '../../app/lib/availability.js';
-import { workload, suggestReplacements, usualDuties } from '../../app/lib/workload.js';
+import { workload, suggestReplacements } from '../../app/lib/workload.js';
 import { isOpen, shownStatus, requestId } from '../../app/lib/requests.js';
 import { ALL_DUTIES, PRAYER_DUTIES, USHER_DUTIES, DUTY_DEFAULTS, dutyDefault } from '../../app/config/duties.js';
 
@@ -131,17 +132,6 @@ test('replacements: free members who can take the duty, lightest load first', ()
   assert.deepEqual(suggestReplacements(praying, 'Usher Door', roster, stats, { exclude: 'S. Naomi' }).map(item => item.memberName), ['S. Grace', 'S. Leah']);
   // Esther ushers at the front already, so she is not offered for the door.
   assert.ok(!suggestReplacements(praying, 'Usher Door', roster, stats, { limit: 9 }).some(item => item.memberName === 'S. Esther'));
-});
-
-test('a service "usually" has a duty filled when half of its kind do', () => {
-  const kind = { worship: 'Sabbath Day', service: 'Morning' };
-  const usual = usualDuties([
-    Object.assign({ assignments: { Presider: 'a', 'Usher #1': 'b' } }, kind),
-    Object.assign({ assignments: { Presider: 'c' } }, kind),
-    Object.assign({ assignments: {} }, kind)
-  ]);
-  assert.deepEqual(usual(kind), ['Presider', 'Usher #1']);
-  assert.deepEqual(usual({ worship: 'Third Day', service: 'Evening' }), []);
 });
 
 test('a change request is open while pending and the member still holds the duty', () => {
