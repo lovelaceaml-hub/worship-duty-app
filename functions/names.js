@@ -20,14 +20,18 @@ const tidy = value => String(value == null ? '' : value).replace(/\s+/g, ' ').tr
 
 /* The current spelling of a name: app/nameMap first, then the built-in list,
    again and again until the name stops changing, so a member renamed twice
-   is still found under their first spelling. A loop stops at the last new
-   name. */
+   is still found under their first spelling. A spelling a rename chose (a
+   value in app/nameMap) stays as it is, even when the built-in list would
+   change it back, so renaming "S. Monica S" to "S. Monica Salazar" holds.
+   A loop stops at the last new name. app/lib/names.js does the same. */
 function canonicalName(raw, nameMap = {}) {
   let value = tidy(raw);
   const seen = new Set([value]);
   const map = nameMap && typeof nameMap === 'object' ? nameMap : {};
+  const has = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+  const chosen = new Set(Object.values(map).map(tidy));
   for (;;) {
-    const mapped = Object.prototype.hasOwnProperty.call(map, value) ? map[value] : BUILT_IN_NAME_MAP[value];
+    const mapped = has(map, value) ? map[value] : !chosen.has(value) && has(BUILT_IN_NAME_MAP, value) ? BUILT_IN_NAME_MAP[value] : '';
     const next = tidy(mapped);
     if (!next || next === value || seen.has(next)) return value;
     seen.add(next);

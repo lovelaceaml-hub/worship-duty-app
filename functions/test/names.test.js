@@ -13,6 +13,10 @@ test('a name reaches its current spelling through both maps, in any number of st
   assert.equal(canonicalName('Bridgette', { Bridgette: 'S. Bridgette' }), 'S. Bridgette');
   assert.equal(canonicalName('D. Chloe', { 'D. Chloe': 'S. Chloe' }), 'S. Chloe', 'the name map wins over the built-in list');
   assert.equal(canonicalName('M. Chloe', { 'M. Chloe': 'D. Chloe' }), 'D. Chloe', 'a loop stops at the last new name');
+  const salazar = { 'S. Monica S': 'S. Monica Salazar' };
+  assert.equal(canonicalName('S. Monica S', salazar), 'S. Monica Salazar', 'a rename to a built-in spelling holds');
+  assert.equal(canonicalName('S. Monica Salazar', salazar), 'S. Monica Salazar', 'and is not changed back');
+  assert.equal(canonicalName('constructor'), 'constructor', 'only the list\'s own spellings');
   assert.equal(canonicalName(''), '');
   assert.equal(canonicalName(null), '');
 });

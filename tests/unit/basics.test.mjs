@@ -43,6 +43,9 @@ test('stored names follow the server: app/nameMap, else the built-in spelling, u
   assert.equal(canonicalName('B. Gio', { 'B. Gio': 'B. Gio Smith' }), 'B. Gio Smith', 'the name map comes before the built-in list');
   assert.equal(canonicalName('B. One', { 'B. One': 'B. Two', 'B. Two': 'B. Three' }), 'B. Three', 'renamed twice');
   assert.equal(canonicalName('B. One', { 'B. One': 'B. Two', 'B. Two': 'B. One' }), 'B. Two', 'a loop stops at the last new name');
+  const salazar = { 'S. Monica S': 'S. Monica Salazar' };
+  assert.equal(canonicalName('S. Monica S', salazar), 'S. Monica Salazar', 'a rename to a built-in spelling holds');
+  assert.equal(canonicalName('S. Monica Salazar', salazar), 'S. Monica Salazar', 'and is not changed back');
   assert.equal(canonicalName('  S.  Leah ', {}), 'S. Leah');
   assert.equal(canonicalName('constructor', {}), 'constructor');
   assert.equal(canonicalName(null, null), '');

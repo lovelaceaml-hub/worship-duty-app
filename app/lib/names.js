@@ -21,8 +21,9 @@ const DISPLAY_FIXES = {
    (functions/names.js canonicalName), so the app and the server always name
    a member the same way: spaces tidied, then app/nameMap, else the built-in
    spellings, again and again until the name stops changing (a member renamed
-   twice is found under their first spelling); a loop stops at the last new
-   name. Answers are kept per name map, because every redraw asks for the
+   twice is found under their first spelling). A spelling a rename chose (a
+   value in app/nameMap) is kept even when the built-in list would change it
+   back; a loop stops at the last new name. Answers are kept per name map, because every redraw asks for the
    same few hundred names. */
 const canonicals = new WeakMap();
 const NO_MAP = {};
@@ -46,8 +47,9 @@ const has = (map, key) => Object.prototype.hasOwnProperty.call(map, key);
 function currentSpelling(raw, map) {
   let value = oneSpaced(raw);
   const seen = new Set([value]);
+  const chosen = new Set(Object.values(map).map(oneSpaced));
   for (;;) {
-    const next = oneSpaced(has(map, value) ? map[value] : has(BUILT_IN_NAME_MAP, value) ? BUILT_IN_NAME_MAP[value] : '');
+    const next = oneSpaced(has(map, value) ? map[value] : !chosen.has(value) && has(BUILT_IN_NAME_MAP, value) ? BUILT_IN_NAME_MAP[value] : '');
     if (!next || next === value || seen.has(next)) return value;
     seen.add(next);
     value = next;
