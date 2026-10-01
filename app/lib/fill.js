@@ -42,18 +42,24 @@ import { canTake, takesDuty } from './availability.js';
 import { serviceId, byStart, startsAt } from './services.js';
 import { hasDuty } from './worship.js';
 import { canAdd, isPrayer, isUsher, prayerOf } from './conflicts.js';
+import { recentLoad } from './workload.js';
 import { ALL_DUTIES, departmentOf } from '../config/duties.js';
 
-export const FILL_MODES = [['auto', 'Auto (fairest first)'], ['rotation', 'Rotation (take turns)'], ['random', 'Random']];
+/* The three ways, each with one line saying what it does. */
+export const FILL_MODES = [
+  ['auto', 'Auto (fairest first)', 'People with the fewest duties this month go first.'],
+  ['rotation', 'Rotation (take turns)', 'Whoever has waited longest since their last turn goes first.'],
+  ['random', 'Random', 'Anyone free, picked at random.']
+];
 
-/* Why a duty stayed empty: its default cannot take it then, no one on the
-   list takes it, no one who takes it is available then, or everyone
-   available already serves in that service. */
+/* Why a duty stayed empty, in a few words and in a sentence: its default
+   cannot take it then, no one on the list takes it, no one who takes it is
+   available then, or everyone available already serves in that service. */
 export const UNFILLED_REASONS = {
-  default: 'The default for this duty cannot take it then. Choose someone by hand',
-  nobody: 'No one on the list takes this duty',
-  away: 'No one who takes this duty is available then',
-  serving: 'Everyone available already serves in this service'
+  default: ['Default not free', 'The default for this duty cannot take it then. Choose someone by hand.'],
+  nobody: ['No one takes it', 'No one on the list takes this duty.'],
+  away: ['No one free then', 'No one who takes this duty is available then.'],
+  serving: ['Everyone free is serving', 'Everyone available already serves in this service.']
 };
 
 /* A small stable number for a name at a service, to break ties fairly. */
@@ -134,8 +140,7 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
   const fairKey = (service, id) => {
     const day = dayNames[service.date] || new Set(), month = monthCount[service.date.slice(0, 7)] || {};
     return remember(name => {
-      const served = stats[name] || {};
-      return [day.has(name) ? 1 : 0, month[name] || 0, (served.past8 || 0) + (served.upcoming || 0), served.last || '', spread(name, id)];
+      return [day.has(name) ? 1 : 0, month[name] || 0, recentLoad(stats, name), (stats[name] || {}).last || '', spread(name, id)];
     });
   };
   const turnKey = line => {
