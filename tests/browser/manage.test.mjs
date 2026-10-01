@@ -281,11 +281,16 @@ test('when Approve can no longer work, the request card offers to close it', asy
   await context.close();
 });
 
-test('Checks lists the usual duties not filled in the next 4 weeks, unplanned services too', async () => {
-  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture: { patch: { 'schedule/2026-07-14_evening': { assignments: {} } } } });
+test('Checks lists the usual duties not filled in the next 4 weeks, unplanned services too, and the names to check', async () => {
+  const fixture = { patch: {
+    'schedule/2026-07-14_evening': { assignments: {} },
+    'departments/Usher Sisters/members/member:S. Naomi': { availability: { recurring: {}, exceptions: { '2026-07-11': { '*': 'unavailable' } } } }
+  } };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
   await tab(page, 'manage');
   await section(page, 'manage-section', 'planning');
   await page.locator('#view .open-duty', { hasText: 'Tue, Jul 14 · Evening' }).locator('span', { hasText: 'Usher Door, Usher Front' }).waitFor();
+  await page.locator('#view .open-duty', { hasText: 'Sat, Jul 11 · Morning' }).locator('span', { hasText: 'Usher Door: S. Naomi (not available then)' }).waitFor();
   assert.deepEqual(errors, []);
   await context.close();
 });

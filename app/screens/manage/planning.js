@@ -17,6 +17,7 @@ import { saveDuty } from '../../services/planner.js';
 import { openConflicts } from '../../services/attention.js';
 import { canEditDuty } from '../../services/access.js';
 import { managedDepartment, shownFor, departmentsShown, serviceById } from './scope.js';
+import { planContext, needsLook } from './plan-cell.js';
 
 function conflicts(stats) {
   const list = openConflicts().filter(item => shownFor(managedDepartment())(item.service));
@@ -56,6 +57,24 @@ function openDuties(coming) {
   </section>`;
 }
 
+/* People on duties in the next four weeks they can no longer take: the
+   planner's red names, with the reason (double duties have their own list). */
+function namesToCheck(coming) {
+  const horizon = addDays(todayISO(), 28);
+  const soon = coming.filter(service => service.date <= horizon);
+  const context = planContext(soon, fillDuties(data.services, todayISO()));
+  const duties = departmentsShown().flatMap(department => department.duties);
+  const rows = soon.flatMap(service => duties.map(duty => ({ service, duty, look: needsLook(service, duty, context) })))
+    .filter(item => item.look && !item.look.double).map(item => Object.assign(item, { why: item.look.note }));
+  if (!rows.length) return '';
+  return html`<section class="card">
+    <h3 class="card-subtitle">Names to check, next 4 weeks</h3>
+    <p class="hint">People on a duty they can no longer take. Give it to someone else in the month plan.</p>
+    ${rows.map(({ service, duty, why }) => html`<p class="open-duty"><button type="button" class="link open-duty-when" data-act="planning-open" data-service="${serviceId(service)}">${shortDate(service.date)} · ${service.service}</button>
+      <span>${dutyName(duty)}: ${nameOf(service.assignments[duty])} (${why.charAt(0).toLowerCase() + why.slice(1)})</span></p>`)}
+  </section>`;
+}
+
 function workloadTable(stats) {
   const department = managedDepartment();
   const year = todayISO().slice(0, 4);
@@ -88,6 +107,7 @@ export function render() {
   // Every coming service: one where the department has no one yet needs it most.
   return html`<h3 class="section-heading">Double duties</h3>
     ${conflicts(stats)}
+    ${namesToCheck(upcoming(data.services))}
     ${openDuties(upcoming(data.services))}
     ${workloadTable(stats)}`;
 }

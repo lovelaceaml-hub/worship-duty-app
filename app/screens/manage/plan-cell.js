@@ -189,10 +189,11 @@ export function field(service, duty, context) {
 }
 
 /* Whether a duty at a service needs a look (a red name, or a member who can
-   no longer make it), for the counts in the service headings. */
+   no longer make it): null, or { note } as the cell says it, with `double`
+   for a double duty. For the counts in the service headings and Checks. */
 export function needsLook(service, duty, context) {
   const state = dutyState(service, duty, context);
-  return !state.none && state.classes.includes('is-flagged');
+  return !state.none && state.classes.includes('is-flagged') ? { note: state.note, double: state.why === 'already-serving' } : null;
 }
 
 /* Whether a duty is empty where the service usually has it filled. */
