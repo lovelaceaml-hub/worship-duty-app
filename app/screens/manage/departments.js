@@ -16,7 +16,7 @@ import {
   departments as state, roster, loadRoster, draftOf, hasDraft, editDraft, dropDraft, saveProfile, setStatus,
   searchMembers, addMember, addByName, missingMembers, resetPin, createInvite, cancelInvite, activeInvites, inviteLink, saveDutyDefault
 } from '../../services/departments.js';
-import { managedDepartment } from './index.js';
+import { managedDepartment } from './scope.js';
 
 /* ---- all departments ---- */
 

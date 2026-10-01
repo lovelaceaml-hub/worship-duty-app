@@ -17,6 +17,7 @@ import * as leaders from './leaders.js';
 import * as features from './features.js';
 import * as dataSection from './data.js';
 import * as feedback from './feedback.js';
+import { managedDepartment } from './scope.js';
 
 function sections() {
   const counts = attentionCounts();
@@ -29,13 +30,6 @@ function sections() {
   if (canManageLeaders()) list.push(['leaders', 'Leaders', leaders]);
   if (isAdmin()) list.push(['features', 'Features', features], ['data', 'Data', dataSection], ['feedback', 'Feedback', feedback]);
   return list;
-}
-
-/* The department being managed: 'All' (administrators) or one department. */
-export function managedDepartment() {
-  const allowed = managedDepartments();
-  if (!allowed.includes(ui.manageDepartment)) ui.manageDepartment = allowed[0] || '';
-  return ui.manageDepartment;
 }
 
 export function render() {

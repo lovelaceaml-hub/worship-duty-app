@@ -13,8 +13,7 @@ import { byTitle } from '../../lib/names.js';
 import { roster, profileOf, loadRoster, assign, legacyRoster } from '../../services/departments.js';
 import { openConflicts } from '../../services/attention.js';
 import { canEditDuty } from '../../services/access.js';
-import { shownFor, departmentsShown, openService } from './services.js';
-import { managedDepartment } from './index.js';
+import { managedDepartment, shownFor, departmentsShown } from './scope.js';
 
 function conflicts(stats) {
   const list = openConflicts().filter(item => shownFor(managedDepartment())(item.service));
@@ -90,6 +89,5 @@ defineActions({
       const profile = profileOf(departmentOf(el.dataset.duty).name, el.dataset.uid);
       if (service && profile) assign(service, el.dataset.duty, profile);
     }
-  },
-  'planning-open': el => openService(el.dataset.service)
+  }
 });
