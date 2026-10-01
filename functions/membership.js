@@ -12,6 +12,7 @@ const crypto = require('node:crypto');
 const authz = require('./department-auth.js');
 const { memberListNames } = require('./department-handlers.js');
 const { refusal, DEFAULT_REASONS } = require('./refusals.js');
+const permissions = require('./permissions.js');
 
 const PAGE_SIZE = 10;
 const INVITATION_DAYS = 7;
@@ -40,12 +41,14 @@ function normalizeText(value, path, max = 160) {
 }
 
 function departmentFrom(value) {
-  try {
-    return normalizeText(value, 'departmentId', 100);
-  } catch (error) {
-    throw error;
-  }
+  const department = normalizeText(value, 'departmentId', 100);
+  if (!permissions.DEPARTMENTS.includes(department)) throw errorWithCode('invalid-argument', 'That is not one of the departments.');
+  return department;
 }
+
+// "Add all" searches once per missing name; the account list read for the
+// first search serves the ones right after it.
+const SEARCH_CACHE_MS = 60 * 1000;
 
 function requestData(request) {
   const data = request && request.data == null ? {} : request && request.data;
@@ -220,7 +223,7 @@ function accountSearchRows(snapshot) {
   const rows = [];
   (snapshot && Array.isArray(snapshot.docs) ? snapshot.docs : []).forEach(document => {
     const data = document.data() || {};
-    if (data.active === false) return;
+    if (data.active === false || data.renamedTo) return;
     const name = accountName(data, document.id);
     const memberUid = accountUid(data, document.id);
     if (!name || !memberUid) return;
@@ -258,6 +261,20 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
     throw new TypeError('now and randomBytes must be functions.');
   }
 
+  let cachedRows = null;
+  let cachedAt = 0;
+  async function accountRows() {
+    const at = Number(now());
+    if (cachedRows && at - cachedAt < SEARCH_CACHE_MS && at >= cachedAt) return cachedRows;
+    const accounts = db.collection('accounts');
+    const selected = typeof accounts.select === 'function'
+      ? accounts.select('authUid', 'uid', 'memberUid', 'memberId', 'id', 'memberName', 'name', 'member', 'displayName', 'active', 'renamedTo')
+      : accounts;
+    cachedRows = accountSearchRows(await selected.get());
+    cachedAt = at;
+    return cachedRows;
+  }
+
   async function searchDepartmentCandidates(request) {
     const actor = verifiedActor(request);
     const data = requestData(request);
@@ -267,13 +284,8 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
     if (query.length < 2) throw errorWithCode('invalid-argument', 'query must contain at least two characters.');
     const page = assertPage(data.page);
     assertManagement(actor, departmentId);
-    const accounts = db.collection('accounts');
-    const selected = typeof accounts.select === 'function'
-      ? accounts.select('authUid', 'uid', 'memberUid', 'memberId', 'id', 'memberName', 'name', 'member', 'displayName', 'active')
-      : accounts;
-    const snapshot = await selected.get();
     const normalizedQuery = query.toLocaleLowerCase();
-    const rows = accountSearchRows(snapshot);
+    const rows = (await accountRows()).slice();
     // Members who have never signed in have no account yet; they get the
     // uid their first sign-in will give them.
     const known = new Set(rows.flatMap(row => [row.memberUid, row.memberName]));
@@ -375,29 +387,34 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
       const profileSnapshot = await transaction.get(profileReference);
       const at = Number(now());
       if (!Number.isFinite(at)) throw errorWithCode('internal', 'The server clock is unavailable.');
+      // Someone already in the department does not use up the link, which
+      // stays for the person it was meant for. An inactive member is told so
+      // (inactive: true), since only a leader can make them active.
+      if (profileSnapshot.exists) {
+        const status = String((profileSnapshot.data() || {}).status || 'active');
+        result = { ok: true, departmentId, memberUid, alreadyMember: true, inactive: status === 'inactive' };
+        return;
+      }
       if (invitation.status === 'accepted') {
         throw errorWithCode('already-exists', 'The invitation has already been accepted.', 'invite-used');
       }
       if (invitation.status !== 'active' || Number(invitation.expiresAt) <= at) {
         throw errorWithCode('failed-precondition', 'The invitation is invalid or expired.', 'invite-invalid');
       }
-      const alreadyMember = profileSnapshot.exists;
-      if (!alreadyMember) {
-        transaction.set(profileReference, profileForAccount(
-          departmentId,
-          memberUid,
-          accountName(account, accountSnapshot.id),
-          actor,
-          at
-        ), { merge: false });
-      }
+      transaction.set(profileReference, profileForAccount(
+        departmentId,
+        memberUid,
+        accountName(account, accountSnapshot.id),
+        actor,
+        at
+      ), { merge: false });
       transaction.set(reference, {
         status: 'accepted',
         acceptedAt: at,
         acceptedByUid: actor.uid,
         acceptedMemberUid: memberUid
       }, { merge: true });
-      result = { ok: true, departmentId, memberUid, alreadyMember };
+      result = { ok: true, departmentId, memberUid, alreadyMember: false };
     });
     return result;
   }
