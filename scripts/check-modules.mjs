@@ -1,6 +1,7 @@
 /* Checks the browser modules in app/ without a browser:
    - each file parses as a module;
-   - every imported name is exported by the file it comes from, and is used;
+   - every imported file exists, and every imported name is exported by the
+     file it comes from and is used;
    - every export is used by another module or a unit test;
    - every data-act, data-change and data-input in the markup has a handler
      in defineActions(), and every handler is used by some markup.
@@ -44,6 +45,11 @@ function importsOf(source) {
   return out;
 }
 
+/* import './actions.js'; (run for its side effects) */
+function sideEffectImportsOf(source) {
+  return Array.from(source.matchAll(/^import\s*'([^']+)';/gm), match => match[1]);
+}
+
 const all = await files(path.join(repo, 'app'));
 const sources = new Map(await Promise.all(all.map(async file => [file, await fs.readFile(file, 'utf8')])));
 
@@ -52,6 +58,9 @@ for (const [file, source] of sources) {
   try { new vm.SourceTextModule(source, { identifier: name }); }
   catch (error) { problems.push(name + ': ' + error.message); continue; }
   const body = source.replace(/^import[\s\S]*?;$/gm, '');
+  for (const from of sideEffectImportsOf(source)) {
+    if (!sources.has(path.resolve(path.dirname(file), from))) problems.push(name + ': imports a missing file ' + from);
+  }
   for (const item of importsOf(source)) {
     const target = path.resolve(path.dirname(file), item.from);
     if (!sources.has(target)) { problems.push(name + ': imports a missing file ' + item.from); continue; }

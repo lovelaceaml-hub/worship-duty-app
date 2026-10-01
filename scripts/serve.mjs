@@ -3,8 +3,12 @@
      node scripts/serve.mjs --fake     the app with an in-memory Firebase and made-up
                                        members (tests/fake), for development and tests
      --port 5174 (default)             --root dist to serve a build instead
+     --host 0.0.0.0                    let other devices on the network open it (for
+                                       phone testing); by default only this computer can
    Fake mode never contacts Firebase: the Firebase SDK addresses are mapped to
-   tests/fake/ and firebase-config.js is replaced with a dummy. */
+   tests/fake/ and firebase-config.js is replaced with a dummy. From the
+   repository only the app's own files are served (what scripts/build.mjs
+   ships), never .git, functions/ or local settings. */
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -14,12 +18,17 @@ const args = process.argv.slice(2);
 const option = (name, fallback) => { const at = args.indexOf(name); return at === -1 ? fallback : args[at + 1]; };
 const fake = args.includes('--fake');
 const port = Number(option('--port', 5174));
+const host = option('--host', '127.0.0.1');
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(repo, option('--root', '.'));
+const fakes = path.join(repo, 'tests', 'fake');
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const FAKES = ['app', 'firestore', 'auth', 'functions', 'messaging'];
+/* The app's files in the repository, as scripts/build.mjs lists them. */
+const APP_FILES = ['index.html', 'permissions.js', 'firebase-config.js', 'song-lib.js', 'song-seed.js', 'sw.js', 'manifest.json', 'icon.svg'];
+const APP_FOLDERS = ['app', 'styles'];
 
 async function page(file) {
   let text = await fs.readFile(file, 'utf8');
@@ -30,11 +39,32 @@ async function page(file) {
   return text.replace(/(<script src="permissions\.js[^"]*"><\/script>)/, '$1\n<script src="/tests/fake/fixture.js"></script>');
 }
 
+/* `file` when it lies inside `folder`, else null. */
+function inside(folder, file) {
+  const relative = path.relative(folder, file);
+  return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative : null;
+}
+
+/* The file a request asks for, or a status code saying why not. */
+function resolve(pathname) {
+  let wanted;
+  try { wanted = decodeURIComponent(pathname); } catch (_error) { return 400; }
+  if (wanted.includes('\0')) return 400;
+  if (fake && wanted.startsWith('/tests/fake/')) {
+    const file = path.join(repo, wanted);
+    return inside(fakes, file) ? file : 403;
+  }
+  const file = path.join(root, wanted === '/' ? 'index.html' : wanted);
+  const relative = inside(root, file);
+  if (!relative) return 403;
+  if (root === repo && !APP_FILES.includes(relative) && !APP_FOLDERS.some(folder => relative.startsWith(folder + path.sep))) return 404;
+  return file;
+}
+
 http.createServer(async (request, response) => {
-  const url = new URL(request.url, 'http://localhost');
-  let file = path.join(root, decodeURIComponent(url.pathname));
-  if (url.pathname.startsWith('/tests/fake/')) file = path.join(repo, decodeURIComponent(url.pathname));
-  if (!file.startsWith(root) && !file.startsWith(path.join(repo, 'tests', 'fake'))) { response.writeHead(403).end(); return; }
+  const found = resolve(new URL(request.url, 'http://localhost').pathname);
+  if (typeof found === 'number') { response.writeHead(found, { 'Content-Type': 'text/plain' }).end(http.STATUS_CODES[found]); return; }
+  let file = found;
   try {
     if ((await fs.stat(file)).isDirectory()) file = path.join(file, 'index.html');
     const type = TYPES[path.extname(file)] || 'application/octet-stream';
@@ -47,6 +77,6 @@ http.createServer(async (request, response) => {
   } catch (_error) {
     response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
   }
-}).listen(port, () => {
-  console.log('Serving ' + path.relative(repo, root || '.') + ' at http://localhost:' + port + (fake ? ' with the fake Firebase' : ''));
+}).listen(port, host, () => {
+  console.log('Serving ' + (path.relative(repo, root) || '.') + ' at http://' + (host === '127.0.0.1' ? 'localhost' : host) + ':' + port + (fake ? ' with the fake Firebase' : ''));
 });
