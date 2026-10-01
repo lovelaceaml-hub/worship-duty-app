@@ -9,6 +9,7 @@ import { notice } from '../ui/banners.js';
 import { DEPARTMENTS, departmentOf, dutyName } from '../config/duties.js';
 import { normalizeProfile, normalizeAvailability, canTake, timeKey } from '../lib/availability.js';
 import { serviceId } from '../lib/services.js';
+import { canAlsoServe, otherDuties } from '../lib/conflicts.js';
 
 /* Loaded rosters and in-progress edits, cleared when the member changes. */
 export const departments = {
@@ -360,9 +361,9 @@ export async function assign(service, duty, profile, { override = false, reason 
     notice(nameOf(profile.memberName) + ' cannot take ' + dutyName(duty) + ' at this service.', true);
     return;
   }
-  const conflict = Object.keys(service.assignments || {}).find(other => other !== duty && service.assignments[other] === profile.memberName);
-  if (conflict && !override) {
-    notice(nameOf(profile.memberName) + ' is already serving as ' + conflict + ' at this service.', true);
+  const others = otherDuties(service.assignments, profile.memberName, duty);
+  if (!override && !canAlsoServe(service.assignments, profile.memberName, duty)) {
+    notice(nameOf(profile.memberName) + ' is already serving as ' + others.map(dutyName).join(' and ') + ' at this service.', true);
     return;
   }
   departments.busy[busyKey] = true;

@@ -14,6 +14,13 @@ export const DEPARTMENTS = [
 
 export const ALL_DUTIES = DEPARTMENTS.flatMap(department => department.duties);
 
+/* The one pair of duties a person may hold together in a service: a prayer
+   with an usher duty. Lobby Security is not an usher duty here. permissions.js
+   holds the same lists for the server; tests/unit/basics.test.mjs keeps the
+   two identical. */
+export const PRAYER_DUTIES = ['Sermon', 'Prayer of Thanks', 'Closing Prayer'];
+export const USHER_DUTIES = ['Usher Door', 'Usher Front', 'Usher Back', 'Usher #1', 'Usher #2'];
+
 /* Service labels in the order a day runs, and the default start time used
    when a service has no time of its own. */
 export const SERVICE_LABELS = ['Early Morning', 'Morning', 'Afternoon', 'Evening', 'Commemoration'];

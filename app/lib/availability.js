@@ -79,13 +79,15 @@ export function availabilityOn(profile, date, key) {
   return recurring[key] || 'available'; // not set counts as available
 }
 
+/* Whether a profile takes `duty` at all: active, schedulable and listing it. */
+export function takesDuty(profile, duty) {
+  if (!profile || profile.status !== 'active' || profile.schedulable !== true) return false;
+  const wanted = String(duty || '').trim().toLowerCase();
+  return profile.eligibleDuties.some(item => item.toLowerCase() === wanted);
+}
+
 /* A normal assignment needs an active, schedulable profile that lists the
    duty and is available at that service. Administrators can override. */
 export function canTake(profile, service, duty) {
-  if (!profile || profile.status !== 'active' || profile.schedulable !== true) return false;
-  const wanted = String(duty || '').trim().toLowerCase();
-  if (!profile.eligibleDuties.some(item => item.toLowerCase() === wanted)) return false;
-  return availabilityOn(profile, service && service.date, timeKey(service)) === 'available';
+  return takesDuty(profile, duty) && availabilityOn(profile, service && service.date, timeKey(service)) === 'available';
 }
-
-/* Everything available at every service time, no exceptions. */

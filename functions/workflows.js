@@ -20,6 +20,7 @@
 
 const { FieldValue } = require('firebase-admin/firestore');
 const authz = require('./department-auth.js');
+const permissions = require('./permissions.js');
 const songHistory = require('./song-history.js');
 const { currentRevision, nextRevision, assertFresh } = require('./revision.js');
 
@@ -376,8 +377,7 @@ function createWorkflowHandlers(options = {}) {
         rejectDecision(result);
 
         const targetName = String(profile.memberName || profile.member || '');
-        const conflictDuties = Object.keys(assignments)
-          .filter(otherDuty => otherDuty !== duty && String(assignments[otherDuty] || '') === targetName);
+        const conflictDuties = permissions.blockingDuties(assignments, targetName, duty);
         if (conflictDuties.length && !acknowledgeConflict) {
           throw errorWithCode('failed-precondition', 'The member already serves in this service.', {
             reason: 'conflict', duties: conflictDuties
@@ -405,9 +405,9 @@ function createWorkflowHandlers(options = {}) {
           scheduleUpdate.needsReplacement = { [duty]: deleteField() };
         }
         if (conflictDuties.length && acknowledgeConflict) {
-          const existing = (scheduleData.conflictOk && scheduleData.conflictOk[targetName]) || [];
-          const merged = Array.from(new Set([...existing, ...conflictDuties, duty]));
-          scheduleUpdate.conflictOk = { [targetName]: merged };
+          // The mark lists exactly the duties the person holds now; an older
+          // mark for other duties no longer counts (app/lib/conflicts.js).
+          scheduleUpdate.conflictOk = { [targetName]: [...conflictDuties, duty] };
         }
         transaction.set(scheduleReference, scheduleUpdate, { merge: true });
 

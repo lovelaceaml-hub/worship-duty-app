@@ -164,20 +164,48 @@ mornings, Closing Prayer and the choir song only at Sabbath Day and Third Day
 
 **Fill empty duties** proposes someone for every empty duty that kind of
 service (same worship and time) has had filled in the past year, or every
-duty it has when there is no history. It only picks members who are active
-in the department, can take that duty, are available, and are not already
-serving in that service. The leader chooses how (remembered on the device):
+duty it has when there is no history. The grid dims the duties Fill leaves
+alone. It only picks members who are active in the department, can take that
+duty, are available, and may hold it alongside what they already do in that
+service (see "One duty each" below).
 
-- **Auto**: no other duty that day first, then the fewest duties this month,
-  then least served lately, then longest since.
-- **Rotation**: down each department's list by name, starting after whoever
-  served there most recently, round and round.
+An usher duty goes first to someone praying in that service, whichever way
+the leader fills: the prayers lead and the ushers follow. A service's
+prayers are settled before its ushers, so when an administrator fills every
+department at once the matches happen in the same fill; an usher leader gets
+them when filling after the prayers are set. Everyone else is chosen the
+leader's way (remembered on the device):
+
+- **Auto**: no other duty that day first, then the fewest duties that month
+  (the services already past count too), then least served lately, then
+  longest since.
+- **Rotation**: everyone takes a turn before anyone serves again. Whoever has
+  gone longest without a turn goes first, and people tied go by name, so once
+  everyone has had a turn it runs down the list by name, round and round.
+  Someone away for their turn goes first next time, and someone already on a
+  duty later that month waits. The Presider takes turns apart from the
+  prayers, and an usher duty matched to a prayer is not a turn.
 - **Random**.
 
 The leader changes any proposal, then saves them together; each member gets
-one notification listing their new duties. A service's heading opens its
-details (date, time, choir song, replacements, double duties, an
-administrator's override, delete).
+one notification listing their new duties. Duties no one was free for are
+outlined, and each says why: no one on the list takes it, no one who takes it
+is available, or everyone available already serves there. A service's
+heading opens its details (date, time, choir song, replacements, double
+duties, an administrator's override, delete).
+
+### One duty each
+
+A member holds one duty in a service, with one exception: a prayer (Opening,
+Thanks or Closing Prayer) together with an usher duty (Usher Door, Front or
+Back, Usher #1 or #2; Lobby Security does not count). The planner offers that
+pair, with the prayer shown next to the name, and Fill makes it as above. The
+server refuses any other second duty, whichever way it is saved. A double
+duty that arrives another way (the Sheet, an administrator's override) is
+flagged on the schedule until a leader marks it OK; the mark holds while the
+person's duties stay the same. `app/lib/conflicts.js` has the rule and
+`permissions.js` the same rule for the server; a test checks that they agree
+on every pair and three of duties.
 
 ## Department members
 

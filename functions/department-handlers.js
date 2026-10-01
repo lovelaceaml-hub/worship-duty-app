@@ -10,6 +10,7 @@
  */
 
 const authz = require('./department-auth.js');
+const permissions = require('./permissions.js');
 const { currentRevision, nextRevision, assertFresh } = require('./revision.js');
 
 const PROFILE_PATCH_FIELDS = new Set(authz.PROFILE_MUTABLE_FIELDS);
@@ -589,8 +590,9 @@ function createDepartmentHandlers(options = {}) {
       const result = authz.authorizeAssignment(actor, verifiedAssignment, profile);
       rejectDecision(result);
       const targetName = String(profile.memberName || profile.member || '');
-      const conflictingDuty = Object.keys(assignments).find(duty => duty !== result.assignment.duty && assignments[duty] === targetName);
-      if (conflictingDuty) throw errorWithCode('failed-precondition', 'The member is already serving in this service.');
+      if (permissions.blockingDuties(assignments, targetName, result.assignment.duty).length) {
+        throw errorWithCode('failed-precondition', 'The member is already serving in this service.');
+      }
       revisionValue = nextRevision({ revision: assignmentRevisions[result.assignment.duty] });
       record = assignmentRecord(result.assignment, profile, actor, now(), {
         override: false,
@@ -855,7 +857,7 @@ function createDepartmentHandlers(options = {}) {
           const decision = authz.authorizeAssignment(actor, assignment, profile);
           if (!decision.allowed) { skipped.push({ ...where, reason: decision.reason }); continue; }
           name = String(profile.memberName || profile.member || '');
-          if (Object.keys(service.assignments).some(duty => duty !== change.duty && service.assignments[duty] === name)) {
+          if (permissions.blockingDuties(service.assignments, name, change.duty).length) {
             skipped.push({ ...where, reason: 'already-serving' });
             continue;
           }

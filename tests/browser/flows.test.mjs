@@ -528,6 +528,39 @@ test('Fill proposes members for the usual empty duties; the leader saves them to
   await context.close();
 });
 
+test('Fill gives an usher duty to the sister praying there first, and outlines the duties no one is free for', async () => {
+  const away = { availability: { recurring: {}, exceptions: { '2026-07-25': { '*': 'unavailable' } } } };
+  const fixture = { patch: Object.assign({
+    'schedule/2026-07-18_morning': { assignments: { Sermon: 'S. Leah' } },
+    'schedule/2026-07-25_morning': { assignments: {} }
+  }, Object.fromEntries(['S. Leah', 'S. Naomi', 'S. Esther', 'S. Grace'].map(name => ['departments/Usher Sisters/members/member:' + name, away]))) };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'services');
+  await page.locator('#view .plan-grid').waitFor();
+  // Leah prays at that service: she is the first choice for an usher duty there, and the list says why.
+  const door = page.locator('#view select[data-service="2026-07-18_morning"][data-duty="Usher Door"]');
+  assert.match(await door.locator('option').nth(1).textContent(), /^S\. Leah \(Opening Prayer\)/);
+  await page.locator('#view [data-act="plan-fill"]').click();
+  await page.locator('#view .plan-cell.is-proposed').first().waitFor();
+  assert.equal(await door.inputValue(), 'member:S. Leah');
+  const front = await page.locator('#view select[data-service="2026-07-18_morning"][data-duty="Usher Front"]').inputValue();
+  assert.ok(front && front !== 'member:S. Leah', 'one usher duty with her prayer');
+  // Everyone is away on the 25th: those duties stay empty, outlined, with the reason.
+  const outlined = page.locator('#view .plan-cell.is-unfilled');
+  assert.equal(await outlined.count(), 2);
+  assert.equal(await outlined.first().getAttribute('title'), 'No one who takes this duty is available then.');
+  await page.locator('#view .plan-actions', { hasText: 'Fill picked 2 members; 2 duties have no one free (outlined)' }).waitFor();
+  await page.locator('#view [data-act="plan-save"]').click();
+  await banner(page, 'Saved 2 duties.');
+  const saved = await fakeDoc(page, 'schedule/2026-07-18_morning');
+  assert.equal(saved.assignments.Sermon, 'S. Leah');
+  assert.equal(saved.assignments['Usher Door'], 'S. Leah');
+  assert.equal(await page.locator('#view .plan-cell.is-unfilled').count(), 0, 'the outlines go once the fill is saved');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('on a phone the month is one list, and a service opens in place', async () => {
   const { context, page, errors } = await as('S. Grace');
   await tab(page, 'manage');

@@ -18,9 +18,9 @@ import { serviceId, byStart, isUpcoming } from '../../lib/services.js';
 import { hasDuty, hasChoir } from '../../lib/worship.js';
 import { clockTime, todayISO, addMonths, monthName, longDate, weekdayShort, dayOfMonth } from '../../lib/dates.js';
 import { canTake } from '../../lib/availability.js';
-import { openDoubleDuties, doubleDuties, isMarkedOk } from '../../lib/conflicts.js';
-import { workload, suggestReplacements, usualDuties } from '../../lib/workload.js';
-import { fill, fillDuties, FILL_MODES } from '../../lib/fill.js';
+import { openDoubleDuties, doubleDuties, isMarkedOk, canAlsoServe, isUsher, prayerOf } from '../../lib/conflicts.js';
+import { workload, suggestReplacements } from '../../lib/workload.js';
+import { fill, fillDuties, FILL_MODES, UNFILLED_REASONS } from '../../lib/fill.js';
 import { isAdmin, canCreateService, canEditDuty, canEditSongsFor, canAcknowledgeConflict } from '../../services/access.js';
 import { roster, profileOf, profileNamed, loadRoster, assign, unassign, departments as departmentState, legacyRoster } from '../../services/departments.js';
 import { addService, updateService, deleteService, markDoubleDuty } from '../../services/schedule.js';
@@ -80,6 +80,23 @@ function planned(service) {
   return out;
 }
 
+/* Who may take `duty` at `service`, given the duties already held there:
+   members who can take it then and may hold it with what they already do
+   (one prayer with one usher duty at most). For an usher duty, anyone
+   praying in that service comes first, as in Fill. */
+function choicesFor(service, duty, people, assignments) {
+  const choices = people.filter(profile => canAlsoServe(assignments, profile.memberName, duty) && canTake(profile, service, duty));
+  if (!isUsher(duty)) return choices;
+  const praying = choices.filter(profile => prayerOf(assignments, profile.memberName));
+  return praying.concat(choices.filter(profile => !praying.includes(profile)));
+}
+
+/* A member's name in a duty list, with the prayer they also have there. */
+function choiceLabel(profile, duty, assignments) {
+  const prayer = isUsher(duty) && prayerOf(assignments, profile.memberName);
+  return nameOf(profile.memberName) + (prayer ? ' (' + dutyName(prayer) + ')' : '');
+}
+
 /* ---- one duty cell ---- */
 
 /* A duty shows at a service that has it, or when someone already holds it. */
@@ -104,24 +121,27 @@ function cell(service, duty, context) {
     return html`<td class="${classes.join(' ')}"><span class="plan-name">${current ? nameOf(current) : (departmentState.loading[department] ? '…' : '')}</span></td>`;
   }
   const assignments = planned(service);
-  const serving = new Set(Object.entries(assignments).filter(([other, name]) => other !== duty && name).map(([, name]) => name));
-  const choices = people.filter(profile => !serving.has(profile.memberName) && canTake(profile, service, duty));
+  const choices = choicesFor(service, duty, people, assignments);
   // Who the cell shows: the proposal, else whoever holds the duty now. Someone
   // who holds it but could not be given it now stays shown, and flagged.
   const shown = proposal ? proposal.memberName : current;
   const chosen = shown && choices.find(profile => profile.memberName === shown);
   const flagged = !proposal && current && (!chosen ||
     (feature('conflictWarnings') && openDoubleDuties(service).some(item => item.name === current)));
+  const unfilled = !shown && ui.plan.unfilled[key];
   if (flagged) classes.push('is-flagged');
+  if (unfilled) classes.push('is-unfilled');
   if (busy.has(key)) classes.push('is-busy');
   const count = name => context.counts[name] ? ' · ' + context.counts[name] : '';
-  return html`<td class="${classes.join(' ')}"${flagged ? html` title="${nameOf(current)} cannot take this duty now, or has another duty in this service"` : ''}>
-    <select data-change="plan-assign" data-service="${id}" data-duty="${duty}" aria-label="${label}"${busy.has(key) || ui.plan.busy ? ' disabled' : ''}>
+  const title = flagged ? nameOf(current) + ' cannot take this duty now, or has another duty in this service.'
+    : (unfilled ? UNFILLED_REASONS[unfilled] + '.' : '');
+  return html`<td class="${classes.join(' ')}"${title ? html` title="${title}"` : ''}>
+    <select data-change="plan-assign" data-service="${id}" data-duty="${duty}" aria-label="${label + (title ? '. ' + title : '')}"${busy.has(key) || ui.plan.busy ? ' disabled' : ''}>
       <option value=""${shown ? '' : ' selected'}></option>
       ${shown && !chosen ? html`<option value="${KEEP}" selected>${nameOf(shown)}</option>` : ''}
       ${choices.map(profile => profile === chosen
         ? html`<option value="${profile.memberUid}" selected>${nameOf(profile.memberName)}</option>`
-        : html`<option value="${profile.memberUid}">${nameOf(profile.memberName)}${count(profile.memberName)}</option>`)}
+        : html`<option value="${profile.memberUid}">${choiceLabel(profile, duty, assignments)}${count(profile.memberName)}</option>`)}
     </select></td>`;
 }
 
@@ -185,7 +205,8 @@ function dutySelect(service, duty) {
   const people = roster(department);
   const current = (service.assignments || {})[duty] || '';
   const currentProfile = profileNamed(department, current);
-  const choices = people.filter(profile => canTake(profile, service, duty));
+  const assignments = service.assignments || {};
+  const choices = choicesFor(service, duty, people, assignments);
   const flagged = feature('conflictWarnings') && current && openDoubleDuties(service).some(item => item.name === current);
   const busyNow = departmentState.busy[serviceId(service) + '::' + duty];
   let options;
@@ -193,7 +214,7 @@ function dutySelect(service, duty) {
   else {
     options = html`<option value="">Not filled</option>
       ${current && !choices.some(profile => profile.memberName === current) ? html`<option value="" selected disabled>${nameOf(current)} (cannot take this now)</option>` : ''}
-      ${choices.map(profile => html`<option value="${profile.memberUid}"${currentProfile && currentProfile.memberUid === profile.memberUid ? ' selected' : ''}>${nameOf(profile.memberName)}</option>`)}`;
+      ${choices.map(profile => html`<option value="${profile.memberUid}"${currentProfile && currentProfile.memberUid === profile.memberUid ? ' selected' : ''}>${choiceLabel(profile, duty, assignments)}</option>`)}`;
   }
   const others = people.filter(profile => !choices.includes(profile));
   return html`<select data-change="assign" data-service="${serviceId(service)}" data-duty="${duty}" aria-label="${dutyName(duty)}"
@@ -300,9 +321,10 @@ export function render() {
   const services = coming.length ? coming : inMonth;
   const counts = {};
   services.forEach(service => Object.values(planned(service)).forEach(name => { if (name) counts[name] = (counts[name] || 0) + 1; }));
-  const context = { usual: usualDuties(data.services), counts };
+  const context = { usual: fillDuties(data.services, todayISO()), counts };
   const open = ui.plan.open && find(ui.plan.open);
   const proposals = proposalCount();
+  const unfilled = Object.keys(ui.plan.unfilled).length;
   const canFill = coming.length > 0 && departments.some(department => department.duties.some(canEditDuty));
   return html`
     ${notes()}
@@ -324,7 +346,7 @@ export function render() {
     ${services.length ? (wide() ? grid(services, context) : list(services, context))
       : empty('No services in ' + monthName(current) + '.' + (isAdmin() ? ' Add a year of services in Manage, Data, or add one above.' : ''))}
     ${proposals ? html`<div class="sticky-actions plan-actions" role="status">
-      <span>Fill picked ${plural(proposals, 'member')}${ui.plan.unfilled ? '; ' + plural(ui.plan.unfilled, 'duty has', 'duties have') + ' no one free' : ''}. Change any of them, then save.</span>
+      <span>Fill picked ${plural(proposals, 'member')}${unfilled ? '; ' + plural(unfilled, 'duty has', 'duties have') + ' no one free (outlined)' : ''}. Change any of them, then save.</span>
       <div class="button-row">
         <button type="button" class="primary" data-act="plan-save"${ui.plan.busy ? ' disabled' : ''}>${ui.plan.busy ? 'Saving…' : 'Save'}</button>
         <button type="button" class="ghost" data-act="plan-discard"${ui.plan.busy ? ' disabled' : ''}>Discard</button>
@@ -356,6 +378,7 @@ defineActions({
     if (proposalCount()) { notice('Save or discard the filled duties first.', true); return; }
     ui.plan.month = addMonths(month(), Number(el.dataset.step));
     ui.plan.open = '';
+    ui.plan.unfilled = {};
     redraw();
   },
   'plan-open': el => {
@@ -398,8 +421,9 @@ defineActions({
         { mode: fillMode(), history: data.services });
       ui.plan.proposals = {};
       result.proposals.forEach(item => { ui.plan.proposals[keyOf(item.serviceId, item.duty)] = { memberUid: item.memberUid, memberName: item.memberName }; });
-      ui.plan.unfilled = result.unfilled.length;
-      if (!result.proposals.length) notice(result.unfilled.length ? 'No one is free for the empty duties this month.' : 'The usual duties this month are all filled.');
+      ui.plan.unfilled = {};
+      result.unfilled.forEach(item => { ui.plan.unfilled[keyOf(item.serviceId, item.duty)] = item.reason; });
+      if (!result.proposals.length) notice(result.unfilled.length ? 'No one is free for the empty duties this month. They are outlined.' : 'The usual duties this month are all filled.');
       redraw();
     }
   },
@@ -414,14 +438,14 @@ defineActions({
     const result = await saveChanges(changes);
     ui.plan.busy = false;
     ui.plan.proposals = {};
-    ui.plan.unfilled = 0;
+    ui.plan.unfilled = {};
     const firstReason = result.skipped.find(item => item.reason !== 'error');
     const left = result.skipped.length === 1 ? '1 was' : result.skipped.length + ' were';
     notice('Saved ' + plural(result.saved, 'duty', 'duties') + '.' +
       (firstReason ? ' ' + left + ' not saved, for example because ' + reasonText(firstReason.reason) + '.' : ''), !!result.skipped.length);
     renderSoon();
   },
-  'plan-discard': () => { ui.plan.proposals = {}; ui.plan.unfilled = 0; redraw(); },
+  'plan-discard': () => { ui.plan.proposals = {}; ui.plan.unfilled = {}; redraw(); },
   'feast-done': {
     allowed: () => isAdmin(),
     run: async () => {

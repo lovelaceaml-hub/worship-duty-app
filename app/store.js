@@ -41,8 +41,9 @@ export const ui = {
   departmentFilter: 'All',
   schedule: { month: '', date: '', service: '', mode: 'day', query: '', chosen: false },
   // Manage, Services: the month shown, the service whose details are open,
-  // and Fill's proposals ('serviceId|duty' -> { memberUid, memberName }).
-  plan: { month: '', open: '', proposals: {}, unfilled: 0, busy: false, scroll: false, adding: false, fillMode: '' },
+  // Fill's proposals ('serviceId|duty' -> { memberUid, memberName }) and the
+  // duties it could not fill ('serviceId|duty' -> reason, see lib/fill.js).
+  plan: { month: '', open: '', proposals: {}, unfilled: {}, busy: false, scroll: false, adding: false, fillMode: '' },
   requestDraft: null,   // { key, note } while a member writes a change request
   availabilityDraft: null, // the member's availability while they edit it
   availabilityChanged: false,

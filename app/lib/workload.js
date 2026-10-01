@@ -2,6 +2,7 @@
 import { ALL_DUTIES } from '../config/duties.js';
 import { addDays } from './dates.js';
 import { canTake } from './availability.js';
+import { canAlsoServe, isUsher, prayerOf } from './conflicts.js';
 import { hasDuty } from './worship.js';
 
 /* { name: { past4, past8, upcoming, total, last, next } } across all services. */
@@ -29,15 +30,18 @@ export function workload(services, members, today) {
 }
 
 /* Up to `limit` profiles from `roster` who can take `duty` at `service` and
-   are not already serving there: lightest recent and upcoming load first,
-   then longest since they last served. */
+   may hold it with what they already do there (conflicts.js). For an usher
+   duty, someone praying in that service comes first, as in Fill. Then the
+   lightest recent and upcoming load, then longest since they last served. */
 export function suggestReplacements(service, duty, roster, stats, { exclude = '', limit = 3 } = {}) {
-  const serving = new Set(Object.values(service.assignments || {}).filter(Boolean));
+  const assignments = service.assignments || {};
   const none = { past4: 0, upcoming: 0, last: '' };
+  const praying = name => (isUsher(duty) && prayerOf(assignments, name) ? 0 : 1);
   return roster
-    .filter(profile => profile.memberName !== exclude && !serving.has(profile.memberName) && canTake(profile, service, duty))
+    .filter(profile => profile.memberName !== exclude && canAlsoServe(assignments, profile.memberName, duty) && canTake(profile, service, duty))
     .map(profile => ({ profile, load: stats[profile.memberName] || none }))
-    .sort((a, b) => (a.load.upcoming + a.load.past4) - (b.load.upcoming + b.load.past4) ||
+    .sort((a, b) => praying(a.profile.memberName) - praying(b.profile.memberName) ||
+      (a.load.upcoming + a.load.past4) - (b.load.upcoming + b.load.past4) ||
       (a.load.last === b.load.last ? 0 : (a.load.last < b.load.last ? -1 : 1)))
     .slice(0, limit)
     .map(item => item.profile);

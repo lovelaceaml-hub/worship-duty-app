@@ -1,26 +1,81 @@
 /* The app's scheduling rules: double duties, availability, suggestions for
    a replacement, which duties a service usually has filled, and when a
-   change request is still open. */
+   change request is still open. Fill has its own file, fill.test.mjs. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { doubleDuties, openDoubleDuties } from '../../app/lib/conflicts.js';
+import { createRequire } from 'node:module';
+import { doubleDuties, openDoubleDuties, canAlsoServe, otherDuties, prayerOf } from '../../app/lib/conflicts.js';
 import { availabilityOn, canTake, normalizeProfile, timeKey, timeLabel } from '../../app/lib/availability.js';
 import { workload, suggestReplacements, usualDuties } from '../../app/lib/workload.js';
 import { isOpen, shownStatus, requestId } from '../../app/lib/requests.js';
-import { fill, fillDuties } from '../../app/lib/fill.js';
+import { ALL_DUTIES, PRAYER_DUTIES, USHER_DUTIES } from '../../app/config/duties.js';
 
-test('two duties in one service are flagged, except one prayer duty with one usher duty', () => {
+const require = createRequire(import.meta.url);
+
+test('one duty each in a service; one prayer with one usher duty is the only pair allowed', () => {
+  const flagged = assignments => doubleDuties({ assignments }).map(item => item.duties);
+  // Every prayer (Opening Prayer is stored as Sermon) with every usher duty, sisters' or brothers'.
+  ['Sermon', 'Prayer of Thanks', 'Closing Prayer'].forEach(prayer => {
+    ['Usher Door', 'Usher Front', 'Usher Back', 'Usher #1', 'Usher #2'].forEach(usher => {
+      assert.deepEqual(flagged({ [prayer]: 'B. Adam', [usher]: 'B. Adam' }), [], prayer + ' with ' + usher);
+    });
+  });
+  assert.deepEqual(flagged({ Sermon: 'B. Adam', 'Lobby Security': 'B. Adam' }), [['Sermon', 'Lobby Security']], 'Lobby Security is not an usher duty here');
+  assert.deepEqual(flagged({ Presider: 'E. Joseph', 'Usher #1': 'E. Joseph' }), [['Presider', 'Usher #1']]);
+  assert.deepEqual(flagged({ 'Closing Prayer': 'B. Adam', Sermon: 'B. Adam' }), [['Sermon', 'Closing Prayer']]);
+  assert.deepEqual(flagged({ 'Usher #2': 'B. Adam', 'Usher #1': 'B. Adam' }), [['Usher #1', 'Usher #2']]);
+  assert.deepEqual(flagged({ Sermon: 'B. Adam', 'Usher #1': 'B. Adam', 'Usher #2': 'B. Adam' }), [['Sermon', 'Usher #1', 'Usher #2']]);
   const service = { assignments: { 'Prayer of Thanks': 'B. Adam', 'Usher #1': 'B. Adam', Presider: 'E. Joseph', 'Media Booth #1': 'E. Joseph' } };
   assert.deepEqual(doubleDuties(service), [{ name: 'E. Joseph', duties: ['Presider', 'Media Booth #1'] }]);
-  const three = { assignments: { 'Prayer of Thanks': 'B. Adam', 'Usher #1': 'B. Adam', Sermon: 'B. Adam' } };
-  assert.equal(doubleDuties(three).length, 1);
+});
+
+test('who may take one more duty in a service', () => {
+  const assignments = { Sermon: 'B. Adam', 'Usher #1': 'B. Eli', Presider: 'E. Joseph' };
+  assert.equal(canAlsoServe(assignments, 'B. Adam', 'Usher #2'), true, 'praying, so may usher');
+  assert.equal(canAlsoServe(assignments, 'B. Adam', 'Lobby Security'), false);
+  assert.equal(canAlsoServe(assignments, 'B. Eli', 'Closing Prayer'), true, 'ushering, so may pray');
+  assert.equal(canAlsoServe(assignments, 'E. Joseph', 'Usher #2'), false, 'the Presider does not usher too');
+  assert.equal(canAlsoServe(assignments, 'B. Adam', 'Sermon'), true, 'the duty they already hold');
+  assert.equal(canAlsoServe(Object.assign({ 'Usher #2': 'B. Adam' }, assignments), 'B. Adam', 'Usher Door'), false, 'one usher duty with a prayer');
+  assert.equal(canAlsoServe(assignments, 'S. Leah', 'Usher Door'), true, 'no duty there yet');
+  assert.equal(canAlsoServe(assignments, '', 'Usher Door'), true);
+  assert.equal(prayerOf(assignments, 'B. Adam'), 'Sermon');
+  assert.equal(prayerOf(assignments, 'B. Eli'), '');
+  assert.deepEqual(otherDuties(assignments, 'B. Adam', 'Usher #2'), ['Sermon']);
+});
+
+test('the browser and the server allow the same duties together, for every pair and three of duties', () => {
+  const permissions = require('../../permissions.js');
+  assert.deepEqual(permissions.PRAYER_DUTIES, PRAYER_DUTIES);
+  assert.deepEqual(permissions.USHER_DUTIES, USHER_DUTIES);
+  const duties = ALL_DUTIES.concat('Not a duty');
+  const same = held => {
+    const last = held[held.length - 1];
+    const assignments = Object.fromEntries(held.slice(0, -1).map(duty => [duty, 'B. Adam']));
+    const browser = canAlsoServe(assignments, 'B. Adam', last);
+    assert.equal(permissions.blockingDuties(assignments, 'B. Adam', last).length === 0, browser, held.join(' + '));
+    assert.equal(permissions.dutiesAllowedTogether(held), browser, held.join(' + '));
+    assert.equal(doubleDuties({ assignments: Object.assign({ [last]: 'B. Adam' }, assignments) }).length === 0, browser, held.join(' + '));
+  };
+  duties.forEach((a, i) => duties.slice(i + 1).forEach((b, j) => {
+    same([a, b]);
+    same([b, a]);
+    duties.slice(i + j + 2).forEach(c => same([a, b, c]));
+  }));
+  assert.deepEqual(permissions.blockingDuties({ Presider: 'E. Joseph', Sermon: 'B. Adam' }, 'E. Joseph', 'Usher #1'), ['Presider']);
+  assert.deepEqual(permissions.blockingDuties({ Sermon: 'B. Adam' }, 'B. Adam', 'Usher #1'), []);
+  assert.deepEqual(permissions.blockingDuties({ Sermon: 'B. Adam' }, '', 'Usher #1'), []);
 });
 
 test('a double duty marked OK stays OK only while the duties stay the same', () => {
   const service = { assignments: { Presider: 'E. Joseph', 'Media Booth #1': 'E. Joseph' }, conflictOk: { 'E. Joseph': ['Presider', 'Media Booth #1'] } };
   assert.equal(openDoubleDuties(service).length, 0);
+  service.conflictOk['E. Joseph'] = ['Media Booth #1', 'Presider', 'Presider'];
+  assert.equal(openDoubleDuties(service).length, 0, 'in any order, once each');
   service.assignments.Sermon = 'E. Joseph';
   assert.equal(openDoubleDuties(service).length, 1);
+  service.conflictOk['E. Joseph'] = ['Presider', 'Media Booth #1', 'Sermon', 'Usher #1'];
+  assert.equal(openDoubleDuties(service).length, 1, 'a mark for other duties does not count');
 });
 
 const profile = normalizeProfile({
@@ -62,6 +117,11 @@ test('replacements: free members who can take the duty, lightest load first', ()
   ], [], '2026-09-10');
   assert.deepEqual(suggestReplacements(service, 'Usher Door', roster, stats, { exclude: 'S. Naomi' }).map(item => item.memberName), ['S. Leah', 'S. Grace']);
   assert.deepEqual([stats['S. Grace'].past4, stats['S. Grace'].upcoming, stats['S. Grace'].last], [1, 1, '2026-09-05']);
+  // Grace prays at this service: she comes first for an usher duty, though she has served more.
+  const praying = Object.assign({}, service, { assignments: Object.assign({ 'Prayer of Thanks': 'S. Grace' }, service.assignments) });
+  assert.deepEqual(suggestReplacements(praying, 'Usher Door', roster, stats, { exclude: 'S. Naomi' }).map(item => item.memberName), ['S. Grace', 'S. Leah']);
+  // Esther ushers at the front already, so she is not offered for the door.
+  assert.ok(!suggestReplacements(praying, 'Usher Door', roster, stats, { limit: 9 }).some(item => item.memberName === 'S. Esther'));
 });
 
 test('a service "usually" has a duty filled when half of its kind do', () => {
@@ -84,87 +144,4 @@ test('a change request is open while pending and the member still holds the duty
   assert.equal(shownStatus(request, services), 'completed');
   assert.equal(shownStatus(Object.assign({}, request, { status: 'declined' }), services), 'declined');
   assert.equal(requestId('2026-09-12_morning', 'Usher #1', 5), '2026-09-12_morning_usher-1_5');
-});
-
-test('Fill gives each empty duty to the least-served member who can take it, never twice in one service', async () => {
-  const person = (name, extra = {}) => normalizeProfile(Object.assign({
-    memberUid: 'member:' + name, departmentId: 'Usher Sisters', memberName: name, status: 'active', schedulable: true,
-    eligibleDuties: ['Usher Door', 'Usher Front'], availability: { recurring: { morning: 'available' }, exceptions: {} }
-  }, extra), 'Usher Sisters');
-  const roster = [
-    person('S. Leah', { availability: { recurring: { morning: 'available' }, exceptions: { '2026-09-19': { '*': 'unavailable' } } } }),
-    person('S. Naomi'), person('S. Esther'), person('S. Grace', { eligibleDuties: ['Usher Front'] })
-  ];
-  const services = [
-    { date: '2026-09-26', service: 'Morning', time: '10:00', assignments: { 'Usher Door': 'S. Esther' } },
-    { date: '2026-09-12', service: 'Morning', time: '10:00', assignments: {} },
-    { date: '2026-09-19', service: 'Morning', time: '10:00', assignments: {} }
-  ];
-  const stats = {
-    'S. Leah': { past8: 1, upcoming: 0, last: '2026-08-29' },
-    'S. Naomi': { past8: 1, upcoming: 0, last: '2026-08-01' },
-    'S. Esther': { past8: 2, upcoming: 1, last: '2026-08-22' }
-  };
-  const { proposals, unfilled } = fill(services, ['Usher Door', 'Usher Front'], () => roster, stats);
-  assert.deepEqual(proposals.map(item => [item.serviceId, item.duty, item.memberName]), [
-    ['2026-09-12_morning', 'Usher Door', 'S. Naomi'],   // Leah and Naomi tie; Naomi served longer ago. Grace cannot take the door.
-    ['2026-09-12_morning', 'Usher Front', 'S. Grace'],  // Grace has served least of all
-    ['2026-09-19_morning', 'Usher Door', 'S. Naomi'],   // Leah is away; Naomi (2) still under Esther (3)
-    ['2026-09-19_morning', 'Usher Front', 'S. Grace'],  // Naomi is serving there already
-    ['2026-09-26_morning', 'Usher Front', 'S. Leah']    // the door was already filled; Esther serves there
-  ]);
-  assert.equal(proposals[0].memberUid, 'member:S. Naomi');
-  assert.deepEqual(unfilled, []);
-  const none = fill([{ date: '2026-09-19', service: 'Morning', assignments: {} }], ['Usher Door'], () => roster.slice(0, 1), {});
-  assert.deepEqual([none.proposals.length, none.unfilled], [0, [{ serviceId: '2026-09-19_morning', duty: 'Usher Door' }]]);
-});
-
-test('Fill spreads a month evenly and avoids two services on one day', () => {
-  const names = ['S. Ada', 'S. Bea', 'S. Cora', 'S. Dina', 'S. Eva', 'S. Fay'];
-  const roster = names.map(name => normalizeProfile({
-    memberUid: 'member:' + name, departmentId: 'Usher Sisters', memberName: name, status: 'active', schedulable: true,
-    eligibleDuties: ['Usher Door', 'Usher Front', 'Usher Back'], availability: { recurring: {}, exceptions: {} }
-  }, 'Usher Sisters'));
-  // Four Saturdays with three services each, three duties per service: 36 duties for 6 people.
-  const services = ['2026-10-03', '2026-10-10', '2026-10-17', '2026-10-24'].flatMap(date =>
-    [['Morning', '10:00'], ['Afternoon', '14:30'], ['Evening', '19:30']].map(([service, time]) => ({ date, service, time, assignments: {} })));
-  const { proposals, unfilled } = fill(services, ['Usher Door', 'Usher Front', 'Usher Back'], () => roster, {});
-  assert.equal(proposals.length, 36);
-  assert.deepEqual(unfilled, []);
-  const counts = names.map(name => proposals.filter(item => item.memberName === name).length);
-  assert.deepEqual(counts, [6, 6, 6, 6, 6, 6], 'everyone gets the same number');
-  // With six people and three duties per service, nobody needs two services on one day.
-  const perDay = {};
-  proposals.forEach(item => { const key = item.serviceId.slice(0, 10) + item.memberName; perDay[key] = (perDay[key] || 0) + 1; });
-  assert.ok(Object.values(perDay).every(count => count <= 2), 'at most two services a day each');
-});
-
-test('Fill by Rotation goes down the list by name, after whoever served last; Random picks anyone free', () => {
-  const names = ['S. Ada', 'S. Bea', 'S. Cora', 'S. Dina'];
-  const roster = names.map(name => normalizeProfile({
-    memberUid: 'member:' + name, departmentId: 'Usher Sisters', memberName: name, status: 'active', schedulable: true,
-    eligibleDuties: ['Usher Door'], availability: { recurring: {}, exceptions: { '2026-10-17': name === 'S. Dina' ? { '*': 'unavailable' } : {} } }
-  }, 'Usher Sisters'));
-  const history = [{ date: '2026-09-26', service: 'Morning', time: '10:00', assignments: { 'Usher Door': 'S. Bea' } }];
-  const services = ['2026-10-03', '2026-10-10', '2026-10-17', '2026-10-24', '2026-10-31']
-    .map(date => ({ date, service: 'Morning', time: '10:00', assignments: {} }));
-  const rotation = fill(services, ['Usher Door'], () => roster, {}, { mode: 'rotation', history });
-  // After Bea: Cora, Dina, (Dina is away on the 17th) Ada, Bea, Cora.
-  assert.deepEqual(rotation.proposals.map(item => item.memberName), ['S. Cora', 'S. Dina', 'S. Ada', 'S. Bea', 'S. Cora']);
-  const random = fill(services, ['Usher Door'], () => roster, {}, { mode: 'random', random: () => 0.99 });
-  assert.deepEqual(random.proposals.map(item => item.memberName), ['S. Dina', 'S. Dina', 'S. Cora', 'S. Dina', 'S. Dina']);
-});
-
-test('Fill looks at every duty a kind of service has had in the past year', () => {
-  const today = '2026-10-01';
-  const past = [
-    { date: '2026-09-26', worship: 'Sabbath Day', service: 'Evening', assignments: { 'Usher Door': 'S. Ada', 'Usher Back': 'S. Bea' } },
-    { date: '2026-09-19', worship: 'Sabbath Day', service: 'Evening', assignments: { 'Usher Door': 'S. Ada', Presider: 'B. Adam' } }
-  ];
-  const duties = fillDuties(past, today);
-  assert.deepEqual(duties({ worship: 'Sabbath Day', service: 'Evening' }), ['Presider', 'Usher Door', 'Usher Back']);
-  // A kind of service with no history gets every duty it has (no Thanks Prayer or Closing Prayer at Prayer Week).
-  const prayerWeek = duties({ worship: 'Prayer Week', service: 'Evening' });
-  assert.ok(prayerWeek.includes('Usher Front') && prayerWeek.includes('Sermon'));
-  assert.ok(!prayerWeek.includes('Closing Prayer') && !prayerWeek.includes('Prayer of Thanks'));
 });

@@ -28,12 +28,14 @@ async function saveProfile(department, uid, next) {
 
 function slug(value) { return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
 
+/* As the server: a date's own entry, then its whole-day entry, then the
+   weekly pattern; a time not set counts as available. */
 function availableAt(profileData, date, key) {
   const availability = profileData.availability || {};
   const exception = (availability.exceptions || {})[date];
   if (exception && exception[key]) return exception[key];
   if (exception && exception['*']) return exception['*'];
-  return (availability.recurring || {})[key] || 'unknown';
+  return (availability.recurring || {})[key] || 'available';
 }
 
 const handlers = {
@@ -179,7 +181,7 @@ const handlers = {
         const reason = !person ? 'no-profile' : person.status !== 'active' ? 'target-inactive' : person.schedulable !== true ? 'target-not-schedulable'
           : !(person.eligibleDuties || []).includes(change.duty) ? 'target-ineligible'
             : availableAt(person, service.date, slug(service.service)) !== 'available' ? 'target-unavailable'
-              : Object.keys(assignments).some(duty => duty !== change.duty && assignments[duty] === person.memberName) ? 'already-serving' : '';
+              : window.WorshipDutyPermissions.blockingDuties(assignments, person.memberName, change.duty).length ? 'already-serving' : '';
         if (reason) { skipped.push(Object.assign({ reason }, where)); continue; }
         name = person.memberName;
       }
