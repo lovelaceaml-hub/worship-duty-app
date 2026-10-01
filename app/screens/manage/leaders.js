@@ -36,13 +36,18 @@ export function render() {
     ${roleBlock('Choir song editors', songEditors(), 'songEditor', '', 'They can change choir songs and plan songs for any service. They do not get other leader rights.')}`;
 }
 
+/* "a Worship leader", "a choir song editor" */
+const roleName = (role, department) => role === 'songEditor' ? 'a choir song editor' : 'a ' + department + ' leader';
+
 async function saveRole(role, department, name, enabled) {
   const memberName = canonical(name);
   if (!memberName) return;
   try {
     const result = await call('updateRoleConfiguration', { roleType: role, department, memberName, enabled });
     if (result && result.config) data.leaderConfig = result.config;
-    notice(enabled ? nameOf(memberName) + ' was added.' : nameOf(memberName) + ' was removed.');
+    // A role change signs the member out of their role until they sign in again with a new PIN.
+    notice(enabled ? nameOf(memberName) + ' is ' + roleName(role, department) + ' now. They sign in again and choose a new PIN.'
+      : nameOf(memberName) + ' is no longer ' + roleName(role, department) + '.');
   } catch (error) {
     notice('That was not saved: ' + problem(error), true);
   }
@@ -53,6 +58,8 @@ defineActions({
   'role-add': { allowed: () => canManageLeaders(), run: form => saveRole(form.dataset.role, form.dataset.department, new FormData(form).get('name'), true) },
   'role-remove': {
     allowed: () => canManageLeaders(),
-    run: el => { if (confirm('Remove ' + nameOf(el.dataset.name) + '?')) saveRole(el.dataset.role, el.dataset.department, el.dataset.name, false); }
+    run: el => {
+      if (confirm('Remove ' + nameOf(el.dataset.name) + ' as ' + roleName(el.dataset.role, el.dataset.department) + '?')) saveRole(el.dataset.role, el.dataset.department, el.dataset.name, false);
+    }
   }
 });
