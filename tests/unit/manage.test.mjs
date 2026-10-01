@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { reasonText, reasonNote, holderNote } from '../../app/lib/reasons.js';
+import { reasonText, reasonNote, holderNote, isKnownReason } from '../../app/lib/reasons.js';
 import { problem } from '../../app/firebase.js';
 import { whyNot, canTake, candidates, normalizeProfile, dutiesFor, statusFor } from '../../app/lib/availability.js';
 import { workload, suggestReplacements, recentLoad } from '../../app/lib/workload.js';
@@ -17,17 +17,22 @@ import { DEPARTMENTS } from '../../app/config/duties.js';
 const require = createRequire(import.meta.url);
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-test('every reason the server gives today has words', () => {
+test('every reason the server gives has words', () => {
   const sources = fs.readdirSync(path.join(repo, 'functions')).filter(file => file.endsWith('.js'))
     .map(file => fs.readFileSync(path.join(repo, 'functions', file), 'utf8')).join('\n');
   const codes = new Set();
   for (const match of sources.matchAll(/decision\(false, '([a-z-]+)'/g)) codes.add(match[1]);
   for (const match of sources.matchAll(/\breason: '([a-z-]+)'/g)) codes.add(match[1]);
+  // The server's list of reasons and the ones it gives by error code alone.
+  if (fs.existsSync(path.join(repo, 'functions', 'refusals.js'))) {
+    const refusals = require('../../functions/refusals.js');
+    Object.keys(refusals.MESSAGES).concat(Object.values(refusals.DEFAULT_REASONS)).forEach(code => codes.add(code));
+  }
   assert.ok(codes.size > 20, 'found the server\'s codes');
-  const missing = [...codes].filter(code => !reasonText(code));
+  const missing = [...codes].filter(code => !isKnownReason(code));
   assert.deepEqual(missing, [], 'add these to app/lib/reasons.js');
-  // And the codes of the new contracts (functions/ adds them in this round).
-  ['service-started', 'service-missing', 'request-closed', 'not-holder', 'role-changed', 'pin-too-common'].forEach(code => assert.ok(reasonText(code), code));
+  ['service-started', 'service-missing', 'request-closed', 'not-holder', 'session-ended', 'pin-too-common', 'privileged-target'].forEach(code => assert.ok(reasonText(code), code));
+  assert.equal(reasonText('sheet-problem'), '', 'the server\'s own message says what went wrong');
   assert.equal(reasonNote('target-unavailable'), 'not available then');
   assert.equal(reasonNote('some-new-code'), 'not saved');
   assert.ok(Object.values({ a: reasonText('changed'), b: reasonText('already-serving') }).every(text => !/[—–]/.test(text)));
@@ -53,6 +58,10 @@ test('problem() decides by the code and the reason, never by words in the messag
   assert.equal(problem(error('permission-denied', 'You cannot list this department roster.')), 'Your account is not allowed to do that.');
   assert.equal(problem(error('unavailable', 'fetch failed')), 'The server could not be reached. Try again.');
   assert.equal(problem(error('not-found', 'That service was moved or deleted.', { reason: 'service-missing' })), 'That service was moved or deleted.');
+  // A reason given by the code alone leaves the server's sentence.
+  assert.equal(problem(error('failed-precondition', 'The Google Sheet could not be read (403).', { reason: 'sheet-problem' })), 'The Google Sheet could not be read (403).');
+  assert.equal(problem(error('invalid-argument', 'Choose a year.', { reason: 'invalid-input' })), 'Choose a year.');
+  assert.equal(problem(error('permission-denied', 'The member role has changed. Sign in again.', { reason: 'session-ended' })), 'Your sign-in has ended. Sign out, then sign in again.');
   assert.equal(problem(new Error('The roster did not load.'), 'The roster did not load.'), 'The roster did not load.', 'a plain error gets the fallback');
   assert.equal(problem(Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' })), 'Your account is not allowed to do that.', 'a Firestore write');
 });

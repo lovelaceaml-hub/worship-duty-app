@@ -82,7 +82,10 @@ export async function importSheetNow() {
     if (result.added) changes.push(plural(result.added, 'service') + ' added');
     if (result.updated) changes.push(plural(result.updated, 'service') + ' updated');
     if (result.newMembers) changes.push(plural(result.newMembers, 'new member'));
-    notice(changes.length ? 'Imported from the sheet: ' + changes.join(', ') + '.' : 'The schedule already matches the sheet.');
+    // Services still waiting to be written to the Sheet keep the app's duties.
+    const waiting = result.waiting ? ' ' + plural(result.waiting, 'service was', 'services were') + ' left as they are, because their changes are still on the way to the Sheet.' : '';
+    if (result.failed) notice('Part of the import was not saved (' + plural(result.failed, 'change') + '). Import again.' + waiting, true);
+    else notice((changes.length ? 'Imported from the Sheet: ' + changes.join(', ') + '.' : 'The schedule already matches the Sheet.') + waiting);
   } catch (error) {
     notice('The sheet was not imported: ' + problem(error), true);
   }
@@ -111,8 +114,9 @@ export async function addServiceYear(year) {
   renderSoon();
   try {
     const result = await call('addServiceYear', { year });
-    notice(result.added ? 'Added ' + plural(result.added, 'service') + (result.sheetRows ? ', and ' + plural(result.sheetRows, 'row') + ' in the Sheet' : '') + '.'
-      : 'Every regular service from December ' + year + ' through December ' + (year + 1) + ' was already there.');
+    notice((result.added ? 'Added ' + plural(result.added, 'service') + (result.sheetRows ? ', and ' + plural(result.sheetRows, 'row') + ' in the Sheet' : '') + '.'
+      : 'Every regular service from December ' + year + ' through December ' + (year + 1) + ' was already there.') +
+      (result.sheetProblem ? ' Their rows were not added to the Sheet: ' + result.sheetProblem : ''), !!result.sheetProblem);
   } catch (error) {
     notice('The services were not added: ' + problem(error), true);
   }

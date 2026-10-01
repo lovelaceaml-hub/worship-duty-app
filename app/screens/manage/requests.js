@@ -55,6 +55,7 @@ function openCard(request, stats) {
   const service = requestService(request, data.services);
   const working = state.busy[choiceKey(request.id)];
   if (!service) return goneCard(request, working);
+  const refused = state.choices['refused::' + request.id];
   const department = departmentOfRequest(request);
   loadRoster(department);
   const loaded = rosterLoaded(department);
@@ -75,6 +76,8 @@ function openCard(request, stats) {
           ${ranked.length > 3 ? html`<optgroup label="Others who can take it">${ranked.slice(3).map(option)}</optgroup>` : ''}
         </select></label>
       ${loaded && !ranked.length ? html`<p class="hint small">No one else in ${department} can take this duty then.</p>` : ''}
+      ${refused ? html`<p class="card-note is-warning">${refused}
+        <button type="button" class="link" data-act="request-close" data-id="${request.id}"${working ? ' disabled' : ''}>Close request</button></p>` : ''}
       <div class="button-row">
         <button type="submit" class="primary"${working || !choice ? ' disabled' : ''}>${working ? 'Saving…' : approveLabel(choice, people)}</button>
         <button type="button" class="link danger" data-act="request-decline" data-id="${request.id}"${working ? ' disabled' : ''}>Decline</button>
@@ -118,6 +121,9 @@ async function answer(id, decision, choice, { closing = false } = {}) {
       : profile ? 'Approved. ' + nameOf(profile.memberName) + ' has ' + dutyName(request.duty) + ' now.'
         : 'Approved. ' + dutyName(request.duty) + ' is open now; fill it in the month plan.');
   } catch (error) {
+    const reason = error && error.details && error.details.reason;
+    // Approving cannot work any more: the card offers to close the request.
+    if (decision === 'approved' && ['not-holder', 'service-missing'].includes(reason)) state.choices['refused::' + id] = problem(error);
     notice('That was not saved: ' + problem(error), true);
   }
   delete state.busy[choiceKey(id)];

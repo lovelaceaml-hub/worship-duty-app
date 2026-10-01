@@ -83,7 +83,9 @@ function skippedList(skipped) {
   const words = skipped.slice(0, 4).map(item => {
     const service = serviceById(item.serviceId);
     const where = service ? shortDate(service.date) + ' ' + service.service : item.serviceId;
-    return dutyName(item.duty) + ' on ' + where + ' (' + (item.memberName ? nameOf(item.memberName) + ': ' : '') + reasonNote(item.reason) + ')';
+    const why = item.reason === 'already-serving' && Array.isArray(item.duties) && item.duties.length
+      ? 'already ' + item.duties.map(dutyName).join(' and ') + ' there' : reasonNote(item.reason);
+    return dutyName(item.duty) + ' on ' + where + ' (' + (item.memberName ? nameOf(item.memberName) + ': ' : '') + why + ')';
   });
   if (skipped.length > 4) words.push('and ' + plural(skipped.length - 4, 'more'));
   return words.join('; ');

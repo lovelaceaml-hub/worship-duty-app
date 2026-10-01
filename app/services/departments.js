@@ -264,10 +264,11 @@ export async function saveProfile(department, uid) {
   const result = await updateProfile(department, profile, patch);
   if (!result) return;
   const name = nameOf(profile.memberName);
-  const marked = (result.replacements && result.replacements.marked) || null;
-  const clashes = patch.availability ? dutiesOnDaysOff(result.profile) : [];
-  if (marked && marked.length) notice(name + '’s profile was saved. ' + plural(marked.length, 'duty', 'duties') + ' on days now marked Not available ' + (marked.length === 1 ? 'was' : 'were') + ' flagged for a replacement.', true);
-  else if (clashes.length) notice(name + '’s profile was saved. ' + name + ' still has ' + dutyList(clashes) + ', on days now marked Not available. Find someone else in the month plan.', true);
+  // The server flags the duties on days now not available (older servers
+  // did not, so the app looks for them itself).
+  const marked = result.replacements && Array.isArray(result.replacements.marked) ? result.replacements.marked : null;
+  const clashes = marked ? marked.map(atService) : (patch.availability ? dutiesOnDaysOff(result.profile) : []);
+  if (clashes.length) notice(name + '’s profile was saved. ' + name + ' can no longer make ' + dutyList(clashes) + '. Find someone else in the month plan.', true);
   else notice(name + '’s profile was saved.');
 }
 
@@ -447,7 +448,8 @@ export function acceptPendingInvite() {
 async function acceptInvite(token) {
   try {
     const result = await call('acceptDepartmentInvitation', { token });
-    notice(result.alreadyMember ? 'You are already in ' + result.departmentId + '.' : 'You joined ' + result.departmentId + '.');
+    notice(result.inactive ? 'You are already in ' + result.departmentId + ', but inactive. Ask your leader to make you active.'
+      : result.alreadyMember ? 'You are already in ' + result.departmentId + '.' : 'You joined ' + result.departmentId + '.', !!result.inactive);
     departments.own = null;
     loadOwnProfiles(true);
   } catch (error) {
@@ -461,14 +463,16 @@ async function acceptInvite(token) {
 
 /* ---- the member's own availability, one editor for every department ---- */
 
-/* The member's duties the server flagged ([{ serviceId, duty }]), in words. */
-function flaggedList(marked) {
-  return dutyList(marked.map(item => ({
-    duty: item.duty,
-    service: data.services.find(service => serviceId(service) === item.serviceId) ||
-      { date: String(item.serviceId).slice(0, 10), service: String(item.serviceId).slice(11).replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) }
-  })));
+/* A duty the server flagged ({ serviceId, duty, date, service }) as
+   { service, duty }, finding the service when the server named only its id. */
+function atService(item) {
+  const known = data.services.find(service => serviceId(service) === item.serviceId);
+  const service = item.date ? { date: item.date, service: item.service || '' } : known ||
+    { date: String(item.serviceId).slice(0, 10), service: String(item.serviceId).slice(11).replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) };
+  return { service, duty: item.duty };
 }
+
+const flaggedList = marked => dutyList(marked.map(atService));
 
 export async function saveOwnAvailability(availability) {
   const own = departments.own || [];

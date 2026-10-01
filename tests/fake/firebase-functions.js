@@ -3,8 +3,9 @@
    depend on, in the same order, and refuses the same way: an HttpsError code
    with details.reason (see app/lib/reasons.js). The real checks live in
    functions/ and its own tests.
-   Tests can set window.__fakeFail = { callableName: 'unavailable' } (or a
-   function of the payload giving a code) to make a call fail, and
+   Tests can set window.__fakeFail = { callableName: 'unavailable' } (a code,
+   a refusal { code, reason, message }, or a function of the payload giving
+   either) to make a call fail, and
    window.__fakeDelay = { callableName: ms } to slow one down. */
 import { doc, getDoc, getDocs, collection, setDoc, updateDoc } from './firebase-firestore.js';
 
@@ -13,8 +14,13 @@ const invites = {};
 const calls = window.__fakeCalls = [];
 const permissions = () => window.WorshipDutyPermissions;
 
-function fail(code, message = code, reason = '') {
-  throw Object.assign(new Error(message), { code: 'functions/' + code }, reason ? { details: { reason } } : {});
+/* The reason the server gives a refusal that names none, by its code
+   (functions/refusals.js). */
+const DEFAULT_REASONS = { 'invalid-argument': 'invalid-input', unauthenticated: 'sign-in-required', 'permission-denied': 'not-allowed',
+  'not-found': 'not-found', 'already-exists': 'exists', 'failed-precondition': 'not-possible', aborted: 'changed', 'resource-exhausted': 'locked' };
+
+function fail(code, message = code, reason = '', extra = {}) {
+  throw Object.assign(new Error(message), { code: 'functions/' + code, details: Object.assign({ reason: reason || DEFAULT_REASONS[code] || 'server-error' }, extra) });
 }
 const me = () => decodeURIComponent((sessionStorage.getItem('fake-auth-member') || ''));
 const profileRef = (department, uid) => doc(null, 'departments', department, 'members', uid);
@@ -30,7 +36,7 @@ function mustLead(department) {
 
 async function profile(department, uid) {
   const snapshot = await getDoc(profileRef(department, uid));
-  if (!snapshot.exists()) fail('not-found', 'The department member profile was not found.', 'no-profile');
+  if (!snapshot.exists()) fail('not-found', 'That member is not in this department.', 'profile-missing');
   return snapshot.data();
 }
 
@@ -39,7 +45,7 @@ function assertFresh(before, expectedRevision, expectedUpdatedAt) {
   if (expectedRevision == null) return;
   const current = Number.isSafeInteger(before.revision) ? before.revision : 0;
   if (expectedRevision !== current || (expectedUpdatedAt != null && expectedUpdatedAt !== before.updatedAt)) {
-    fail('aborted', 'This record changed since you loaded it. Reload to see the newer version.');
+    fail('aborted', 'This record changed since you loaded it. Reload to see the newer version.', 'changed');
   }
 }
 
@@ -85,6 +91,42 @@ function refusal(person, service, duty, assignments) {
   return '';
 }
 
+/* The duties `person` holds that cannot be paired with `duty`. */
+const blocking = (assignments, person, duty) => permissions().blockingDuties(assignments, person.memberName, duty);
+
+/* A member's flags after an availability change, as functions/replacements.js
+   makes them: their upcoming duties in the department on a time now
+   unavailable are flagged, and their own flags on times available again go.
+   Returns { marked, cleared } with each duty's service, date and label. */
+async function flagDuties(profileData, departmentId, memberUid) {
+  const marked = [], cleared = [];
+  const own = permissions().DEPARTMENT_DUTIES[departmentId] || [];
+  for (const item of (await getDocs(collection(null, 'schedule'))).docs) {
+    const service = item.data();
+    if (hasStarted(service)) continue;
+    let changed = false;
+    Object.entries(service.assignments || {}).forEach(([duty, name]) => {
+      if (!own.includes(duty) || name !== profileData.memberName) return;
+      const where = { serviceId: item.id, duty, date: service.date, service: service.service };
+      const marker = (service.needsReplacement || {})[duty];
+      const mine = !!marker && marker.memberName === name;
+      const status = availableAt(profileData, service.date, slug(service.service));
+      if (status === 'unavailable' && !mine) {
+        service.needsReplacement = Object.assign({}, service.needsReplacement, { [duty]: { memberName: name, memberUid, departmentId, reason: 'unavailable', since: Date.now() } });
+        marked.push(where);
+        changed = true;
+      } else if (status === 'available' && mine && marker.reason === 'unavailable') {
+        service.needsReplacement = Object.assign({}, service.needsReplacement);
+        delete service.needsReplacement[duty];
+        cleared.push(where);
+        changed = true;
+      }
+    });
+    if (changed) await setDoc(doc(null, 'schedule', item.id), service);
+  }
+  return { marked, cleared };
+}
+
 async function serviceFor(id) {
   const snapshot = await getDoc(doc(null, 'schedule', id));
   return snapshot.exists() ? snapshot.data() : null;
@@ -111,7 +153,7 @@ const handlers = {
     const config = (await getDoc(doc(null, 'app', 'leaderConfig'))).data() || {};
     const name = data.memberId, rules = permissions();
     const privileged = rules.isAdmin(name, config) || rules.canManageLeaders(name, config) || rules.departmentsForLeader(name, config).length || rules.canEditSongs(name, {}, config);
-    if (!isAdmin() && privileged) fail('permission-denied', 'Only an administrator can reset that PIN.', 'administrator-required');
+    if (!isAdmin() && privileged) fail('permission-denied', 'Only an administrator can reset that PIN.', 'privileged-target');
     Object.assign(accounts[data.memberId], { pin: '0000' });
     accounts[data.memberId].claims.mustChangePin = true;
     return { ok: true };
@@ -128,12 +170,13 @@ const handlers = {
     const patch = clone(data.patch || {});
     const unknown = Object.keys(patch).find(field => !['status', 'eligibleDuties', 'schedulable', 'availability'].includes(field));
     if (unknown) fail('invalid-argument', 'Profile field is not allowed: ' + unknown + '.', 'field-not-allowed');
-    const next = Object.assign({}, before, patch);
-    return { ok: true, departmentId: data.departmentId, memberUid: data.memberUid, profile: await saveProfile(data.departmentId, data.memberUid, next) };
+    const next = await saveProfile(data.departmentId, data.memberUid, Object.assign({}, before, patch));
+    const replacements = patch.availability ? await flagDuties(next, data.departmentId, data.memberUid) : { marked: [], cleared: [] };
+    return { ok: true, departmentId: data.departmentId, memberUid: data.memberUid, profile: next, replacements };
   },
   async createDepartmentProfile(data) {
     mustLead(data.departmentId);
-    if ((await getDoc(profileRef(data.departmentId, data.memberUid))).exists()) fail('already-exists', 'The department member profile already exists.');
+    if ((await getDoc(profileRef(data.departmentId, data.memberUid))).exists()) fail('already-exists', 'That member is already in this department.', 'profile-exists');
     const next = Object.assign({ uid: data.memberUid, department: data.departmentId, role: 'member', createdAt: Date.now() }, clone(data), { revision: 0 });
     return { ok: true, departmentId: data.departmentId, memberUid: data.memberUid, profile: await saveProfile(data.departmentId, data.memberUid, next) };
   },
@@ -144,7 +187,8 @@ const handlers = {
     if (hasStarted(service)) fail('failed-precondition', 'That service has already started.', 'service-started');
     const person = (await getDoc(profileRef(data.departmentId, data.memberUid))).data() || null;
     const why = refusal(person, service, data.duty, service.assignments || {});
-    if (why) fail(why === 'no-profile' ? 'not-found' : 'failed-precondition', 'Department authorization denied: ' + why + '.', why);
+    if (why) fail(why === 'no-profile' ? 'not-found' : 'failed-precondition', 'That change is not allowed.', why === 'no-profile' ? 'profile-missing' : why,
+      why === 'already-serving' ? { duties: blocking(service.assignments || {}, person, data.duty) } : {});
     await updateDoc(doc(null, 'schedule', data.serviceId), { assignments: Object.assign({}, service.assignments, { [data.duty]: person.memberName }) });
     return { ok: true, override: false };
   },
@@ -200,48 +244,37 @@ const handlers = {
   },
   async acceptDepartmentInvitation(data) {
     const invite = invites[data.token] || (window.__fixture.invites || {})[data.token];
-    if (!invite || invite.status !== 'active' || invite.expiresAt <= Date.now()) fail('failed-precondition', 'The invitation is invalid or expired.');
+    if (!invite || invite.status !== 'active' || invite.expiresAt <= Date.now()) fail('failed-precondition', 'The invitation is invalid or expired.', 'invite-invalid');
     const name = me(), uid = 'member:' + name;
     const existing = await getDoc(profileRef(invite.departmentId, uid));
+    // Someone already in the department keeps the link unused; an inactive member is told so.
+    if (existing.exists()) return { ok: true, departmentId: invite.departmentId, memberUid: uid, alreadyMember: true, inactive: existing.data().status === 'inactive' };
     if (!existing.exists()) {
       await saveProfile(invite.departmentId, uid, { uid, memberUid: uid, department: invite.departmentId, departmentId: invite.departmentId, memberName: name,
         role: 'member', status: 'active', eligibleDuties: [], schedulable: false, availability: { recurring: {}, exceptions: {} }, createdAt: Date.now(), revision: 0 });
     }
     invite.status = 'accepted';
-    return { ok: true, departmentId: invite.departmentId, memberUid: uid, alreadyMember: existing.exists() };
+    return { ok: true, departmentId: invite.departmentId, memberUid: uid, alreadyMember: false };
   },
   /* The member's own availability, every department at once; their duties in
      those departments that have not started and fall on a time now marked
-     unavailable are flagged for their leader. */
+     unavailable are flagged for their leader (see flagDuties). */
   async saveMemberAvailability(data) {
-    const out = [], marked = [];
+    const out = [], marked = [], cleared = [];
     const befores = [];
     for (const entry of data.departments) {
       const before = await profile(entry.departmentId, data.memberUid);
       assertFresh(before, entry.expectedRevision, entry.expectedUpdatedAt);
       befores.push(before);
     }
-    const schedule = await getDocs(collection(null, 'schedule'));
     for (const [index, entry] of data.departments.entries()) {
-      const next = Object.assign({}, befores[index], { availability: clone(entry.availability) });
-      out.push({ departmentId: entry.departmentId, profile: await saveProfile(entry.departmentId, data.memberUid, next) });
-      const own = permissions().DEPARTMENT_DUTIES[entry.departmentId] || [];
-      for (const item of schedule.docs) {
-        const service = item.data();
-        if (hasStarted(service)) continue;
-        let changed = false;
-        Object.entries(service.assignments || {}).forEach(([duty, name]) => {
-          if (!own.includes(duty) || name !== next.memberName || availableAt(next, service.date, slug(service.service)) !== 'unavailable') return;
-          const marker = (service.needsReplacement || {})[duty];
-          if (marker && marker.memberName === name) return;
-          marked.push({ serviceId: item.id, duty });
-          service.needsReplacement = Object.assign({}, service.needsReplacement, { [duty]: { memberName: name, memberUid: data.memberUid, departmentId: entry.departmentId, reason: 'unavailable', since: Date.now() } });
-          changed = true;
-        });
-        if (changed) await setDoc(doc(null, 'schedule', item.id), service);
-      }
+      const next = await saveProfile(entry.departmentId, data.memberUid, Object.assign({}, befores[index], { availability: clone(entry.availability) }));
+      out.push({ departmentId: entry.departmentId, profile: next });
+      const flags = await flagDuties(next, entry.departmentId, data.memberUid);
+      marked.push(...flags.marked);
+      cleared.push(...flags.cleared);
     }
-    return { ok: true, departments: out, replacements: { marked, cleared: [] } };
+    return { ok: true, departments: out, replacements: { marked, cleared } };
   },
   /* A request's answer, or a flagged duty's: give the duty to someone, leave
      it open, keep the member on it ('keep'), or decline the request. A
@@ -254,9 +287,9 @@ const handlers = {
     let request = null;
     if (data.requestId) {
       const snapshot = await getDoc(doc(null, 'requests', data.requestId));
-      if (!snapshot.exists()) fail('not-found', 'The request was not found.');
+      if (!snapshot.exists()) fail('not-found', 'The request was not found.', 'request-missing');
       request = snapshot.data();
-      if (request.status !== 'pending') fail('failed-precondition', 'That request was already answered or withdrawn.', 'request-closed');
+      if (request.status !== 'pending') fail('failed-precondition', 'That request was already answered or withdrawn.', 'request-closed', { status: request.status });
     }
     const answer = async status => {
       if (data.requestId) await setDoc(doc(null, 'requests', data.requestId), { status, resolvedAt: Date.now(), resolvedByName: me() }, { merge: true });
@@ -271,16 +304,17 @@ const handlers = {
     const needsReplacement = Object.assign({}, service.needsReplacement);
     if (data.decision === 'keep') {
       const marker = needsReplacement[data.duty];
-      if (!marker || assignments[data.duty] !== marker.memberName) fail('failed-precondition', 'That member no longer has that duty.', 'not-holder');
+      if (!marker || assignments[data.duty] !== marker.memberName) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: marker ? marker.memberName : '' });
       delete needsReplacement[data.duty];
       await setDoc(ref, Object.assign({}, service, { needsReplacement }));
       return { ok: true, kept: true };
     }
-    if (request && assignments[data.duty] !== request.name) fail('failed-precondition', 'That member no longer has that duty.', 'not-holder');
+    if (request && assignments[data.duty] !== request.name) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: request.name });
     if (data.replacementMemberUid) {
       const person = (await getDoc(profileRef(data.departmentId, data.replacementMemberUid))).data() || null;
       const why = refusal(person, service, data.duty, assignments);
-      if (why) fail(why === 'no-profile' ? 'not-found' : 'failed-precondition', 'Department authorization denied: ' + why + '.', why);
+      if (why) fail(why === 'no-profile' ? 'not-found' : 'failed-precondition', 'That change is not allowed.', why === 'no-profile' ? 'profile-missing' : why,
+        why === 'already-serving' ? { duties: blocking(assignments, person, data.duty) } : {});
       assignments[data.duty] = person.memberName;
     } else assignments[data.duty] = '';
     delete needsReplacement[data.duty];
@@ -288,7 +322,7 @@ const handlers = {
     await answer('approved');
     return { ok: true, requestStatus: data.requestId ? 'approved' : null };
   },
-  async syncSheetNow() { return { ok: true, added: 0, updated: 0, newMembers: 0, warnings: [] }; },
+  async syncSheetNow() { return { ok: true, added: 0, updated: 0, newMembers: 0, waiting: 0, failed: 0, warnings: [] }; },
   /* Manage, Worship: the default for Opening Prayer (the real one also checks
      that the member takes the duty). */
   async setDutyDefault(data) {
@@ -316,7 +350,7 @@ const handlers = {
         const snapshot = await getDoc(profileRef(data.departmentId, change.memberUid));
         const person = snapshot.exists() ? snapshot.data() : null;
         const reason = refusal(person, service, change.duty, assignments);
-        if (reason) { skipped.push(Object.assign({ reason }, where)); continue; }
+        if (reason) { skipped.push(Object.assign({ reason }, where, reason === 'already-serving' ? { duties: blocking(assignments, person, change.duty) } : {})); continue; }
         name = person.memberName;
       }
       if (name === current) continue;
@@ -331,7 +365,7 @@ const handlers = {
   },
   async checkSheet() {
     const settings = (await getDoc(doc(null, 'app', 'settings'))).data() || {};
-    if (!settings.sheetId) fail('failed-precondition', 'Paste the Sheet\'s link first.');
+    if (!settings.sheetId) fail('failed-precondition', 'Paste the Sheet\'s link first.', 'sheet-not-set');
     return { ok: true, account: 'server@example.test', tabs: ['2026 Entry'], services: 40, notInApp: 0, notInSheet: 2,
       differences: [{ service: '2026-07-11_morning', duty: 'Usher Door', sheet: 'S. Grace', app: 'S. Leah' }], differenceCount: 1, warnings: [] };
   },
@@ -362,8 +396,10 @@ export function httpsCallable(_functions, name) {
     const delay = (window.__fakeDelay || {})[name];
     if (delay) await new Promise(resolve => setTimeout(resolve, delay));
     const failure = (window.__fakeFail || {})[name];
-    const code = typeof failure === 'function' ? failure(payload) : failure;
-    if (code) fail(code, 'The fake ' + name + ' was told to fail.');
+    const told = typeof failure === 'function' ? failure(payload) : failure;
+    // A refusal ({ code, reason, message }), or a code alone as when the call never reaches the server.
+    if (told && typeof told === 'object') fail(told.code, told.message || told.code, told.reason || '');
+    if (told) throw Object.assign(new Error('The fake ' + name + ' was told to fail.'), { code: 'functions/' + told });
     if (!handlers[name]) fail('not-found', 'No fake for ' + name);
     return { data: await handlers[name](payload) };
   };

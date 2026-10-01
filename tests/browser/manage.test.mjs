@@ -263,6 +263,24 @@ test('Requests: a past request leaves the count, and one for a deleted service c
   await context.close();
 });
 
+test('when Approve can no longer work, the request card offers to close it', async () => {
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
+  await tab(page, 'manage');
+  const card = page.locator('#view .request', { has: page.locator('.card-subtitle', { hasText: 'S. Leah' }) });
+  await card.locator('select[name="uid"]').selectOption('__open');
+  await page.evaluate(() => { window.__fakeFail = { resolveDutyAttention: { code: 'failed-precondition', reason: 'not-holder', message: 'That member is no longer on that duty.' } }; });
+  await card.locator('button[type="submit"]', { hasText: 'Approve, leave it open' }).click();
+  await card.locator('.card-note', { hasText: 'That member is no longer on that duty. Decline the request to close it' }).waitFor();
+  await page.evaluate(() => { window.__fakeFail = {}; });
+  accept(page);
+  await card.locator('[data-act="request-close"]').click();
+  await banner(page, 'Request closed.');
+  const request = await page.evaluate(() => window.__fake.paths('requests/').map(item => window.__fake.get(item)).find(item => item.name === 'S. Leah'));
+  assert.equal(request.status, 'declined');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Checks lists the usual duties not filled in the next 4 weeks, unplanned services too', async () => {
   const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture: { patch: { 'schedule/2026-07-14_evening': { assignments: {} } } } });
   await tab(page, 'manage');
@@ -309,7 +327,10 @@ test('a leader\'s availability edit goes on top of the member\'s newer day off',
   await banner(page, 'S. Naomi’s profile changed while you were editing it.');
   await page.locator('#view .exception', { hasText: 'Saturday, July 25' }).waitFor();
   await page.locator('#view [data-act="profile-save"]').click();
-  await banner(page, 'S. Naomi’s profile was saved. S. Naomi still has ');
+  await banner(page, 'S. Naomi’s profile was saved. S. Naomi can no longer make ');
+  const flagged = await page.evaluate(() => window.__fake.paths('schedule/').map(item => window.__fake.get(item))
+    .filter(service => Object.values(service.needsReplacement || {}).some(marker => marker.memberName === 'S. Naomi')).length);
+  assert.ok(flagged > 0, 'her evening duties are flagged for her leader');
   const stored = await fakeDoc(page, path);
   assert.equal(stored.availability.recurring.evening, 'unavailable');
   assert.deepEqual(stored.availability.exceptions['2026-07-25'], { '*': 'unavailable' }, 'her day off stayed');
