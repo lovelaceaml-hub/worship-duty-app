@@ -3,7 +3,7 @@
    past. The Presider planner also treats a service as "in progress" for three
    hours after it starts, so the runsheet and Mark as sung stay reachable. */
 import { DEPARTMENTS, DEFAULT_TIMES, SERVICE_LABELS } from '../config/duties.js';
-import { pacificNow, wallTime } from './dates.js';
+import { clockTime, pacificNow, wallTime } from './dates.js';
 
 const IN_PROGRESS_MS = 3 * 60 * 60 * 1000;
 
@@ -15,6 +15,12 @@ export function serviceId(service) {
 export function startTime(service) {
   if (/^\d{2}:\d{2}$/.test(service.time || '')) return service.time;
   return DEFAULT_TIMES[service.service] || '12:00';
+}
+
+/* "9:00 AM": the start shown for a service, its usual time when the stored
+   one is missing or cannot be read. */
+export function serviceClock(service) {
+  return clockTime(startTime(service));
 }
 
 /* Start as a Pacific wall-clock timestamp (see dates.js wallTime). NaN for a

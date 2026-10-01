@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { hasChoir, hasThanks, isFeast, hasDuty } from '../../app/lib/worship.js';
-import { nextService, upcoming, past, isUpcoming, isInProgress, dutiesOf, serviceId, startTime } from '../../app/lib/services.js';
+import { nextService, upcoming, past, isUpcoming, isInProgress, dutiesOf, serviceId, startTime, serviceClock } from '../../app/lib/services.js';
 
 // 2026-09-14 is in Pacific daylight time (UTC minus 7).
 const pacific = (date, time) => new Date(date + 'T' + time + ':00-07:00');
@@ -58,6 +58,8 @@ test('the Pacific clock decides, not the device or UTC clock', () => {
 test('a service without a time uses its label\'s usual time; bad rows are ignored', () => {
   const list = [{ date: 'not-a-date', time: '05:00', service: 'Early Morning' }, { date: '2026-09-14', service: 'Evening' }];
   assert.equal(startTime(list[1]), '19:30');
+  assert.equal(serviceClock(list[1]), '7:30 PM', 'shown with its usual time too');
+  assert.equal(serviceClock({ date: '2026-09-14', service: 'Morning', time: '09:00' }), '9:00 AM');
   assert.equal(nextService(list, pacific('2026-09-14', '19:29')).service, 'Evening');
 });
 
