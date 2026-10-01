@@ -16,7 +16,9 @@ async function as(member, options = {}) {
   return opened;
 }
 
-const banner = (page, text) => page.locator('#banners .banner', { hasText: text }).waitFor();
+/* A message on screen: a banner, or (once the core package's toasts are in)
+   a short toast for good news. */
+const banner = (page, text) => page.locator('#banners .banner, #toasts .toast', { hasText: text }).first().waitFor();
 const fakeDoc = (page, docPath) => page.evaluate(docPath => window.__fake.get(docPath), docPath);
 const setDoc = (page, docPath, value) => page.evaluate(([docPath, value]) => window.__fake.set(docPath, value), [docPath, value]);
 const calls = (page, name) => page.evaluate(name => window.__fakeCalls.filter(call => call.name === name).map(call => call.payload), name);
@@ -37,6 +39,11 @@ test('Manage opens on Requests when one waits, else on the month plan; the picke
   const leader = await as('S. Grace');
   await tab(leader.page, 'manage');
   assert.equal(await activeSection(leader.page), 'requests', 'S. Leah\'s request waits');
+  accept(leader.page);
+  await leader.page.locator('#view [data-act="request-decline"]').click();
+  await banner(leader.page, 'Request declined.');
+  await leader.page.locator('#view .empty', { hasText: 'No requests waiting.' }).waitFor();
+  assert.equal(await activeSection(leader.page), 'requests', 'answering the last one does not move the leader');
   await leader.context.close();
 
   const joseph = await as('E. Joseph', { viewport: DESKTOP });

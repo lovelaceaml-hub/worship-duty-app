@@ -109,7 +109,7 @@ function dutyState(service, duty, context) {
   if (skipped && !proposal && !state.saving) say('Not saved: ' + reasonNote(skipped.reason), 'danger', 'is-skipped');
   if (shown && upcoming && ready(department)) {
     // Whether the person shown can have the duty now, and their other duty here.
-    const profile = people.find(item => item.memberName === shown) || people.find(item => nameOf(item.memberName) === nameOf(shown)) || null;
+    const profile = people.find(item => item.memberName === shown) || null;
     const also = otherDuties(assignments, shown, duty);
     const double = doubleDuties({ assignments }).find(item => item.name === shown && item.duties.includes(duty));
     const why = whyNot(profile, service, duty) || (double && !isMarkedOk(service, double) ? 'already-serving' : '');

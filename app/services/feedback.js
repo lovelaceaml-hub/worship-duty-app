@@ -17,7 +17,7 @@ export async function sendFeedback(kind, message) {
   if (navigator.onLine === false) throw new Error('You are offline, so this was not sent. Your message is still here.');
   const entry = {
     uid: session.user ? session.user.uid : '',
-    name: nameOf(ui.me),
+    name: ui.me, // the stored name; screens show it with nameOf()
     kind: KINDS.some(item => item[0] === kind) ? kind : 'feedback',
     message: text,
     screen: ui.tab,

@@ -20,9 +20,9 @@ import * as dataSection from './data.js';
 import * as feedback from './feedback.js';
 import { managedDepartment, setManagedDepartment } from './scope.js';
 
-/* [id, label, module, count, whether the department picker applies] */
-function sections() {
-  const counts = attentionCounts();
+/* [id, label, module, count, whether the department picker applies]. The
+   counts are attentionCounts(), worked out once per drawing by render. */
+function sections(counts = {}) {
   const list = [
     ['services', 'Month plan', services, counts.replacements, true],
     ['requests', 'Requests', requests, counts.requests, true],
@@ -34,15 +34,20 @@ function sections() {
   return list;
 }
 
-/* The section shown: the one picked, else Requests when some wait, else the
-   month plan. */
+/* The section shown: the one picked. When Manage opens without one, it is
+   Requests when some wait, else the month plan, and it stays put after that
+   (answering the last request does not move the leader away). */
 function currentSection(list) {
-  return list.find(([id]) => id === ui.manage) || list.find(([id, , , count]) => id === 'requests' && count) || list[0];
+  const picked = list.find(([id]) => id === ui.manage);
+  if (picked) return picked;
+  const first = list.find(([id, , , count]) => id === 'requests' && count) || list[0];
+  ui.manage = first[0];
+  return first;
 }
 
 export function render() {
   if (!canManageAnyDepartment()) return empty('Your account does not manage a department.');
-  const list = sections();
+  const list = sections(attentionCounts());
   const current = currentSection(list);
   const department = managedDepartment();
   const allowed = managedDepartments();
@@ -61,8 +66,8 @@ export function render() {
 }
 
 export function mounted(view) {
-  const current = currentSection(sections());
-  if (current[2].mounted) current[2].mounted(view);
+  const current = sections().find(([id]) => id === ui.manage);
+  if (current && current[2].mounted) current[2].mounted(view);
 }
 
 defineActions({

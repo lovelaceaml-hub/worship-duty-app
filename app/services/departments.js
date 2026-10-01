@@ -56,8 +56,9 @@ export function profileOf(department, uid) {
     (departments.own || []).find(profile => profile.departmentId === department && profile.memberUid === uid) || null;
 }
 
+/* Names are matched as stored: two members can share a display name. */
 function profileNamed(department, name) {
-  return roster(department).find(profile => profile.memberName === name || nameOf(profile.memberName) === nameOf(name)) || null;
+  return roster(department).find(profile => profile.memberName === name) || null;
 }
 
 /* ---- unsaved edits ---- */

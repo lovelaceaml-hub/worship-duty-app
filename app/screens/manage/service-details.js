@@ -129,7 +129,7 @@ export function details(service, context) {
       ${admin ? html`${input('Date', html`<input type="date" value="${service.date}" data-change="service-field" data-service="${id}" data-field="date">`)}
         ${input('Time', html`<input type="time" value="${service.time}" data-change="service-field" data-service="${id}" data-field="time">`)}
         ${input('Worship', worshipControl(service.worship || 'Sabbath Day', html`data-change="service-field" data-service="${id}" data-field="worship"`))}` : ''}
-      ${songs ? input('Choir song', html`<input type="text" value="${service.choirSong || ''}" placeholder="Number and title" data-change="service-field" data-service="${id}" data-field="choirSong">`) : ''}
+      ${songs ? input('Choir song', html`<input type="text" value="${service.choirSong || ''}" placeholder="e.g. 311 I Repent of My Sin" data-change="service-field" data-service="${id}" data-field="choirSong">`) : ''}
     </div>` : (service.choirSong ? html`<p class="hint">Choir song: ${service.choirSong}</p>` : '')}
     ${upcoming ? replacementPanel(service) : ''}
     ${upcoming ? doubleDutyNotes(service) : ''}

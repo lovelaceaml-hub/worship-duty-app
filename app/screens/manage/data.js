@@ -23,7 +23,7 @@ function importCard() {
     ${last ? html`<p class="hint small">Last import from this device: ${when(last.at)}, ${last.added || 0} added, ${last.updated || 0} updated${last.warnings && last.warnings.length ? ', ' + plural(last.warnings.length, 'row') + ' skipped' : ''}.</p>` : ''}
     <button type="button" class="primary" data-act="sheet-import"${sheet.busy || !feature('sheetSync') ? ' disabled' : ''}>${sheet.busy ? 'Importing…' : 'Import now'}</button>
     ${fromGrid ? '' : html`<label class="field"><span>Published sheet link (File, Share, Publish to web, CSV)</span>
-      <input type="url" data-change="sheet-url" value="${data.settings.sheetUrl || ''}" placeholder="https://docs.google.com/spreadsheets/…/pub?output=csv"></label>`}
+      <input type="url" data-change="sheet-url" value="${data.settings.sheetUrl || ''}" placeholder="Paste the published CSV link"></label>`}
   </section>`;
 }
 
@@ -52,7 +52,7 @@ function writeCard() {
       ? 'Duty changes made in the app go into the Sheet\'s Entry grid within seconds, and new services get a row.'
       : 'Off in Features: the app only reads the Sheet. Paste the Sheet\'s link and check it before you turn it on.'}</p>
     <label class="field"><span>The Sheet's link (its address while you edit it)</span>
-      <input type="url" data-change="sheet-edit-link" value="${link}" placeholder="https://docs.google.com/spreadsheets/d/…/edit"></label>
+      <input type="url" data-change="sheet-edit-link" value="${link}" placeholder="Paste the Sheet's address"></label>
     ${status && status.ok === false ? html`<p class="card-note is-warning">The last change did not reach the Sheet (${when(status.at)}): ${status.message}</p>` : ''}
     <button type="button" class="ghost" data-act="sheet-check"${sheet.checking || !data.settings.sheetId ? ' disabled' : ''}>${sheet.checking ? 'Checking…' : 'Check the Sheet'}</button>
     <p class="hint small">Checking reads the Sheet and compares it with the app. It changes nothing.</p>
