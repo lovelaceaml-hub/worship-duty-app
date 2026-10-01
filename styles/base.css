@@ -250,7 +250,7 @@ button.service-head { cursor: pointer; }
 .plan-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .plan-key { display: inline-block; width: 16px; height: 16px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); }
 .plan-key.is-empty { background: var(--warn-soft); box-shadow: inset 3px 0 0 var(--warn); }
-.plan-key.is-proposed { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.plan-key.is-proposed { border: 2px dashed var(--accent); background: var(--accent-soft); }
 .plan-key.is-flagged { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
 .plan-key.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
 .plan-key.is-none { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 5px); }
@@ -303,7 +303,8 @@ button.service-head { cursor: pointer; }
 .plan-cell.is-empty .plan-value { color: var(--warn); }
 .plan-cell.is-unusual .plan-value { color: var(--faint); }
 .plan-cell.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
-.plan-cell.is-proposed { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+/* A proposal is dashed (not saved yet), so it never reads as a problem. */
+.plan-cell.is-proposed { background: var(--accent-soft); box-shadow: none; outline: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: -4px; }
 .plan-cell.is-proposed .plan-value { color: var(--accent); font-weight: 700; }
 .plan-cell.is-proposed.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
 .plan-cell.is-flagged { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
@@ -335,7 +336,7 @@ button.service-head { cursor: pointer; }
 .plan-field.is-empty .plan-value { color: var(--warn); font-style: italic; font-weight: 400; }
 .plan-field.is-unusual .plan-value { color: var(--faint); font-style: italic; font-weight: 400; }
 .plan-field.is-paired .plan-pick { box-shadow: inset 3px 0 0 var(--ok); }
-.plan-field.is-proposed .plan-pick { border-color: var(--accent); background: var(--accent-soft); }
+.plan-field.is-proposed .plan-pick { border: 2px dashed var(--accent); background: var(--accent-soft); }
 .plan-field.is-proposed .plan-value { color: var(--accent); font-weight: 700; }
 .plan-field.is-flagged .plan-pick { border-color: var(--danger); background: var(--danger-soft); }
 .plan-field.is-flagged .plan-value { color: var(--danger); font-weight: 700; }

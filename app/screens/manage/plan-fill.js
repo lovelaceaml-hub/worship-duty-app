@@ -74,7 +74,7 @@ export function fillBar() {
   if (unfilled) notes.push(plural(unfilled, 'duty has', 'duties have') + ' no one free.');
   return html`<div class="sticky-actions plan-actions" role="status">
     <span><strong>Fill proposed ${plural(count.duties, 'duty', 'duties')} for ${plural(count.people, 'person', 'people')}.</strong>
-      ${notes.join(' ')} Check the blue ones, then save.</span>${buttons}</div>`;
+      ${notes.join(' ')} Check them, then save.</span>${buttons}</div>`;
 }
 
 /* "Usher Door on Sat, Jul 18 Morning (S. Leah: not available then)" for each
