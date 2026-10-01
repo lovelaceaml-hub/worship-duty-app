@@ -410,3 +410,24 @@ test('a member\'s availability saves after it changed elsewhere, and the save na
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+test('the kind of worship is chosen from a list, with Other for a feast\'s own name', async () => {
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
+  await monthPlan(page);
+  await page.locator('#view .plan-add summary').click();
+  const form = page.locator('#view form[data-act="service-add"]');
+  await form.locator('input[name="date"]').fill('2026-07-23');
+  await form.locator('select[name="service"]').selectOption('Evening');
+  await form.locator('select[name="worship"]').selectOption('__other');
+  await form.locator('input[name="worship"]').fill('Feast of Trumpets');
+  await form.locator('button[type="submit"]').click();
+  await page.waitForFunction(() => window.__fake.get('schedule/2026-07-23_evening'));
+  assert.equal((await fakeDoc(page, 'schedule/2026-07-23_evening')).worship, 'Feast of Trumpets');
+  // The details offer the same list, with the feast's name kept.
+  const select = page.locator('#view .plan-detail select[data-field="worship"]');
+  assert.equal(await select.inputValue(), 'Feast of Trumpets');
+  await select.selectOption('Sabbath Day');
+  await page.waitForFunction(() => window.__fake.get('schedule/2026-07-23_evening').worship === 'Sabbath Day');
+  assert.deepEqual(errors, []);
+  await context.close();
+});

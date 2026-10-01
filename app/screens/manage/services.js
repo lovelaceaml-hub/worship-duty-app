@@ -10,8 +10,9 @@ import { html } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, ui, feature } from '../../store.js';
 import { render as redraw, renderSoon, goTo } from '../../render.js';
+import { notice } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
-import { SERVICE_LABELS, WORSHIP_TYPES, DEFAULT_TIMES } from '../../config/duties.js';
+import { SERVICE_LABELS, DEFAULT_TIMES } from '../../config/duties.js';
 import { serviceId, byStart, isUpcoming } from '../../lib/services.js';
 import { todayISO, addMonths, monthName } from '../../lib/dates.js';
 import { fillDuties } from '../../lib/fill.js';
@@ -23,7 +24,7 @@ import { departmentsShown, planMonth, serviceById, managedDepartment, mayShow, s
 import { planContext } from './plan-cell.js';
 import { grid, list, legend, rosterNotes } from './plan-grid.js';
 import { fillControls, fillHint, fillBar } from './plan-fill.js';
-import { details } from './service-details.js';
+import { details, worshipControl, choseOther } from './service-details.js';
 
 /* Open a service's details in the planner, from anywhere in the app. While
    Fill's proposals wait in another month, the planner stays with them. */
@@ -68,7 +69,7 @@ function addForm() {
       <input type="date" name="date" value="${planMonth() + '-01'}" required aria-label="Date">
       <input type="time" name="time" value="${DEFAULT_TIMES.Morning}" required aria-label="Time">
       <select name="service" aria-label="Service">${SERVICE_LABELS.map(label => html`<option${label === 'Morning' ? ' selected' : ''}>${label}</option>`)}</select>
-      <input type="text" name="worship" list="worship-types" value="Sabbath Day" aria-label="Worship">
+      <span class="plan-worship">${worshipControl('Sabbath Day', html`name="worship" aria-label="Worship" data-change="plan-worship"`)}</span>
       <button type="submit" class="primary">Add service</button>
     </form>
   </details>`;
@@ -100,7 +101,6 @@ export function render() {
     ${canFill ? fillHint() : ''}
     ${rosterNotes()}
     ${addForm()}
-    <datalist id="worship-types">${WORSHIP_TYPES.map(type => html`<option>${type}</option>`)}</datalist>
     ${services.length ? legend() : ''}
     ${open && wide() ? html`<section class="card">${details(open, context)}</section>` : ''}
     ${services.length ? (wide() ? grid(services, context) : list(services, context))
@@ -140,6 +140,7 @@ defineActions({
   },
   'plan-close': () => { ui.plan.open = ''; redraw(); },
   'plan-add-toggle': () => { ui.plan.adding = !ui.plan.adding; },
+  'plan-worship': el => { choseOther(el); },
   'planning-open': el => openService(el.dataset.service),
   // From a note about an empty list: that department's roster.
   'plan-roster-open': el => {
@@ -152,7 +153,11 @@ defineActions({
     allowed: () => canCreateService(),
     run: async form => {
       const values = new FormData(form);
-      const fields = { date: values.get('date'), time: values.get('time'), service: values.get('service'), worship: String(values.get('worship') || '').trim() };
+      // The select gives the kind; with "Other..." the field next to it gives the name.
+      const [choice, other] = values.getAll('worship').map(value => String(value || '').trim());
+      const worship = choice === '__other' ? other : choice;
+      if (!worship) { notice('Type the name of the feast or service.', true); return; }
+      const fields = { date: values.get('date'), time: values.get('time'), service: values.get('service'), worship };
       if (!fields.date || !fields.time || !mayShow({ month: fields.date.slice(0, 7) })) return;
       const service = await addService(fields);
       if (service) {

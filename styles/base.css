@@ -245,6 +245,8 @@ button.service-head { cursor: pointer; }
 .plan-status .ghost { margin-top: 8px; }
 .plan-add { margin: 0 0 12px; font-size: 13.5px; }
 .plan-add summary { color: var(--accent); font-weight: 700; cursor: pointer; }
+.plan-worship { display: flex; flex: 1 1 220px; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.plan-worship > * { flex: 1 1 150px; min-width: 0; }
 /* What the marks mean, once, above the month. */
 .plan-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 2px 10px; padding: 0; list-style: none; color: var(--muted); font-size: 12.5px; }
 .plan-legend li { display: inline-flex; align-items: center; gap: 6px; }

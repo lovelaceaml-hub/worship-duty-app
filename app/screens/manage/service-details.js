@@ -9,7 +9,7 @@ import { defineActions } from '../../actions.js';
 import { data, ui, nameOf } from '../../store.js';
 import { render as redraw, renderSoon } from '../../render.js';
 import { notice } from '../../ui/banners.js';
-import { departmentOf, dutyName } from '../../config/duties.js';
+import { WORSHIP_TYPES, departmentOf, dutyName } from '../../config/duties.js';
 import { serviceId, isUpcoming, serviceClock } from '../../lib/services.js';
 import { hasChoir } from '../../lib/worship.js';
 import { longDate, todayISO } from '../../lib/dates.js';
@@ -26,7 +26,28 @@ import { problem } from '../../firebase.js';
 import { departmentsShown, serviceById, mayShow } from './scope.js';
 import { field, planned, atService, showsPrayers, prayers } from './plan-cell.js';
 
-const KEEP = '__keep', OPEN = '__open';
+const KEEP = '__keep', OPEN = '__open', OTHER = '__other';
+
+/* The kind of worship: a select of the usual kinds, so a typo cannot turn a
+   Sabbath into a feast day (with other duties), and "Other..." for a feast's
+   own name, typed in the field that then shows. `attributes` go on both. */
+export function worshipControl(value, attributes) {
+  const known = WORSHIP_TYPES.includes(value);
+  return html`<select ${attributes} data-worship="choice">
+      ${WORSHIP_TYPES.map(type => html`<option${type === value ? ' selected' : ''}>${type}</option>`)}
+      ${value && !known ? html`<option selected>${value}</option>` : ''}
+      <option value="${OTHER}">Other…</option>
+    </select>
+    <input type="text" ${attributes} data-worship="other" maxlength="80" placeholder="Name of the feast or service" aria-label="Worship, other" hidden>`;
+}
+
+/* "Other..." shows the field for a name of its own; nothing is saved yet. */
+export function choseOther(el) {
+  if (el.value !== OTHER) return false;
+  const other = el.parentElement.querySelector('[data-worship="other"]');
+  if (other) { other.hidden = false; other.focus(); }
+  return true;
+}
 
 /* An administrator can put someone on a duty they could not normally take,
    with a reason the server keeps with the change. */
@@ -107,7 +128,7 @@ export function details(service, context) {
     ${upcoming && (admin || songs) ? html`<div class="field-grid">
       ${admin ? html`${input('Date', html`<input type="date" value="${service.date}" data-change="service-field" data-service="${id}" data-field="date">`)}
         ${input('Time', html`<input type="time" value="${service.time}" data-change="service-field" data-service="${id}" data-field="time">`)}
-        ${input('Worship', html`<input type="text" value="${service.worship}" list="worship-types" data-change="service-field" data-service="${id}" data-field="worship">`)}` : ''}
+        ${input('Worship', worshipControl(service.worship || 'Sabbath Day', html`data-change="service-field" data-service="${id}" data-field="worship"`))}` : ''}
       ${songs ? input('Choir song', html`<input type="text" value="${service.choirSong || ''}" placeholder="Number and title" data-change="service-field" data-service="${id}" data-field="choirSong">`) : ''}
     </div>` : (service.choirSong ? html`<p class="hint">Choir song: ${service.choirSong}</p>` : '')}
     ${upcoming ? replacementPanel(service) : ''}
@@ -129,7 +150,7 @@ defineActions({
     allowed: el => el.dataset.field === 'choirSong' ? canEditSongsFor(serviceById(el.dataset.service)) : isAdmin(),
     run: el => {
       const service = serviceById(el.dataset.service);
-      if (!service) return;
+      if (!service || choseOther(el)) return;
       const value = el.value.trim();
       if (!value && el.dataset.field !== 'choirSong') { redraw(); return; }
       if (!isUpcoming(service)) { notice(reasonText('service-started'), true); redraw(); return; }

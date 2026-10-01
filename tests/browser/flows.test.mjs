@@ -600,7 +600,7 @@ test('Opening Prayer goes to its default: Fill proposes them, a Worship leader c
   const form = admin.page.locator('#view form[data-act="service-add"]');
   await form.locator('input[name="date"]').fill('2026-07-16');
   await form.locator('select[name="service"]').selectOption('Evening');
-  await form.locator('input[name="worship"]').fill('Pentecost');
+  await form.locator('select[name="worship"]').selectOption('Pentecost');
   await form.locator('button[type="submit"]').click();
   await admin.page.waitForFunction(() => window.__fake.get('schedule/2026-07-16_evening'));
   assert.deepEqual((await fakeDoc(admin.page, 'schedule/2026-07-16_evening')).assignments, { Sermon: 'B. Samuel' });
