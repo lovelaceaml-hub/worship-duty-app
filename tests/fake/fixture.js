@@ -68,7 +68,10 @@
   services.forEach(service => {
     docs['schedule/' + service.date + '_' + service.service.toLowerCase().replace(/[^a-z0-9]+/g, '-')] = service;
   });
+  // B. Silas serves in Translation but has no profile there, as happens for
+  // members who had never signed in when departments were set up.
   Object.entries(rosters).forEach(([department, names]) => names.forEach(name => {
+    if (department === 'Translation' && name === 'B. Silas') return;
     const uid = 'member:' + name;
     docs['departments/' + department + '/members/' + uid] = {
       uid, memberUid: uid, department, departmentId: department, memberName: name,

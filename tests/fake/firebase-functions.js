@@ -93,7 +93,9 @@ const handlers = {
   },
   async searchDepartmentCandidates(data) {
     const query = String(data.query).toLowerCase();
-    const members = Object.keys(accounts).filter(name => name.toLowerCase().includes(query)).sort()
+    // Like the server: accounts, plus members on the list who have never signed in.
+    const listed = ((await getDoc(doc(null, 'app', 'members'))).data() || {}).list || [];
+    const members = Array.from(new Set(Object.keys(accounts).concat(listed))).filter(name => name.toLowerCase().includes(query)).sort()
       .map(name => ({ memberUid: 'member:' + name, memberName: name }));
     const page = data.page || 1;
     return { ok: true, departmentId: data.departmentId, members: members.slice((page - 1) * 10, page * 10), page, total: members.length };

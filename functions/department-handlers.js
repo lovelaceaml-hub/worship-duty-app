@@ -313,7 +313,19 @@ async function readAccountForMemberUid(db, memberUid) {
     const snapshot = await accounts.where('authUid', '==', memberUid).limit(2).get();
     if (snapshot.size === 1) return { id: snapshot.docs[0].id, data: snapshot.docs[0].data() || {} };
   }
+  // A member on the member list who has never signed in has no account yet.
+  // Their first sign-in makes one named after them, with this same uid.
+  const name = memberUid.startsWith('member:') ? memberUid.slice('member:'.length) : '';
+  if (name && (await memberListNames(db)).includes(name)) return { id: name, data: { memberName: name } };
   throw errorWithCode('not-found', 'The member account was not found.');
+}
+
+/* The names in app/members, the church's member list. */
+async function memberListNames(db) {
+  const snapshot = await db.collection('app').doc('members').get();
+  const data = snapshot && snapshot.exists ? snapshot.data() || {} : {};
+  const list = Array.isArray(data.list) ? data.list : Array.isArray(data.members) ? data.members : [];
+  return list.map(name => String(name || '').trim().replace(/\s+/g, ' ')).filter(Boolean);
 }
 
 function departmentInput(data) {
@@ -895,6 +907,7 @@ function createDepartmentHandlers(options = {}) {
 
 module.exports = {
   PROFILE_PATCH_FIELDS,
+  memberListNames,
   createDepartmentHandlers,
   assignmentIdFor,
   profileWithPatch,

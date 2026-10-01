@@ -10,6 +10,7 @@
 
 const crypto = require('node:crypto');
 const authz = require('./department-auth.js');
+const { memberListNames } = require('./department-handlers.js');
 
 const PAGE_SIZE = 10;
 const INVITATION_DAYS = 7;
@@ -271,17 +272,22 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
       : accounts;
     const snapshot = await selected.get();
     const normalizedQuery = query.toLocaleLowerCase();
-    const rows = accountSearchRows(snapshot)
-      .filter(row => row.memberName.toLocaleLowerCase().includes(normalizedQuery))
-      .sort(compareRows);
+    const rows = accountSearchRows(snapshot);
+    // Members who have never signed in have no account yet; they get the
+    // uid their first sign-in will give them.
+    const known = new Set(rows.flatMap(row => [row.memberUid, row.memberName]));
+    (await memberListNames(db)).forEach(name => {
+      if (!known.has(name) && !known.has('member:' + name)) rows.push({ memberUid: 'member:' + name, memberName: name });
+    });
+    const found = rows.filter(row => row.memberName.toLocaleLowerCase().includes(normalizedQuery)).sort(compareRows);
     const start = (page - 1) * PAGE_SIZE;
     return {
       ok: true,
       departmentId,
-      members: rows.slice(start, start + PAGE_SIZE),
+      members: found.slice(start, start + PAGE_SIZE),
       page,
       pageSize: PAGE_SIZE,
-      total: rows.length
+      total: found.length
     };
   }
 

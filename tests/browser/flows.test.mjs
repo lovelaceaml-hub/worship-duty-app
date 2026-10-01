@@ -375,6 +375,23 @@ test('each appearance\'s own Schedule controls work', async () => {
   await context.close();
 });
 
+test('a leader adds people who serve in the department but are not on its list', async () => {
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'departments');
+  await page.locator('[data-act="department-open"][data-department="Translation"]').click();
+  const missing = page.locator('#view .missing-members');
+  await missing.locator('.list-row', { hasText: 'B. Silas' }).waitFor();
+  await missing.locator('[data-act="department-add-name"][data-name="B. Silas"]').click();
+  await missing.waitFor({ state: 'detached' });
+  const added = await page.evaluate(() => window.__fake.get('departments/Translation/members/member:B. Silas'));
+  assert.equal(added.memberName, 'B. Silas');
+  assert.equal(added.schedulable, true);
+  assert.deepEqual(added.eligibleDuties.sort(), ['Translation #1', 'Translation #2']);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('every screen opens without errors for each kind of member', async () => {
   for (const member of ['B. Adam', 'E. Joseph', 'S. Grace', 'M. Ruth', 'S. Naomi', 'S. Joanna']) {
     const { context, page, errors } = await as(member, { viewport: DESKTOP });
