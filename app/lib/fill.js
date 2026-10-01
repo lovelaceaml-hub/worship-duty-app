@@ -3,10 +3,16 @@
    eligible, available) and may hold it alongside whatever they already do in
    that service (conflicts.js: one duty, or one prayer with one usher duty).
 
-   An usher duty goes first to someone praying in that service, whatever the
-   mode: the prayers lead and the ushers follow. A service's duties are filled
-   in department order, so its prayers are settled before its ushers. When
-   more than one person praying could take it, the fairest goes (as in Auto).
+   A duty with a default member (Opening Prayer: see DUTY_DEFAULTS) goes to
+   the default whenever they can take it, and to no one else: when they
+   cannot, it stays empty for the leader to fill by hand. The default never
+   gets another duty.
+
+   An usher duty goes first to someone praying in that service (Thanks or
+   Closing Prayer), whatever the mode: the prayers lead and the ushers follow.
+   A service's duties are filled in department order, so its prayers are
+   settled before its ushers. When more than one person praying could take
+   it, the fairest goes (as in Auto).
 
    Everyone else is chosen the leader's way:
    - 'auto' (the default), fairest first:
@@ -18,9 +24,9 @@
      5. then a different order for each service, so no name always wins a tie.
    - 'rotation': everyone takes a turn before anyone serves again. Whoever has
      gone longest without a turn goes first, and people tied go by name. A
-     department's duties share the turns, except that the Presider takes turns
-     apart from the prayers. An usher duty held by someone praying in that
-     service is not a turn.
+     department's duties share the turns, except that the Presider and Opening
+     Prayer each take turns of their own. An usher duty held by someone
+     praying in that service is not a turn.
    - 'random': anyone who can take it.
 
    When no one is free for a duty, Fill moves its own picks in that service
@@ -30,7 +36,8 @@
 
    `duties` is a list, or a function giving each service its own. `history`
    is every known service; it gives the month, the day and the turns their
-   context. Nothing is saved here; the leader sees the proposals first. */
+   context. `defaults` maps a duty to its default member's name. Nothing is
+   saved here; the leader sees the proposals first. */
 import { canTake, takesDuty } from './availability.js';
 import { serviceId, byStart, startsAt } from './services.js';
 import { hasDuty } from './worship.js';
@@ -39,9 +46,11 @@ import { ALL_DUTIES, departmentOf } from '../config/duties.js';
 
 export const FILL_MODES = [['auto', 'Auto (fairest first)'], ['rotation', 'Rotation (take turns)'], ['random', 'Random']];
 
-/* Why a duty stayed empty: no one on the list takes it, no one who takes it
-   is available then, or everyone available already serves in that service. */
+/* Why a duty stayed empty: its default cannot take it then, no one on the
+   list takes it, no one who takes it is available then, or everyone
+   available already serves in that service. */
 export const UNFILLED_REASONS = {
+  default: 'The default for this duty cannot take it then. Choose someone by hand',
   nobody: 'No one on the list takes this duty',
   away: 'No one who takes this duty is available then',
   serving: 'Everyone available already serves in this service'
@@ -54,9 +63,10 @@ function spread(name, id) {
   return hash >>> 0;
 }
 
-/* The line of turns a duty belongs to in Rotation. */
+/* The line of turns a duty belongs to in Rotation: its department's, but
+   the Presider and Opening Prayer (Sermon) each have their own. */
 function turnOf(duty) {
-  return duty === 'Presider' ? 'Presider' : (departmentOf(duty) || { name: duty }).name;
+  return duty === 'Presider' || duty === 'Sermon' ? duty : (departmentOf(duty) || { name: duty }).name;
 }
 
 /* Whether `name` holding `duty` in these assignments counts as a turn: an
@@ -78,9 +88,14 @@ function sortBy(list, keyOf) {
   return list.map(profile => [keyOf(profile.memberName), profile]).sort((a, b) => compare(a[0], b[0])).map(([, profile]) => profile);
 }
 
-export function fill(services, duties, rosterFor, stats, { mode = 'auto', history = [], random = Math.random } = {}) {
+export function fill(services, duties, rosterFor, stats, { mode = 'auto', history = [], random = Math.random, defaults = {} } = {}) {
   const ordered = services.slice().sort(byStart);
   if (!ordered.length) return { proposals: [], unfilled: [] };
+  const defaultNames = new Set(Object.values(defaults).filter(Boolean));
+  // Who may be given `duty`: its default alone, or anyone but a default.
+  const allowedFor = duty => (defaults[duty]
+    ? profile => profile.memberName === defaults[duty]
+    : profile => !defaultNames.has(profile.memberName));
   const ids = new Set(ordered.map(serviceId));
   const months = new Set(ordered.map(service => service.date.slice(0, 7)));
   const days = new Set(ordered.map(service => service.date));
@@ -214,7 +229,7 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
       }).length > 0;
 
     let empty = ALL_DUTIES.filter(duty => wanted.includes(duty) && !state[duty]).filter(duty => {
-      able[duty] = (rosterFor(duty) || []).filter(profile => canTake(profile, service, duty));
+      able[duty] = (rosterFor(duty) || []).filter(profile => allowedFor(duty)(profile) && canTake(profile, service, duty));
       return !fillDuty(duty);
     });
     // Whoever a match frees may fill a duty still empty; go on while that
@@ -226,7 +241,9 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
       if (!matched && empty.length === before) break;
     }
     empty.forEach(duty => {
-      const reason = able[duty].length ? 'serving' : ((rosterFor(duty) || []).some(profile => takesDuty(profile, duty)) ? 'away' : 'nobody');
+      const takers = (rosterFor(duty) || []).filter(profile => takesDuty(profile, duty));
+      const reason = defaults[duty] && !able[duty].length ? 'default'
+        : (able[duty].length ? 'serving' : (takers.length ? 'away' : 'nobody'));
       unfilled.push({ serviceId: id, duty, reason });
     });
     ALL_DUTIES.filter(duty => picks[duty]).forEach(duty => {

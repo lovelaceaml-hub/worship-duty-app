@@ -8,40 +8,43 @@ import { doubleDuties, openDoubleDuties, canAlsoServe, otherDuties, prayerOf } f
 import { availabilityOn, canTake, normalizeProfile, timeKey, timeLabel } from '../../app/lib/availability.js';
 import { workload, suggestReplacements, usualDuties } from '../../app/lib/workload.js';
 import { isOpen, shownStatus, requestId } from '../../app/lib/requests.js';
-import { ALL_DUTIES, PRAYER_DUTIES, USHER_DUTIES } from '../../app/config/duties.js';
+import { ALL_DUTIES, PRAYER_DUTIES, USHER_DUTIES, DUTY_DEFAULTS, dutyDefault } from '../../app/config/duties.js';
 
 const require = createRequire(import.meta.url);
 
-test('one duty each in a service; one prayer with one usher duty is the only pair allowed', () => {
+test('one duty each in a service; Thanks or Closing Prayer with one usher duty is the only pair allowed', () => {
   const flagged = assignments => doubleDuties({ assignments }).map(item => item.duties);
-  // Every prayer (Opening Prayer is stored as Sermon) with every usher duty, sisters' or brothers'.
-  ['Sermon', 'Prayer of Thanks', 'Closing Prayer'].forEach(prayer => {
+  // Thanks Prayer and Closing Prayer with every usher duty, sisters' or brothers'.
+  ['Prayer of Thanks', 'Closing Prayer'].forEach(prayer => {
     ['Usher Door', 'Usher Front', 'Usher Back', 'Usher #1', 'Usher #2'].forEach(usher => {
       assert.deepEqual(flagged({ [prayer]: 'B. Adam', [usher]: 'B. Adam' }), [], prayer + ' with ' + usher);
+      assert.deepEqual(flagged({ Sermon: 'E. Simon', [usher]: 'E. Simon' }), [['Sermon', usher]], 'Opening Prayer is never paired: ' + usher);
     });
   });
-  assert.deepEqual(flagged({ Sermon: 'B. Adam', 'Lobby Security': 'B. Adam' }), [['Sermon', 'Lobby Security']], 'Lobby Security is not an usher duty here');
+  assert.deepEqual(flagged({ 'Closing Prayer': 'B. Adam', 'Lobby Security': 'B. Adam' }), [['Closing Prayer', 'Lobby Security']], 'Lobby Security is not an usher duty here');
   assert.deepEqual(flagged({ Presider: 'E. Joseph', 'Usher #1': 'E. Joseph' }), [['Presider', 'Usher #1']]);
   assert.deepEqual(flagged({ 'Closing Prayer': 'B. Adam', Sermon: 'B. Adam' }), [['Sermon', 'Closing Prayer']]);
   assert.deepEqual(flagged({ 'Usher #2': 'B. Adam', 'Usher #1': 'B. Adam' }), [['Usher #1', 'Usher #2']]);
-  assert.deepEqual(flagged({ Sermon: 'B. Adam', 'Usher #1': 'B. Adam', 'Usher #2': 'B. Adam' }), [['Sermon', 'Usher #1', 'Usher #2']]);
+  assert.deepEqual(flagged({ 'Closing Prayer': 'B. Adam', 'Usher #1': 'B. Adam', 'Usher #2': 'B. Adam' }), [['Closing Prayer', 'Usher #1', 'Usher #2']]);
   const service = { assignments: { 'Prayer of Thanks': 'B. Adam', 'Usher #1': 'B. Adam', Presider: 'E. Joseph', 'Media Booth #1': 'E. Joseph' } };
   assert.deepEqual(doubleDuties(service), [{ name: 'E. Joseph', duties: ['Presider', 'Media Booth #1'] }]);
 });
 
 test('who may take one more duty in a service', () => {
-  const assignments = { Sermon: 'B. Adam', 'Usher #1': 'B. Eli', Presider: 'E. Joseph' };
+  const assignments = { 'Closing Prayer': 'B. Adam', 'Usher #1': 'B. Eli', Presider: 'E. Joseph', Sermon: 'E. Simon' };
   assert.equal(canAlsoServe(assignments, 'B. Adam', 'Usher #2'), true, 'praying, so may usher');
+  assert.equal(canAlsoServe(assignments, 'E. Simon', 'Usher #2'), false, 'whoever gives the Opening Prayer does nothing else');
   assert.equal(canAlsoServe(assignments, 'B. Adam', 'Lobby Security'), false);
   assert.equal(canAlsoServe(assignments, 'B. Eli', 'Closing Prayer'), true, 'ushering, so may pray');
   assert.equal(canAlsoServe(assignments, 'E. Joseph', 'Usher #2'), false, 'the Presider does not usher too');
-  assert.equal(canAlsoServe(assignments, 'B. Adam', 'Sermon'), true, 'the duty they already hold');
+  assert.equal(canAlsoServe(assignments, 'B. Adam', 'Closing Prayer'), true, 'the duty they already hold');
   assert.equal(canAlsoServe(Object.assign({ 'Usher #2': 'B. Adam' }, assignments), 'B. Adam', 'Usher Door'), false, 'one usher duty with a prayer');
   assert.equal(canAlsoServe(assignments, 'S. Leah', 'Usher Door'), true, 'no duty there yet');
   assert.equal(canAlsoServe(assignments, '', 'Usher Door'), true);
-  assert.equal(prayerOf(assignments, 'B. Adam'), 'Sermon');
+  assert.equal(prayerOf(assignments, 'B. Adam'), 'Closing Prayer');
   assert.equal(prayerOf(assignments, 'B. Eli'), '');
-  assert.deepEqual(otherDuties(assignments, 'B. Adam', 'Usher #2'), ['Sermon']);
+  assert.equal(prayerOf(assignments, 'E. Simon'), '', 'the Opening Prayer is not one of the prayers that pair');
+  assert.deepEqual(otherDuties(assignments, 'B. Adam', 'Usher #2'), ['Closing Prayer']);
 });
 
 test('the browser and the server allow the same duties together, for every pair and three of duties', () => {
@@ -63,8 +66,14 @@ test('the browser and the server allow the same duties together, for every pair 
     duties.slice(i + j + 2).forEach(c => same([a, b, c]));
   }));
   assert.deepEqual(permissions.blockingDuties({ Presider: 'E. Joseph', Sermon: 'B. Adam' }, 'E. Joseph', 'Usher #1'), ['Presider']);
-  assert.deepEqual(permissions.blockingDuties({ Sermon: 'B. Adam' }, 'B. Adam', 'Usher #1'), []);
+  assert.deepEqual(permissions.blockingDuties({ 'Closing Prayer': 'B. Adam' }, 'B. Adam', 'Usher #1'), []);
+  assert.deepEqual(permissions.blockingDuties({ Sermon: 'B. Adam' }, 'B. Adam', 'Usher #1'), ['Sermon']);
   assert.deepEqual(permissions.blockingDuties({ Sermon: 'B. Adam' }, '', 'Usher #1'), []);
+  assert.deepEqual(permissions.DUTY_DEFAULTS, DUTY_DEFAULTS);
+  [{}, { dutyDefaults: {} }, { dutyDefaults: { Sermon: '' } }, { dutyDefaults: { Sermon: ' P. Paul ' } }].forEach(settings => {
+    assert.equal(permissions.dutyDefault(settings, 'Sermon'), dutyDefault(settings, 'Sermon'));
+  });
+  assert.equal(dutyDefault({}, 'Sermon'), 'E. Simon', 'the overseer until a leader changes it');
 });
 
 test('a double duty marked OK stays OK only while the duties stay the same', () => {

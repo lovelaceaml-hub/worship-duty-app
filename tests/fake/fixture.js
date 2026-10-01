@@ -3,7 +3,8 @@
    Site passcode 2468. Every member's PIN is 1234. B. Adam is an
    administrator, E. Joseph leads Worship and Media, S. Grace leads Usher
    Sisters, M. Ruth edits songs, B. Silas must choose a new PIN, and
-   S. Joanna is in no department yet.
+   S. Joanna is in no department yet. B. Samuel is the default for Opening
+   Prayer.
    A test can set window.__fixtureOverrides first: `patch` merges fields into
    documents by path, and any other key replaces that part of the fixture. */
 (function () {
@@ -55,7 +56,8 @@
   if (nextSaturday) Object.assign(nextSaturday.assignments, { Presider: 'B. Adam', 'Media Booth #1': 'B. Adam' });
 
   const docs = {
-    'app/settings': { sitePinHash: 'a1fb4e703a9ef1fa4936801721ff285a97ac85330856674412e054892afe6972', features: {}, schedulerName: 'E. Joseph' },
+    'app/settings': { sitePinHash: 'a1fb4e703a9ef1fa4936801721ff285a97ac85330856674412e054892afe6972', features: {}, schedulerName: 'E. Joseph',
+      dutyDefaults: { Sermon: 'B. Samuel' } },
     'app/members': { list: members },
     'app/departments': { map: rosters },
     'app/nameMap': { map: { 'B. Adam A': 'B. Adam' } },

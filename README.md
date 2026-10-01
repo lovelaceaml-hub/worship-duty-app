@@ -169,12 +169,20 @@ alone. It only picks members who are active in the department, can take that
 duty, are available, and may hold it alongside what they already do in that
 service (see "One duty each" below).
 
-An usher duty goes first to someone praying in that service, whichever way
-the leader fills: the prayers lead and the ushers follow. A service's
-prayers are settled before its ushers, so when an administrator fills every
-department at once the matches happen in the same fill; an usher leader gets
-them when filling after the prayers are set. Everyone else is chosen the
-leader's way (remembered on the device):
+Opening Prayer is given by whoever delivers the sermon. Fill always gives it
+to its default, the church overseer (E. Simon) unless a Worship leader or an
+administrator chooses someone else, or no default, in Manage, Departments,
+Worship. When the default cannot take it, it stays empty, outlined, for the
+leader to fill by hand; another preacher is always put on by hand. Fill never
+gives the default any other duty. New services, added by hand or by the
+yearly batch, start with the default on Opening Prayer.
+
+An usher duty goes first to someone giving the Thanks or Closing Prayer in
+that service, whichever way the leader fills: the prayers lead and the ushers
+follow. A service's prayers are settled before its ushers, so when an
+administrator fills every department at once the matches happen in the same
+fill; an usher leader gets them when filling after the prayers are set.
+Everyone else is chosen the leader's way (remembered on the device):
 
 - **Auto**: no other duty that day first, then the fewest duties that month
   (the services already past count too), then least served lately, then
@@ -183,8 +191,8 @@ leader's way (remembered on the device):
   gone longest without a turn goes first, and people tied go by name, so once
   everyone has had a turn it runs down the list by name, round and round.
   Someone away for their turn goes first next time, and someone already on a
-  duty later that month waits. The Presider takes turns apart from the
-  prayers, and an usher duty matched to a prayer is not a turn.
+  duty later that month waits. The Presider and Opening Prayer each take
+  turns of their own, and an usher duty matched to a prayer is not a turn.
 - **Random**.
 
 When no one is free for a duty, Fill moves its own picks in that service
@@ -199,10 +207,12 @@ duties, an administrator's override, delete).
 
 ### One duty each
 
-A member holds one duty in a service, with one exception: a prayer (Opening,
-Thanks or Closing Prayer) together with an usher duty (Usher Door, Front or
-Back, Usher #1 or #2; Lobby Security does not count). The planner offers that
-pair, with the prayer shown next to the name, and Fill makes it as above. The
+A member holds one duty in a service, with one exception: Thanks Prayer or
+Closing Prayer together with an usher duty (Usher Door, Front or Back, Usher
+#1 or #2; Lobby Security does not count). Opening Prayer is never paired:
+whoever gives it delivers the sermon and does nothing else. The planner
+offers the pair, with the prayer shown next to the name, and Fill makes it as
+above. The
 server refuses any other second duty, whichever way it is saved. A double
 duty that arrives another way (the Sheet, an administrator's override) is
 flagged on the schedule until a leader marks it OK; the mark holds while the

@@ -13,7 +13,7 @@ import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';
 import { render as redraw, renderSoon, goTo } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
-import { DEPARTMENTS, SERVICE_LABELS, WORSHIP_TYPES, DEFAULT_TIMES, departmentOf, dutyName } from '../../config/duties.js';
+import { DEPARTMENTS, SERVICE_LABELS, WORSHIP_TYPES, DEFAULT_TIMES, DUTY_DEFAULTS, departmentOf, dutyName, dutyDefault } from '../../config/duties.js';
 import { serviceId, byStart, isUpcoming } from '../../lib/services.js';
 import { hasDuty, hasChoir } from '../../lib/worship.js';
 import { clockTime, todayISO, addMonths, monthName, longDate, weekdayShort, dayOfMonth } from '../../lib/dates.js';
@@ -91,10 +91,19 @@ function choicesFor(service, duty, people, assignments) {
   return praying.concat(choices.filter(profile => !praying.includes(profile)));
 }
 
-/* A member's name in a duty list, with the prayer they also have there. */
+/* The default member of each duty that has one (Opening Prayer). */
+function dutyDefaults() {
+  const out = {};
+  Object.keys(DUTY_DEFAULTS).forEach(duty => { const name = dutyDefault(data.settings, duty); if (name) out[duty] = name; });
+  return out;
+}
+
+/* A member's name in a duty list, with the prayer they also have there, or
+   "default" for the default of the duty. */
 function choiceLabel(profile, duty, assignments) {
   const prayer = isUsher(duty) && prayerOf(assignments, profile.memberName);
-  return nameOf(profile.memberName) + (prayer ? ' (' + dutyName(prayer) + ')' : '');
+  const note = prayer ? dutyName(prayer) : (dutyDefaults()[duty] === profile.memberName ? 'default' : '');
+  return nameOf(profile.memberName) + (note ? ' (' + note + ')' : '');
 }
 
 /* ---- one duty cell ---- */
@@ -423,7 +432,7 @@ defineActions({
       const services = data.services.filter(service => service.date.startsWith(month()) && isUpcoming(service));
       const stats = workload(data.services, data.members, todayISO());
       const result = fill(services, service => dutiesOf(service).filter(duty => editable.includes(duty)), duty => roster(departmentOf(duty).name), stats,
-        { mode: fillMode(), history: data.services });
+        { mode: fillMode(), history: data.services, defaults: dutyDefaults() });
       ui.plan.proposals = {};
       result.proposals.forEach(item => { ui.plan.proposals[keyOf(item.serviceId, item.duty)] = { memberUid: item.memberUid, memberName: item.memberName }; });
       ui.plan.unfilled = {};

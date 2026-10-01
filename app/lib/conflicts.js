@@ -1,7 +1,8 @@
 /* Who may hold which duties together in one service. One duty each is the
-   rule. The one exception is a prayer (Opening, Thanks or Closing Prayer)
-   with an usher duty, allowed on purpose and never flagged; Lobby Security
-   does not count as an usher duty here. Anything else is a double duty: Fill
+   rule. The one exception is Thanks Prayer or Closing Prayer with an usher
+   duty, allowed on purpose and never flagged; Lobby Security does not count
+   as an usher duty here, and Opening Prayer is never paired (whoever gives it
+   delivers the sermon). Anything else is a double duty: Fill
    never makes one, the planner does not offer one and the server refuses one.
    One that arrives another way (the Sheet, an administrator's override) is
    flagged. A leader can mark a double duty as OK; that holds only while the

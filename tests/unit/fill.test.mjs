@@ -82,7 +82,7 @@ test('Auto counts the duties already served earlier in the month and earlier tha
 function brothers() {
   const brothersDuties = ['Usher #1', 'Usher #2', 'Lobby Security'];
   return {
-    Worship: [profile('Worship', 'B. Adam', ['Sermon', 'Closing Prayer']), profile('Worship', 'B. Eli', ['Sermon', 'Prayer of Thanks']),
+    Worship: [profile('Worship', 'B. Adam', ['Prayer of Thanks', 'Closing Prayer']), profile('Worship', 'B. Eli', ['Prayer of Thanks', 'Closing Prayer']),
       profile('Worship', 'E. Joseph', ['Presider'])],
     'Usher Brothers': [profile('Usher Brothers', 'B. Adam', brothersDuties), profile('Usher Brothers', 'B. Cal', brothersDuties),
       profile('Usher Brothers', 'B. Dan', brothersDuties)]
@@ -95,7 +95,7 @@ test('in every mode, an usher duty goes first to the member praying in that serv
   const stats = { 'B. Adam': { past8: 6, upcoming: 2, last: '2026-09-26' } };
   const history = [service('2026-09-26', 'Morning', { 'Usher #1': 'B. Adam' })];
   for (const mode of ['auto', 'rotation', 'random']) {
-    const result = fill([service('2026-10-03', 'Morning', { Sermon: 'B. Adam' })], ['Usher #1', 'Usher #2', 'Lobby Security'],
+    const result = fill([service('2026-10-03', 'Morning', { 'Closing Prayer': 'B. Adam' })], ['Usher #1', 'Usher #2', 'Lobby Security'],
       rostersFor(rosters), stats, { mode, history, random: () => 0.99 });
     const given = Object.fromEntries(result.proposals.map(item => [item.duty, item.memberName]));
     assert.equal(given['Usher #1'], 'B. Adam', mode + ': the member praying ushers');
@@ -119,29 +119,65 @@ test('a prayer Fill proposes is matched too, and the prayers come first whatever
 test('a member praying is not matched when they cannot usher then, and the prayers lead', () => {
   const rosters = brothers();
   rosters['Usher Brothers'][0] = profile('Usher Brothers', 'B. Adam', ['Usher #1'], away(['2026-10-03']));
-  const result = fill([service('2026-10-03', 'Morning', { Sermon: 'B. Adam' })], ['Usher #1'], rostersFor(rosters), {});
+  const result = fill([service('2026-10-03', 'Morning', { 'Closing Prayer': 'B. Adam' })], ['Usher #1'], rostersFor(rosters), {});
   assert.notEqual(names(result)[0], 'B. Adam', 'away for ushering that day');
   // Someone already ushering in a service is not preferred for its prayer: Eli, with no duty that day, prays.
-  const prayers = fill([service('2026-10-10', 'Morning', { 'Usher #1': 'B. Adam' })], ['Sermon'], rostersFor(brothers()), {});
+  const prayers = fill([service('2026-10-10', 'Morning', { 'Usher #1': 'B. Adam' })], ['Closing Prayer'], rostersFor(brothers()), {});
   assert.deepEqual(names(prayers), ['B. Eli']);
 });
 
 test('when no one is free, Fill moves its own picks to fill the duty, even both duties of a pair', () => {
   const rosters = {
-    Worship: [profile('Worship', 'B. Adam', ['Sermon']), profile('Worship', 'B. Eli', ['Sermon'])],
+    Worship: [profile('Worship', 'B. Adam', ['Closing Prayer']), profile('Worship', 'B. Eli', ['Closing Prayer'])],
     'Usher Brothers': [profile('Usher Brothers', 'B. Adam', ['Usher #1']), profile('Usher Brothers', 'B. Cal', ['Usher #1'])],
     Lobby: [profile('Lobby', 'B. Adam', ['Lobby Desk #1']), profile('Lobby', 'B. Dan', ['Lobby Desk #1', 'Lobby Desk #2'])]
   };
   const stats = { 'B. Eli': { past8: 9 }, 'B. Cal': { past8: 9 }, 'B. Dan': { past8: 9 } };
   // Adam is fairest for the prayer and then ushers with it; only he and Dan take Lobby Desk #1, and
   // Dan is needed at Lobby Desk #2. So Adam leaves both, Eli prays and Cal ushers.
-  const result = fill([service('2026-10-03')], ['Sermon', 'Usher #1', 'Lobby Desk #1', 'Lobby Desk #2'], rostersFor(rosters), stats);
-  assert.deepEqual(picks(result).map(([, duty, name]) => duty + ': ' + name), ['Sermon: B. Eli', 'Usher #1: B. Cal', 'Lobby Desk #1: B. Adam', 'Lobby Desk #2: B. Dan']);
+  const result = fill([service('2026-10-03')], ['Closing Prayer', 'Usher #1', 'Lobby Desk #1', 'Lobby Desk #2'], rostersFor(rosters), stats);
+  assert.deepEqual(picks(result).map(([, duty, name]) => duty + ': ' + name), ['Closing Prayer: B. Eli', 'Usher #1: B. Cal', 'Lobby Desk #1: B. Adam', 'Lobby Desk #2: B. Dan']);
   assert.deepEqual(result.unfilled, []);
   // One move: Ada, the fairest, took the door; the front needs her, so she moves and Bea takes the door.
   const sisters = { 'Usher Sisters': [profile('Usher Sisters', 'S. Ada', ['Usher Door', 'Usher Front']), profile('Usher Sisters', 'S. Bea', ['Usher Door'])] };
   const moved = fill([service('2026-10-03')], ['Usher Door', 'Usher Front'], rostersFor(sisters), { 'S. Bea': { past8: 9 } });
   assert.deepEqual(names(moved), ['S. Bea', 'S. Ada']);
+});
+
+test('Opening Prayer goes to its default in every mode, and the default gets no other duty', () => {
+  const rosters = {
+    Worship: [profile('Worship', 'E. Simon', ['Presider', 'Sermon', 'Closing Prayer']), profile('Worship', 'B. Adam', ['Sermon', 'Closing Prayer']),
+      profile('Worship', 'E. Joseph', ['Presider'])],
+    'Usher Brothers': [profile('Usher Brothers', 'E. Simon', ['Usher #1']), profile('Usher Brothers', 'B. Cal', ['Usher #1'])]
+  };
+  // Adam is fairer than Simon for the Opening Prayer, and in Rotation it is his turn; Simon gets it anyway.
+  // Simon would be fairest for Presider and Usher #1, but the default gets no other duty.
+  const stats = { 'E. Simon': { past8: 2, upcoming: 0, last: '2026-09-29' }, 'E. Joseph': { past8: 9, upcoming: 9 }, 'B. Cal': { past8: 9, upcoming: 9 } };
+  const history = [service('2026-09-29', 'Evening', { Sermon: 'E. Simon' }, 'Third Day')];
+  const services = [service('2026-10-03'), service('2026-10-03', 'Evening'), service('2026-10-06', 'Evening', {}, 'Third Day')];
+  for (const mode of ['auto', 'rotation', 'random']) {
+    const result = fill(services, ['Presider', 'Sermon', 'Closing Prayer', 'Usher #1'], rostersFor(rosters), stats,
+      { mode, history, random: () => 0, defaults: { Sermon: 'E. Simon' } });
+    const given = picks(result).map(([id, duty, name]) => id.slice(5) + ' ' + duty + ': ' + name);
+    assert.deepEqual(given, ['10-03_morning Presider: E. Joseph', '10-03_morning Sermon: E. Simon', '10-03_morning Closing Prayer: B. Adam', '10-03_morning Usher #1: B. Cal',
+      '10-03_evening Presider: E. Joseph', '10-03_evening Sermon: E. Simon', '10-03_evening Closing Prayer: B. Adam', '10-03_evening Usher #1: B. Cal',
+      '10-06_evening Presider: E. Joseph', '10-06_evening Sermon: E. Simon', '10-06_evening Closing Prayer: B. Adam', '10-06_evening Usher #1: B. Cal'], mode);
+  }
+  // Another preacher gives the Opening Prayer there (put on by hand): Simon is still given nothing else.
+  const guest = fill([service('2026-10-10', 'Morning', { Sermon: 'P. Paul' })], ['Presider', 'Usher #1'], rostersFor(rosters), stats, { defaults: { Sermon: 'E. Simon' } });
+  assert.deepEqual(names(guest), ['E. Joseph', 'B. Cal']);
+});
+
+test('when the default cannot give the Opening Prayer, it stays empty for the leader to fill by hand', () => {
+  const rosters = { Worship: [profile('Worship', 'E. Simon', ['Sermon'], away(['2026-10-10'])), profile('Worship', 'B. Adam', ['Sermon'])] };
+  const result = fill([service('2026-10-03'), service('2026-10-10')], ['Sermon'], rostersFor(rosters), {}, { defaults: { Sermon: 'E. Simon' } });
+  assert.deepEqual(picks(result), [['2026-10-03_morning', 'Sermon', 'E. Simon']]);
+  assert.deepEqual(result.unfilled, [{ serviceId: '2026-10-10_morning', duty: 'Sermon', reason: 'default' }], 'Adam is not given it');
+  // A default who is not on the Worship list for it: nobody is given it.
+  const missing = fill([service('2026-10-03')], ['Sermon'], rostersFor(rosters), {}, { defaults: { Sermon: 'P. Paul' } });
+  assert.deepEqual([missing.proposals, missing.unfilled.map(item => item.reason)], [[], ['default']]);
+  // With no default, Fill gives it to whoever comes first.
+  assert.deepEqual(names(fill([service('2026-10-10')], ['Sermon'], rostersFor(rosters), {})), ['B. Adam']);
 });
 
 test('Rotation: whoever has waited longest goes first, people tied go by name, and someone away goes first next time', () => {
@@ -156,23 +192,24 @@ test('Rotation: whoever has waited longest goes first, people tied go by name, a
   assert.deepEqual(names(random), ['S. Dina', 'S. Dina', 'S. Cora', 'S. Dina', 'S. Dina']);
 });
 
-test('Rotation: someone already on later that month waits, and the Presider takes turns apart from the prayers', () => {
+test('Rotation: someone already on later that month waits, and the Presider and Opening Prayer take turns of their own', () => {
   const sisters = ['S. Ada', 'S. Bea', 'S. Cora'].map(name => profile('Usher Sisters', name, ['Usher Door', 'Usher Front', 'Usher Back']));
   const lastMonth = [service('2026-09-26', 'Morning', { 'Usher Door': 'S. Ada', 'Usher Front': 'S. Bea', 'Usher Back': 'S. Cora' })];
   const services = [service('2026-10-03'), service('2026-10-10'), service('2026-10-17', 'Morning', { 'Usher Door': 'S. Ada' })];
   assert.deepEqual(names(fill(services, ['Usher Door'], () => sisters, {}, { mode: 'rotation', history: lastMonth })), ['S. Bea', 'S. Cora']);
 
-  const worship = [profile('Worship', 'E. Joseph', ['Presider', 'Sermon']), profile('Worship', 'E. Simon', ['Presider', 'Sermon']),
-    profile('Worship', 'B. Adam', ['Sermon'])];
-  const history = [service('2026-09-26', 'Morning', { Presider: 'E. Joseph', Sermon: 'E. Simon' })];
-  const result = fill([service('2026-10-03')], ['Presider', 'Sermon'], () => worship, {}, { mode: 'rotation', history });
-  // Simon prayed last time but has not presided yet; Joseph presided. Adam has not prayed yet.
-  assert.deepEqual(picks(result), [['2026-10-03_morning', 'Presider', 'E. Simon'], ['2026-10-03_morning', 'Sermon', 'B. Adam']]);
+  const worship = [profile('Worship', 'E. Joseph', ['Presider', 'Sermon', 'Closing Prayer']), profile('Worship', 'E. Simon', ['Presider', 'Sermon']),
+    profile('Worship', 'B. Adam', ['Sermon', 'Closing Prayer'])];
+  const history = [service('2026-09-26', 'Morning', { Presider: 'E. Joseph', Sermon: 'E. Simon', 'Closing Prayer': 'B. Adam' })];
+  const result = fill([service('2026-10-03')], ['Presider', 'Sermon', 'Closing Prayer'], () => worship, {}, { mode: 'rotation', history });
+  // Simon gave the Opening Prayer last time but has not presided yet; Joseph presided. Adam's Closing Prayer
+  // is not an Opening Prayer turn, so he gives the Opening Prayer, and Joseph, who has had no prayer turn, closes.
+  assert.deepEqual(picks(result).map(([, duty, name]) => duty + ': ' + name), ['Presider: E. Simon', 'Sermon: B. Adam', 'Closing Prayer: E. Joseph']);
 });
 
 test('Rotation: an usher duty matched to a prayer is not a turn', () => {
   const rosters = brothers();
-  const services = [service('2026-10-03', 'Morning', { Sermon: 'B. Adam' }), service('2026-10-10')];
+  const services = [service('2026-10-03', 'Morning', { 'Closing Prayer': 'B. Adam' }), service('2026-10-10')];
   const result = fill(services, ['Usher #1', 'Usher #2'], rostersFor(rosters), {}, { mode: 'rotation' });
   // The 3rd: Adam ushers with his prayer, Cal takes the first turn. The 10th: Adam has not had a turn yet.
   assert.deepEqual(names(result), ['B. Adam', 'B. Cal', 'B. Adam', 'B. Dan']);
@@ -262,8 +299,11 @@ function madeUpMonth(seed) {
   // The duties to fill come in any order; Fill must still settle the prayers before the ushers.
   const shuffle = list => list.map(item => [rand(), item]).sort((a, b) => a[0] - b[0]).map(([, item]) => item);
   const wanted = new Map(toFill.map(made => [serviceId(made), shuffle(some(ALL_DUTIES.filter(duty => hasDuty(made, duty) && rosters[departmentOf(duty).name]), 0.8))]));
+  // Some months have a default for Opening Prayer: someone who takes it, someone who may not, or no one.
+  const takers = (rosters.Worship || []).map(entry => entry.memberName);
+  const defaults = rand() < 0.5 ? {} : { Sermon: rand() < 0.8 && takers.length ? pick(takers) : pick(PEOPLE) };
   return {
-    services: toFill, history: Array.from(known.values()), rosters,
+    services: toFill, history: Array.from(known.values()), rosters, defaults,
     dutiesFor: made => wanted.get(serviceId(made)) || [],
     rosterFor: rostersFor(rosters),
     mode: pick(['auto', 'rotation', 'random']), random: seeded(seed * 7 + 1)
@@ -277,6 +317,10 @@ function freeze(value) {
 
 function checkFill(scenario, result, label) {
   const byId = new Map(scenario.services.map(made => [serviceId(made), made]));
+  // Who Fill may give a duty to: its default alone, or anyone but a default.
+  const defaultNames = new Set(Object.values(scenario.defaults));
+  const allowed = (entry, duty) => (scenario.defaults[duty] ? entry.memberName === scenario.defaults[duty] : !defaultNames.has(entry.memberName));
+  const candidates = duty => scenario.rosterFor(duty).filter(entry => allowed(entry, duty));
   const finals = new Map(scenario.services.map(made => [serviceId(made), Object.assign({}, made.assignments)]));
   const proposed = new Set(), empty = new Set();
   const before = new Map(scenario.services.map(made => [serviceId(made), Object.assign({}, made.assignments)]));
@@ -290,6 +334,7 @@ function checkFill(scenario, result, label) {
     assert.ok(!made.assignments[item.duty], label + ': a duty that was empty');
     const person = scenario.rosterFor(item.duty).find(entry => entry.memberUid === item.memberUid);
     assert.ok(person && person.memberName === item.memberName, label + ': someone on the department list');
+    assert.ok(allowed(person, item.duty), label + ': ' + item.duty + ' to ' + item.memberName + ', not the default or a default elsewhere');
     assert.ok(canTake(person, made, item.duty), label + ': who can take the duty then');
     const state = before.get(item.serviceId);
     assert.ok(canAlsoServe(state, item.memberName, item.duty), label + ': who may hold it with their other duties');
@@ -302,19 +347,19 @@ function checkFill(scenario, result, label) {
     const key = item.serviceId + '|' + item.duty;
     assert.ok(!proposed.has(key) && !empty.has(key), label + ': a duty is filled or left empty, once');
     empty.add(key);
-    assert.ok(['nobody', 'away', 'serving'].includes(item.reason), label + ': a reason');
+    assert.ok((scenario.defaults[item.duty] ? ['default', 'serving'] : ['nobody', 'away', 'serving']).includes(item.reason), label + ': a reason');
     const made = byId.get(item.serviceId);
     const final = finals.get(item.serviceId);
-    assert.ok(!scenario.rosterFor(item.duty).some(entry => canTake(entry, made, item.duty) && canAlsoServe(final, entry.memberName, item.duty)),
+    assert.ok(!candidates(item.duty).some(entry => canTake(entry, made, item.duty) && canAlsoServe(final, entry.memberName, item.duty)),
       label + ': ' + item.duty + ' left empty although someone could take it');
     // Nor could one of this fill's picks there move to it, with someone free taking their duty instead.
     const swap = result.proposals.filter(other => other.serviceId === item.serviceId).find(other => {
-      const mover = scenario.rosterFor(item.duty).find(entry => entry.memberName === other.memberName);
+      const mover = candidates(item.duty).find(entry => entry.memberName === other.memberName);
       if (!mover || !canTake(mover, made, item.duty)) return false;
       const moved = Object.assign({}, final, { [other.duty]: '' });
       if (!canAlsoServe(moved, other.memberName, item.duty)) return false;
       moved[item.duty] = other.memberName;
-      return scenario.rosterFor(other.duty).some(entry => entry.memberName !== other.memberName &&
+      return candidates(other.duty).some(entry => entry.memberName !== other.memberName &&
         canTake(entry, made, other.duty) && canAlsoServe(moved, entry.memberName, other.duty));
     });
     assert.equal(swap, undefined, label + ': ' + item.duty + ' left empty though ' + (swap && swap.memberName) + ' could move to it');
@@ -324,7 +369,7 @@ function checkFill(scenario, result, label) {
   for (const item of result.proposals) {
     const final = finals.get(item.serviceId);
     if (!USHER_DUTIES.includes(item.duty) || prayerOf(final, item.memberName)) continue;
-    const passedOver = scenario.rosterFor(item.duty).find(entry => prayerOf(final, entry.memberName) &&
+    const passedOver = candidates(item.duty).find(entry => prayerOf(final, entry.memberName) &&
       canAlsoServe(final, entry.memberName, item.duty) && canTake(entry, byId.get(item.serviceId), item.duty));
     assert.equal(passedOver, undefined, label + ': ' + item.duty + ' passed over ' + (passedOver && passedOver.memberName) + ', who prays there');
   }
@@ -346,7 +391,7 @@ test('Fill never breaks a rule, on 400 made-up months in every mode', () => {
   for (let seed = 1; seed <= 400; seed++) {
     const scenario = freeze(madeUpMonth(seed));
     const stats = workload(scenario.history, [], '2026-10-04');
-    const options = { mode: scenario.mode, history: scenario.history, random: scenario.random };
+    const options = { mode: scenario.mode, history: scenario.history, random: scenario.random, defaults: scenario.defaults };
     const result = fill(scenario.services, scenario.dutiesFor, scenario.rosterFor, stats, options);
     checkFill(scenario, result, 'seed ' + seed + ' (' + scenario.mode + ')');
     if (scenario.mode !== 'random') {
@@ -359,4 +404,5 @@ test('the prayer lists name real duties of the Worship and usher departments', (
   PRAYER_DUTIES.forEach(duty => assert.equal(departmentOf(duty).name, 'Worship'));
   USHER_DUTIES.forEach(duty => assert.ok(['Usher Sisters', 'Usher Brothers'].includes(departmentOf(duty).name)));
   assert.ok(!USHER_DUTIES.includes('Lobby Security'));
+  assert.ok(!PRAYER_DUTIES.includes('Sermon'), 'Opening Prayer is never paired');
 });

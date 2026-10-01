@@ -531,7 +531,7 @@ test('Fill proposes members for the usual empty duties; the leader saves them to
 test('Fill gives an usher duty to the sister praying there first, and outlines the duties no one is free for', async () => {
   const away = { availability: { recurring: {}, exceptions: { '2026-07-25': { '*': 'unavailable' } } } };
   const fixture = { patch: Object.assign({
-    'schedule/2026-07-18_morning': { assignments: { Sermon: 'S. Leah' } },
+    'schedule/2026-07-18_morning': { assignments: { 'Closing Prayer': 'S. Leah' } },
     'schedule/2026-07-25_morning': { assignments: {} }
   }, Object.fromEntries(['S. Leah', 'S. Naomi', 'S. Esther', 'S. Grace'].map(name => ['departments/Usher Sisters/members/member:' + name, away]))) };
   const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
@@ -540,7 +540,7 @@ test('Fill gives an usher duty to the sister praying there first, and outlines t
   await page.locator('#view .plan-grid').waitFor();
   // Leah prays at that service: she is the first choice for an usher duty there, and the list says why.
   const door = page.locator('#view select[data-service="2026-07-18_morning"][data-duty="Usher Door"]');
-  assert.match(await door.locator('option').nth(1).textContent(), /^S\. Leah \(Opening Prayer\)/);
+  assert.match(await door.locator('option').nth(1).textContent(), /^S\. Leah \(Closing Prayer\)/);
   await page.locator('#view [data-act="plan-fill"]').click();
   await page.locator('#view .plan-cell.is-proposed').first().waitFor();
   assert.equal(await door.inputValue(), 'member:S. Leah');
@@ -554,11 +554,53 @@ test('Fill gives an usher duty to the sister praying there first, and outlines t
   await page.locator('#view [data-act="plan-save"]').click();
   await banner(page, 'Saved 2 duties.');
   const saved = await fakeDoc(page, 'schedule/2026-07-18_morning');
-  assert.equal(saved.assignments.Sermon, 'S. Leah');
+  assert.equal(saved.assignments['Closing Prayer'], 'S. Leah');
   assert.equal(saved.assignments['Usher Door'], 'S. Leah');
   assert.equal(await page.locator('#view .plan-cell.is-unfilled').count(), 0, 'the outlines go once the fill is saved');
   assert.deepEqual(errors, []);
   await context.close();
+});
+
+test('Opening Prayer goes to its default: Fill proposes them, a Worship leader changes them, a new service starts with them', async () => {
+  const fixture = { patch: { 'schedule/2026-07-18_morning': { assignments: {} } } };
+  const { context, page, errors } = await as('E. Joseph', { viewport: DESKTOP, fixture });
+  await tab(page, 'manage');
+  await page.locator('#view select[data-change="manage-department"]').selectOption('Worship');
+  await section(page, 'manage-section', 'services');
+  await page.locator('#view .plan-grid').waitFor();
+  const sermon = page.locator('#view select[data-service="2026-07-18_morning"][data-duty="Sermon"]');
+  assert.ok((await sermon.locator('option').allTextContents()).some(text => /^B\. Samuel \(default\)/.test(text)), 'the default is marked in the list');
+  await page.locator('#view [data-act="plan-fill"]').click();
+  await page.locator('#view .plan-cell.is-proposed').first().waitFor();
+  assert.equal(await sermon.inputValue(), 'member:B. Samuel');
+  const given = await page.locator('#view select[data-service="2026-07-18_morning"]').evaluateAll(selects => selects.map(select => select.value));
+  assert.equal(given.filter(value => value === 'member:B. Samuel').length, 1, 'the default gets no other duty');
+  await page.locator('#view [data-act="plan-discard"]').click();
+
+  await section(page, 'manage-section', 'departments');
+  const choice = page.locator('#view select[data-change="duty-default"][data-duty="Sermon"]');
+  assert.equal(await choice.inputValue(), 'B. Samuel');
+  await choice.selectOption('B. Caleb');
+  await banner(page, 'B. Caleb is the default for Opening Prayer.');
+  assert.deepEqual(await calls(page, 'setDutyDefault'), [{ duty: 'Sermon', memberName: 'B. Caleb' }]);
+  assert.deepEqual((await fakeDoc(page, 'app/settings')).dutyDefaults, { Sermon: 'B. Caleb' });
+  assert.deepEqual(errors, []);
+  await context.close();
+
+  // An administrator adds a service: it starts with the default on Opening Prayer.
+  const admin = await as('B. Adam', { viewport: DESKTOP });
+  await tab(admin.page, 'manage');
+  await section(admin.page, 'manage-section', 'services');
+  await admin.page.locator('#view .plan-add summary').click();
+  const form = admin.page.locator('#view form[data-act="service-add"]');
+  await form.locator('input[name="date"]').fill('2026-07-16');
+  await form.locator('select[name="service"]').selectOption('Evening');
+  await form.locator('input[name="worship"]').fill('Pentecost');
+  await form.locator('button[type="submit"]').click();
+  await admin.page.waitForFunction(() => window.__fake.get('schedule/2026-07-16_evening'));
+  assert.deepEqual((await fakeDoc(admin.page, 'schedule/2026-07-16_evening')).assignments, { Sermon: 'B. Samuel' });
+  assert.deepEqual(admin.errors, []);
+  await admin.context.close();
 });
 
 test('on a phone the month is one list, and a service opens in place', async () => {

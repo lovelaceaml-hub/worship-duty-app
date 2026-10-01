@@ -20,7 +20,7 @@ export const departments = {
   ownLoading: null,
   ownError: '',
   drafts: {},      // 'department::uid' -> unsaved patch
-  busy: {},        // 'serviceId::duty' -> true while an assignment saves
+  busy: {},        // 'serviceId::duty' or 'default::duty' -> true while it saves
   search: null,    // { department, query, page, members, total, busy, error, adding }
   invites: {}      // department -> [{ token, expiresAt }] made on this device
 };
@@ -392,6 +392,24 @@ export async function unassign(service, duty) {
   } catch (error) {
     notice('The duty was not cleared: ' + problem(error), true);
   }
+  renderSoon();
+}
+
+/* The default member for a duty that has one (Opening Prayer), or '' for
+   none. The server checks the leader's rights and that the member takes the
+   duty; app/settings then carries the choice to every device. */
+export async function saveDutyDefault(duty, memberName) {
+  if (departments.busy['default::' + duty]) return;
+  departments.busy['default::' + duty] = true;
+  renderSoon();
+  try {
+    await call('setDutyDefault', { duty, memberName });
+    data.settings.dutyDefaults = Object.assign({}, data.settings.dutyDefaults, { [duty]: memberName });
+    notice(memberName ? nameOf(memberName) + ' is the default for ' + dutyName(duty) + '.' : dutyName(duty) + ' has no default now.');
+  } catch (error) {
+    notice('The default was not saved: ' + problem(error), true);
+  }
+  delete departments.busy['default::' + duty];
   renderSoon();
 }
 

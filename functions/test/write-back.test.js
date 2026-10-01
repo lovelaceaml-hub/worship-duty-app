@@ -68,10 +68,24 @@ test('a planning year adds the missing services, their Sheet rows, and the feast
   assert.equal(services.length, 56 * 3 + 57);
   assert.deepEqual(docs['schedule/2026-12-05_morning'].assignments, { Presider: 'B. Adam' }, 'an existing service is kept');
   assert.equal(docs['schedule/2027-01-02_evening'].worship, 'Sabbath Day');
+  assert.deepEqual(docs['schedule/2027-01-02_evening'].assignments, { Sermon: 'E. Simon' }, 'new services start with the default for Opening Prayer');
+  assert.deepEqual(docs['schedule/2027-01-05_evening'].assignments, { Sermon: 'E. Simon' });
   assert.ok(docs['schedule/2027-01-02_evening'].sheetSyncedAt);
   assert.equal(docs['app/settings'].feastNotice.year, 2027);
   assert.deepEqual(sheets.tab('2026 Entry').slice(4, 6).map(row => row[0]), ['DECEMBER 2026', serial('2026-12-01')]);
   const next = sheets.tab('2027 Entry');
   assert.equal(next.filter(row => typeof row[0] === 'number').length, 52 * 3 + 52);
+  assert.ok(next.filter(row => typeof row[0] === 'number').every(row => row[HEADER.indexOf('Sermon')] === 'E. Simon'), 'and so do their Sheet rows');
   assert.equal(next.filter(row => typeof row[0] === 'string' && /2027$/.test(row[0])).length, 12);
+});
+
+test('a planning year starts its services with the chosen default, or none', async () => {
+  for (const [dutyDefaults, expected] of [[{ Sermon: 'P. Paul' }, { Sermon: 'P. Paul' }], [{ Sermon: '' }, {}]]) {
+    const docs = { 'app/settings': { dutyDefaults } };
+    const { functions } = loadIndex(docs, {});
+    const realNow = Date.now;
+    Date.now = () => Date.parse('2026-11-01T14:00:00Z');
+    try { await functions.yearlyServices.run({}); } finally { Date.now = realNow; }
+    assert.deepEqual(docs['schedule/2027-01-02_morning'].assignments, expected);
+  }
 });

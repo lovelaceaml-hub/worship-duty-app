@@ -4,17 +4,17 @@
    scheduled, and when they are available. */
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
-import { ui, nameOf } from '../../store.js';
+import { data, ui, nameOf } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
-import { SERVICE_LABELS, departmentNamed, dutyName } from '../../config/duties.js';
-import { isLeaderProfile, normalizeAvailability, timeKey, timeLabel } from '../../lib/availability.js';
+import { SERVICE_LABELS, DUTY_DEFAULTS, departmentNamed, departmentOf, dutyName, dutyDefault } from '../../config/duties.js';
+import { isLeaderProfile, normalizeAvailability, takesDuty, timeKey, timeLabel } from '../../lib/availability.js';
 import { longDate, todayISO, shortDate } from '../../lib/dates.js';
 import { managedDepartments, canManageDepartment, canResetPin, leadersOf } from '../../services/access.js';
 import {
   departments as state, roster, loadRoster, draftOf, hasDraft, editDraft, dropDraft, saveProfile, setStatus,
-  searchMembers, addMember, addByName, missingMembers, resetPin, createInvite, cancelInvite, activeInvites, inviteLink
+  searchMembers, addMember, addByName, missingMembers, resetPin, createInvite, cancelInvite, activeInvites, inviteLink, saveDutyDefault
 } from '../../services/departments.js';
 import { managedDepartment } from './index.js';
 
@@ -79,6 +79,28 @@ function searchPanel(department) {
   </section>`;
 }
 
+/* The default member of each of this department's duties that has one
+   (Worship: Opening Prayer). Fill always gives the duty to them. */
+function defaultsPanel(department, canEdit) {
+  const duties = Object.keys(DUTY_DEFAULTS).filter(duty => (departmentOf(duty) || {}).name === department);
+  return duties.map(duty => {
+    const current = dutyDefault(data.settings, duty);
+    const takers = roster(department).filter(profile => takesDuty(profile, duty));
+    const listed = !current || takers.some(profile => profile.memberName === current);
+    const busy = state.busy['default::' + duty];
+    return html`<section class="card duty-default">
+      <label class="field"><span>Default for ${dutyName(duty)}</span>
+        <select data-change="duty-default" data-duty="${duty}"${canEdit && !busy ? '' : ' disabled'}>
+          <option value=""${current ? '' : ' selected'}>No default</option>
+          ${listed ? '' : html`<option value="${current}" selected>${nameOf(current)}</option>`}
+          ${takers.map(profile => html`<option value="${profile.memberName}"${profile.memberName === current ? ' selected' : ''}>${nameOf(profile.memberName)}</option>`)}
+        </select></label>
+      <p class="hint">Fill always gives ${dutyName(duty)} to the default, and new services start with them on it. When someone else gives it, choose them by hand in Services.</p>
+      ${listed ? '' : html`<p class="card-note is-warning">${nameOf(current)} does not take ${dutyName(duty)} in ${department}, so Fill leaves it empty. Add it to their duties, or choose another default.</p>`}
+    </section>`;
+  });
+}
+
 /* People serving in this department who are not on its list yet. */
 function missingPanel(department) {
   const missing = missingMembers(department, todayISO());
@@ -125,6 +147,7 @@ function departmentRoster(department) {
   return html`${back}
     <h2 class="screen-title">${department}</h2>
     <p class="hint"><strong>Leaders:</strong> ${leadersOf(department).map(nameOf).join(', ') || 'none set'}</p>
+    ${defaultsPanel(department, canEdit)}
     ${canEdit ? missingPanel(department) : ''}
     ${canEdit ? searchPanel(department) : ''}
     <h3 class="section-heading">Members <span class="count">${active.length}</span></h3>
@@ -231,6 +254,10 @@ defineActions({
   },
   'department-list': () => { ui.manageDepartment = managedDepartments()[0] || ''; ui.departmentView = null; redraw(); },
   'department-retry': el => { loadRoster(el.dataset.department, true); },
+  'duty-default': {
+    allowed: el => canManageDepartment((departmentOf(el.dataset.duty) || {}).name),
+    run: el => saveDutyDefault(el.dataset.duty, el.value)
+  },
   'department-member': el => { ui.departmentView = { department: managedDepartment(), uid: el.dataset.uid }; redraw(); window.scrollTo({ top: 0 }); },
   'department-member-back': () => { ui.departmentView = null; redraw(); },
   'department-search': {

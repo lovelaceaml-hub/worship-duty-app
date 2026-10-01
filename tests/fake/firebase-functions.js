@@ -162,6 +162,13 @@ const handlers = {
     return { ok: true, requestStatus: data.decision || null };
   },
   async syncSheetNow() { return { ok: true, added: 0, updated: 0, newMembers: 0, warnings: [] }; },
+  /* Manage, Worship: the default for Opening Prayer (the real one also checks
+     the leader's rights and that the member takes the duty). */
+  async setDutyDefault(data) {
+    const settings = (await getDoc(doc(null, 'app', 'settings'))).data() || {};
+    await setDoc(doc(null, 'app', 'settings'), Object.assign({}, settings, { dutyDefaults: Object.assign({}, settings.dutyDefaults, { [data.duty]: data.memberName }) }));
+    return { ok: true, duty: data.duty, memberName: data.memberName };
+  },
   /* The month planner's save, with the real function's checks. */
   async saveDepartmentAssignments(data) {
     const planBatch = 'plan-' + Date.now();

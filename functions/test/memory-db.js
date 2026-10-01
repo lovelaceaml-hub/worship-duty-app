@@ -32,11 +32,25 @@ function plain(value) {
 
 function memoryDb(docs = {}) {
   const store = new Map(Object.entries(clone(docs)));
+  const snapshot = path => ({ id: path.split('/').pop(), exists: store.has(path), data: () => clone(store.get(path)) });
   const ref = path => ({
     path,
     id: path.split('/').pop(),
-    collection: name => ({ doc: id => ref(path + '/' + name + '/' + id) }),
-    get: async () => ({ id: path.split('/').pop(), exists: store.has(path), data: () => clone(store.get(path)) })
+    collection: name => collection(path + '/' + name),
+    get: async () => snapshot(path),
+    set: async (value, options) => { apply([path, value, options]); }
+  });
+  // A collection's documents, and `where(field, '==', value)` over them.
+  const collection = prefix => ({
+    doc: id => ref(prefix + '/' + id),
+    where: (field, op, value) => ({
+      get: async () => {
+        if (op !== '==') throw new Error('memoryDb supports == only');
+        const docs = [...store.keys()].filter(path => path.startsWith(prefix + '/') && !path.slice(prefix.length + 1).includes('/') &&
+          (store.get(path) || {})[field] === value).map(snapshot);
+        return { docs, empty: !docs.length, size: docs.length };
+      }
+    })
   });
   const apply = ([path, value, options]) => {
     if (value === undefined) store.delete(path);
@@ -45,7 +59,7 @@ function memoryDb(docs = {}) {
   };
   return {
     store,
-    collection: name => ({ doc: id => ref(name + '/' + id) }),
+    collection,
     async runTransaction(work) {
       const writes = [];
       const result = await work({

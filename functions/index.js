@@ -28,6 +28,7 @@ const sheetSync = require('./sheet-sync');
 const { serviceYear } = require('./service-year');
 const { dutyName } = require('./names');
 const { addServingMembers } = require('./serving-members');
+const { setDutyDefault } = require('./duty-defaults');
 const { renameMember: renameMemberEverywhere } = require('./rename-member');
 
 initializeApp();
@@ -1027,7 +1028,10 @@ exports.checkSheet = onCall({ region: REGION }, async request => {
    year's feast services. */
 async function addServiceYear(year) {
   const settings = await loadSettings();
-  const wanted = serviceYear(year);
+  // New services start with each duty's default member on it (Opening Prayer).
+  const defaults = {};
+  Object.keys(permissions.DUTY_DEFAULTS).forEach(duty => { const name = permissions.dutyDefault(settings, duty); if (name) defaults[duty] = name; });
+  const wanted = serviceYear(year).map(service => Object.assign(service, { assignments: Object.assign({}, defaults) }));
   const existing = await db.collection('schedule').where('date', '>=', wanted[0].date).get();
   const have = new Map(existing.docs.map(doc => [doc.id, doc.data() || {}]));
   const missing = wanted.filter(service => !have.has(service.id));
@@ -1102,6 +1106,20 @@ exports.renameMember = onCall({ region: REGION }, async request => {
     return Object.assign({ ok: true }, result);
   } catch (error) {
     if (error && ['invalid-argument', 'not-found', 'already-exists'].includes(error.code)) throw new HttpsError(error.code, error.message);
+    throw error;
+  }
+});
+
+/* Manage, Worship: the default for Opening Prayer. The Worship leaders and
+   administrators (duty-defaults.js). */
+exports.setDutyDefault = onCall({ region: REGION }, async request => {
+  const actor = await callableActor(request);
+  try {
+    const result = await setDutyDefault({ db, actor, config: await runtimePermissionConfig(), data: request.data || {} });
+    logger.info('setDutyDefault', { duty: result.duty, set: !!result.memberName });
+    return result;
+  } catch (error) {
+    if (error && ['invalid-argument', 'permission-denied', 'failed-precondition'].includes(error.code)) throw new HttpsError(error.code, error.message);
     throw error;
   }
 });
