@@ -156,8 +156,10 @@ export function render({ live = false } = {}) {
 
 /* A screen with unsaved changes can ask before the member leaves it
    (Availability): the guard gets the tab being opened and returns false to
-   stay. Tabs, swipes, the account menu and links between screens all ask. */
-let leaveGuard = null;
+   stay. Tabs, swipes, the account menu and links between screens all ask.
+   `var`, not `let`: screens register their guard while they load, which is
+   before this module's own lines run (it imports the screens). */
+var leaveGuard;
 export function setLeaveGuard(guard) { leaveGuard = typeof guard === 'function' ? guard : null; }
 export function mayLeave(tab, options = {}) {
   return !leaveGuard || leaveGuard(tab, options) !== false;
