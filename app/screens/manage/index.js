@@ -6,6 +6,7 @@ import { defineActions } from '../../actions.js';
 import { ui } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { empty } from '../../ui/components.js';
+import { notice } from '../../ui/banners.js';
 import { managedDepartments, canManageAnyDepartment, canManageLeaders, isAdmin } from '../../services/access.js';
 import { attentionCounts } from '../../services/attention.js';
 import * as departments from './departments.js';
@@ -64,6 +65,13 @@ defineActions({
   'manage-section': el => { ui.manage = el.dataset.section; ui.departmentView = null; redraw(); },
   'manage-department': {
     allowed: el => managedDepartments().includes(el.value),
-    run: el => { ui.manageDepartment = el.value; ui.departmentView = null; redraw(); }
+    run: el => {
+      // Fill's proposals belong to the departments shown; keep them in view until saved.
+      if (Object.keys(ui.plan.proposals).length) { notice('Save or discard the filled duties first.', true); redraw(); return; }
+      ui.manageDepartment = el.value;
+      ui.departmentView = null;
+      ui.plan.unfilled = {};
+      redraw();
+    }
   }
 });

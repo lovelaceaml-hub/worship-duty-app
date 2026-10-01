@@ -126,6 +126,24 @@ test('a member praying is not matched when they cannot usher then, and the praye
   assert.deepEqual(names(prayers), ['B. Eli']);
 });
 
+test('when no one is free, Fill moves its own picks to fill the duty, even both duties of a pair', () => {
+  const rosters = {
+    Worship: [profile('Worship', 'B. Adam', ['Sermon']), profile('Worship', 'B. Eli', ['Sermon'])],
+    'Usher Brothers': [profile('Usher Brothers', 'B. Adam', ['Usher #1']), profile('Usher Brothers', 'B. Cal', ['Usher #1'])],
+    Lobby: [profile('Lobby', 'B. Adam', ['Lobby Desk #1']), profile('Lobby', 'B. Dan', ['Lobby Desk #1', 'Lobby Desk #2'])]
+  };
+  const stats = { 'B. Eli': { past8: 9 }, 'B. Cal': { past8: 9 }, 'B. Dan': { past8: 9 } };
+  // Adam is fairest for the prayer and then ushers with it; only he and Dan take Lobby Desk #1, and
+  // Dan is needed at Lobby Desk #2. So Adam leaves both, Eli prays and Cal ushers.
+  const result = fill([service('2026-10-03')], ['Sermon', 'Usher #1', 'Lobby Desk #1', 'Lobby Desk #2'], rostersFor(rosters), stats);
+  assert.deepEqual(picks(result).map(([, duty, name]) => duty + ': ' + name), ['Sermon: B. Eli', 'Usher #1: B. Cal', 'Lobby Desk #1: B. Adam', 'Lobby Desk #2: B. Dan']);
+  assert.deepEqual(result.unfilled, []);
+  // One move: Ada, the fairest, took the door; the front needs her, so she moves and Bea takes the door.
+  const sisters = { 'Usher Sisters': [profile('Usher Sisters', 'S. Ada', ['Usher Door', 'Usher Front']), profile('Usher Sisters', 'S. Bea', ['Usher Door'])] };
+  const moved = fill([service('2026-10-03')], ['Usher Door', 'Usher Front'], rostersFor(sisters), { 'S. Bea': { past8: 9 } });
+  assert.deepEqual(names(moved), ['S. Bea', 'S. Ada']);
+});
+
 test('Rotation: whoever has waited longest goes first, people tied go by name, and someone away goes first next time', () => {
   const roster = ['S. Ada', 'S. Bea', 'S. Cora', 'S. Dina'].map(name =>
     profile('Usher Sisters', name, ['Usher Door'], name === 'S. Dina' ? away(['2026-10-17']) : {}));
@@ -277,12 +295,6 @@ function checkFill(scenario, result, label) {
     assert.ok(canAlsoServe(state, item.memberName, item.duty), label + ': who may hold it with their other duties');
     const earlier = result.proposals.filter(other => other.serviceId === item.serviceId && ALL_DUTIES.indexOf(other.duty) > ALL_DUTIES.indexOf(item.duty));
     assert.ok(earlier.every(other => result.proposals.indexOf(other) > result.proposals.indexOf(item)), label + ': a service is filled in department order');
-    // An usher duty given to someone not praying: no one praying could have taken it then.
-    if (USHER_DUTIES.includes(item.duty) && !prayerOf(state, item.memberName)) {
-      const passedOver = scenario.rosterFor(item.duty).find(entry => prayerOf(state, entry.memberName) &&
-        canTake(entry, made, item.duty) && canAlsoServe(state, entry.memberName, item.duty));
-      assert.equal(passedOver, undefined, label + ': ' + item.duty + ' passed over someone praying');
-    }
     state[item.duty] = item.memberName;
     finals.get(item.serviceId)[item.duty] = item.memberName;
   }
@@ -295,6 +307,26 @@ function checkFill(scenario, result, label) {
     const final = finals.get(item.serviceId);
     assert.ok(!scenario.rosterFor(item.duty).some(entry => canTake(entry, made, item.duty) && canAlsoServe(final, entry.memberName, item.duty)),
       label + ': ' + item.duty + ' left empty although someone could take it');
+    // Nor could one of this fill's picks there move to it, with someone free taking their duty instead.
+    const swap = result.proposals.filter(other => other.serviceId === item.serviceId).find(other => {
+      const mover = scenario.rosterFor(item.duty).find(entry => entry.memberName === other.memberName);
+      if (!mover || !canTake(mover, made, item.duty)) return false;
+      const moved = Object.assign({}, final, { [other.duty]: '' });
+      if (!canAlsoServe(moved, other.memberName, item.duty)) return false;
+      moved[item.duty] = other.memberName;
+      return scenario.rosterFor(other.duty).some(entry => entry.memberName !== other.memberName &&
+        canTake(entry, made, other.duty) && canAlsoServe(moved, entry.memberName, other.duty));
+    });
+    assert.equal(swap, undefined, label + ': ' + item.duty + ' left empty though ' + (swap && swap.memberName) + ' could move to it');
+  }
+  // An usher duty Fill gave to someone not praying: everyone praying there who
+  // could have taken it ushers there too.
+  for (const item of result.proposals) {
+    const final = finals.get(item.serviceId);
+    if (!USHER_DUTIES.includes(item.duty) || prayerOf(final, item.memberName)) continue;
+    const passedOver = scenario.rosterFor(item.duty).find(entry => prayerOf(final, entry.memberName) &&
+      canAlsoServe(final, entry.memberName, item.duty) && canTake(entry, byId.get(item.serviceId), item.duty));
+    assert.equal(passedOver, undefined, label + ': ' + item.duty + ' passed over ' + (passedOver && passedOver.memberName) + ', who prays there');
   }
   // Every empty duty Fill was asked about is either proposed or left empty.
   for (const made of scenario.services) {

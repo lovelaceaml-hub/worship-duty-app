@@ -22,7 +22,7 @@ import { openDoubleDuties, doubleDuties, isMarkedOk, canAlsoServe, isUsher, pray
 import { workload, suggestReplacements } from '../../lib/workload.js';
 import { fill, fillDuties, FILL_MODES, UNFILLED_REASONS } from '../../lib/fill.js';
 import { isAdmin, canCreateService, canEditDuty, canEditSongsFor, canAcknowledgeConflict } from '../../services/access.js';
-import { roster, profileOf, profileNamed, loadRoster, assign, unassign, departments as departmentState, legacyRoster } from '../../services/departments.js';
+import { roster, rosterLoaded, profileOf, profileNamed, loadRoster, assign, unassign, departments as departmentState, legacyRoster } from '../../services/departments.js';
 import { addService, updateService, deleteService, markDoubleDuty } from '../../services/schedule.js';
 import { replaceDuty } from '../../services/requests.js';
 import { saveChanges, reasonText } from '../../services/planner.js';
@@ -412,7 +412,12 @@ defineActions({
     allowed: () => departmentsShown().some(department => department.duties.some(canEditDuty)),
     run: () => {
       const departments = departmentsShown();
-      if (departments.some(department => !roster(department.name).length)) { notice('The rosters are still loading. Try again in a moment.', true); return; }
+      const waiting = departments.filter(department => !rosterLoaded(department.name));
+      if (waiting.length) {
+        waiting.forEach(department => loadRoster(department.name, true));
+        notice('The department lists are still loading. Try again in a moment.', true);
+        return;
+      }
       const editable = departments.flatMap(department => department.duties).filter(canEditDuty);
       const dutiesOf = fillDuties(data.services, todayISO());
       const services = data.services.filter(service => service.date.startsWith(month()) && isUpcoming(service));

@@ -187,10 +187,13 @@ leader's way (remembered on the device):
   prayers, and an usher duty matched to a prayer is not a turn.
 - **Random**.
 
-The leader changes any proposal, then saves them together; each member gets
-one notification listing their new duties. Duties no one was free for are
-outlined, and each says why: no one on the list takes it, no one who takes it
-is available, or everyone available already serves there. A service's
+When no one is free for a duty, Fill moves its own picks in that service
+around so that someone is (another free member takes the duty they leave), so
+a duty stays empty only when no such move fills it. Duties already saved are
+never moved. The leader changes any proposal, then saves them together; each
+member gets one notification listing their new duties. Duties no one was free
+for are outlined, and each says why: no one on the list takes it, no one who
+takes it is available, or everyone available already serves there. A service's
 heading opens its details (date, time, choir song, replacements, double
 duties, an administrator's override, delete).
 

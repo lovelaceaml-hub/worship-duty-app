@@ -34,6 +34,9 @@ const key = (department, uid) => department + '::' + uid;
 
 export function roster(department) { return departments.rosters[department] || []; }
 
+/* Whether a department's roster has loaded. A loaded roster can be empty. */
+export function rosterLoaded(department) { return Array.isArray(departments.rosters[department]); }
+
 export function profileOf(department, uid) {
   return roster(department).find(profile => profile.memberUid === uid) ||
     (departments.own || []).find(profile => profile.departmentId === department && profile.memberUid === uid) || null;

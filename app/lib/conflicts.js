@@ -9,7 +9,7 @@
    same rule for the server; a test keeps the two in step. */
 import { ALL_DUTIES, PRAYER_DUTIES, USHER_DUTIES } from '../config/duties.js';
 
-const isPrayer = duty => PRAYER_DUTIES.includes(duty);
+export const isPrayer = duty => PRAYER_DUTIES.includes(duty);
 export const isUsher = duty => USHER_DUTIES.includes(duty);
 
 /* Whether one person may hold all of `duties` in one service. */
@@ -26,10 +26,15 @@ export function otherDuties(assignments, name, duty) {
   return Object.keys(assignments || {}).filter(other => other !== duty && assignments[other] === name);
 }
 
+/* Whether someone holding `held` in a service may also take `duty` there. */
+export function canAdd(held, duty) {
+  return allowedTogether(held.filter(other => other !== duty).concat(duty));
+}
+
 /* Whether `name` may take `duty` in a service with these assignments and keep
    every other duty they hold there. */
 export function canAlsoServe(assignments, name, duty) {
-  return allowedTogether(otherDuties(assignments, name, duty).concat(duty));
+  return canAdd(otherDuties(assignments, name, duty), duty);
 }
 
 /* The prayer `name` holds in a service's `assignments`, or ''. */
