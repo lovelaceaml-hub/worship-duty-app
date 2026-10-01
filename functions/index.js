@@ -881,7 +881,7 @@ exports.renameMember = onCall({ region: REGION }, async request => {
   const data = request.data || {};
   try {
     const result = await renameMemberEverywhere(db, {
-      from: data.from, to: data.to,
+      from: data.from, to: data.to, auth: getAuth(),
       newAccount: async name => {
         const record = memberRoleRecord(name, await runtimePermissionConfig());
         return Object.assign(record, { pinHash: await hashPin(record.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN), active: true, roleVersion: 1 });
@@ -890,8 +890,12 @@ exports.renameMember = onCall({ region: REGION }, async request => {
     logger.info('renameMember', result);
     return Object.assign({ ok: true }, result);
   } catch (error) {
-    if (error && ['invalid-argument', 'not-found', 'already-exists'].includes(error.code)) throw new HttpsError(error.code, error.message);
-    throw error;
+    if (error && ['invalid-argument', 'not-found'].includes(error.code)) {
+      throw new HttpsError(error.code, error.message, { reason: error.code === 'not-found' ? 'not-on-list' : 'invalid-input' });
+    }
+    // Every step can run again, so the same fix finishes the job.
+    logger.error('renameMember failed', { error: String(error && error.message || error) });
+    throw new HttpsError('aborted', 'The name was only partly fixed. Fix the same name again to finish.', { reason: 'rename-incomplete' });
   }
 });
 

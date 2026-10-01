@@ -60,6 +60,7 @@ const MESSAGES = Object.freeze({
   'sheet-problem': 'The Google Sheet could not be used.',
   'sheet-empty': 'The sheet had no services in it, so nothing was changed.',
   'not-on-list': 'That name is not on the member list.',
+  'rename-incomplete': 'The name was only partly fixed. Fix the same name again to finish.',
   'no-default': 'That duty has no default.',
   'not-eligible': 'That member does not take that duty in its department.',
   'server-error': 'The server could not finish that. Try again.'
