@@ -1,6 +1,9 @@
 /* The round feedback button and the form it opens. Both sit outside #view,
-   so live updates never touch a message while it is being typed. */
+   so live updates never touch a message while it is being typed. On phones
+   the button is hidden (it covered row buttons at the right edge) and the
+   account menu's "Feedback about the app" opens the same form. */
 import { html, raw } from '../html.js';
+import { defineActions } from '../actions.js';
 import { KINDS, sendFeedback } from '../services/feedback.js';
 import { notice } from './banners.js';
 
@@ -13,8 +16,8 @@ export function syncFeedbackButton(show) {
     button = document.createElement('button');
     button.type = 'button';
     button.className = 'feedback-button';
-    button.setAttribute('aria-label', 'Send feedback');
-    button.title = 'Send feedback';
+    button.setAttribute('aria-label', 'Feedback about the app');
+    button.title = 'Feedback about the app';
     button.innerHTML = ICON;
     button.addEventListener('click', open);
     document.body.appendChild(button);
@@ -29,8 +32,8 @@ function build() {
   dialog.setAttribute('aria-labelledby', 'feedback-title');
   dialog.innerHTML = String(html`
     <form method="dialog" class="feedback-form" novalidate>
-      <h2 id="feedback-title">Send feedback</h2>
-      <p class="hint">Tell the app administrators what works, what does not, or what you would change.</p>
+      <h2 id="feedback-title">Feedback about the app</h2>
+      <p class="hint">Tell the app administrators what works, what does not, or what you would change. This goes to them, not to your department leader.</p>
       <div class="choice-row" role="radiogroup" aria-label="Kind of note">
         ${KINDS.map(([value, label], index) => html`<label><input type="radio" name="kind" value="${value}"${raw(index ? '' : ' checked')}><span>${label}</span></label>`)}
       </div>
@@ -75,3 +78,7 @@ function open() {
   dialog.showModal();
   dialog.querySelector('textarea').focus({ preventScroll: true });
 }
+
+defineActions({
+  'feedback-open': () => open()
+});
