@@ -90,14 +90,32 @@ export const arrayUnion = (...items) => ({ __op: 'union', items });
 export const arrayRemove = (...items) => ({ __op: 'remove', items });
 export const deleteField = () => DELETE;
 
+/* A listener hears what changed since its last snapshot, as the real SDK
+   tells it through docChanges(). */
+function changesFor(listener, snapshot) {
+  if (!snapshot.docs) return snapshot;
+  const before = listener.seen || new Map();
+  const now = new Map(snapshot.docs.map(doc => [doc.ref.path, JSON.stringify(doc.data())]));
+  const changes = [];
+  snapshot.docs.forEach(doc => {
+    if (!before.has(doc.ref.path)) changes.push({ type: 'added', doc });
+    else if (before.get(doc.ref.path) !== now.get(doc.ref.path)) changes.push({ type: 'modified', doc });
+  });
+  before.forEach((_value, path) => {
+    if (!now.has(path)) changes.push({ type: 'removed', doc: { id: path.split('/').pop(), ref: { type: 'doc', path }, data: () => undefined, exists: () => false } });
+  });
+  listener.seen = now;
+  return Object.assign({}, snapshot, { docChanges: () => changes });
+}
+
 export function onSnapshot(ref, callback, error) {
-  const listener = { ref, callback };
+  const listener = { ref, callback: snapshot => callback(changesFor(listener, snapshot)) };
   if ((fixture.denied || []).includes(ref.path)) {
     setTimeout(() => error && error(Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' })), 20);
     return () => {};
   }
   listeners.add(listener);
-  setTimeout(() => { if (listeners.has(listener)) callback(snapshotOf(ref)); }, (fixture.delays || {})[ref.path] ?? 10);
+  setTimeout(() => { if (listeners.has(listener)) listener.callback(snapshotOf(ref)); }, (fixture.delays || {})[ref.path] ?? 10);
   return () => listeners.delete(listener);
 }
 
