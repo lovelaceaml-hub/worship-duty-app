@@ -32,7 +32,13 @@ async function openAccount(page, view) {
 }
 
 const requestCard = (page, name) => page.locator('.request', { has: page.locator('.card-subtitle', { hasText: name }) });
-const banner = (page, text) => page.locator('#banners .banner', { hasText: text }).waitFor();
+/* A message: a confirmation toast, or a banner (problems, reminders). */
+const banner = (page, text) => page.locator('#banners .banner, #toasts .toast', { hasText: text }).first().waitFor();
+/* Appearance and feedback open from the account menu. */
+async function fromMenu(page, action) {
+  await page.locator('[data-slot="member"]').click();
+  await page.locator(`[data-slot="menu"] [data-act="${action}"]`).click();
+}
 const fakeDoc = (page, docPath) => page.evaluate(docPath => window.__fake.get(docPath), docPath);
 const fakeDocs = (page, prefix) => page.evaluate(prefix => window.__fake.paths(prefix).map(docPath => window.__fake.get(docPath)), prefix);
 /* Manage, Services: open a service's details in the month planner. */
@@ -258,7 +264,7 @@ test('a leader makes and cancels an invite link; a member opens one and joins', 
 
 test('a member sends feedback and an administrator reads it', async () => {
   const { context, page, errors } = await as('S. Naomi');
-  await page.locator('.feedback-button').click();
+  await fromMenu(page, 'feedback-open');
   await page.locator('.feedback-dialog input[value="suggestion"]').check();
   await page.locator('#feedback-text').fill('The schedule is easy to read.');
   await page.locator('.feedback-dialog button[type="submit"]').click();
@@ -300,6 +306,8 @@ test('the song planner shows how often songs were sung, adds a song and confirms
   await page.locator('#song-root [data-act="song-add"][data-id="004"]').click();
   await page.locator('#song-root .selecting').waitFor({ state: 'detached' });
 
+  // The Thanks song is not chosen, so Confirm asks first.
+  page.once('dialog', dialog => dialog.accept());
   await builder.locator('[data-act="song-confirm"]').click();
   await builder.locator('.confirm.is-done', { hasText: 'Songs confirmed by B. Adam' }).waitFor();
   const setlist = (await fakeDocs(page, 'setlists/'))[0];
@@ -314,7 +322,8 @@ test('the song planner shows how often songs were sung, adds a song and confirms
   const card = page.locator('#song-root .svc-card', { has: page.locator('[data-act="song-toggle-songs"]') }).first();
   await card.locator('.svc-role', { hasText: 'Opening Prayer' }).waitFor();
   await card.locator('.order-head', { hasText: 'Preparation Songs' }).waitFor();
-  await card.locator('.order-head', { hasText: 'Glory & Thanks Song' }).waitFor();
+  await card.locator('.order-head', { hasText: 'Glory Song' }).waitFor();
+  assert.equal(await card.locator('.order-head', { hasText: 'Thanks Song' }).count(), 0, 'no Thanks song was chosen');
   await card.locator('[data-act="song-toggle-songs"]', { hasText: 'Hide songs' }).click();
   await card.locator('.order').waitFor({ state: 'detached' });
 
@@ -327,14 +336,14 @@ test('the song planner shows how often songs were sung, adds a song and confirms
 test('each appearance has its own look and Schedule layout, and the choice is remembered', async () => {
   const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
   for (const [id, layout] of [['prism', '.schedule-calendar'], ['navy', '.schedule-rail'], ['aurora', '.schedule-strip'], ['classic', '.next-service']]) {
-    await page.locator('header [data-act="appearance-open"]').click();
+    await fromMenu(page, 'appearance-open');
     await page.locator(`[data-appearance-choice="${id}"]`).click();
     await page.waitForFunction(id => document.documentElement.dataset.appearance === id, id);
     await page.locator('#view ' + layout).waitFor();
     const sheet = await page.evaluate(() => document.getElementById('theme-css')?.getAttribute('href') || '');
     assert.equal(sheet.includes('styles/themes/' + id + '.css'), id !== 'classic', id);
   }
-  await page.locator('header [data-act="appearance-open"]').click();
+  await fromMenu(page, 'appearance-open');
   await page.locator('[data-appearance-choice="aurora"]').click();
   // The choice is saved once its stylesheet has loaded, in the same step that switches the page.
   await page.waitForFunction(() => document.documentElement.dataset.appearance === 'aurora');
@@ -450,7 +459,7 @@ test('a build works with its stamped files; the maintenance build shows only the
           await signIn(page, 'B. Adam');
           await tab(page, 'songs');
           await page.locator('#song-root .planner-sections').waitFor({ state: 'attached' });
-          await page.locator('header [data-act="appearance-open"]').click();
+          await fromMenu(page, 'appearance-open');
           await page.locator('[data-appearance-choice="prism"]').click();
           await tab(page, 'schedule');
           await page.locator('#view .schedule-calendar').waitFor();

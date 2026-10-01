@@ -66,7 +66,8 @@ for (const [label, viewport] of [['phone', PHONE], ['desktop', DESKTOP]]) {
   await section(page, 'manage-section', 'services');
   await page.locator('#view [data-act="plan-open"]').nth(1).click();
   await shoot(page, label + '-manage-service-open');
-  await page.locator('[data-act="appearance-open"]').click();
+  await page.locator('[data-slot="member"]').click();
+  await page.locator('[data-slot="menu"] [data-act="appearance-open"]').click();
   await shoot(page, label + '-appearance');
   if (errors.length) problems.push(label + ': ' + errors.join(' | '));
   await context.close();
