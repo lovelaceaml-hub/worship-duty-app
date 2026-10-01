@@ -122,8 +122,8 @@ html[data-appearance="navy"] .status { padding: 3px 8px; border-radius: 7px; let
 html[data-appearance="navy"] .status-pending, html[data-appearance="navy"] .status-new { background: var(--accent-soft); color: var(--accent); }
 html[data-appearance="navy"] .card-note { border-radius: 10px; }
 
-/* Banners: cream-pink with a burgundy edge. */
-html[data-appearance="navy"] .banner { align-items: center; margin: 0 0 10px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--accent-soft); color: var(--ink); }
+/* Banners: news is cream with a gold edge, a problem pink with a red edge. */
+html[data-appearance="navy"] .banner { align-items: center; margin: 0 0 10px; border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 12px; background: var(--surface); color: var(--ink); }
 html[data-appearance="navy"] .banner.is-alert { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); border-left-color: var(--danger); background: var(--danger-soft); }
 html[data-appearance="navy"] .banner-close:hover { background: rgba(102, 44, 56, 0.08); color: var(--accent); }
 
