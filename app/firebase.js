@@ -1,6 +1,7 @@
 /* The one connection to Firebase. connect() loads the SDK from Google's CDN
    and fills in `fb`; until then fb.db is null and nothing reads or writes. */
 import { session } from './store.js';
+import { reasonText } from './lib/reasons.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 
@@ -67,15 +68,23 @@ export async function write(run) {
   return run(fb);
 }
 
-/* Plain words for a failed call or write. */
+/* Plain words for a failed call or write. A refusal from the server names
+   its reason (error.details.reason), which lib/reasons.js turns into words;
+   otherwise the error's code decides, and for the rest the server's own
+   sentence is shown. Never guessed from words in the message: the server's
+   messages say "changed" for things that are not a clash. */
 export function problem(error, fallback = 'That did not work. Try again.') {
   const code = String(error && error.code || '').replace(/^functions\//, '');
-  if (code === 'permission-denied') return 'Your account is not allowed to do that.';
+  const message = String(error && error.message || '');
+  // Servers from before details.reason wrote "Department authorization denied: <reason>."
+  const reason = (error && error.details && error.details.reason) || (message.match(/authorization denied: ([a-z-]+)/) || [])[1];
+  if (reasonText(reason)) return reasonText(reason);
   if (code === 'unauthenticated') return 'Sign in again, then try again.';
-  if (code === 'failed-precondition' && /PIN/i.test(error.message || '')) return 'Change your PIN first.';
   if (code === 'unavailable' || code === 'internal' || code === 'deadline-exceeded') return 'The server could not be reached. Try again.';
-  if (code === 'aborted' || code === 'stale-profile' || /changed/i.test(error && error.message || '')) {
-    return 'Someone else changed this at the same time. Look again, then retry.';
+  if (code === 'aborted') return 'Someone else changed this at the same time. Look again, then retry.';
+  if (code === 'resource-exhausted') return 'Too many tries. Wait a few minutes, then try again.';
+  if (code === 'permission-denied') {
+    return /role has changed/i.test(message) ? reasonText('role-changed') : 'Your account is not allowed to do that.';
   }
-  return (error && error.message && code && code !== 'unknown') ? error.message : fallback;
+  return message && code && code !== 'unknown' && code !== 'cancelled' ? message : fallback;
 }
