@@ -1,6 +1,8 @@
 /* The header every appearance shares: the LV badge (goes home), the name of
-   the current screen, the sync status, the Appearance button, and the
-   member chip with the account menu (Availability, Settings, Sign out). */
+   the current screen, the sync status, and the member chip with the account
+   menu (Availability, Settings, Appearance, Feedback about the app, Sign
+   out). Text is only written when it changes, so a screen reader does not
+   hear it again on every redraw. */
 import { ui, nameOf } from '../store.js';
 import { initials } from '../lib/names.js';
 
@@ -18,21 +20,31 @@ function screenName(inApp) {
 
 const all = selector => document.querySelectorAll(selector);
 
-export function paintHeader(inApp, online) {
-  all('[data-slot="screen"]').forEach(el => { el.textContent = screenName(inApp); });
+const SYNC = {
+  live: ['Live', 'Changes show up for everyone right away.'],
+  connecting: ['Connecting…', 'Showing the schedule saved on this device while the app connects.'],
+  offline: ['Offline', 'Showing the schedule saved on this device.']
+};
+
+function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
+
+/* `link` is 'live', 'connecting' or 'offline'. */
+export function paintHeader(inApp, link) {
+  all('[data-slot="screen"]').forEach(el => setText(el, screenName(inApp)));
+  const [label, title] = SYNC[link] || SYNC.offline;
   all('[data-slot="sync"]').forEach(el => {
-    el.textContent = online ? 'Live' : 'Offline';
-    el.classList.toggle('is-live', online);
-    el.title = online ? 'Changes show up for everyone right away.' : 'Showing the schedule saved on this device.';
+    setText(el, label);
+    el.classList.toggle('is-live', link === 'live');
+    el.dataset.link = link;
+    el.title = title;
   });
   const person = inApp ? nameOf(ui.me) : '';
   all('[data-slot="member"]').forEach(button => {
     button.hidden = !person;
     button.setAttribute('aria-label', person ? 'Account menu for ' + person : 'Account menu');
   });
-  all('[data-slot="initials"]').forEach(el => { el.textContent = initials(person); });
-  all('[data-slot="person"]').forEach(el => { el.textContent = person; });
-  all('[data-act="appearance-open"]').forEach(button => { button.hidden = !inApp; });
+  all('[data-slot="initials"]').forEach(el => setText(el, initials(person)));
+  all('[data-slot="person"]').forEach(el => setText(el, person));
   if (!person) setMenu(false);
 }
 

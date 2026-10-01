@@ -36,6 +36,8 @@ export function syncSubnav() {
   if (row.dataset.signature === signature) return;
   row.dataset.signature = signature;
   const keep = row.scrollLeft;
+  // A keyboard user on a copy stays on it when the row is drawn again.
+  const focused = row.contains(document.activeElement) ? document.activeElement.dataset.index : null;
   row.textContent = '';
   let active = null;
   buttons.forEach((button, index) => {
@@ -49,6 +51,7 @@ export function syncSubnav() {
       active = copy;
     }
     row.appendChild(copy);
+    if (focused === copy.dataset.index) copy.focus({ preventScroll: true });
   });
   row.scrollLeft = keep;
   if (active) {
