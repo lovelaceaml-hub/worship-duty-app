@@ -39,6 +39,7 @@ html[data-appearance="aurora"] {
   --focus: #6f75ea;
   --radius: 16px;
   --radius-small: 10px;
+  --field-radius: 10px;
   --font: Inter, "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   /* Aurora's own */
   --navy: #151d39;
@@ -92,13 +93,13 @@ html[data-appearance="aurora"] .account-menu { top: calc(100% + 8px); min-width:
 html[data-appearance="aurora"] .account-menu button { border-radius: 11px; color: var(--ink); }
 html[data-appearance="aurora"] .account-menu button:hover, html[data-appearance="aurora"] .account-menu button:focus-visible { background: var(--accent-soft); color: var(--accent); }
 html[data-appearance="aurora"] .account-menu .account-sign-out { border-top-color: var(--hairline); border-radius: 0 0 11px 11px; color: var(--danger); }
-html[data-appearance="aurora"] .account-who { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-appearance="aurora"] .account-who { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
 
 @media (min-width: 641px) {
   html[data-appearance="aurora"] .header { min-height: 78px; padding: 14px 2px; }
   html[data-appearance="aurora"] .brand-mark { width: 43px; height: 43px; font-size: 17px; }
   html[data-appearance="aurora"] .brand-name { font-size: 15px; }
-  html[data-appearance="aurora"] .brand-screen { margin-top: 4px; font-size: 10px; }
+  html[data-appearance="aurora"] .brand-screen { margin-top: 4px; font-size: 11px; }
   html[data-appearance="aurora"] .account-initials { width: 32px; height: 32px; font-size: 12px; }
   html[data-appearance="aurora"] .sync-status { min-height: 30px; padding: 4px 11px; border-color: var(--line); border-radius: 999px; background: var(--surface); box-shadow: none; font-size: 11.5px; }
 }
@@ -161,10 +162,6 @@ html[data-appearance="aurora"] .tabs .tab:focus-visible { outline-color: #aeb7ff
     flex: 1 0 auto; min-height: 42px; padding: 8px 13px; border: 0; border-radius: 9px; background: none; color: var(--muted); font-weight: 650;
   }
   html[data-appearance="aurora"] .subnav-top button.is-active { background: var(--pill); color: var(--pill-ink); box-shadow: var(--pill-shadow); }
-  html[data-appearance="aurora"] .subnav-top .count {
-    display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 5px; padding: 0 5px; border-radius: 9px;
-    background: var(--brand-rose); color: #fff; font-size: 11px; font-weight: 700;
-  }
 }
 
 /* ---- banners ---- */
@@ -174,7 +171,6 @@ html[data-appearance="aurora"] .banner {
   border-radius: 12px; background: var(--accent-soft); color: var(--ink); font-size: 14px; line-height: 1.6;
 }
 html[data-appearance="aurora"] .banner.is-alert { border-color: #f0c9d6; border-left-color: var(--brand-rose); background: var(--danger-soft); }
-html[data-appearance="aurora"] .banner-close { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin: -8px -4px -8px auto; padding: 0; border-radius: 10px; }
 html[data-appearance="aurora"] .banner .link { min-height: 40px; }
 html[data-appearance="aurora"] #view > .button-row:first-child { margin-top: 0; }
 
@@ -216,11 +212,6 @@ html[data-appearance="aurora"] .link.danger, html[data-appearance="aurora"] .dan
 
 /* ---- forms ---- */
 
-html[data-appearance="aurora"] input[type=text], html[data-appearance="aurora"] input[type=password], html[data-appearance="aurora"] input[type=search],
-html[data-appearance="aurora"] input[type=date], html[data-appearance="aurora"] input[type=time], html[data-appearance="aurora"] input[type=url],
-html[data-appearance="aurora"] select, html[data-appearance="aurora"] textarea {
-  border-color: var(--field-line); border-radius: 10px; background: var(--surface); color: var(--ink);
-}
 html[data-appearance="aurora"] input:focus, html[data-appearance="aurora"] select:focus, html[data-appearance="aurora"] textarea:focus {
   border-color: #7784f2; box-shadow: 0 0 0 3px rgba(119, 132, 242, 0.26);
 }
@@ -317,7 +308,7 @@ html[data-appearance="aurora"] .day-button {
   border-color: var(--line); border-radius: 12px; background: var(--surface); color: var(--muted);
   transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
 }
-html[data-appearance="aurora"] .day-weekday { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+html[data-appearance="aurora"] .day-weekday { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
 html[data-appearance="aurora"] .day-number { color: var(--ink); font-size: 23px; font-weight: 700; line-height: 1.25; }
 html[data-appearance="aurora"] .day-dots i { background: #9aa7c4; opacity: 1; }
 html[data-appearance="aurora"] .day-button.is-selected {
@@ -375,7 +366,7 @@ html[data-appearance="aurora"] .choir-song::before {
   mask: var(--icon-music) center / contain no-repeat;
 }
 html[data-appearance="aurora"] .duty-group { margin-top: 16px; }
-html[data-appearance="aurora"] .duty-group-name { margin: 0 0 5px; color: var(--dept, var(--accent)); font-size: 11px; font-weight: 800; letter-spacing: 0.07em; }
+html[data-appearance="aurora"] .duty-group-name { margin: 0 0 5px; color: var(--dept, var(--accent)); font-size: 12px; font-weight: 800; letter-spacing: 0.06em; }
 html[data-appearance="aurora"] .duty-group-name::before { width: 6px; height: 6px; }
 html[data-appearance="aurora"] .duty-row {
   align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--hairline); font-size: 14.5px; line-height: 1.4;
@@ -396,17 +387,16 @@ html[data-appearance="aurora"] .edit-link::after {
   -webkit-mask: var(--icon-arrow) center / contain no-repeat;
   mask: var(--icon-arrow) center / contain no-repeat;
 }
-html[data-appearance="aurora"] .schedule-strip > .check { margin: 2px 2px 8px; color: var(--muted); font-size: 13.5px; }
 html[data-appearance="aurora"] .date-heading { gap: 12px; margin: 28px 2px 13px; color: var(--ink); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
 html[data-appearance="aurora"] .date-heading::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-html[data-appearance="aurora"] .day-badge { padding: 3px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 10px; letter-spacing: 0.08em; }
+html[data-appearance="aurora"] .day-badge { padding: 3px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 12px; letter-spacing: 0.06em; }
 
 /* On wide screens the teams sit in two columns, as on Aurora's service card. */
 @media (min-width: 800px) {
-  html[data-appearance="aurora"] .service-card:not(.is-open), html[data-appearance="aurora"] .duty-team {
+  html[data-appearance="aurora"] .service-card, html[data-appearance="aurora"] .duty-team {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 34px; align-items: start;
   }
-  html[data-appearance="aurora"] .service-card:not(.is-open) > :not(.duty-group) { grid-column: 1 / -1; }
+  html[data-appearance="aurora"] .service-card > :not(.duty-group) { grid-column: 1 / -1; }
 }
 
 /* ---- My Duties ---- */
@@ -456,13 +446,6 @@ html[data-appearance="aurora"] .sticky-actions { border: 1px solid var(--line); 
 html[data-appearance="aurora"] .override summary { display: inline-flex; align-items: center; min-height: 40px; }
 html[data-appearance="aurora"] .add-service { align-items: center; }
 html[data-appearance="aurora"] button.service-head { border-radius: 0; }
-html[data-appearance="aurora"] .service-card.is-open { border-color: #c1c8ee; box-shadow: 0 6px 22px rgba(69, 85, 214, 0.08); }
-/* An open service in Manage: its title bar is tinted, edge to edge. */
-html[data-appearance="aurora"] .service-card.is-open > .service-head {
-  width: calc(100% + 2 * var(--card-x)); margin: calc(-1 * var(--card-y)) calc(-1 * var(--card-x)) 16px; padding: 16px var(--card-x);
-  border-bottom: 1px solid var(--line); border-radius: 16px 16px 0 0; background: var(--accent-soft);
-}
-html[data-appearance="aurora"] .service-card.is-open > .service-head .service-time { background: var(--surface); }
 html[data-appearance="aurora"] .service-editor .field-grid { gap: 0 16px; }
 
 /* ---- sign-in and other gates ---- */
@@ -501,7 +484,7 @@ html[data-appearance="aurora"] #song-root .planner-head {
   align-items: center; gap: 8px 12px; margin: 0 0 14px; padding: 12px 18px; border: 1px solid var(--line); border-radius: 14px;
   background: var(--surface); box-shadow: var(--shadow);
 }
-html[data-appearance="aurora"] #song-root .planner-role { padding: 4px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 10px; letter-spacing: 0.1em; }
+html[data-appearance="aurora"] #song-root .planner-role { padding: 4px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 11px; letter-spacing: 0.1em; }
 html[data-appearance="aurora"] #song-root .planner-name { color: var(--ink); font-size: 15px; font-weight: 700; }
 html[data-appearance="aurora"] #song-root .planner-next { margin-left: auto; font-size: 12.5px; }
 html[data-appearance="aurora"] #song-root .planner-sections { gap: 4px; margin: 0 0 18px; padding: 5px; border-color: var(--line); border-radius: 13px; background: var(--track); }
@@ -519,7 +502,7 @@ html[data-appearance="aurora"] #song-root .total {
   align-items: center; gap: 4px 14px; margin: 14px 0 10px; padding: 14px 16px; border-radius: 12px;
   background: linear-gradient(112deg, #263971, #534d91); color: #d6dfff; font-size: 12px;
 }
-html[data-appearance="aurora"] #song-root .total > span:first-child { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+html[data-appearance="aurora"] #song-root .total > span:first-child { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
 html[data-appearance="aurora"] #song-root .total strong { color: #fff; font-size: 28px; font-weight: 700; letter-spacing: -0.04em; }
 /* A song in the list being built: its title on the first line, its length
    and the move and remove buttons under it, as on Aurora's set tiles. */
@@ -545,7 +528,6 @@ html[data-appearance="aurora"] #song-root .song-row .num {
 }
 html[data-appearance="aurora"] #song-root .song-row .title { color: var(--ink); font-weight: 600; }
 html[data-appearance="aurora"] #song-root .song-row.is-static { padding-right: 12px; border-bottom-color: var(--hairline); }
-html[data-appearance="aurora"] #song-root .song:not(:has(> .add)) > .song-row { padding-right: 12px; }
 html[data-appearance="aurora"] #song-root .song-controls input[type=search] {
   padding-left: 41px; border-radius: 12px;
   background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23626e85' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='m20 20-4.2-4.2'/%3E%3C/svg%3E") 14px 50% / 17px no-repeat;
@@ -562,12 +544,12 @@ html[data-appearance="aurora"] #song-root .runsheet-head h2 { color: var(--ink);
 /* ---- phones ---- */
 
 @media (max-width: 640px) {
-  html[data-appearance="aurora"] { --card-y: 18px; --card-x: 17px; }
+  html[data-appearance="aurora"] { --card-y: 18px; --card-x: 17px; --above-tabs: calc(88px + env(safe-area-inset-bottom)); }
   html[data-appearance="aurora"] .header { min-height: 62px; margin-bottom: 16px; }
   html[data-appearance="aurora"] .brand-mark { width: 36px; height: 36px; border-radius: 12px; font-size: 14.5px; }
   html[data-appearance="aurora"] .brand-mark::after { bottom: 6px; width: 12px; margin-left: -6px; }
   html[data-appearance="aurora"] .brand-name { font-size: 14px; }
-  html[data-appearance="aurora"] .brand-screen { margin-top: 3px; font-size: 9.5px; letter-spacing: 0.16em; }
+  html[data-appearance="aurora"] .brand-screen { margin-top: 3px; font-size: 11px; letter-spacing: 0.12em; }
   html[data-appearance="aurora"] .account-name { max-width: 88px; }
 
   /* The floating navy bar. */
@@ -578,7 +560,6 @@ html[data-appearance="aurora"] #song-root .runsheet-head h2 { color: var(--ink);
   html[data-appearance="aurora"] .tab { gap: 4px; min-height: 52px; padding: 7px 3px 6px; border-radius: 12px; color: #dfe5fa; font-size: 11.5px; font-weight: 600; }
   html[data-appearance="aurora"] .tab.is-active { background: var(--navy-pick); color: #fff; box-shadow: 0 8px 18px rgba(10, 17, 41, 0.4); }
   html[data-appearance="aurora"] .tab-dot { top: 5px; right: calc(50% - 19px); width: 7px; height: 7px; box-shadow: 0 0 0 2px var(--navy); }
-  html[data-appearance="aurora"] .feedback-button { right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); }
 
   html[data-appearance="aurora"] .screen-title { font-size: 24px; }
   html[data-appearance="aurora"] .picker { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; }
@@ -595,7 +576,7 @@ html[data-appearance="aurora"] #song-root .runsheet-head h2 { color: var(--ink);
   html[data-appearance="aurora"] .strip-card { padding: 16px 16px 6px; border-radius: 15px; }
   html[data-appearance="aurora"] .strip-card .day-strip { gap: 7px; }
   html[data-appearance="aurora"] .day-button { flex-basis: 48px; min-width: 48px; min-height: 76px; border-radius: 10px; }
-  html[data-appearance="aurora"] .day-weekday { font-size: 10px; }
+  html[data-appearance="aurora"] .day-weekday { font-size: 12px; }
   html[data-appearance="aurora"] .schedule-filters { gap: 10px 8px; margin-top: 18px; }
   html[data-appearance="aurora"] .schedule-filters select { flex: 1 1 140px; max-width: 190px; font-size: 16px; }
   html[data-appearance="aurora"] .segmented button { padding: 7px 11px; font-size: 13px; }
@@ -604,28 +585,13 @@ html[data-appearance="aurora"] #song-root .runsheet-head h2 { color: var(--ink);
   html[data-appearance="aurora"] .time-buttons button { min-height: 56px; padding: 9px 6px; font-size: 13.5px; }
   html[data-appearance="aurora"] .card { border-radius: 15px; }
   html[data-appearance="aurora"] .service-title { font-size: 17px; }
-  html[data-appearance="aurora"] .service-card.is-open > .service-head { border-radius: 14px 14px 0 0; }
   html[data-appearance="aurora"] .duty-card { padding: 12px 14px 12px 12px; border-radius: 15px; }
   html[data-appearance="aurora"] .duty-date { border-radius: 12px; }
   html[data-appearance="aurora"] .song-prompt { padding: 16px; border-radius: 16px; }
   html[data-appearance="aurora"] .gate { margin-top: 24px; padding: 30px 20px 26px; border-radius: 18px; }
   html[data-appearance="aurora"] #song-root .planner-head { padding: 12px 14px; }
   html[data-appearance="aurora"] #song-root .planner-next { flex-basis: 100%; margin-left: 0; }
-  /* Song titles get their own line; length and times sung sit under them. */
-  html[data-appearance="aurora"] #song-root .song-row {
-    grid-template-columns: 40px 8px auto auto minmax(0, 1fr); grid-template-areas: "num dot title title title" ". . time times .";
-    gap: 1px 8px; min-height: 58px; padding-top: 9px; padding-bottom: 9px;
-  }
-  html[data-appearance="aurora"] #song-root .song-row .num { grid-area: num; }
-  html[data-appearance="aurora"] #song-root .song-row .dot { grid-area: dot; }
-  html[data-appearance="aurora"] #song-root .song-row .title { grid-area: title; overflow: visible; white-space: normal; line-height: 1.35; }
-  html[data-appearance="aurora"] #song-root .song-row .time { grid-area: time; }
-  html[data-appearance="aurora"] #song-root .song-row .times { grid-area: times; }
   html[data-appearance="aurora"] #song-root .add { top: 9px; }
-  /* The save bar of a member's profile stays above the floating tabs. */
-  html[data-appearance="aurora"] .sticky-actions { bottom: calc(88px + env(safe-area-inset-bottom)); }
-  html[data-appearance="aurora"][data-keyboard="open"] .sticky-actions { bottom: 12px; }
-  html[data-appearance="aurora"] body:has(#view .sticky-actions) .feedback-button { bottom: calc(166px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 380px) {
   html[data-appearance="aurora"] .tab { font-size: 11px; }
@@ -674,14 +640,15 @@ html[data-appearance="aurora"] #song-root .runsheet-head h2 { color: var(--ink);
   html[data-appearance="aurora"] .banner.is-alert { border-color: rgba(237, 120, 150, 0.45); background: rgba(224, 60, 100, 0.16); }
   html[data-appearance="aurora"] .empty, html[data-appearance="aurora"] .invite { border-color: #435073; }
   html[data-appearance="aurora"] .card .empty { background: none; }
-  html[data-appearance="aurora"] .duty-group-name { color: color-mix(in srgb, var(--dept, var(--accent)) 38%, #e3e8f6); }
+  /* Department colors are dark: on a dark card their names and dots are lightened. */
+  html[data-appearance="aurora"] :is(.duty-group-name, .plan-group span) { color: color-mix(in srgb, var(--dept, var(--accent)) 38%, #e3e8f6); }
+  html[data-appearance="aurora"] :is(.duty-group-name, .department-row)::before { background: color-mix(in srgb, var(--dept, var(--accent)) 55%, #e3e8f6); }
   html[data-appearance="aurora"] .day-dots i { background: #7d88a8; }
   html[data-appearance="aurora"] .day-hero { box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
   html[data-appearance="aurora"] .flag.is-ok { background: #9a6412; }
   html[data-appearance="aurora"] input[role="switch"] { background: #4b5778; }
   html[data-appearance="aurora"] .song-prompt { border-color: #504d6c; background: linear-gradient(132deg, #353653, #292c43); }
   html[data-appearance="aurora"] .song-prompt .hint { color: #d3cbe8; }
-  html[data-appearance="aurora"] .service-card.is-open { border-color: #53609a; box-shadow: var(--shadow); }
   html[data-appearance="aurora"] #song-root .svc-card.is-other { border-color: #4a5677; }
   html[data-appearance="aurora"] .account-menu { box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6); }
   html[data-appearance="aurora"] dialog { box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5); }
@@ -699,6 +666,13 @@ html[data-appearance="aurora"] #song-root .runsheet-head h2 { color: var(--ink);
 }
 @media (prefers-color-scheme: dark) and (min-width: 1000px) {
   html[data-appearance="aurora"]:not([data-maintenance="on"]) .app:has(> nav.tabs:not([hidden])) > nav.tabs { box-shadow: 1px 0 0 #2a3452; }
+}
+
+/* Fingers need 44px. */
+@media (pointer: coarse) {
+  html[data-appearance="aurora"] :is(.primary.small, .ghost.small, .link, .link.small, .segmented button, .help summary) { min-height: 44px; }
+  html[data-appearance="aurora"] #song-root :is(.set-row .icon-button, .sort select) { min-width: 44px; min-height: 44px; }
+  html[data-appearance="aurora"] #song-root .add { width: 44px; height: 44px; }
 }
 
 /* ---- print ---- */

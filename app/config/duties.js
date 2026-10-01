@@ -7,7 +7,7 @@ export const DEPARTMENTS = [
   { name: 'Usher Brothers', color: '#0369a1', duties: ['Usher #1', 'Usher #2', 'Lobby Security'] },
   { name: 'Lobby', color: '#b45309', duties: ['Lobby Desk #1', 'Lobby Desk #2'] },
   { name: 'Translation', color: '#047857', duties: ['Translation #1', 'Translation #2'] },
-  { name: 'Media', color: '#6d28d9', duties: ['Media Booth #1', 'Media Booth #2'] },
+  { name: 'Media', color: '#7c2d12', duties: ['Media Booth #1', 'Media Booth #2'] },
   { name: 'Parking Lot', color: '#3f6212', duties: ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'] },
   { name: 'Offering', color: '#a21caf', duties: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'] }
 ];
