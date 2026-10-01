@@ -18,8 +18,8 @@ test('a name reaches its current spelling through both maps, in any number of st
 });
 
 test('Sheet names are cleaned and then put in their current spelling', () => {
-  assert.equal(cleanName('s leah\n'), 'S. Leah');
-  assert.equal(cleanName('b gio'), 'B. Giomar');
+  assert.equal(cleanName('s Leah\n'), 'S. Leah');
+  assert.equal(cleanName('b Gio'), 'B. Giomar');
   assert.equal(cleanName('Bridgette', { Bridgette: 'S. Bridgette' }), 'S. Bridgette');
 });
 
