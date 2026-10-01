@@ -126,6 +126,8 @@ defineActions({
   'plan-save': async () => {
     const result = await saveProposals();
     if (!result) return;
+    // Redraw now, so the month shows what was saved before the message says so.
+    redraw();
     const total = result.saved.length + result.skipped.length;
     const skipped = result.skipped.filter(item => item.reason !== 'error');
     const failed = result.failed.map(item => item.departmentId + ' was not saved: ' + item.message + ' Its filled duties are still here; press Save to try again.');
