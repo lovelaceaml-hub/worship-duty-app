@@ -42,9 +42,10 @@ test('keeps exact date and service identity without carrying assignments', () =>
 });
 
 test('accepts optional weekday prefixes, rejects impossible calendar dates, and avoids UTC date shifts', () => {
-  assert.deepEqual(parseSheetDate('Sat, May 02'), { month: 4, day: 2 });
-  assert.deepEqual(parseSheetDate('Sat May 02'), { month: 4, day: 2 });
-  assert.deepEqual(parseSheetDate('May 02'), { month: 4, day: 2 });
+  assert.deepEqual(parseSheetDate('Sat, May 02'), { month: 4, day: 2, weekday: 6 });
+  assert.deepEqual(parseSheetDate('Sat May 02'), { month: 4, day: 2, weekday: 6 });
+  assert.deepEqual(parseSheetDate('May 02'), { month: 4, day: 2, weekday: null });
+  assert.equal(parseSheetDate('Xyz, May 02'), null);
   assert.equal(parseSheetDate('Feb 30'), null);
   assert.equal(parseSheetDate('Apr 31'), null);
   assert.equal(inferYearISO(4, 2, TODAY), '2026-05-02');
@@ -159,4 +160,29 @@ test('creates a new service from only its own sheet assignments', () => {
     }],
     updates: []
   });
+});
+
+/* Raw Data has no year column. The year was the closest one to today, so
+   from midyear January's rows landed on next January, on the wrong weekday,
+   and next year's rows could land on this year's dates. */
+test('the year of a Raw Data row follows its weekday, or its worship\'s', () => {
+  const october = new Date(2026, 9, 1, 12, 0, 0);
+  const july = new Date(2026, 6, 15, 12, 0, 0);
+  const date = (raw, worship, today = october) => {
+    const parsed = sheetRowsToServices([HEADER, row(raw, 'Morning', 'Presider', 'Alice', worship)], today);
+    return { date: parsed.services.map(service => service.date)[0] || null, warnings: parsed.warnings };
+  };
+  assert.equal(date('Sat, Jan 03', 'Sabbath Day').date, '2026-01-03', 'not 2027-01-03, a Sunday');
+  assert.equal(date('Sat, Mar 28', 'Sabbath Day').date, '2026-03-28');
+  assert.equal(date('Sat, Jan 03', 'Sabbath Day', july).date, '2026-01-03');
+  assert.equal(date('Sat, Jan 02', 'Sabbath Day').date, '2027-01-02', 'next year\'s tab stays next year');
+  assert.equal(date('Tue, Jan 05', 'Third Day').date, '2027-01-05');
+  assert.equal(date('Jan 03', 'Sabbath Day').date, '2026-01-03', 'the worship gives the weekday');
+  assert.equal(date('Sat, Jan 03', 'Pentecost').date, '2026-01-03');
+  const typo = date('Sun, Jan 03', 'Sabbath Day');
+  assert.equal(typo.date, null);
+  assert.deepEqual(typo.warnings, ['Rows for "Sun, Jan 03" were skipped: Sabbath Day is on a Saturday.']);
+  const never = date('Wed, Jan 03', '');
+  assert.equal(never.date, null);
+  assert.match(never.warnings[0], /not a Wednesday last year, this year or next year/);
 });
