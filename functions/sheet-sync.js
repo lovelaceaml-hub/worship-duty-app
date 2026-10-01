@@ -115,17 +115,30 @@ async function dropTemplates(sheets, tab) {
   delete tab.templates;
 }
 
-async function tabForYear(sheets, metas, year) {
+/* A new year's tab is made only for this year or later, and never for a
+   year before the earliest tab: a change to an old service (a name fix
+   touching last December) must not add a tab to the master Sheet. */
+function mayAddTab(metas, year, today) {
+  const thisYear = Number(String(today || new Date().toISOString()).slice(0, 4));
+  const years = metas.map(meta => Number(meta.title.slice(0, 4)));
+  return year >= thisYear && (!years.length || year >= Math.min(...years));
+}
+
+/* The tab for a year, made when it may be (see mayAddTab), else null. */
+async function tabForYear(sheets, metas, year, today) {
   const meta = metas.find(item => item.title === year + ' Entry');
   if (meta) return readTab(sheets, meta);
+  if (!mayAddTab(metas, year, today)) return null;
   const created = await createYearTab(sheets, metas, year);
   metas.push({ title: created.title, sheetId: created.sheetId, index: created.index });
   return created;
 }
 
 /* Add many services (a year of them, or one), each into its year's tab.
-   Services already in the grid are left alone. Returns how many rows went in. */
-async function addServices(sheets, services) {
+   Services already in the grid, and those of a year that has no tab and may
+   not get one, are left alone. Returns how many rows went in. `today` is
+   the Pacific date (YYYY-MM-DD). */
+async function addServices(sheets, services, { today } = {}) {
   const metas = await entryTabs(sheets);
   const byYear = new Map();
   services.forEach(service => {
@@ -134,7 +147,8 @@ async function addServices(sheets, services) {
   });
   let added = 0;
   for (const year of Array.from(byYear.keys()).sort()) {
-    const tab = await tabForYear(sheets, metas, year);
+    const tab = await tabForYear(sheets, metas, year, today);
+    if (!tab) continue;
     const requests = [];
     const before = tab.rows.length;
     const writes = planInserts(tab, byYear.get(year), requests);
@@ -148,7 +162,7 @@ async function addServices(sheets, services) {
 
 /* One service changed in the app (before or after is null for an add or a
    delete). Returns what was done, for the log. */
-async function writeService(sheets, before, after) {
+async function writeService(sheets, before, after, options = {}) {
   const metas = await entryTabs(sheets);
   if (!after) {
     const meta = metas.find(item => item.title === grid.yearTab(before.date));
@@ -161,10 +175,25 @@ async function writeService(sheets, before, after) {
   const meta = metas.find(item => item.title === grid.yearTab(after.date));
   const tab = meta && await readTab(sheets, meta);
   const row = tab && grid.findRow(tab, after.date, after.service);
-  if (!row) return (await addServices(sheets, [after])) ? 'row added' : 'nothing to add';
+  if (!row) return (await addServices(sheets, [after], options)) ? 'row added' : 'not in the Sheet';
   const cells = grid.changedCells(tab, before || {}, after);
   await sheets.write(cells.map(cell => ({ range: grid.a1(tab.title, row.row, cell.column), values: [[cell.value]] })));
   return cells.length + ' cells written';
 }
 
-module.exports = { entryTabs, readServices, addServices, writeService };
+/* A service as the app has it now, into its row: every cell that differs
+   from the app is written. After a failed write this puts back whatever the
+   Sheet missed, whichever change it was. */
+async function writeState(sheets, service, options = {}) {
+  const metas = await entryTabs(sheets);
+  const meta = metas.find(item => item.title === grid.yearTab(service.date));
+  const tab = meta && await readTab(sheets, meta);
+  const row = tab && grid.findRow(tab, service.date, service.service);
+  if (!row) return (await addServices(sheets, [service], options)) ? 'row added' : 'not in the Sheet';
+  const inSheet = { worship: row.worship, choirSong: row.duties[grid.CHOIR_SONG], assignments: row.duties };
+  const cells = grid.changedCells(tab, inSheet, service);
+  await sheets.write(cells.map(cell => ({ range: grid.a1(tab.title, row.row, cell.column), values: [[cell.value]] })));
+  return cells.length + ' cells written';
+}
+
+module.exports = { entryTabs, readServices, addServices, writeService, writeState };

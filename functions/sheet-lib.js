@@ -276,10 +276,15 @@ function sheetRowsToServices(rows, today) {
 
 /* Merge policy, mirroring the app's mergeSheetServices: new services are
    created whole; existing ones change field-by-field, and only duties the
-   sheet mentions are touched (in-app-only duties are preserved). Instead of
-   writing, returns { creates: [{id, svc}], updates: [{id, patch}] } so the
-   caller controls Firestore I/O and can count zero-write runs. */
-function planMerge(sheetServices, existingById) {
+   sheet mentions are touched (in-app-only duties are preserved). An update
+   names only the duties that changed, so a merge write leaves every other
+   duty as it is in the app at that moment, even one changed while the
+   import ran. With patchTime false an existing service keeps its time: the
+   Sheet only has each label's usual time, so it would undo a time set in the
+   app. Instead of writing, returns { creates: [{id, svc}], updates:
+   [{id, patch}] } so the caller controls Firestore I/O and can count
+   zero-write runs. */
+function planMerge(sheetServices, existingById, { patchTime = true } = {}) {
   const creates = [], updates = [];
   (Array.isArray(sheetServices) ? sheetServices : []).forEach(sheetSvc => {
     if (!sheetSvc || typeof sheetSvc !== 'object') return;
@@ -300,7 +305,7 @@ function planMerge(sheetServices, existingById) {
       return;
     }
     const patch = {};
-    if (sheetSvc.time && existing.time !== sheetSvc.time) patch.time = sheetSvc.time;
+    if (patchTime && sheetSvc.time && existing.time !== sheetSvc.time) patch.time = sheetSvc.time;
     if (sheetSvc.worship && existing.worship !== sheetSvc.worship) patch.worship = sheetSvc.worship;
     // A Choir Song row is authoritative for this exact date/service. Its
     // presence marker lets a blank row clear a stale synced song, while a
@@ -319,9 +324,7 @@ function planMerge(sheetServices, existingById) {
         assignmentsChanged = true;
       }
     });
-    if (assignmentsChanged) {
-      patch.assignments = Object.assign({}, existingAssignments, changedAssignments);
-    }
+    if (assignmentsChanged) patch.assignments = changedAssignments;
     if (Object.keys(patch).length) updates.push({ id: id, patch: patch });
   });
   return { creates: creates, updates: updates };

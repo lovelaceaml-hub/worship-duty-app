@@ -85,7 +85,7 @@ test('treats a blank assignment as an explicit clear and preserves unmentioned d
     id,
     patch: {
       choirSong: '',
-      assignments: { Presider: '', 'Prayer of Thanks': 'Alice', 'Usher Door': 'Keep me' }
+      assignments: { Presider: '', 'Prayer of Thanks': 'Alice' }
     }
   }]);
 });

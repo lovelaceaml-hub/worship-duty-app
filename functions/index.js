@@ -4,7 +4,6 @@ const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require('fir
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
-const sheetLib = require('./sheet-lib');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
@@ -21,8 +20,6 @@ const { createDepartmentHandlers } = require('./department-handlers');
 const { createWorkflowHandlers } = require('./workflows');
 const { createMembershipHandlers } = require('./membership');
 const { createSheets, accountEmail } = require('./sheets');
-const sheetSync = require('./sheet-sync');
-const { serviceYear } = require('./service-year');
 const { canonicalName, usableMemberName } = require('./names');
 const { addServingMembers } = require('./serving-members');
 const { setDutyDefault } = require('./duty-defaults');
@@ -32,6 +29,7 @@ const { detailsFor } = require('./refusals');
 const { createNotifier } = require('./notify');
 const { reconcileScheduleAssignmentProjection } = require('./schedule-projection');
 const { createPublicEndpoints } = require('./public-endpoints');
+const { createSheetIo } = require('./sheet-io');
 
 initializeApp();
 const db = getFirestore();
@@ -46,6 +44,7 @@ const workflowHandlers = createWorkflowHandlers({ db, now: () => Date.now(), log
 const membershipHandlers = createMembershipHandlers({ db, now: () => Date.now() });
 
 const notifier = createNotifier({ db, messaging: getMessaging(), logger });
+const sheetIo = createSheetIo({ db, logger, notifier, createSheets, accountEmail });
 const loadNameMap = () => appDocs.loadNameMap(db);
 const runtimePermissionConfig = () => appDocs.runtimePermissionConfig(db);
 
@@ -544,42 +543,6 @@ exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
 const loadSettings = () => appDocs.loadSettings(db);
 const switchOn = appDocs.switchOn;
 
-/* The Sheet's Entry grid, when an administrator has set the Sheet's link
-   (Manage, Data) and turned on "Write changes to the Sheet". Otherwise null,
-   and the import keeps reading the published Raw Data link. */
-function gridSheets(settings) {
-  return settings.sheetId && switchOn(settings, 'sheetWrite', false) ? createSheets(settings.sheetId) : null;
-}
-
-/* The last Sheet write's outcome, shown in Manage. Written only when it
-   changes, so a working Sheet costs no extra writes. */
-async function noteSheetStatus(settings, error) {
-  const was = settings.sheetStatus || {};
-  const message = error ? String(error.message || error).slice(0, 300) : '';
-  if (!error && was.ok !== false) return;
-  if (error && was.ok === false && was.message === message) return;
-  await db.collection('app').doc('settings').set({ sheetStatus: { ok: !error, message, at: Date.now() } }, { merge: true });
-}
-
-/* A change made in the app goes into the Sheet's grid. Writes that came from
-   the Sheet itself (the import, a generated year) carry a new sheetSyncedAt
-   and are not written back. */
-async function writeBack(event, before, after) {
-  const existed = event.data.before && event.data.before.exists;
-  if (after && after.sheetSyncedAt && after.sheetSyncedAt !== (existed ? before.sheetSyncedAt : undefined)) return;
-  const settings = await loadSettings();
-  const sheets = gridSheets(settings);
-  if (!sheets) return;
-  try {
-    const done = await sheetSync.writeService(sheets, existed ? before : null, after);
-    logger.info('Sheet write', { service: event.params.id, done });
-    await noteSheetStatus(settings, null);
-  } catch (error) {
-    logger.error('Sheet write failed', { service: event.params.id, error: String(error && error.message || error) });
-    await noteSheetStatus(settings, error);
-  }
-}
-
 /* ---- 1. after every schedule write: the assignment records, the Sheet's
    grid and new-duty alerts (switch: notifications). Each runs on its own, so
    one that fails does not stop the others. ---- */
@@ -592,8 +555,9 @@ exports.onScheduleWrite = onDocumentWritten(
     const after = afterSnapshot && afterSnapshot.exists ? afterSnapshot.data() || {} : null;
     const steps = [
       ['projection', () => reconcileScheduleAssignmentProjection({ db, logger }, event.params.id, before, after || { ...before, assignments: {} })],
-      ['sheet', () => writeBack(event, before, after)],
-      ['alerts', () => notifier.alertScheduleWrite(before, after, existed)]
+      ['sheet', () => sheetIo.writeBack(event.params.id, before, after, existed)],
+      ['alerts', () => notifier.alertScheduleWrite(before, after, existed)],
+      ['deletions', () => sheetIo.noteDeletion(event.params.id, before, after, existed)]
     ];
     for (const [step, run] of steps) {
       try {
@@ -646,155 +610,32 @@ const publicEndpoints = createPublicEndpoints({ db });
 exports.ics = onRequest({ region: REGION, maxInstances: 5 }, publicEndpoints.ics);
 exports.publicSchedule = onRequest({ region: REGION, maxInstances: 5 }, publicEndpoints.publicSchedule);
 
-/* ---- 7. Google Sheet import ----
-   Other coordinators keep the schedule in a Google Sheet; the app only reads
-   it. Every 2 hours (and when an administrator taps Import now in Manage,
-   Data) the published sheet is merged into the schedule: only the duties the
-   sheet lists are changed, anything added in the app stays. New names join
-   the member list and their department's name list. The Google Sheet import
-   switch in Manage, Features turns the automatic import off. */
-async function importSheet() {
-  const settings = await loadSettings();
-  // Old spellings are mapped to the current ones first, so the sheet cannot
-  // bring back a name the app has already cleaned up.
-  const nameMapSnap = await db.collection('app').doc('nameMap').get();
-  const nameMap = (nameMapSnap.exists && nameMapSnap.data().map) || {};
-  const sheets = gridSheets(settings);
-  let parsed;
-  if (sheets) {
-    // The grid itself: edits the app makes through the API never reach Raw Data.
-    parsed = await sheetSync.readServices(sheets, nameMap);
-  } else {
-    const response = await fetch(settings.sheetUrl || sheetLib.DEFAULT_SHEET_URL, { redirect: 'follow' });
-    if (!response.ok) throw new HttpsError('unavailable', 'The Google Sheet could not be read (' + response.status + ').');
-    parsed = sheetLib.sheetRowsToServices(sheetLib.parseCSV(await response.text()), new Date());
-    parsed.services.forEach(service => {
-      const assignments = service.assignments || {};
-      Object.keys(assignments).forEach(duty => { assignments[duty] = canonicalName(assignments[duty], nameMap); });
-    });
-  }
-  if (!parsed.services.length) {
-    throw new HttpsError('failed-precondition', 'The sheet had no services in it, so nothing was changed.');
-  }
-  const sheetMembers = Array.from(new Set(parsed.members.map(name => canonicalName(name, nameMap))));
-
-  const [existingSnap, membersSnap, departmentsSnap] = await Promise.all([
-    db.collection('schedule').get(),
-    db.collection('app').doc('members').get(),
-    db.collection('app').doc('departments').get()
-  ]);
-  const existing = {};
-  existingSnap.forEach(document => { existing[document.id] = document.data() || {}; });
-  const plan = sheetLib.planMerge(parsed.services, existing);
-  const members = (membersSnap.exists && membersSnap.data().list) || [];
-  const newMembers = sheetMembers.filter(name => name && !members.includes(name));
-  const rosters = Object.assign({}, departmentsSnap.exists ? departmentsSnap.data().map : {});
-  let rostersChanged = false;
-  parsed.services.forEach(service => Object.entries(service.assignments || {}).forEach(([duty, name]) => {
-    const department = permissions.departmentForDuty(duty);
-    if (!name || !department) return;
-    const roster = rosters[department] || (rosters[department] = []);
-    if (!roster.includes(name)) { rosters[department] = roster.concat(name).sort(); rostersChanged = true; }
-  }));
-
-  if (plan.creates.length || plan.updates.length || newMembers.length || rostersChanged) {
-    // BulkWriter splits a large import into batches under Firestore's limit.
-    const writer = db.bulkWriter();
-    const sheetSyncedAt = Date.now(); // these changes came from the Sheet, so none is written back
-    plan.creates.forEach(item => writer.set(db.collection('schedule').doc(item.id), Object.assign({}, item.svc, { sheetSyncedAt })));
-    plan.updates.forEach(item => writer.set(db.collection('schedule').doc(item.id), Object.assign({}, item.patch, { sheetSyncedAt }), { merge: true }));
-    if (newMembers.length) writer.set(db.collection('app').doc('members'), { list: members.concat(newMembers).sort() });
-    if (rostersChanged) writer.set(db.collection('app').doc('departments'), { map: rosters }, { merge: true });
-    await writer.close();
-  }
-  const result = { added: plan.creates.length, updated: plan.updates.length, newMembers: newMembers.length, warnings: parsed.warnings.slice(0, 20) };
-  logger.info('importSheet: done', result);
-  return result;
-}
-
+/* ---- 7. the Google Sheet (sheet-io.js) ----
+   Every 2 hours (and when an administrator taps Import now in Manage, Data)
+   the Sheet is merged into the schedule. The Google Sheet import switch in
+   Manage, Features turns the automatic import off. */
 exports.scheduledSheetSync = onSchedule(
   { schedule: 'every 2 hours', timeZone: TZ, region: REGION },
   async () => {
     if (!switchOn(await loadSettings(), 'sheetSync')) return;
     try {
-      await importSheet();
+      await sheetIo.importSheet();
     } catch (error) {
       logger.error('scheduledSheetSync: import failed', { error: String(error && error.message || error) });
     }
   });
 
-/* Manage, Data, Check the Sheet: reads the Sheet's Entry grid and compares
-   it with the app, changing nothing. Administrators only. */
+/* Manage, Data, Check the Sheet: compares the Sheet with the app, changing
+   nothing. Administrators only. */
 exports.checkSheet = onCall({ region: REGION }, async request => {
   const actor = await callableActor(request);
   if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
     throw new HttpsError('permission-denied', 'Only an administrator can check the Sheet.');
   }
-  const settings = await loadSettings();
-  if (!settings.sheetId) throw new HttpsError('failed-precondition', 'Paste the Sheet\'s link first.');
-  const nameMapSnap = await db.collection('app').doc('nameMap').get();
-  const nameMap = (nameMapSnap.exists && nameMapSnap.data().map) || {};
-  let read;
-  try {
-    read = await sheetSync.readServices(createSheets(settings.sheetId), nameMap);
-  } catch (error) {
-    throw new HttpsError('failed-precondition', String(error.message || error));
-  }
-  const schedule = await db.collection('schedule').get();
-  const app = new Map(schedule.docs.map(doc => [doc.id, doc.data() || {}]));
-  const inSheet = new Set();
-  const differences = [];
-  read.services.forEach(service => {
-    const id = sheetLib.svcId(service);
-    inSheet.add(id);
-    const mine = app.get(id);
-    if (!mine) return;
-    Object.entries(service.assignments).forEach(([duty, name]) => {
-      const current = canonicalName((mine.assignments || {})[duty], nameMap);
-      if (current !== name) differences.push({ service: id, duty, sheet: name, app: current });
-    });
-  });
-  const today = pacificDate();
-  return {
-    ok: true,
-    account: await accountEmail(),
-    tabs: read.tabs,
-    services: read.services.length,
-    notInApp: read.services.filter(service => !app.has(sheetLib.svcId(service))).length,
-    notInSheet: Array.from(app.entries()).filter(([id, service]) => !inSheet.has(id) && String(service.date || '') >= today).length,
-    differences: differences.slice(0, 25),
-    differenceCount: differences.length,
-    warnings: read.warnings.slice(0, 10)
-  };
+  return sheetIo.checkSheet();
 });
 
-/* A planning year of regular services (service-year.js): each one missing
-   from the app is added, and, when the app writes to the Sheet, a blank row
-   goes into the Sheet too. Administrators are then reminded to add that
-   year's feast services. */
-async function addServiceYear(year) {
-  const settings = await loadSettings();
-  // New services start with each duty's default member on it (Opening Prayer).
-  const defaults = {};
-  Object.keys(permissions.DUTY_DEFAULTS).forEach(duty => { const name = permissions.dutyDefault(settings, duty); if (name) defaults[duty] = name; });
-  const wanted = serviceYear(year).map(service => Object.assign(service, { assignments: Object.assign({}, defaults) }));
-  const existing = await db.collection('schedule').where('date', '>=', wanted[0].date).get();
-  const have = new Map(existing.docs.map(doc => [doc.id, doc.data() || {}]));
-  const missing = wanted.filter(service => !have.has(service.id));
-  // Every regular service gets a Sheet row, including ones the app already
-  // has (with their duties); rows already in the grid are left alone.
-  const sheets = gridSheets(settings);
-  const sheetRows = sheets ? await sheetSync.addServices(sheets, wanted.map(service => have.has(service.id) ? Object.assign({}, have.get(service.id), { date: service.date, service: service.service }) : service)) : 0;
-  if (missing.length) {
-    const writer = db.bulkWriter();
-    const sheetSyncedAt = Date.now();
-    missing.forEach(({ id, ...service }) => writer.set(db.collection('schedule').doc(id), Object.assign(service, { sheetSyncedAt })));
-    await writer.close();
-  }
-  await db.collection('app').doc('settings').set({ feastNotice: { year: year + 1, since: Date.now() } }, { merge: true });
-  return { added: missing.length, sheetRows, from: wanted[0].date, to: wanted[wanted.length - 1].date };
-}
-
+/* Manage, Data: a planning year of regular services. Administrators only. */
 exports.addServiceYear = onCall({ region: REGION }, async request => {
   const actor = await callableActor(request);
   if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
@@ -803,21 +644,18 @@ exports.addServiceYear = onCall({ region: REGION }, async request => {
   const year = Number(request.data && request.data.year);
   if (!Number.isInteger(year) || year < 2026 || year > 2100) throw new HttpsError('invalid-argument', 'Choose a year.');
   try {
-    return Object.assign({ ok: true }, await addServiceYear(year));
+    return Object.assign({ ok: true }, await sheetIo.addServiceYear(year));
   } catch (error) {
     throw new HttpsError('failed-precondition', String(error && error.message || error));
   }
 });
 
-/* Every November 1: December through the next December. */
+/* Every November 1: December through the next December. A run that fails
+   is tried again (it only adds what is missing). */
 exports.yearlyServices = onSchedule(
-  { schedule: '0 6 1 11 *', timeZone: TZ, region: REGION },
+  { schedule: '0 6 1 11 *', timeZone: TZ, region: REGION, retryCount: 3 },
   async () => {
-    try {
-      logger.info('yearlyServices: done', await addServiceYear(Number(pacificDate().slice(0, 4))));
-    } catch (error) {
-      logger.error('yearlyServices: failed', { error: String(error && error.message || error) });
-    }
+    logger.info('yearlyServices: done', await sheetIo.addServiceYear(Number(pacificDate().slice(0, 4))));
   });
 
 /* Every night: everyone who has served in a department's duties gets a
@@ -882,5 +720,5 @@ exports.syncSheetNow = onCall({ region: REGION }, async request => {
   if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
     throw new HttpsError('permission-denied', 'Only an administrator can import the sheet.');
   }
-  return Object.assign({ ok: true }, await importSheet());
+  return Object.assign({ ok: true }, await sheetIo.importSheet());
 });
