@@ -20,13 +20,13 @@ Functions (Node 22), sign-in (member name and PIN), and push notifications.
 | `app/sync.js` | Live Firestore listeners that fill `data`. |
 | `app/render.js` | Picks what shows (a lock screen or a tab) and draws it. |
 | `app/actions.js` | Connects buttons and forms to code (see below). |
-| `app/config/` | Departments and duties, and the feature switches in Manage, Features. |
+| `app/config/` | Departments and duties (with the names shown for older stored ones: "Sermon" shows as Opening Prayer, "Prayer of Thanks" as Thanks Prayer; the Sheet and database keep the old names), and the feature switches in Manage, Features. |
 | `app/lib/` | The rules, with no side effects: dates, services, availability, double duties, workload, Fill, requests, names. Unit tested. |
 | `app/services/` | Reads, writes and server calls: sign-in, requests, departments, notifications, feedback. |
 | `app/screens/` | One file per screen or Manage section. The Schedule has one layout per appearance. |
 | `app/ui/` | Pieces used on many screens: header, tabs, banners, cards. |
 | `app/appearance/` | The four appearances and the picker. |
-| `app/presider/` | The song planner. |
+| `app/presider/` | The song planner: each service's prayers, Preparation Songs, Glory (and Thanks) and Choir song, and Copy for Signal. |
 | `styles/base.css` | The Original appearance, and the layout every appearance shares. |
 | `styles/themes/` | Prism, Navy & Cream and Aurora, each drawn over `base.css`. |
 | `permissions.js` | Who may do what. The server has an identical copy in `functions/`; a test keeps the two the same. |
@@ -157,13 +157,51 @@ npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only fires
 
 Manage, Services is the month planner. A leader sees their department's
 duties for every service still to come that month: a grid on a computer, a
-list on a phone. Changing a duty saves it at once. **Fill empty duties**
-proposes someone for each empty duty the service usually has, using only
-members who can take it and are available, whoever has served least first,
-and never two duties in one service. The leader changes any proposal, then
-saves them together; each member gets one notification listing their new
-duties. A service's heading opens its details (date, time, choir song,
-replacements, double duties, an administrator's override, delete).
+list on a phone. Changing a duty saves it at once. A service shows only the
+duties it has: Thanks Prayer only at Sabbath Day Morning and feast-day
+mornings, Closing Prayer and the choir song only at Sabbath Day and Third Day
+(`app/lib/worship.js`).
+
+**Fill empty duties** proposes someone for every empty duty that kind of
+service (same worship and time) has had filled in the past year, or every
+duty it has when there is no history. It only picks members who are active
+in the department, can take that duty, are available, and are not already
+serving in that service. The leader chooses how (remembered on the device):
+
+- **Auto**: no other duty that day first, then the fewest duties this month,
+  then least served lately, then longest since.
+- **Rotation**: down each department's list by name, starting after whoever
+  served there most recently, round and round.
+- **Random**.
+
+The leader changes any proposal, then saves them together; each member gets
+one notification listing their new duties. A service's heading opens its
+details (date, time, choir song, replacements, double duties, an
+administrator's override, delete).
+
+## Department members
+
+- Every night (`servingMembers`, 3:30 AM Pacific) everyone who has served in
+  a department's duties is added to it if they are not on its list yet:
+  active if they served there in the last 35 days or have a duty coming up,
+  inactive otherwise. They can take any duty of the department (in Worship,
+  only the duties they have served). People already on a list are never
+  changed, so a leader removes someone by making them inactive.
+- A department's page also lists people who serve there but are not on the
+  list yet ("Not on the list yet"), with Add and Add all. "Add a member"
+  finds anyone on the member list, including people who have never signed in.
+- Availability: a service time a member has not set counts as available.
+  Only times marked "not available" (or a day off) keep them off.
+
+## Fixing a name
+
+Manage, Data, **Fix a member's name** (administrators) changes a name
+everywhere: member list, services, departments, leaders, song lists,
+requests and department profiles, and adds the old spelling to
+`app/nameMap` so a Sheet import maps it too. The member keeps their sign-in
+and PIN, and no duty alerts go out. When the correct name is already a
+member, the two become one. Names shown without a title ("Bridgette") are
+shown as written, never split into "B. ridgette".
 
 Every November 1 the server adds the regular services from December 1
 through the next December (every Saturday's three and every Tuesday
@@ -206,5 +244,9 @@ Sheet's own script copies them into "Raw Data".
   `setlists` and `songStats` (songs), and `feedback`.
 - Server jobs on a timer: duty reminders every hour, the Sheet import every
   2 hours, every 30 minutes the songs of each confirmed list are counted as
-  sung once 3 hours have passed since its service started, and every
-  November 1 the next planning year's regular services.
+  sung once 3 hours have passed since its service started, every night the
+  department members from the schedule, and every November 1 the next
+  planning year's regular services.
+- Notifications: a new duty, a day-before reminder, a change request (to the
+  scheduler and that department's leaders) and its answer, and feedback
+  marked done (to the member who sent it).
