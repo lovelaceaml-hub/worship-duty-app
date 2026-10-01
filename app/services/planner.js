@@ -12,7 +12,7 @@ const REASONS = {
   'target-unavailable': 'that member is not available then',
   'target-ineligible': 'that member does not take that duty',
   'target-not-schedulable': 'that member cannot be scheduled',
-  'target-inactive': 'that member is archived',
+  'target-inactive': 'that member is inactive in this department',
   'no-service': 'the service is gone',
   'no-profile': 'that member is not in the department'
 };

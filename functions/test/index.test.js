@@ -35,7 +35,7 @@ test('exports exactly the functions the app and the public site use', () => {
     'createDepartmentInvitation', 'createDepartmentProfile', 'dutyReminders', 'ics', 'listDepartmentRoster',
     'onFeedbackDone', 'onRequestCreated', 'onRequestResolved', 'onScheduleWrite', 'overrideDepartmentAssignment', 'publicSchedule',
     'resetMemberPin', 'resolveDutyAttention', 'revokeDepartmentInvitation', 'saveDepartmentAssignments',
-    'saveMemberAvailability', 'scheduledSheetSync', 'searchDepartmentCandidates', 'songHistoryRecorder',
+    'saveMemberAvailability', 'scheduledSheetSync', 'searchDepartmentCandidates', 'servingMembers', 'songHistoryRecorder',
     'syncSheetNow', 'unassignDepartmentDuty', 'updateDepartmentProfile', 'updateMemberAvailability',
     'updateRoleConfiguration', 'verifyMemberPin', 'yearlyServices'
   ]);

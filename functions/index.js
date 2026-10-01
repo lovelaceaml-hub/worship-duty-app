@@ -27,6 +27,7 @@ const { createSheets, accountEmail } = require('./sheets');
 const sheetSync = require('./sheet-sync');
 const { serviceYear } = require('./service-year');
 const { dutyName } = require('./names');
+const { addServingMembers } = require('./serving-members');
 
 initializeApp();
 const db = getFirestore();
@@ -1065,6 +1066,20 @@ exports.yearlyServices = onSchedule(
       logger.info('yearlyServices: done', await addServiceYear(Number(pacificDate().slice(0, 4))));
     } catch (error) {
       logger.error('yearlyServices: failed', { error: String(error && error.message || error) });
+    }
+  });
+
+/* Every night: everyone who has served in a department's duties gets a
+   profile there (inactive when they have not served there in 35 days), so
+   the planner can offer them. Profiles that already exist are left alone. */
+exports.servingMembers = onSchedule(
+  { schedule: '30 3 * * *', timeZone: TZ, region: REGION },
+  async () => {
+    try {
+      const result = await addServingMembers(db, { today: pacificDate(), canonicalName: canonicalMemberName, logger });
+      logger.info('servingMembers: done', { added: result.added.length, unmatched: result.unmatched });
+    } catch (error) {
+      logger.error('servingMembers: failed', { error: String(error && error.message || error) });
     }
   });
 

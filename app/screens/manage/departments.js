@@ -1,5 +1,5 @@
 /* Manage, Departments. A leader sees their department's roster: add members
-   by name or with an invite link, archive or restore them, reset a PIN, and
+   by name or with an invite link, make them inactive or active again, reset a PIN, and
    open a member to set the duties they can take, whether they can be
    scheduled, and when they are available. */
 import { html, plural } from '../../html.js';
@@ -104,7 +104,7 @@ function memberRow(department, profile, canEdit) {
     </button>
     <div class="button-row">
       ${canEdit ? html`<button type="button" class="ghost small" data-act="department-status" data-uid="${profile.memberUid}"
-        data-status="${profile.status === 'active' ? 'inactive' : 'active'}">${profile.status === 'active' ? 'Archive' : 'Restore'}</button>` : ''}
+        data-status="${profile.status === 'active' ? 'inactive' : 'active'}">${profile.status === 'active' ? 'Make inactive' : 'Make active'}</button>` : ''}
       ${canResetPin(profile.memberName, department) ? html`<button type="button" class="ghost small" data-act="department-reset-pin" data-name="${profile.memberName}">Reset PIN</button>` : ''}
     </div>
   </div>`;
@@ -129,7 +129,7 @@ function departmentRoster(department) {
     ${canEdit ? searchPanel(department) : ''}
     <h3 class="section-heading">Members <span class="count">${active.length}</span></h3>
     ${active.length ? html`<div class="list">${active.map(profile => memberRow(department, profile, canEdit))}</div>` : empty('No members yet.')}
-    ${archived.length ? html`<h3 class="section-heading">Archived <span class="count">${archived.length}</span></h3>
+    ${archived.length ? html`<h3 class="section-heading">Inactive <span class="count">${archived.length}</span></h3>
       <div class="list">${archived.map(profile => memberRow(department, profile, canEdit))}</div>` : ''}`;
 }
 
@@ -164,7 +164,7 @@ function memberProfile(department, uid) {
   const disabled = canEdit ? '' : ' disabled';
   const changed = hasDraft(department, uid);
   return html`<button type="button" class="link" data-act="department-member-back">Back to ${department}</button>
-    <h2 class="screen-title">${nameOf(profile.memberName)} <span class="status status-${profile.status === 'active' ? 'approved' : 'declined'}">${profile.status === 'active' ? 'Active' : 'Archived'}</span></h2>
+    <h2 class="screen-title">${nameOf(profile.memberName)} <span class="status status-${profile.status === 'active' ? 'approved' : 'declined'}">${profile.status === 'active' ? 'Active' : 'Inactive'}</span></h2>
     ${lastChange(profile)}
     <section class="card">
       <h3 class="card-subtitle">Duties they can take</h3>
