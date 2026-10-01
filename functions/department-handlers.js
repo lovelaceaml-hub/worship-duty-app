@@ -17,6 +17,7 @@ const { refusal, decisionRefusal, DEFAULT_REASONS } = require('./refusals.js');
 const { canonicalName } = require('./names.js');
 const { loadNameMap } = require('./app-docs.js');
 const { hasStarted } = require('./time.js');
+const replacements = require('./replacements.js');
 
 const PROFILE_PATCH_FIELDS = new Set(authz.PROFILE_MUTABLE_FIELDS);
 const PROFILE_DECISION_FIELDS = Object.freeze([
@@ -228,6 +229,17 @@ function profileWithPatch(before, patch, actor, at) {
   return next;
 }
 
+/* What a profile update is authorized as: the new profile with the stored
+   attribution, which the server alone writes. */
+function authorizationCandidate(before, next) {
+  const candidate = { ...next };
+  ['attribution', 'fieldAttribution'].forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(before, field)) candidate[field] = before[field];
+    else delete candidate[field];
+  });
+  return candidate;
+}
+
 /* A department-auth.js decision that refused: its reason goes to the app. */
 function rejectDecision(result) {
   if (result.allowed) return;
@@ -435,7 +447,14 @@ function createDepartmentHandlers(options = {}) {
       throw errorWithCode('internal', 'Atomic profile storage is unavailable.');
     }
     const reference = profileRef(db, path.department, path.memberUid);
+    // A changed availability flags the member's upcoming duties they can no
+    // longer make, as the member's own save does.
+    const availabilityChanged = Object.prototype.hasOwnProperty.call(patch, 'availability');
+    const nameMap = availabilityChanged ? await loadNameMap(db) : {};
+    const canonical = name => canonicalName(name, nameMap);
+    const services = availabilityChanged ? await replacements.upcomingServices(db, at) : [];
     let next;
+    let flagged = { marked: [], cleared: [] };
     await db.runTransaction(async transaction => {
       const snapshot = await transaction.get(reference);
       if (!snapshot.exists) {
@@ -451,28 +470,26 @@ function createDepartmentHandlers(options = {}) {
       });
       const candidate = profileWithPatch(before, patch, actor, at);
       candidate.revision = nextRevision(before);
-      const authorizationCandidate = { ...candidate };
-      if (Object.prototype.hasOwnProperty.call(before, 'attribution')) {
-        authorizationCandidate.attribution = before.attribution;
-      } else {
-        delete authorizationCandidate.attribution;
-      }
-      if (Object.prototype.hasOwnProperty.call(before, 'fieldAttribution')) {
-        authorizationCandidate.fieldAttribution = before.fieldAttribution;
-      } else {
-        delete authorizationCandidate.fieldAttribution;
-      }
-      const result = authz.authorizeProfileUpdate(actor, before, authorizationCandidate);
-      rejectDecision(result);
+      rejectDecision(authz.authorizeProfileUpdate(actor, before, authorizationCandidate(before, candidate)));
       next = candidate;
+      const ids = availabilityChanged
+        ? replacements.servicesHolding(services, path.department, canonical(next.memberName || next.member), canonical)
+        : [];
+      const scheduleSnapshots = ids.length ? await transaction.getAll(...ids.map(id => db.collection('schedule').doc(id))) : [];
+      const byId = {};
+      ids.forEach((id, index) => { byId[id] = scheduleSnapshots[index].exists ? scheduleSnapshots[index].data() || {} : null; });
       transaction.set(reference, next, { merge: false });
+      flagged = replacements.writeFlags(transaction, db, replacements.flagChanges({
+        profile: next, departmentId: path.department, memberUid: path.memberUid, byId, canonical, at, markedByUid: actor.uid
+      }));
     });
     return {
       ok: true,
       departmentId: path.department,
       memberUid: path.memberUid,
       revision: next.revision,
-      profile: next
+      profile: next,
+      replacements: flagged
     };
   }
 
@@ -962,5 +979,6 @@ module.exports = {
   assignmentForSchedule,
   assignmentRecord,
   errorWithCode,
-  rejectDecision
+  rejectDecision,
+  authorizationCandidate
 };

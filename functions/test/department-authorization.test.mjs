@@ -84,6 +84,19 @@ class FakeCollection {
     return { id };
   }
 
+  where(field, op, value) {
+    const compare = { '==': (a, b) => a === b, '>=': (a, b) => a >= b };
+    const query = {
+      limit: () => query,
+      get: async () => {
+        const all = await this.get();
+        const docs = all.docs.filter(document => compare[op]((document.data() || {})[field], value));
+        return { docs, empty: docs.length === 0, size: docs.length };
+      }
+    };
+    return query;
+  }
+
   async get() {
     const prefix = `${this.path.join('/')}/`;
     const docs = [];
@@ -117,6 +130,9 @@ class FakeDb {
     const transaction = {
       get(reference) {
         return reference.get();
+      },
+      getAll(...references) {
+        return Promise.all(references.map(reference => reference.get()));
       },
       set(reference, value, options = {}) {
         writes.push(['set', reference, clone(value), options]);

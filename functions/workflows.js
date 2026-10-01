@@ -35,11 +35,13 @@ const {
   errorWithCode,
   rejectDecision,
   assignmentIdFor,
-  profileWithPatch
+  profileWithPatch,
+  authorizationCandidate
 } = require('./department-handlers.js');
-const { pacificDate, serviceStart, hasStarted } = require('./time.js');
+const { serviceStart, hasStarted } = require('./time.js');
 const { canonicalName } = require('./names.js');
 const { loadNameMap } = require('./app-docs.js');
+const replacements = require('./replacements.js');
 
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 // Release day. The automatic recorder only ever considers services on or after
@@ -125,20 +127,21 @@ function createWorkflowHandlers(options = {}) {
     });
 
     const at = now();
-    const today = pacificDate(new Date(at));
+    const nameMap = await loadNameMap(db);
+    const canonical = name => canonicalName(name, nameMap);
+    const services = await replacements.upcomingServices(db, at);
     let highestRevision = 0;
     const departmentsOut = [];
-    const marked = [];
-    const cleared = [];
+    let flagged = { marked: [], cleared: [] };
 
     await db.runTransaction(async transaction => {
-      /* ---- reads: profiles, then per-department assignment queries and
-         the schedule docs they touch ---- */
+      /* ---- reads: profiles, then the upcoming services where the member
+         holds a duty of one of these departments ---- */
       const profileRefs = entries.map(entry => profileRef(db, entry.departmentId, memberUid));
       const profileSnapshots = await Promise.all(profileRefs.map(reference => transaction.get(reference)));
       profileSnapshots.forEach((snapshot, index) => {
         if (!snapshot.exists) {
-          throw errorWithCode('not-found', `The department member profile was not found: ${entries[index].departmentId}.`);
+          throw errorWithCode('not-found', `The department member profile was not found: ${entries[index].departmentId}.`, { reason: 'profile-missing' });
         }
       });
 
@@ -153,103 +156,34 @@ function createWorkflowHandlers(options = {}) {
         });
         const next = profileWithPatch(before, entry.patch, actor, at);
         next.revision = nextRevision(before);
-        const authorizationCandidate = { ...next };
-        if (Object.prototype.hasOwnProperty.call(before, 'attribution')) {
-          authorizationCandidate.attribution = before.attribution;
-        } else {
-          delete authorizationCandidate.attribution;
-        }
-        if (Object.prototype.hasOwnProperty.call(before, 'fieldAttribution')) {
-          authorizationCandidate.fieldAttribution = before.fieldAttribution;
-        } else {
-          delete authorizationCandidate.fieldAttribution;
-        }
-        const result = authz.authorizeProfileUpdate(actor, before, authorizationCandidate);
-        rejectDecision(result);
+        rejectDecision(authz.authorizeProfileUpdate(actor, before, authorizationCandidate(before, next)));
         return { departmentId: entry.departmentId, reference: profileRefs[index], before, next };
       });
 
-      const assignmentQuerySnapshots = await Promise.all(candidates.map(candidate =>
-        transaction.get(db.collection('departmentAssignments')
-          .where('departmentId', '==', candidate.departmentId)
-          .where('memberUid', '==', memberUid))
-      ));
+      const serviceIds = new Set();
+      candidates.forEach(candidate => replacements.servicesHolding(services, candidate.departmentId,
+        canonical(candidate.next.memberName || candidate.next.member), canonical).forEach(id => serviceIds.add(id)));
+      const ids = Array.from(serviceIds);
+      const scheduleSnapshots = ids.length ? await transaction.getAll(...ids.map(id => db.collection('schedule').doc(id))) : [];
+      const byId = {};
+      ids.forEach((id, index) => { byId[id] = scheduleSnapshots[index].exists ? scheduleSnapshots[index].data() || {} : null; });
 
-      const relevantByDepartment = candidates.map((candidate, index) => {
-        const records = assignmentQuerySnapshots[index].docs
-          .map(document => document.data() || {})
-          .filter(record => record.serviceId && record.serviceDate >= today);
-        return { candidate, records };
-      });
-
-      const scheduleIds = new Set();
-      relevantByDepartment.forEach(({ records }) => records.forEach(record => scheduleIds.add(record.serviceId)));
-      const scheduleRefs = Array.from(scheduleIds).map(id => db.collection('schedule').doc(id));
-      const scheduleSnapshots = await Promise.all(scheduleRefs.map(reference => transaction.get(reference)));
-      const scheduleById = {};
-      scheduleRefs.forEach((reference, index) => {
-        scheduleById[reference.id] = { reference, snapshot: scheduleSnapshots[index] };
-      });
-
-      /* ---- writes: profiles, then needs-replacement markers ---- */
-      relevantByDepartment.forEach(({ candidate }) => {
+      /* ---- writes: profiles, then one write per service for its flags ---- */
+      candidates.forEach(candidate => {
         transaction.set(candidate.reference, candidate.next, { merge: false });
         if (candidate.next.revision > highestRevision) highestRevision = candidate.next.revision;
         departmentsOut.push({ departmentId: candidate.departmentId, revision: candidate.next.revision, profile: candidate.next });
       });
-
-      /* Firestore forbids a second write to the same document reference
-         within one transaction, and two different duties (even across
-         departments) can land on the same schedule document, so every
-         needsReplacement change for a given service is accumulated here
-         and written with exactly one transaction.set per document. */
-      const needsReplacementPatchByServiceId = new Map();
-      const patchFor = serviceId => {
-        if (!needsReplacementPatchByServiceId.has(serviceId)) needsReplacementPatchByServiceId.set(serviceId, {});
-        return needsReplacementPatchByServiceId.get(serviceId);
-      };
-
-      relevantByDepartment.forEach(({ candidate, records }) => {
-        records.forEach(record => {
-          const entry = scheduleById[record.serviceId];
-          if (!entry || !entry.snapshot.exists) return;
-          const scheduleData = entry.snapshot.data() || {};
-          const assignments = scheduleData.assignments || {};
-          if (String(assignments[record.duty] || '') !== String(record.memberName || '')) return;
-          const scheduled = authz.profileForScheduling(candidate.next);
-          if (!scheduled) return;
-          const effective = authz.effectiveAvailability(scheduled, record.serviceDate, record.serviceTime);
-          const needsReplacement = scheduleData.needsReplacement || {};
-          const existingMarker = needsReplacement[record.duty];
-          if (effective === 'unavailable' && !existingMarker) {
-            patchFor(record.serviceId)[record.duty] = {
-              memberName: record.memberName || '',
-              memberUid,
-              departmentId: candidate.departmentId,
-              reason: 'unavailable',
-              since: at,
-              markedByUid: actor.uid
-            };
-            marked.push({ serviceId: record.serviceId, duty: record.duty });
-          } else if (effective === 'available' && existingMarker &&
-              existingMarker.reason === 'unavailable' && existingMarker.memberUid === memberUid) {
-            patchFor(record.serviceId)[record.duty] = deleteField();
-            cleared.push({ serviceId: record.serviceId, duty: record.duty });
-          }
-        });
-      });
-
-      needsReplacementPatchByServiceId.forEach((patch, serviceId) => {
-        const entry = scheduleById[serviceId];
-        transaction.set(entry.reference, { needsReplacement: patch }, { merge: true });
-      });
+      flagged = replacements.writeFlags(transaction, db, candidates.flatMap(candidate => replacements.flagChanges({
+        profile: candidate.next, departmentId: candidate.departmentId, memberUid, byId, canonical, at, markedByUid: actor.uid
+      })));
     });
 
     return {
       ok: true,
       revision: highestRevision,
       departments: departmentsOut,
-      replacements: { marked, cleared }
+      replacements: flagged
     };
   }
 

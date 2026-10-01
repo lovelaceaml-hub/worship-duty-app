@@ -168,6 +168,10 @@ function memoryDb(docs = {}, { live = false } = {}) {
           create: (item, value) => { pending.create(item, value); },
           delete: item => { pending.delete(item); }
         });
+        // The handlers write each document at most once per transaction.
+        const paths = pending.writes.map(([path]) => path);
+        const twice = paths.find((path, index) => paths.indexOf(path) !== index);
+        if (twice) throw new Error('memoryDb: two writes to ' + twice + ' in one transaction');
         pending.commit();
         return result;
       });
