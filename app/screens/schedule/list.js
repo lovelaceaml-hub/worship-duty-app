@@ -1,28 +1,27 @@
-/* Original's Schedule: department chips, the next service, then every
-   upcoming service by date. Past services open below on request. */
+/* Original's Schedule: the tools, then the service under way or the next
+   one with its date, then every service from the chosen month on, a page
+   at a time. A search lists the matches instead. */
 import { html } from '../../html.js';
-import { data, ui } from '../../store.js';
-import { departmentChips, serviceCard, serviceList } from '../../ui/components.js';
-import { nextService, upcoming, past, departmentHasAssignments } from '../../lib/services.js';
-import { pastCount } from './index.js';
+import { ui } from '../../store.js';
+import { departmentChips } from '../../ui/components.js';
+import { isInProgress } from '../../lib/services.js';
+import { selection, nowOrNext, monthNav, searchBox, pastControl, servicePanel, allServicesList } from './index.js';
 
 export function render() {
-  const only = ui.departmentFilter;
-  const fits = service => only === 'All' || departmentHasAssignments(service, only);
-  const coming = upcoming(data.services).filter(fits);
-  const next = nextService(data.services);
-  const earlier = ui.showPast ? past(data.services).filter(fits) : [];
-  const pastTotal = pastCount();
-  return html`
+  const sel = selection();
+  const searching = !!ui.schedule.query;
+  const next = searching ? null : nowOrNext(sel.all);
+  return html`<div class="schedule-list">
+    <div class="schedule-filters">${searchBox()}${pastControl()}</div>
     ${departmentChips()}
-    ${next && fits(next) ? html`<section class="next-service">
-      <h2 class="section-heading">Next service</h2>
-      ${serviceCard(next, { only })}
+    ${next ? html`<section class="next-service">
+      <h2 class="section-heading">${isInProgress(next) ? 'Now' : 'Next service'}</h2>
+      ${servicePanel(next, { withDate: true })}
     </section>` : ''}
-    <h2 class="section-heading">Full schedule</h2>
-    ${coming.length ? serviceList(coming, only) : html`<p class="empty">No upcoming services yet.</p>`}
-    ${pastTotal ? html`<div class="center">
-      <button type="button" class="link" data-act="toggle-past">${ui.showPast ? 'Hide past services' : 'Show ' + pastTotal + ' past services'}</button>
-    </div>` : ''}
-    ${earlier.length ? serviceList(earlier, only) : ''}`;
+    <section class="schedule-all">
+      <h2 class="section-heading">${searching ? 'Search results' : 'All services'}</h2>
+      ${searching ? '' : monthNav(sel.month)}
+      ${allServicesList(sel, { skip: next })}
+    </section>
+  </div>`;
 }

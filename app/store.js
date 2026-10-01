@@ -39,7 +39,9 @@ export const ui = {
   expanded: {},         // open cards and lists, by key
   showPast: false,
   departmentFilter: 'All',
-  schedule: { month: '', date: '', service: '', mode: 'day', query: '', chosen: false },
+  // Schedule: the chosen month, day and service, the view, the search, and
+  // how many services the list shows before "Show more services".
+  schedule: { month: '', date: '', service: '', mode: 'day', query: '', chosen: false, size: 12 },
   // Manage, Services: the month shown, the service whose details are open,
   // Fill's proposals ('serviceId|duty' -> { memberUid, memberName }) and the
   // duties it could not fill ('serviceId|duty' -> reason, see lib/fill.js).
