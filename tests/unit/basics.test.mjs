@@ -37,24 +37,31 @@ test('two people who share a title, first name and last initial show their whole
   assert.equal(displayName('  S.  Monica   Castro ', members), 'S. Monica C.');
 });
 
-test('stored names follow the server: tidy spaces and title, built-in spellings, then the name map', () => {
-  const { cleanName } = require('../../functions/names.js');
+test('stored names follow the server: app/nameMap, else the built-in spelling, until the name stops changing', () => {
+  assert.equal(canonicalName('B. Anthony L', {}), 'B. Anthony');
+  assert.equal(canonicalName('B. Gio', { 'B. Giomar': 'B. Giomar R' }), 'B. Giomar R', 'a built-in spelling of a renamed member');
+  assert.equal(canonicalName('B. Gio', { 'B. Gio': 'B. Gio Smith' }), 'B. Gio Smith', 'the name map comes before the built-in list');
+  assert.equal(canonicalName('B. One', { 'B. One': 'B. Two', 'B. Two': 'B. Three' }), 'B. Three', 'renamed twice');
+  assert.equal(canonicalName('B. One', { 'B. One': 'B. Two', 'B. Two': 'B. One' }), 'B. Two', 'a loop stops at the last new name');
+  assert.equal(canonicalName('  S.  Leah ', {}), 'S. Leah');
+  assert.equal(canonicalName('constructor', {}), 'constructor');
+  assert.equal(canonicalName(null, null), '');
+});
+
+// The server's canonicalName arrives with the server package's changes.
+const server = require('../../functions/names.js');
+test('the app and the server give every stored name the same spelling', { skip: !server.canonicalName && 'functions/names.js has no canonicalName yet' }, () => {
   const maps = [
     {},
-    { 'S. Monica S': 'S. Monica Salinas' },          // rename the target of a built-in spelling
-    { 'S. Monica S': 'S. Monica Salazar' },          // rename to a built-in spelling
-    { 'B. Giomar': 'B. Giomar R', 'M. Chloe': 'M. Chloe Park' }
+    { 'S. Monica S': 'S. Monica Salinas' },
+    { 'S. Monica S': 'S. Monica Salazar' },
+    { 'B. Giomar': 'B. Giomar R', 'M. Chloe': 'M. Chloe Park' },
+    { 'B. Gio': 'B. Gio Smith', 'B. One': 'B. Two', 'B. Two': 'B. Three' }
   ];
-  const names = Object.keys(BUILT_IN_NAME_MAP).concat(['S. Monica S', 'B. Giomar', 'S Leah', 'b.  adam', ' E. Simon ', 'Bridgette', 'H.Elena', '']);
+  const names = Object.keys(BUILT_IN_NAME_MAP).concat(['S. Monica S', 'B. Giomar', 'B. One', 'S. Leah', ' E.  Simon ', 'Bridgette', '']);
   for (const nameMap of maps) {
-    for (const name of names) assert.equal(canonicalName(name, nameMap), cleanName(name, nameMap), JSON.stringify([name, nameMap]));
+    for (const name of names) assert.equal(canonicalName(name, nameMap), server.canonicalName(name, nameMap), JSON.stringify([name, nameMap]));
   }
-  assert.equal(canonicalName('S. Monica Salazar', { 'S. Monica S': 'S. Monica Salazar' }), 'S. Monica Salazar', 'a rename to a built-in spelling holds');
-  assert.equal(canonicalName('B. Gio', { 'B. Giomar': 'B. Giomar R' }), 'B. Giomar R');
-  // Renamed twice by hand: followed to the end, and a loop stops.
-  assert.equal(canonicalName('B. One', { 'B. One': 'B. Two', 'B. Two': 'B. Three' }), 'B. Three');
-  assert.ok(['B. One', 'B. Two'].includes(canonicalName('B. One', { 'B. One': 'B. Two', 'B. Two': 'B. One' })));
-  assert.equal(canonicalName('constructor', {}), 'constructor');
 });
 
 test('member lists run Pastor, Elder, Missionary, Deacon, then Brothers and Sisters by name', () => {

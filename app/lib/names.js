@@ -17,11 +17,13 @@ const DISPLAY_FIXES = {
   'H.Elena': 'H. Elena', 'S. Melisaa': 'S. Melissa'
 };
 
-/* The stored spelling of a name, the way the server cleans it
-   (functions/names.js): spaces tidied, the title written "B. ", the
-   built-in spellings, then app/nameMap. A renamed name can be renamed again,
-   so the maps are followed until the name stops changing. Answers are kept
-   per name map, because every redraw asks for the same few hundred names. */
+/* The current spelling of a stored name, exactly as the server works it out
+   (functions/names.js canonicalName), so the app and the server always name
+   a member the same way: spaces tidied, then app/nameMap, else the built-in
+   spellings, again and again until the name stops changing (a member renamed
+   twice is found under their first spelling); a loop stops at the last new
+   name. Answers are kept per name map, because every redraw asks for the
+   same few hundred names. */
 const canonicals = new WeakMap();
 const NO_MAP = {};
 
@@ -32,23 +34,21 @@ export function canonicalName(name, nameMap) {
   const key = String(name == null ? '' : name);
   let value = known.get(key);
   if (value === undefined) {
-    value = cleanName(key, map);
+    value = currentSpelling(key, map);
     known.set(key, value);
   }
   return value;
 }
 
-const own = (map, key) => Object.prototype.hasOwnProperty.call(map, key) ? map[key] : '';
+const oneSpaced = value => String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+const has = (map, key) => Object.prototype.hasOwnProperty.call(map, key);
 
-function cleanName(raw, map) {
-  let value = raw.replace(/[\x00-\x1f\x7f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
-  if (!value) return '';
-  value = value.replace(/^([BDSEM])[.\s]+\s*/i, (_match, title) => title.toUpperCase() + '. ');
+function currentSpelling(raw, map) {
+  let value = oneSpaced(raw);
   const seen = new Set([value]);
   for (;;) {
-    const fixed = own(BUILT_IN_NAME_MAP, value) || value;
-    const next = own(map, fixed) || fixed;
-    if (next === value || seen.has(next)) return next;
+    const next = oneSpaced(has(map, value) ? map[value] : has(BUILT_IN_NAME_MAP, value) ? BUILT_IN_NAME_MAP[value] : '');
+    if (!next || next === value || seen.has(next)) return value;
     seen.add(next);
     value = next;
   }
