@@ -147,7 +147,7 @@ test('a service "usually" has a duty filled when half of its kind do', () => {
 test('a change request is open while pending and the member still holds the duty', () => {
   const services = [{ date: '2026-09-12', service: 'Morning', assignments: { 'Usher Door': 'S. Leah' } }];
   const request = { svcId: '2026-09-12_morning', duty: 'Usher Door', name: 'S. Leah', status: 'pending' };
-  assert.equal(isOpen(request, services), true);
+  assert.equal(isOpen(request, services, undefined, new Date('2026-09-10T12:00:00-07:00')), true, 'before the service starts');
   services[0].assignments['Usher Door'] = 'S. Grace';
   assert.equal(isOpen(request, services), false);
   assert.equal(shownStatus(request, services), 'completed');
