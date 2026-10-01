@@ -24,15 +24,15 @@ Functions (Node 22), sign-in (member name and PIN), and push notifications.
 | `app/lib/` | The rules, with no side effects: dates, services, availability, double duties, workload, Fill, requests, names. Unit tested. |
 | `app/services/` | Reads, writes and server calls: sign-in, requests, departments, notifications, feedback. |
 | `app/screens/` | One file per screen or Manage section. The Schedule has one layout per appearance. |
-| `app/ui/` | Pieces used on many screens: header, tabs, banners, cards. |
+| `app/ui/` | Pieces used on many screens: header, tabs, banners and toasts, cards. `replace.js` redraws a screen while keeping the member's place: focus, the caret, unsaved field values and scroll. |
 | `app/appearance/` | The four appearances and the picker. |
 | `app/presider/` | The song planner: each service's prayers, Preparation Songs, Glory (and Thanks) and Choir song, and Copy for Signal. |
 | `styles/base.css` | The Original appearance, and the layout every appearance shares. |
 | `styles/themes/` | Prism, Navy & Cream and Aurora, each drawn over `base.css`. |
 | `permissions.js` | Who may do what. The server has an identical copy in `functions/`; a test keeps the two the same. |
 | `song-lib.js`, `song-seed.js` | Song counts and the song list. The Signal song ingest on Anthony's Mac loads these two files from this folder, so keep them here and keep their behavior. |
-| `functions/` | Cloud Functions. |
-| `firestore.rules` | Database rules. |
+| `functions/` | Cloud Functions. `index.js` only wires each one, through one `callable()` wrapper; the work is in modules by area (`accounts.js` sign-in and PINs, `notify.js` alerts, `schedule-projection.js`, `sheet-io.js`, `public-endpoints.js`, `replacements.js`, ...). Every refusal carries a reason code (`refusals.js`), which `app/lib/reasons.js` turns into plain words. |
+| `firestore.rules` | Database rules. They decide from the member's account document, as the server does. |
 | `scripts/` | Local server, build, release, and the functions deploy. |
 | `tests/` | Unit, rules and browser tests, and the fake Firebase they use. |
 
@@ -44,7 +44,11 @@ Functions (Node 22), sign-in (member name and PIN), and push notifications.
   `allowed` is checked before `run`. An action needs a signed-in member unless
   it says `public: true`.
 - **Markup.** Build it with `` html`...` `` from `app/html.js`. Values are
-  escaped; wrap trusted markup in `raw()`.
+  escaped; wrap trusted markup in `raw()`. Give controls stable `data-*` keys
+  (service, duty, date), so a redraw finds them again and keeps the focus.
+- **A message.** `notice(text)` for a short confirmation (it shows briefly
+  above the tabs), `notice(text, true)` for a problem, and `banner(text)` for
+  anything the member must read or copy; banners stay until closed.
 - **A rule.** Put it in `app/lib/` with a unit test in `tests/unit/`.
 - **A feature switch.** Add it to `app/config/features.js`. It shows up in
   Manage, Features, and `feature('id')` reads it.
@@ -67,6 +71,9 @@ schedule, and never touches Firebase. Passcode 2468, every PIN 1234. B. Adam
 is an administrator, E. Joseph leads Worship and Media, S. Grace leads Usher
 Sisters, and M. Ruth edits songs (see `tests/fake/fixture.js`).
 
+`npm start` serves only this computer; add `-- --host 0.0.0.0` to open it
+from a phone on the same network.
+
 `npm run serve` runs the app against the real database. Anything you change
 there is real.
 
@@ -85,19 +92,30 @@ npm run test:functions
 ```
 
 ```bash
+npm run test:rules
+```
+
+```bash
 npm run test:browser
 ```
 
 - `check`: every module's imports and exports line up.
-- `test`: the rules in `app/lib/`, permissions, and the Firestore rules.
+- `test`: the rules in `app/lib/`, permissions, and that the Firestore rules
+  know every document and duty the app writes.
+- `test:rules`: the Firestore rules themselves, on the Firestore emulator,
+  for every read and write the app makes, allowed and refused. It needs
+  Java 21 (Mac: `brew install openjdk@21`) and downloads firebase-tools 15
+  and the emulator the first time (prefix `npm_config_cache=/tmp/npm-cache`
+  as for the deploy commands).
 - `test:functions`: the Cloud Functions. Run `npm ci` in `functions/` once first.
 - `test:browser`: the main flows in a real browser on the fake data: sign-in,
-  change requests, assignments, availability, invite links, feedback, the song
-  planner, appearances, offline, and the built files.
+  change requests, assignments, the month plan and Fill, availability, invite
+  links, feedback, the song planner, appearances, offline, keyboard focus,
+  and the built files (`tests/browser/*.test.mjs`).
 - `npm run screenshots -- --appearance prism --out /tmp/shots` saves every
   screen in one appearance.
 
-GitHub runs all four on every pull request.
+GitHub runs all five on every pull request.
 
 ## Release
 
@@ -153,18 +171,34 @@ Database rules, only when `firestore.rules` changed:
 npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only firestore:rules --project lv-zion-duties
 ```
 
+When a change needs all three, deploy them the same day in this order: the
+functions, then the rules, then the app. To undo the rules: Firebase console,
+Firestore, Rules, history.
+
 ## Planning a month
 
-Manage, Services is the month planner. A leader sees their department's
-duties for every service still to come that month: a grid on a computer, a
-list on a phone. Changing a duty saves it at once. A service shows only the
+Manage, Month plan is the month planner. A leader sees their department's
+duties for every service still to come that month: a grid on a computer (as
+wide as the window), a list on a phone. Changing a duty saves it at once.
+Manage opens on Requests when one is waiting, otherwise on the month plan.
+
+The legend above the month explains the marks: amber "Not filled" for a duty
+the service usually has, a red name with the reason underneath (not on the
+list, not available, already serving), a dashed cell for a Fill proposal not
+saved yet, and a green edge for an usher who also gives a prayer there (an
+allowed pair). Usher leaders see who prays in each service. A service that
+has started can no longer be changed by leaders (administrators use the
+override, which is recorded), and a past month only shows what happened. A service shows only the
 duties it has: Thanks Prayer only at Sabbath Day Morning and feast-day
 mornings, Closing Prayer and the choir song only at Sabbath Day and Third Day
 (`app/lib/worship.js`).
 
-**Fill empty duties** proposes someone for every empty duty that kind of
-service (same worship and time) has had filled in the past year, or every
-duty it has when there is no history. The grid dims the duties Fill leaves
+**Fill** ("Fill by" Auto, Rotation or Random) reads the department lists
+again, then proposes someone for every empty duty that kind of service (same
+worship and time) has had filled in the past year, or every duty it has when
+there is no history. Proposals belong to their department and month: until
+they are saved or discarded, the month and the department stay put. A save
+that fails keeps the proposals, and a duty the server refuses says why. The grid dims the duties Fill leaves
 alone. It only picks members who are active in the department, can take that
 duty, are available, and may hold it alongside what they already do in that
 service (see "One duty each" below).
@@ -220,6 +254,20 @@ person's duties stay the same. `app/lib/conflicts.js` has the rule and
 `permissions.js` the same rule for the server; a test checks that they agree
 on every pair and three of duties.
 
+## Change requests and flagged duties
+
+- A member asks for a change from My Duties. The duty then says "Asked. You
+  stay on this duty until your leader answers.", and the member can withdraw
+  the request while it waits. A member can ask only about their own duty.
+- The department's leaders answer in Manage, Requests: give the duty to
+  someone (suggested people first, then everyone who can take it), leave it
+  open, or decline (the member stays on). The button says what Approve does.
+  When the member no longer holds the duty, Approve is refused and the
+  request can only be closed; a request for a moved or deleted service can
+  be closed too. Requests for services that have started show as Past.
+- A duty flagged because the member marked the day off ("can no longer make
+  it") can go to someone else, be left open, or stay with the member.
+
 ## Department members
 
 - Every night (`servingMembers`, 3:30 AM Pacific) everyone who has served in
@@ -232,7 +280,29 @@ on every pair and three of duties.
   list yet ("Not on the list yet"), with Add and Add all. "Add a member"
   finds anyone on the member list, including people who have never signed in.
 - Availability: a service time a member has not set counts as available.
-  Only times marked "not available" (or a day off) keep them off.
+  Only times marked "not available" (or a day off) keep them off. A weekly
+  time covers every service at that time ("Evening" is Saturday and Tuesday
+  evenings and feast-day evenings), and the screen says so. Changes wait in
+  an "Unsaved changes" bar until saved. Saving names the duties on days now
+  marked off; their leaders are told. A leader's change to someone's
+  availability flags the same way, and is refused if the member changed it
+  meanwhile.
+- "Add a member", "Add" and "Add all" give people duties the way the nightly
+  job does. Someone who joins with an invite link shows as "Not ready" until
+  a leader chooses the duties they can take.
+
+## Signing in
+
+- Members sign in with their name and PIN. A new or reset PIN is a shared
+  starting PIN until the member chooses their own (Settings, Change your
+  PIN); the shared starting PINs cannot be chosen.
+- Five wrong PINs lock the account for 15 minutes. A reset unlocks it and
+  signs the member out on every device. Only administrators reset a leader's,
+  a song editor's or an administrator's PIN, and every reset is recorded.
+- Removing someone as a leader or song editor holds; it also ends their open
+  sessions, as a reset and a name fix do. They sign in again.
+- Signing out clears what the member left on the device: unsaved changes,
+  notices, Recent updates, and alerts to that device.
 
 ## Fixing a name
 
@@ -256,7 +326,11 @@ tabs (one row per service, one column per duty, header on row 2); the
 Sheet's own script copies them into "Raw Data".
 
 - By default the app only reads the Sheet: every 2 hours (or Import now in
-  Manage, Data) from the published Raw Data link.
+  Manage, Data) from the published Raw Data link. Then the Sheet wins: a
+  name the Sheet lists comes back at the next import, so change it in the
+  Sheet too (the month plan says so). Times set in the app stay, and a
+  service deleted in the app is not added again; add it again in the app to
+  bring it back. A row's year follows its weekday.
 - With **Write changes to the Sheet** on (Manage, Features), the app writes
   every duty change and new service into the Entry tabs within seconds, adds
   each new year's tab, and reads the Entry tabs directly. A blank cell never
@@ -272,7 +346,9 @@ Sheet's own script copies them into "Raw Data".
      `node scripts/sheet-try.mjs "<the copy's address>"`, then look at the copy.
   5. Update the Sheet's script so it reads every year's Entry tab.
   6. Turn on Write changes to the Sheet.
-- If a write fails, Manage shows why, and the next change tries again.
+- If a write fails, Manage shows why until the next import, which writes it
+  first. **Write changes to the Sheet** turns on only after a successful
+  Check the Sheet.
 
 ## Where the data comes from
 
@@ -288,6 +364,8 @@ Sheet's own script copies them into "Raw Data".
   sung once 3 hours have passed since its service started, every night the
   department members from the schedule, and every November 1 the next
   planning year's regular services.
-- Notifications: a new duty, a day-before reminder, a change request (to the
-  scheduler and that department's leaders) and its answer, and feedback
-  marked done (to the member who sent it).
+- Notifications: new duties (one alert names all of a member's new duties,
+  also after a Sheet import), a day-before reminder (one per member, gone once
+  the service starts), a change request (to the scheduler and that
+  department's leaders) and its answer, and feedback marked done (to the
+  member who sent it). None for services that have started.
