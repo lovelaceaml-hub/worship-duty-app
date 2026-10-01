@@ -55,7 +55,7 @@ function newProfile(department, memberUid, name, record, today, at) {
   return {
     memberUid, uid: memberUid, departmentId: department, department, role: 'member', memberName: name,
     status, eligibleDuties: duties, schedulable: true, availability: { recurring: {}, exceptions: {} },
-    createdAt: at, createdBy: SYSTEM, updatedAt: at, updatedByUid: SYSTEM, updatedBy: 'Added from the schedule',
+    createdAt: at, createdBy: SYSTEM, updatedAt: at, updatedByUid: SYSTEM, updatedBy: 'Added from the schedule', revision: 1,
     attribution: { createdBy: SYSTEM, createdAt: at, updatedBy: 'Added from the schedule', updatedAt: at },
     fieldAttribution: { status: initial, eligibleDuties: initial, schedulable: initial, availability: initial },
     provenance: { source: 'schedule', lastServed: record.last, recentDays: RECENT_DAYS, addedOn: today }

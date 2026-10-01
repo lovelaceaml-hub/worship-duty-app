@@ -519,6 +519,7 @@ function createDepartmentHandlers(options = {}) {
       updatedAt: at,
       updatedByUid: actor.uid,
       updatedBy: actor.token.memberName || actor.token.member || actor.uid,
+      revision: 1,
       attribution: {
         createdBy: actor.uid,
         createdAt: at,

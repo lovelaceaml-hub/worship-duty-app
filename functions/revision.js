@@ -26,12 +26,13 @@ function isSafeExpectedRevision(value) {
 
 /*
  * assertFresh({ expectedRevision, expectedWitness, currentRevision,
- * currentWitness, code, message, details }) is a no-op when
- * expectedRevision is undefined (an older caller, or a first save against a
- * document with no stored revision, which reads as 0). When present it must
- * be a non-negative safe integer. A mismatch on the revision, or on the
- * witness when one was supplied, throws `code` ('aborted' by default) with
- * `details` merged onto { revision: currentRevision, ...witness fields }.
+ * currentWitness, code, message, details }) checks what the caller sent.
+ * A missing value is not checked: undefined, and null too, because the
+ * callable SDK sends an undefined field as null (a document with no stored
+ * revision gives the client undefined). A revision, when present, must be a
+ * non-negative safe integer. A mismatch on the revision or on the witness
+ * throws `code` ('aborted' by default) with `details` merged onto
+ * { reason: 'changed', revision: currentRevision }.
  */
 function assertFresh(options = {}) {
   const {
@@ -44,21 +45,21 @@ function assertFresh(options = {}) {
     details = {}
   } = options;
 
-  if (expectedRevision === undefined) return;
-
-  if (!isSafeExpectedRevision(expectedRevision)) {
+  const hasRevision = expectedRevision != null;
+  if (hasRevision && !isSafeExpectedRevision(expectedRevision)) {
     const error = new Error('expectedRevision must be a non-negative integer.');
     error.code = 'invalid-argument';
+    error.details = { reason: 'invalid-input' };
     throw error;
   }
 
-  const revisionStale = expectedRevision !== current;
-  const witnessStale = expectedWitness !== undefined && expectedWitness !== currentWitness;
+  const revisionStale = hasRevision && expectedRevision !== current;
+  const witnessStale = expectedWitness != null && expectedWitness !== currentWitness;
   if (!revisionStale && !witnessStale) return;
 
   const error = new Error(message);
   error.code = code;
-  error.details = Object.assign({ revision: current }, details);
+  error.details = Object.assign({ reason: 'changed', revision: current }, details);
   throw error;
 }
 

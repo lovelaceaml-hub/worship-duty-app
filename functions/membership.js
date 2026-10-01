@@ -202,6 +202,7 @@ function profileForAccount(departmentId, memberUid, name, actor, at) {
     updatedAt: at,
     updatedByUid: actor.uid,
     updatedBy: actor.token.memberName || actor.token.member || actor.uid,
+    revision: 1,
     attribution: {
       createdBy: actor.uid,
       createdAt: at,
