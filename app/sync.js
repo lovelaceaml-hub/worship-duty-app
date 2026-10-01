@@ -2,7 +2,7 @@
    and asks for a redraw. The schedule is also saved on the device so the
    next start-up can show it at once, and offline. */
 import { fb } from './firebase.js';
-import { data, loaded, canonicalizeNames, saveCache } from './store.js';
+import { data, loaded, canonicalizeNames, canonicalizeService, canonicalizeRosters, saveCache } from './store.js';
 import { renderSoon } from './render.js';
 import { notice } from './ui/banners.js';
 import { afterScheduleChange } from './services/notifications.js';
@@ -14,10 +14,17 @@ function listen(path, apply) {
     error => console.warn('Listener stopped: ' + path, error));
 }
 
+/* Services by document id. A snapshot after the first carries only the
+   services that changed, so only those are read and respelled. */
+const services = new Map();
+
 export function startSync() {
   fb.onSnapshot(fb.collection(fb.db, 'schedule'), snapshot => {
-    data.services = snapshot.docs.map(doc => doc.data());
-    canonicalizeNames();
+    snapshot.docChanges().forEach(change => {
+      if (change.type === 'removed') services.delete(change.doc.id);
+      else services.set(change.doc.id, canonicalizeService(change.doc.data()));
+    });
+    data.services = Array.from(services.values());
     loaded.schedule = true;
     saveCache();
     afterScheduleChange();
@@ -39,7 +46,7 @@ export function startSync() {
   });
   listen('app/departments', snapshot => {
     data.rosters = snapshot.exists() ? (snapshot.data().map || {}) : {};
-    canonicalizeNames();
+    canonicalizeRosters();
     loaded.rosters = true;
   });
   listen('app/leaderConfig', snapshot => {
