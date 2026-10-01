@@ -39,11 +39,11 @@ function conflicts(stats) {
 
 /* Empty duties of the next four weeks that services like these usually
    have (the duties Fill fills), services not planned yet included. */
-function openDuties(visible) {
+function openDuties(coming) {
   const usual = fillDuties(data.services, todayISO());
   const horizon = addDays(todayISO(), 28);
   const own = new Set(departmentsShown().flatMap(department => department.duties));
-  const rows = visible.filter(service => service.date <= horizon).map(service => {
+  const rows = coming.filter(service => service.date <= horizon).map(service => {
     const assignments = service.assignments || {};
     const missing = usual(service).filter(duty => own.has(duty) && !assignments[duty]);
     return missing.length ? { service, missing } : null;
@@ -85,10 +85,10 @@ function workloadTable(stats) {
 export function render() {
   departmentsShown().forEach(department => loadRoster(department.name));
   const stats = workload(data.services, data.members, todayISO());
-  const visible = upcoming(data.services).filter(shownFor(managedDepartment()));
+  // Every coming service: one where the department has no one yet needs it most.
   return html`<h3 class="section-heading">Double duties</h3>
     ${conflicts(stats)}
-    ${openDuties(visible)}
+    ${openDuties(upcoming(data.services))}
     ${workloadTable(stats)}`;
 }
 

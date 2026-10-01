@@ -3,8 +3,9 @@
    depend on, in the same order, and refuses the same way: an HttpsError code
    with details.reason (see app/lib/reasons.js). The real checks live in
    functions/ and its own tests.
-   Tests can set window.__fakeFail = { callableName: 'unavailable' } to make a
-   call fail, and window.__fakeDelay = { callableName: ms } to slow one down. */
+   Tests can set window.__fakeFail = { callableName: 'unavailable' } (or a
+   function of the payload giving a code) to make a call fail, and
+   window.__fakeDelay = { callableName: ms } to slow one down. */
 import { doc, getDoc, getDocs, collection, setDoc, updateDoc } from './firebase-firestore.js';
 
 const accounts = window.__fakeAccounts = window.__fakeAccounts || structuredClone((window.__fixture || {}).accounts || {});
@@ -361,7 +362,8 @@ export function httpsCallable(_functions, name) {
     const delay = (window.__fakeDelay || {})[name];
     if (delay) await new Promise(resolve => setTimeout(resolve, delay));
     const failure = (window.__fakeFail || {})[name];
-    if (failure) fail(failure, 'The fake ' + name + ' was told to fail.');
+    const code = typeof failure === 'function' ? failure(payload) : failure;
+    if (code) fail(code, 'The fake ' + name + ' was told to fail.');
     if (!handlers[name]) fail('not-found', 'No fake for ' + name);
     return { data: await handlers[name](payload) };
   };
