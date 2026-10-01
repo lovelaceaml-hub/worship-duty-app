@@ -7,7 +7,7 @@
     "build": "node scripts/build.mjs",
     "check": "node --experimental-vm-modules scripts/check-modules.mjs",
     "test": "node --test \"tests/unit/*.test.mjs\" \"tests/rules/*.test.mjs\"",
-    "test:browser": "node --test tests/browser/flows.test.mjs",
+    "test:browser": "node --test \"tests/browser/*.test.mjs\"",
     "test:functions": "npm --prefix functions test",
     "screenshots": "node tests/browser/shoot.mjs"
   },
