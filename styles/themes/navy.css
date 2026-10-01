@@ -344,6 +344,12 @@ html[data-appearance="navy"] .appearance-choice { border-radius: 14px; }
   html[data-appearance="navy"] .schedule-rail:has(> .day-hero) > .next-button { width: calc(55% - 14px); }
 }
 
+/* The month plan uses the window's width, as in the other appearances. */
+@media (min-width: 900px) {
+  html[data-appearance="navy"] .app:has(.plan-grid) { width: calc(100% - 52px); }
+  html[data-appearance="navy"] #view:has(.plan-grid), html[data-appearance="navy"] .app:has(.plan-grid) > #banners { max-width: none; }
+}
+
 /* ---- tablets and phones: no frame ---- */
 
 @media (max-width: 800px) {

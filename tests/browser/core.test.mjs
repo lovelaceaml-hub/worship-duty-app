@@ -201,7 +201,10 @@ test('signing out leaves nothing of the member: drafts, banners, name, alerts an
   await page.evaluate(() => import('/app/ui/banners.js').then(module => module.notice('Only for S. Leah.', true)));
   await page.locator('#banners .banner', { hasText: 'Only for S. Leah.' }).waitFor();
 
+  let asked = '';
+  page.once('dialog', dialog => { asked = dialog.message(); dialog.accept(); });
   await signOut(page);
+  assert.match(asked, /not saved/, 'signing out with unsaved changes asks first');
   assert.equal(await fakeDoc(page, 'tokens/device-token-1'), undefined, 'the push token document is deleted');
   const stored = await page.evaluate(() => ['wds-me', 'wds-fcm-token', 'wds-seen-S. Leah'].map(key => localStorage.getItem(key)));
   assert.deepEqual(stored, [null, null, null]);
@@ -210,7 +213,7 @@ test('signing out leaves nothing of the member: drafts, banners, name, alerts an
   assert.equal(await page.locator('#banners .banner', { hasText: 'Only for S. Leah.' }).count(), 0);
   await fromMenu(page, 'account', 'availability');
   assert.equal(await evening.inputValue(), 'available', 'Naomi sees her own pattern');
-  assert.equal(await page.locator('[data-act="availability-save"]').isDisabled(), true);
+  assert.equal(await page.locator('.availability-unsaved').count(), 0, 'and nothing waits to be saved');
 
   // Offline after the sign-out, the app does not open as anyone.
   await signOut(page);
@@ -301,11 +304,15 @@ test('a member whose PIN is locked after too many tries is told to wait', async 
   await context.close();
 });
 
-test('an open Schedule moves on at the service\'s start minute by itself', async () => {
+test('an open Schedule marks the service Now at its start minute, and moves on after it, by itself', async () => {
   const { context, page, errors } = await as('B. Adam', { now: '2026-07-07T19:59:10-07:00' });
   const card = page.locator('.next-service .service-card');
   assert.equal(await card.getAttribute('data-service'), '2026-07-07_evening');
+  assert.equal(await card.locator('.service-now').count(), 0);
   await page.clock.runFor(90 * 1000);
+  await card.locator('.service-now').waitFor();
+  assert.equal(await card.getAttribute('data-service'), '2026-07-07_evening', 'the service under way stays on');
+  await page.clock.runFor(3 * 60 * 60 * 1000);
   await page.waitForFunction(() => document.querySelector('.next-service .service-card')?.dataset.service === '2026-07-11_morning');
   assert.deepEqual(errors, []);
   await context.close();

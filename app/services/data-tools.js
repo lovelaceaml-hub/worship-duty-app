@@ -5,7 +5,7 @@
    and fixing a member's name. */
 import { fb, call, write, problem } from '../firebase.js';
 import { plural } from '../html.js';
-import { data, readJSON, writeJSON } from '../store.js';
+import { data, readJSON, writeJSON, onMemberChange } from '../store.js';
 import { todayISO } from '../lib/dates.js';
 import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
@@ -49,6 +49,8 @@ export async function saveSettings(fields, done, { optimistic = true } = {}) {
 
 /* The Sheet tools' state; `check` is the last "Check the Sheet" result. */
 export const sheet = { busy: false, checking: false, check: null, addingYear: false, renaming: false };
+// A Sheet check is an administrator's; it is not shown to the next member.
+onMemberChange(() => { sheet.check = null; });
 
 export function lastSheetImport() { return readJSON('wds-sheet-import', null); }
 

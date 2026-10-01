@@ -40,7 +40,7 @@ async function swipeRight(page) {
   await page.waitForTimeout(300);
 }
 
-const banner = (page, text) => page.locator('#banners .banner', { hasText: text }).waitFor();
+const banner = (page, text) => page.locator('#banners .banner, #toasts .toast', { hasText: text }).first().waitFor();
 const fakeDoc = (page, docPath) => page.evaluate(docPath => window.__fake.get(docPath), docPath);
 const calls = (page, name) => page.evaluate(name => window.__fakeCalls.filter(call => call.name === name).map(call => call.payload), name);
 /* Changes a schedule document the way a leader's edit elsewhere would. */

@@ -2,7 +2,7 @@
    button; administrators read them in Manage, Feedback. Stored in the
    feedback collection. */
 import { fb, write } from '../firebase.js';
-import { session, ui, nameOf } from '../store.js';
+import { session, ui, nameOf, onMemberChange } from '../store.js';
 import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
 import { currentAppearance } from '../appearance/picker.js';
@@ -10,6 +10,8 @@ import { currentAppearance } from '../appearance/picker.js';
 export const KINDS = [['feedback', 'Feedback'], ['bug', 'Report a problem'], ['suggestion', 'Suggest a change']];
 
 export const feedback = { list: null, state: 'idle', error: '', showDone: false };
+// The feedback list belongs to whoever signed in; the next member starts fresh.
+onMemberChange(() => Object.assign(feedback, { list: null, state: 'idle', error: '', showDone: false }));
 
 export async function sendFeedback(kind, message) {
   const text = String(message || '').trim().slice(0, 2000);

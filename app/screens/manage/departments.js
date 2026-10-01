@@ -6,7 +6,7 @@ import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, ui, nameOf } from '../../store.js';
 import { render as redraw } from '../../render.js';
-import { notice } from '../../ui/banners.js';
+import { notice, banner } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
 import { DUTY_DEFAULTS, departmentNamed, departmentOf, dutyName, dutyDefault } from '../../config/duties.js';
 import { normalizeAvailability, takesDuty, timeLabel, dutiesFor, WEEKLY_TIMES, SPECIAL_TIMES } from '../../lib/availability.js';
@@ -277,7 +277,7 @@ const editing = () => canManageDepartment(managedDepartment());
 
 async function copy(text, done) {
   try { await navigator.clipboard.writeText(text); notice(done); }
-  catch (_error) { notice('Copy this link: ' + text); }
+  catch (_error) { banner('Copy this link: ' + text); }
 }
 
 const openProfile = (department, uid) => { ui.departmentView = { department, uid }; redraw(); window.scrollTo({ top: 0 }); };
