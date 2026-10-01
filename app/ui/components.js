@@ -1,6 +1,6 @@
 /* Markup pieces shared by every screen and appearance. */
 import { html } from '../html.js';
-import { DEPARTMENTS } from '../config/duties.js';
+import { DEPARTMENTS, dutyName } from '../config/duties.js';
 import { ui, feature, nameOf } from '../store.js';
 import { clockTime, longDate, dayBadge } from '../lib/dates.js';
 import { doubleDuties, isMarkedOk } from '../lib/conflicts.js';
@@ -31,7 +31,7 @@ export function dutyGroups(service, { only = '', showEmpty = feature('emptyDutie
     return html`<div class="duty-group" style="--dept: ${department.color}">
       <h4 class="duty-group-name">${department.name}</h4>
       ${duties.map(duty => html`<div class="duty-row">
-        <span class="duty-name">${duty}</span>
+        <span class="duty-name">${dutyName(duty)}</span>
         ${assignments[duty] ? html`${person(assignments[duty])}${doubleDutyFlag(service, assignments[duty])}` : html`<span class="person is-empty">Not filled</span>`}
       </div>`)}
     </div>`;

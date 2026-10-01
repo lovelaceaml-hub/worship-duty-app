@@ -29,12 +29,14 @@ export function loadSeed() {
 /* "A57" for appendix songs, the number otherwise. */
 export function songNumber(song) {
   const match = /^Appx\.?\s*(\d+)/i.exec((song && song.number) || '');
-  return match ? 'A' + match[1] : (song && song.number) || '';
+  return match ? 'A' + match[1].padStart(2, '0') : (song && song.number) || '';
 }
 
-export function songLabel(id) {
+/* "001 Holy and Honorable Day", as the song shows in a Signal message and
+   in a service's choir song. */
+export function songLine(id) {
   const song = id && planner.songById[id];
-  return song ? '#' + song.number + ' ' + song.title : '';
+  return song ? songNumber(song) + ' ' + song.title : '';
 }
 
 export function minutes(seconds) {

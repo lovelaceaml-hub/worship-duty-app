@@ -4,8 +4,8 @@ import { data, ui, nameOf } from '../store.js';
 import { planner, view, SECTIONS, SECTION_NAMES, SORTS, RECENT_DAYS } from './state.js';
 import { canEdit, canManageSongs } from './access.js';
 import { myServices, current, isConfirmed, changedSinceConfirmed, totalTime, countedSongs } from './data.js';
-import { serviceCard, orderOfWorship } from './cards.js';
-import { filteredSongs, pages, categories, categoryColor, songNumber, songLabel, minutes, statsFor } from './catalog.js';
+import { serviceCard, serviceSheet, kindOf } from './cards.js';
+import { filteredSongs, pages, categories, categoryColor, songNumber, minutes, statsFor } from './catalog.js';
 import { serviceId } from '../lib/services.js';
 import { shortDate, longDate, dayBadge, todayISO, daysSince, relativeDay } from '../lib/dates.js';
 import { SERVICE_LABELS, WORSHIP_TYPES } from '../config/duties.js';
@@ -102,31 +102,43 @@ function servicePicker() {
   </section>`;
 }
 
+const SLOT_NAMES = { glory: 'Glory', thanks: 'Thanks', choir: 'Choir' };
+
+/* The Glory, Thanks or Choir song as a row under the preparation songs, with
+   a tag to choose it from the list. A choir song is text on the service,
+   such as "358 Children of Jerusalem". */
+function slotRow(slot, song, text = '') {
+  const selecting = view.slot === slot;
+  const [, number, title] = song ? [, songNumber(song), song.title] : /^#?([A-Z]?\d+)\s+(.+)$/.exec(text) || [, '', text];
+  return html`<li class="set-row is-slot${selecting ? ' is-selecting' : ''}">
+    ${number ? html`<span class="num">${number}</span>` : html`<span></span>`}
+    <span class="title${title ? '' : ' is-empty'}">${title || SLOT_NAMES[slot] + ' song not chosen'}</span>
+    <span class="time">${song ? minutes(song.durationSec) : ''}</span>
+    <button type="button" class="slot-tag" data-act="song-slot" data-slot="${slot}" aria-pressed="${selecting}"
+      aria-label="${(title ? 'Change the ' : 'Choose the ') + SLOT_NAMES[slot] + ' song'}">${SLOT_NAMES[slot]}</button>
+    ${title ? html`<button type="button" class="icon-button" data-act="song-slot-clear" data-slot="${slot}" aria-label="Remove the ${SLOT_NAMES[slot]} song">&times;</button>` : ''}
+  </li>`;
+}
+
 function builder(setlist) {
   const service = serviceFor(setlist);
   if (!canEdit(setlist)) {
     return html`<section class="card"><h3 class="card-subtitle">${setlist.worshipType} <span class="service-label">${setlist.serviceLabel}</span></h3>
       <p class="hint">View only. The assigned Presider, a song editor or an administrator can change these songs.</p>
-      ${orderOfWorship(setlist, service)}
+      ${serviceSheet(setlist, service)}
       <button type="button" class="link" data-act="song-close-list">Choose another service</button></section>`;
   }
   const songs = setlist.songs || [];
   const main = songs.map((id, index) => ({ id, index })).filter(item => item.id !== setlist.glorySong && item.id !== setlist.thanksSong);
-  const slot = (name, label, id) => html`<div class="slot"><span class="slot-name">${label}</span>
-    <span class="slot-song${id ? '' : ' is-empty'}">${songLabel(id) || 'Not chosen'}</span>
-    <button type="button" class="link" data-act="song-slot" data-slot="${name}">${id ? 'Change' : 'Choose'}</button></div>`;
-  const sabbathMorning = setlist.worshipType === 'Sabbath Day' && setlist.serviceLabel === 'Morning';
+  const kind = kindOf(setlist, service);
+  const thanks = kind.thanks || !!setlist.thanksSong;
   const sung = setlist.status === 'sung';
   return html`<section class="card builder">
     <div class="svc-head"><h3 class="svc-title">${setlist.worshipType} <span class="service-label">${setlist.serviceLabel}</span></h3>
       <span class="hint">${shortDate(setlist.date)}${dayBadge(setlist.date) ? ' · ' + dayBadge(setlist.date) : ''}</span></div>
     <button type="button" class="link" data-act="song-close-list">Choose another service</button>
-    <textarea data-input="song-notes" rows="2" placeholder="Notes (optional)" aria-label="Notes">${setlist.notes || ''}</textarea>
-    <div class="slots">${slot('glory', 'Glory song', setlist.glorySong)}${sabbathMorning ? slot('thanks', 'Thanks song', setlist.thanksSong) : ''}</div>
-    ${view.slot ? html`<div class="banner"><span>Tap + next to a song below to make it the ${view.slot === 'glory' ? 'Glory' : 'Thanks'} song.</span>
-      <button type="button" class="banner-close" data-act="song-slot-cancel" aria-label="Cancel">&times;</button></div>` : ''}
-    <div class="total"><span>Total time</span><strong>${minutes(totalTime(setlist))}</strong><span>${countedSongs(setlist).length} songs (Glory and Thanks songs not counted)</span></div>
-    ${main.length ? html`<ol class="set-list">${main.map((item, position) => {
+    <div class="total"><span>Total time</span><strong>${minutes(totalTime(setlist))}</strong><span>${countedSongs(setlist).length} songs (${thanks ? 'Glory and Thanks songs' : 'Glory song'} not counted)</span></div>
+    <ol class="set-list">${main.map((item, position) => {
       const song = planner.songById[item.id];
       if (!song) return '';
       return html`<li class="set-row"><span class="num">${songNumber(song)}</span><span class="title">${song.title}</span><span class="time">${minutes(song.durationSec)}</span>
@@ -135,13 +147,25 @@ function builder(setlist) {
           <button type="button" class="icon-button" data-act="song-move" data-from="${item.index}" data-to="${position < main.length - 1 ? main[position + 1].index : -1}" aria-label="Move down"${position < main.length - 1 ? '' : ' disabled'}>↓</button>
         </span>
         <button type="button" class="icon-button" data-act="song-remove" data-index="${item.index}" aria-label="Remove ${song.title}">&times;</button></li>`;
-    })}</ol>` : html`<p class="hint">No songs yet. Tap + next to a song below.</p>`}
+    })}
+      ${slotRow('glory', planner.songById[setlist.glorySong])}
+      ${thanks ? slotRow('thanks', planner.songById[setlist.thanksSong]) : ''}
+      ${kind.choir && service ? slotRow('choir', null, service.choirSong) : ''}
+    </ol>
+    ${main.length ? '' : html`<p class="hint">No preparation songs yet. Tap + next to a song below.</p>`}
     ${sung ? '' : isConfirmed(setlist)
       ? html`<p class="confirm is-done">Songs confirmed${setlist.confirmedBy ? ' by ' + nameOf(setlist.confirmedBy) : ''}. Change them any time and confirm again.</p>`
       : songs.length ? html`<div class="confirm${changedSinceConfirmed(setlist) ? ' is-changed' : ''}">
           <p>${changedSinceConfirmed(setlist) ? 'You changed the songs after confirming. Confirm again so others see the final list.' : 'Ready? Confirm so the list shows as done.'}</p>
           <button type="button" class="primary" data-act="song-confirm" data-id="${setlist.id}">${changedSinceConfirmed(setlist) ? 'Confirm again' : 'Confirm songs'}</button></div>` : ''}
   </section>`;
+}
+
+/* Shown at the top while a Glory, Thanks or Choir song is being chosen. */
+function selecting() {
+  if (!view.slot) return '';
+  return html`<div class="banner selecting" role="status"><span><strong>Selecting ${SLOT_NAMES[view.slot]} song</strong>. Tap + next to a song below.</span>
+    <button type="button" class="banner-close" data-act="song-slot-cancel" aria-label="Cancel">&times;</button></div>`;
 }
 
 function songRow(song, setlist) {
@@ -179,6 +203,7 @@ export function library() {
   const last = Math.min(view.page + view.more, groups.length - 1);
   const shown = groups.slice(view.page, last + 1).flatMap(group => group.songs);
   return html`<div class="library">
+    ${setlist ? selecting() : ''}
     <div class="library-set">${help()}${setlist ? builder(setlist) : servicePicker()}</div>
     <section class="library-songs" aria-label="Songs">
       <div class="song-controls">
@@ -257,7 +282,7 @@ function runsheet() {
     <div class="runsheet-head"><h2>${(setlist && setlist.worshipType) || service.worship} · ${(setlist && setlist.serviceLabel) || service.service}</h2>
       <button type="button" class="ghost small" data-act="song-runsheet-close">Close</button></div>
     <p class="hint">${longDate(date)}</p>
-    <div class="card">${orderOfWorship(setlist, service || { assignments: {} })}</div>
+    <div class="card">${serviceSheet(setlist, service)}</div>
   </section>`;
 }
 

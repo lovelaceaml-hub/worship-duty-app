@@ -1,11 +1,13 @@
-/* A service in the planner: who presides, how far the songs are, and what
-   can be done with them. Also the order of worship shown in the runsheet. */
+/* A service in the planner: who presides, who prays, how far the songs are,
+   and what can be done with them. */
 import { html, plural } from '../html.js';
 import { ui, nameOf } from '../store.js';
 import { planner, view } from './state.js';
 import { canEdit } from './access.js';
 import { isConfirmed, changedSinceConfirmed, totalTime } from './data.js';
-import { songLabel, songNumber, minutes } from './catalog.js';
+import { songNumber, minutes } from './catalog.js';
+import { dutyName } from '../config/duties.js';
+import { hasChoir, hasThanks } from '../lib/worship.js';
 import { serviceId, isUpcoming } from '../lib/services.js';
 import { shortDate, dayBadge, todayISO, clockTime } from '../lib/dates.js';
 
@@ -18,36 +20,57 @@ function songStatus(setlist) {
   return ['picked', 'Songs picked'];
 }
 
-function roles(service) {
-  const a = (service && service.assignments) || {};
-  const rows = [['Sermon', a.Sermon], ['Prayer of Thanks', a['Prayer of Thanks']], ['Closing Prayer', a['Closing Prayer']]].filter(([, name]) => name);
-  const choir = service && service.choirSong;
-  if (!rows.length && !choir) return '';
-  return html`<div class="svc-roles">${rows.map(([duty, name]) => html`<div class="svc-role"><span>${duty}</span><strong>${nameOf(name)}</strong></div>`)}
-    ${choir ? html`<div class="svc-role"><span>Choir song</span><strong>${choir}</strong></div>` : ''}</div>`;
+/* What a service has, by its worship name and label. */
+export function kindOf(setlist, service) {
+  const worship = (setlist && setlist.worshipType) || (service && service.worship) || '';
+  const label = (setlist && setlist.serviceLabel) || (service && service.service) || '';
+  return { choir: hasChoir(worship), thanks: hasThanks(worship, label) };
 }
 
-/* Steps of the service with the chosen songs and the people on duty. */
-export function orderOfWorship(setlist, service) {
-  if (!service) return '';
-  const a = service.assignments || {};
-  const worship = (setlist && setlist.worshipType) || service.worship;
-  const label = (setlist && setlist.serviceLabel) || service.service;
-  const steps = [{ step: 'Glory song', note: songLabel(setlist && setlist.glorySong) || 'Stand and sing' }, { step: 'Opening prayer', who: a.Sermon }];
-  if (worship === 'Sabbath Day' && label === 'Morning') {
-    steps.push({ step: 'Thanks song', note: songLabel(setlist && setlist.thanksSong) }, { step: 'Prayer of thanks', who: a['Prayer of Thanks'] });
-  }
-  steps.push({ step: 'Choir song', note: service.choirSong || '' }, { step: 'Sermon', who: a.Sermon }, { step: 'Closing prayer', who: a['Closing Prayer'] });
-  const preparation = (setlist ? setlist.songs || [] : []).filter(id => id !== setlist.glorySong && id !== setlist.thanksSong)
-    .map(id => planner.songById[id]).filter(Boolean);
-  return html`<div class="order">
-    ${preparation.length ? html`<h4 class="order-head">Songs before the service</h4>
-      ${preparation.map(song => html`<div class="order-step"><span class="num">${songNumber(song)}</span><span class="step">${song.title}</span><span class="who">${minutes(song.durationSec)}</span></div>`)}` : ''}
-    <h4 class="order-head">Order of worship</h4>
-    ${steps.map((item, index) => html`<div class="order-step"><span class="num">${index + 1}</span>
-      <span class="step">${item.step}${item.note ? html`<span class="step-note"> · ${item.note}</span>` : ''}</span>
-      ${'who' in item ? html`<span class="who">${item.who ? nameOf(item.who) : '-'}</span>` : ''}</div>`)}
-  </div>`;
+/* Opening Prayer, Thanks Prayer, Closing Prayer and Choir Song, for the
+   services that have them, as [label, value] pairs. The card and the Signal
+   copy both use this order. */
+export function roleLines(setlist, service) {
+  const a = (service && service.assignments) || {};
+  const kind = kindOf(setlist, service);
+  const person = duty => [dutyName(duty), a[duty] ? nameOf(a[duty]) : ''];
+  const lines = [person('Sermon')];
+  if (kind.thanks || a['Prayer of Thanks']) lines.push(person('Prayer of Thanks'));
+  if (kind.choir) lines.push(person('Closing Prayer'), ['Choir Song', (service && service.choirSong) || '']);
+  return lines;
+}
+
+/* "Preparation Songs", then "Glory Song" (or "Glory & Thanks Song"), each
+   with its song ids; empty sections are left out. */
+export function songSections(setlist, service) {
+  if (!setlist) return [];
+  const thanks = kindOf(setlist, service).thanks || !!setlist.thanksSong;
+  return [
+    { title: 'Preparation Songs', ids: (setlist.songs || []).filter(id => id !== setlist.glorySong && id !== setlist.thanksSong) },
+    { title: thanks ? 'Glory & Thanks Song' : 'Glory Song', ids: [setlist.glorySong, setlist.thanksSong].filter(Boolean) }
+  ].filter(section => section.ids.length);
+}
+
+function roles(setlist, service) {
+  return html`<div class="svc-roles">${roleLines(setlist, service).map(([label, value]) => html`<div class="svc-role"><span>${label}</span>
+    ${value ? html`<strong>${value}</strong>` : html`<strong class="is-empty">Not set</strong>`}</div>`)}</div>`;
+}
+
+/* The songs of a service, in the card's format. */
+function songList(setlist, service) {
+  return html`<div class="order">${songSections(setlist, service).map(section => html`<h4 class="order-head">${section.title}</h4>
+    ${section.ids.map(id => planner.songById[id]).filter(Boolean).map(song => html`<div class="order-step"><span class="num">${songNumber(song)}</span>
+      <span class="step">${song.title}</span><span class="who">${minutes(song.durationSec)}</span></div>`)}`)}</div>`;
+}
+
+/* Who prays and what is sung, for the runsheet and a view-only list. */
+export function serviceSheet(setlist, service) {
+  return html`${service ? roles(setlist, service) : ''}${songList(setlist, service)}`;
+}
+
+/* The songs show once they are confirmed, until the presider hides them. */
+function songsShown(id, setlist) {
+  return id in view.songsShown ? view.songsShown[id] : isConfirmed(setlist);
 }
 
 /* One service, with or without a song list yet. `home` adds the runsheet
@@ -60,7 +83,7 @@ export function serviceCard(service, setlist, { home = false } = {}) {
   const songs = setlist ? setlist.songs || [] : [];
   const [statusClass, statusLabel] = songStatus(setlist);
   const sung = setlist && setlist.status === 'sung';
-  const open = view.openService === id;
+  const open = !!songs.length && songsShown(id, setlist);
   const today = date === todayISO();
   const badge = dayBadge(date);
   const worship = (setlist && setlist.worshipType) || (service && service.worship) || '';
@@ -76,7 +99,7 @@ export function serviceCard(service, setlist, { home = false } = {}) {
   if (editable && sung) actions.push(html`<button type="button" class="ghost small" data-act="song-edit" data-id="${id}">Edit songs</button>`,
     html`<button type="button" class="link danger" data-act="song-undo-sung" data-id="${id}">Undo sung</button>`);
   if (!editable) actions.push(html`<span class="hint small">View only</span>`);
-  if (service) actions.push(html`<button type="button" class="ghost small" data-act="song-toggle-order" data-id="${id}" aria-expanded="${open}">${open ? 'Hide order' : 'Order of worship'}</button>`);
+  if (songs.length) actions.push(html`<button type="button" class="ghost small" data-act="song-toggle-songs" data-id="${id}" aria-expanded="${open}">${open ? 'Hide songs' : 'Show songs'}</button>`);
   if (songs.length) actions.push(html`<button type="button" class="ghost small" data-act="song-copy" data-id="${id}">Copy for Signal</button>`);
   // An empty list for a scheduled service comes back when the planner opens, so only a real list can be deleted.
   if (editable && setlist && (songs.length || !service)) actions.push(html`<button type="button" class="link danger" data-act="song-delete" data-id="${id}">Delete</button>`);
@@ -88,9 +111,9 @@ export function serviceCard(service, setlist, { home = false } = {}) {
     </div>
     <p class="svc-meta"><span>${shortDate(date)}${badge ? ' · ' + badge : ''}${service && service.time ? ' · ' + clockTime(service.time) : ''}</span>
       <span>${songs.length ? plural(songs.length, 'song') + ' · ' + minutes(totalTime(setlist)) + ' · ' : ''}<span class="song-state is-${statusClass}">${statusLabel}</span></span></p>
-    ${service ? roles(service) : ''}
-    ${open ? orderOfWorship(setlist, service) : ''}
+    ${service ? roles(setlist, service) : ''}
     <div class="button-row">${actions}</div>
+    ${open ? songList(setlist, service) : ''}
   </article>`;
 }
 

@@ -8,7 +8,7 @@ import { ui, nameOf } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
-import { SERVICE_LABELS, departmentNamed } from '../../config/duties.js';
+import { SERVICE_LABELS, departmentNamed, dutyName } from '../../config/duties.js';
 import { isLeaderProfile, normalizeAvailability, timeKey, timeLabel } from '../../lib/availability.js';
 import { longDate, todayISO, shortDate } from '../../lib/dates.js';
 import { managedDepartments, canManageDepartment, canResetPin, leadersOf } from '../../services/access.js';
@@ -154,7 +154,7 @@ function memberProfile(department, uid) {
     <section class="card">
       <h3 class="card-subtitle">Duties they can take</h3>
       <div class="check-grid">${duties.map(duty => html`<label class="check"><input type="checkbox" data-change="profile-duty" data-duty="${duty}"
-        ${profile.eligibleDuties.some(item => item.toLowerCase() === duty.toLowerCase()) ? ' checked' : ''}${disabled}> ${duty}</label>`)}</div>
+        ${profile.eligibleDuties.some(item => item.toLowerCase() === duty.toLowerCase()) ? ' checked' : ''}${disabled}> ${dutyName(duty)}</label>`)}</div>
       <label class="switch-row"><span><strong>Can be scheduled</strong><small>Show them as a choice when filling duties.</small></span>
         <input type="checkbox" role="switch" data-change="profile-schedulable"${profile.schedulable ? ' checked' : ''}${disabled}></label>
     </section>

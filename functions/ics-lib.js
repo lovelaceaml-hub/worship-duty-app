@@ -6,6 +6,8 @@
  * so a subscribed feed and a one-off download produce identical events.
  */
 
+const { dutyName } = require('./names');
+
 function icsEscape(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n')
     .replace(/;/g, '\\;').replace(/,/g, '\\,');
@@ -86,8 +88,8 @@ function buildIcsForMember(services, member, nameMap) {
       'DTSTAMP:' + stamp,
       'DTSTART;TZID=America/Los_Angeles:' + dt,
       'DURATION:PT1H30M',
-      'SUMMARY:' + icsEscape(d.duty + ' (' + (d.svc.worship || '') + ' ' + d.svc.service + ')'),
-      'DESCRIPTION:' + icsEscape('Worship duty: ' + d.duty),
+      'SUMMARY:' + icsEscape(dutyName(d.duty) + ' (' + (d.svc.worship || '') + ' ' + d.svc.service + ')'),
+      'DESCRIPTION:' + icsEscape('Worship duty: ' + dutyName(d.duty)),
       'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Duty tomorrow', 'TRIGGER:-PT24H', 'END:VALARM',
       'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Duty soon', 'TRIGGER:-PT2H', 'END:VALARM',
       'END:VEVENT'

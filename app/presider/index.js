@@ -7,9 +7,11 @@ import { data, ui, writeText } from '../store.js';
 import { notice } from '../ui/banners.js';
 import { planner, view, SECTIONS } from './state.js';
 import { canEdit, canManageSongs } from './access.js';
-import { loadSeed, loadPublished, songLabel, statsFor } from './catalog.js';
+import { loadSeed, loadPublished, songLine, statsFor } from './catalog.js';
+import { roleLines, songSections } from './cards.js';
+import { updateService } from '../services/schedule.js';
 import {
-  listen, ensureSetlist, addSong, removeSong, moveSong, setSlot, setNotes, confirmSongs,
+  listen, ensureSetlist, addSong, removeSong, moveSong, setSlot, clearSlot, confirmSongs,
   markSung, undoSung, deleteSetlist, addPastDate, removePastEntry
 } from './data.js';
 import { frame, home, library, services, history } from './screens.js';
@@ -82,15 +84,14 @@ export function mount(element) {
 
 /* ---- actions ---- */
 
+/* The service card as a Signal message: who prays, then each song list. */
 function signalText(setlist) {
   const service = findService(setlist.id);
-  const lines = [setlist.worshipType + ' ' + setlist.serviceLabel + ' · ' + shortDate(setlist.date)];
-  if (setlist.glorySong) lines.push('Glory song: ' + songLabel(setlist.glorySong));
-  if (setlist.thanksSong) lines.push('Thanks song: ' + songLabel(setlist.thanksSong));
-  if (service && service.choirSong) lines.push('Choir song: ' + service.choirSong);
-  const rest = (setlist.songs || []).filter(id => id !== setlist.glorySong && id !== setlist.thanksSong).map(songLabel).filter(Boolean);
-  if (rest.length) lines.push('New songs:', ...rest);
-  return lines.join('\n');
+  const head = [setlist.worshipType + ' ' + setlist.serviceLabel + ' - ' + shortDate(setlist.date)]
+    .concat(roleLines(setlist, service).filter(([, value]) => value).map(([label, value]) => label + ': ' + value));
+  const sections = songSections(setlist, service)
+    .map(section => section.title + '\n\n' + section.ids.map(songLine).filter(Boolean).map(line => '* ' + line).join('\n'));
+  return [head.join('\n')].concat(sections.length ? [sections.join('\n\n\n')] : []).join('\n\n');
 }
 
 function downloadHistory() {
@@ -105,7 +106,6 @@ function downloadHistory() {
   URL.revokeObjectURL(link.href);
 }
 
-let notesTimer = null;
 const listOf = el => planner.setlists[el.dataset.id];
 const canEditList = el => !!listOf(el) && canEdit(listOf(el));
 
@@ -113,7 +113,7 @@ defineActions({
   'song-section': el => { view.section = el.dataset.section; view.slot = null; view.runsheet = null; draw(); },
   'song-scope': el => { view.scope = el.dataset.scope === 'all' ? 'all' : 'mine'; view.showPast = false; draw(); },
   'song-toggle-past': () => { view.showPast = !view.showPast; draw(); },
-  'song-toggle-order': el => { view.openService = view.openService === el.dataset.id ? null : el.dataset.id; draw(); },
+  'song-toggle-songs': el => { view.songsShown[el.dataset.id] = el.getAttribute('aria-expanded') !== 'true'; draw(); },
   'song-runsheet': el => { view.runsheet = el.dataset.id; draw(); window.scrollTo({ top: 0 }); },
   'song-runsheet-close': () => { view.runsheet = null; draw(); },
   'song-edit': el => { if (openList(el.dataset.id)) { draw(); window.scrollTo({ top: 0 }); } },
@@ -149,20 +149,27 @@ defineActions({
   'song-add': {
     allowed: () => !!view.setlist && canEdit(planner.setlists[view.setlist]),
     run: el => {
-      if (view.slot) { setSlot(view.setlist, view.slot, el.dataset.id); view.slot = null; }
+      if (view.slot === 'choir') {
+        const service = findService(view.setlist);
+        if (service) updateService(service, 'choirSong', songLine(el.dataset.id));
+        view.slot = null;
+      } else if (view.slot) { setSlot(view.setlist, view.slot, el.dataset.id); view.slot = null; }
       else addSong(view.setlist, el.dataset.id);
       draw();
     }
   },
   'song-remove': { allowed: () => !!view.setlist && canEdit(planner.setlists[view.setlist]), run: el => { removeSong(view.setlist, Number(el.dataset.index)); draw(); } },
   'song-move': { allowed: () => !!view.setlist && canEdit(planner.setlists[view.setlist]), run: el => { moveSong(view.setlist, Number(el.dataset.from), Number(el.dataset.to)); draw(); } },
-  'song-slot': el => { view.slot = el.dataset.slot; draw(); },
-  'song-slot-cancel': () => { view.slot = null; draw(); },
-  'song-notes': el => {
-    clearTimeout(notesTimer);
-    const id = view.setlist, notes = el.value;
-    notesTimer = setTimeout(() => setNotes(id, notes), 600);
+  'song-slot': el => { view.slot = view.slot === el.dataset.slot ? null : el.dataset.slot; draw(); },
+  'song-slot-clear': {
+    allowed: () => !!view.setlist && canEdit(planner.setlists[view.setlist]),
+    run: el => {
+      if (el.dataset.slot !== 'choir') clearSlot(view.setlist, el.dataset.slot);
+      else if (findService(view.setlist)) updateService(findService(view.setlist), 'choirSong', '');
+      draw();
+    }
   },
+  'song-slot-cancel': () => { view.slot = null; draw(); },
   'song-confirm': { allowed: canEditList, run: el => { confirmSongs(el.dataset.id); draw(); } },
   'song-mark-sung': {
     allowed: canEditList,

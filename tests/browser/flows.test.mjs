@@ -287,11 +287,36 @@ test('the song planner shows how often songs were sung, adds a song and confirms
 
   await page.locator('#song-root [data-act="song-add"][data-id="002"]').click();
   await builder.locator('.total', { hasText: '3 songs' }).waitFor();
+
+  // Glory and Choir songs are chosen with their tags; the Glory song is not counted.
+  assert.equal(await builder.locator('textarea').count(), 0);
+  await builder.locator('[data-act="song-slot"][data-slot="glory"]').click();
+  await page.locator('#song-root .selecting', { hasText: 'Selecting Glory song' }).waitFor();
+  await page.locator('#song-root [data-act="song-add"][data-id="003"]').click();
+  await builder.locator('.set-row.is-slot .num', { hasText: '003' }).waitFor();
+  await builder.locator('.total', { hasText: '3 songs' }).waitFor();
+  await builder.locator('[data-act="song-slot"][data-slot="choir"]').click();
+  await page.locator('#song-root .selecting', { hasText: 'Selecting Choir song' }).waitFor();
+  await page.locator('#song-root [data-act="song-add"][data-id="004"]').click();
+  await page.locator('#song-root .selecting').waitFor({ state: 'detached' });
+
   await builder.locator('[data-act="song-confirm"]').click();
   await builder.locator('.confirm.is-done', { hasText: 'Songs confirmed by B. Adam' }).waitFor();
   const setlist = (await fakeDocs(page, 'setlists/'))[0];
-  assert.deepEqual(setlist.songs, ['001', '015', '002']);
+  assert.deepEqual(setlist.songs, ['001', '015', '002', '003']);
+  assert.equal(setlist.glorySong, '003');
   assert.ok(setlist.confirmedAt >= setlist.updatedAt);
+  const service = (await fakeDocs(page, 'schedule/')).find(item => item.date === setlist.date && item.service === 'Morning');
+  assert.match(service.choirSong, /^004 /);
+
+  // Confirmed songs show on the card, under the people who pray.
+  await section(page, 'song-section', 'home');
+  const card = page.locator('#song-root .svc-card', { has: page.locator('[data-act="song-toggle-songs"]') }).first();
+  await card.locator('.svc-role', { hasText: 'Opening Prayer' }).waitFor();
+  await card.locator('.order-head', { hasText: 'Preparation Songs' }).waitFor();
+  await card.locator('.order-head', { hasText: 'Glory & Thanks Song' }).waitFor();
+  await card.locator('[data-act="song-toggle-songs"]', { hasText: 'Hide songs' }).click();
+  await card.locator('.order').waitFor({ state: 'detached' });
 
   await tab(page, 'my');
   await page.locator('[data-act="open-songs"]', { hasText: 'See your songs' }).waitFor();

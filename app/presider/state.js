@@ -19,7 +19,7 @@ export const view = {
   section: 'home',
   scope: 'mine',          // Home: 'mine' or 'all'
   setlist: null,          // id of the song list open in the Library
-  slot: null,             // 'glory' or 'thanks' while picking that song
+  slot: null,             // 'glory', 'thanks' or 'choir' while picking that song
   runsheet: null,         // id of the service shown full screen
   otherDate: false,       // "Plan another date" form open
   search: '',
@@ -28,7 +28,7 @@ export const view = {
   page: 0,                // first 100-song group shown
   more: 0,                // groups added below it by scrolling
   openSong: null,
-  openService: null,
+  songsShown: {},         // service id -> songs shown or hidden on its card
   showPast: false,
   backfill: null,         // { songId, date } while adding a past date
   helpHidden: readText('nss-help-dismissed') === '1'

@@ -24,8 +24,9 @@
 #song-root .svc-roles { display: grid; gap: 2px; margin: 6px 0 4px; }
 #song-root .svc-role { display: flex; gap: 8px; font-size: 13.5px; }
 #song-root .svc-role span { flex: 0 0 120px; color: var(--muted); }
+#song-root .svc-role .is-empty { color: var(--faint); font-weight: 400; }
 
-/* ---- order of worship and runsheet ---- */
+/* ---- song lists on a card and the runsheet ---- */
 
 #song-root .order { margin: 10px 0 4px; }
 #song-root .order-head { margin: 12px 0 6px; color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -41,12 +42,6 @@
 /* ---- Library: the list being built, then the songs ---- */
 
 #song-root .library { display: grid; gap: 16px; }
-#song-root .slots { display: grid; gap: 6px; margin: 12px 0; }
-#song-root .slot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; }
-#song-root .slot-name { flex: 0 0 96px; color: var(--muted); }
-#song-root .slot-song { font-weight: 650; }
-#song-root .slot-song.is-empty { color: var(--faint); font-weight: 400; font-style: italic; }
-#song-root .builder textarea { margin-top: 8px; }
 #song-root .total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 12px 0 8px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--muted); font-size: 12.5px; }
 #song-root .total strong { color: var(--heading); font-size: 24px; font-variant-numeric: tabular-nums; }
 #song-root .set-list { margin: 0; padding: 0; list-style: none; }
@@ -54,6 +49,11 @@
 #song-root .set-row .num { color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 #song-root .set-row .time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 #song-root .set-row .move { display: flex; }
+#song-root .set-row .title.is-empty { color: var(--faint); font-style: italic; }
+#song-root .set-row.is-slot.is-selecting { background: var(--accent-soft); }
+#song-root .slot-tag { min-width: 68px; min-height: 34px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--surface)); border-radius: 999px; background: var(--surface); color: var(--accent); font-size: 12.5px; font-weight: 700; }
+#song-root .slot-tag[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+#song-root .selecting { position: sticky; top: 8px; z-index: 5; margin: 0; }
 #song-root .set-row .icon-button { min-width: 34px; min-height: 34px; font-size: 16px; }
 #song-root .confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding: 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; }
 #song-root .confirm.is-changed { background: var(--danger-soft); color: var(--danger); }

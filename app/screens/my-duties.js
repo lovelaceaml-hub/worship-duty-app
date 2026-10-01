@@ -13,6 +13,7 @@ import { openRequestFor, shownStatus } from '../lib/requests.js';
 import { sendRequest } from '../services/requests.js';
 import { recentUpdates, clearRecentUpdates, notificationsOn, turnOn, turnOff } from '../services/notifications.js';
 import { canEditSongsFor } from '../services/access.js';
+import { dutyName } from '../config/duties.js';
 
 const SWAP_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4"/><path d="M3 8h13"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8"/></svg>';
 
@@ -83,7 +84,7 @@ function requestControl(item) {
   const key = id + ':' + item.duty;
   if (ui.requestDraft && ui.requestDraft.key === key) return '';
   return html`<button type="button" class="icon-button request-button" data-act="request-open" data-key="${key}"
-    aria-label="Ask for a change to ${item.duty}" title="Ask for a change">${raw(SWAP_ICON)}</button>`;
+    aria-label="Ask for a change to ${dutyName(item.duty)}" title="Ask for a change">${raw(SWAP_ICON)}</button>`;
 }
 
 function requestForm(item) {
@@ -105,7 +106,7 @@ function myRequests() {
   return html`<section class="card">
     <h2 class="card-title">Your change requests</h2>
     ${mine.map(request => html`<div class="list-item">
-      <div class="list-item-head"><span>${request.duty} · ${shortDate(request.date)} ${request.service}</span>${statusChip(shownStatus(request, data.services, canonical))}</div>
+      <div class="list-item-head"><span>${dutyName(request.duty)} · ${shortDate(request.date)} ${request.service}</span>${statusChip(shownStatus(request, data.services, canonical))}</div>
       ${request.note ? html`<p class="hint">${request.note}</p>` : ''}
     </div>`)}
   </section>`;
@@ -139,7 +140,7 @@ function dayCard(date, services, duties) {
           <div class="duty-when"><span class="duty-time">${clockTime(service.time)}</span><span class="duty-worship">${service.worship || service.service}</span>${index === 0 && badge ? html`<span class="tag">${badge}</span>` : ''}</div>
           <span class="sr-only">${longDate(date)}${badge ? ', ' + badge : ''}</span>
           ${mine.map(item => html`
-            <div class="duty-line"><span class="dot" style="background: ${item.department.color}"></span><span class="duty-title">${item.duty}</span>${requestControl(item)}</div>
+            <div class="duty-line"><span class="dot" style="background: ${item.department.color}"></span><span class="duty-title">${dutyName(item.duty)}</span>${requestControl(item)}</div>
             ${open && item.duty === 'Presider' && feature('songPicker') ? html`<div class="duty-extra">${songTag(id)}
               <button type="button" class="link" data-act="open-songs" data-service="${id}">${songState(id) && songState(id).count ? 'Open songs' : 'Pick songs'}</button></div>` : ''}
             ${requestForm(item)}`)}

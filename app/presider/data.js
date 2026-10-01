@@ -124,9 +124,16 @@ export function setSlot(id, slot, songId) {
   change(id, patch);
 }
 
-export function setNotes(id, notes) {
+/* Take the Glory or Thanks song off the list. */
+export function clearSlot(id, slot) {
   const setlist = planner.setlists[id];
-  if (setlist && canEdit(setlist)) change(id, { notes });
+  const field = slot === 'glory' ? 'glorySong' : 'thanksSong';
+  const other = slot === 'glory' ? 'thanksSong' : 'glorySong';
+  const songId = setlist && setlist[field];
+  if (!songId || !canEdit(setlist)) return;
+  const patch = { [field]: null };
+  if (setlist[other] !== songId) patch.songs = (setlist.songs || []).filter(item => item !== songId);
+  change(id, patch);
 }
 
 export function confirmSongs(id) {

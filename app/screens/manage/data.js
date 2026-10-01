@@ -9,6 +9,7 @@ import { fb, write, problem } from '../../firebase.js';
 import { isAdmin } from '../../services/access.js';
 import { downloadBackup, importSheetNow, lastSheetImport, sheet, checkSheet, addServiceYear } from '../../services/data-tools.js';
 import { todayISO } from '../../lib/dates.js';
+import { dutyName } from '../../config/duties.js';
 
 const when = at => new Date(at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
@@ -36,7 +37,7 @@ function checkResult() {
       ${check.notInApp ? plural(check.notInApp, 'of them is', 'of them are') + ' not in the app yet (the next import adds them). ' : ''}
       ${check.notInSheet ? plural(check.notInSheet, 'upcoming service in the app is', 'upcoming services in the app are') + ' not in the Sheet.' : ''}</p>
     ${check.differenceCount ? html`<p>${plural(check.differenceCount, 'duty differs', 'duties differ')} between the Sheet and the app${check.differenceCount > check.differences.length ? ', for example' : ''}:</p>
-      <ul class="plain-list">${check.differences.map(item => html`<li>${item.service} · ${item.duty}: Sheet ${item.sheet ? nameOf(item.sheet) : 'blank'}, app ${item.app ? nameOf(item.app) : 'blank'}</li>`)}</ul>`
+      <ul class="plain-list">${check.differences.map(item => html`<li>${item.service} · ${dutyName(item.duty)}: Sheet ${item.sheet ? nameOf(item.sheet) : 'blank'}, app ${item.app ? nameOf(item.app) : 'blank'}</li>`)}</ul>`
       : html`<p>Every duty the Sheet lists matches the app.</p>`}
     ${check.warnings.length ? html`<p class="hint small">${check.warnings.join(' ')}</p>` : ''}
     ${check.account ? html`<p class="hint small">The app reaches the Sheet as ${check.account}.</p>` : ''}

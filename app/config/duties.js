@@ -21,7 +21,16 @@ export const SERVICE_LABELS = ['Early Morning', 'Morning', 'Afternoon', 'Evening
    the schedule carries its own time; these fill in when one is missing. */
 export const DEFAULT_TIMES = { 'Early Morning': '05:00', Morning: '10:00', Afternoon: '14:30', Evening: '19:30' };
 
-export const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
+export const WORSHIP_TYPES = ['Sabbath Day', 'Third Day', 'Prayer Week', 'Preaching Week', 'Ascension Day', 'Pentecost', 'Heavenly Parent\'s Day'];
+
+/* Names shown for duties whose stored name (the Sheet column, the database
+   key) is older. functions/names.js holds the same map for alerts and the
+   calendar feed; tests/unit/basics.test.mjs keeps the two identical. */
+export const DUTY_NAMES = { Sermon: 'Opening Prayer', 'Prayer of Thanks': 'Thanks Prayer' };
+
+export function dutyName(duty) {
+  return DUTY_NAMES[duty] || duty;
+}
 
 export function departmentOf(duty) {
   return DEPARTMENTS.find(department => department.duties.includes(duty)) || null;
