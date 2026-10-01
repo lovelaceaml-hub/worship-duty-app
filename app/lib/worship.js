@@ -19,3 +19,13 @@ export function isFeast(worship) {
 export function hasThanks(worship, label) {
   return label === 'Morning' && (worship === 'Sabbath Day' || isFeast(worship));
 }
+
+/* Whether a service has this duty at all: Thanks Prayer ("Prayer of
+   Thanks") only with a Thanks song, Closing Prayer only with a choir song.
+   A service with no worship name is a Sabbath Day service. */
+export function hasDuty(service, duty) {
+  const worship = (service && service.worship) || 'Sabbath Day';
+  if (duty === 'Prayer of Thanks') return hasThanks(worship, service && service.service);
+  if (duty === 'Closing Prayer') return hasChoir(worship);
+  return true;
+}

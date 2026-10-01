@@ -539,8 +539,7 @@ html[data-appearance="prism"] .exception { border-color: var(--line); border-rad
 
 /* ---- Manage ---- */
 
-html[data-appearance="prism"] .department-card { border-top: 3px solid var(--dept); }
-html[data-appearance="prism"] .department-card h3 { font-size: 18px; letter-spacing: -0.02em; }
+html[data-appearance="prism"] .department-name { letter-spacing: -0.02em; }
 html[data-appearance="prism"] .list-row { border-bottom-color: var(--hairline); }
 html[data-appearance="prism"] .member-row { border-color: var(--line); }
 html[data-appearance="prism"] .member-row:first-child { border-radius: 12px 12px 0 0; }

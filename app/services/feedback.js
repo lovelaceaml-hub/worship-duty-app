@@ -48,7 +48,10 @@ export async function loadFeedback(force = false) {
 export async function markDone(id) {
   try {
     await write(() => fb.updateDoc(fb.doc(fb.db, 'feedback', id), { status: 'done' }));
-    (feedback.list || []).forEach(entry => { if (entry.id === id) entry.status = 'done'; });
+    const entry = (feedback.list || []).find(item => item.id === id);
+    if (entry) entry.status = 'done';
+    // The server sends the member a notification (functions onFeedbackDone).
+    notice('Marked done. ' + (entry && entry.name ? nameOf(entry.name) : 'The sender') + ' gets a notification if their alerts are on.');
   } catch (_error) {
     notice('That change was not saved. Try again.', true);
   }

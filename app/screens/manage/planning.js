@@ -19,21 +19,20 @@ import { managedDepartment } from './index.js';
 function conflicts(stats) {
   const list = openConflicts().filter(item => shownFor(managedDepartment())(item.service));
   if (!list.length) return empty('No double duties to sort out.');
-  return list.map(({ service, conflict }) => html`<article class="card">
-    <div class="card-title-row"><h3 class="card-subtitle">${nameOf(conflict.name)} · ${conflict.duties.map(dutyName).join(' and ')}</h3></div>
-    <p class="hint">${service.worship} ${service.service}, ${shortDate(service.date)}</p>
+  return html`<div class="card conflict-list">${list.map(({ service, conflict }) => html`<article class="conflict">
+    <div class="conflict-head">
+      <h3 class="conflict-who">${nameOf(conflict.name)} <span>${conflict.duties.map(dutyName).join(' + ')}</span></h3>
+      <button type="button" class="link small" data-act="double-duty" data-service="${serviceId(service)}" data-name="${conflict.name}" data-ok="true">Mark OK</button>
+    </div>
+    <button type="button" class="link small conflict-when" data-act="planning-open" data-service="${serviceId(service)}">${shortDate(service.date)} · ${service.worship} ${service.service}</button>
     ${conflict.duties.filter(canEditDuty).map(duty => {
-      const options = suggestReplacements(service, duty, roster(departmentOf(duty).name), stats, { exclude: conflict.name });
-      return html`<div class="suggest-row"><span class="suggest-label">${dutyName(duty)} could go to</span>
-        ${options.length ? options.map(profile => html`<button type="button" class="ghost small" data-act="planning-assign"
+      const options = suggestReplacements(service, duty, roster(departmentOf(duty).name), stats, { exclude: conflict.name, limit: 2 });
+      return html`<div class="conflict-swap"><span class="conflict-duty">${dutyName(duty)} to</span>
+        ${options.length ? options.map(profile => html`<button type="button" class="chip" data-act="planning-assign"
           data-service="${serviceId(service)}" data-duty="${duty}" data-uid="${profile.memberUid}">${nameOf(profile.memberName)}</button>`)
           : html`<span class="hint">no one else is free</span>`}</div>`;
     })}
-    <div class="button-row">
-      <button type="button" class="ghost small" data-act="planning-open" data-service="${serviceId(service)}">Open service</button>
-      <button type="button" class="link" data-act="double-duty" data-service="${serviceId(service)}" data-name="${conflict.name}" data-ok="true">Mark OK</button>
-    </div>
-  </article>`);
+  </article>`)}</div>`;
 }
 
 function openDuties(visible) {
@@ -48,8 +47,8 @@ function openDuties(visible) {
   return html`<section class="card">
     <h3 class="card-subtitle">Open duties, next 4 weeks</h3>
     <p class="hint">Duties a service like this usually has filled.</p>
-    ${rows.length ? rows.map(({ service, missing }) => html`<p class="suggest-row"><span class="suggest-label">${shortDate(service.date)} · ${service.service}</span>
-      <span>${missing.join(', ')}</span></p>`) : html`<p class="hint">Every planned service has its usual duties filled.</p>`}
+    ${rows.length ? rows.map(({ service, missing }) => html`<p class="open-duty"><span class="open-duty-when">${shortDate(service.date)} · ${service.service}</span>
+      <span>${missing.map(dutyName).join(', ')}</span></p>`) : html`<p class="hint">Every planned service has its usual duties filled.</p>`}
   </section>`;
 }
 

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { hasChoir, hasThanks, isFeast } from '../../app/lib/worship.js';
+import { hasChoir, hasThanks, isFeast, hasDuty } from '../../app/lib/worship.js';
 import { nextService, upcoming, past, isUpcoming, isInProgress, dutiesOf, serviceId, startTime } from '../../app/lib/services.js';
 
 // 2026-09-14 is in Pacific daylight time (UTC minus 7).
@@ -100,4 +100,13 @@ test('choir song and closing prayer only at Sabbath Day and Third Day; Thanks at
   assert.ok(!hasThanks('Sabbath Day', 'Afternoon'));
   assert.ok(hasThanks('Pentecost', 'Morning') && isFeast('Feast of Trumpets'));
   for (const worship of ['Third Day', 'Prayer Week', 'Preaching Week']) assert.ok(!hasThanks(worship, 'Morning'), worship);
+});
+
+test('Thanks Prayer and Closing Prayer are duties only at services that have them', () => {
+  assert.ok(hasDuty({ worship: 'Sabbath Day', service: 'Morning' }, 'Prayer of Thanks'));
+  assert.ok(!hasDuty({ worship: 'Sabbath Day', service: 'Evening' }, 'Prayer of Thanks'));
+  assert.ok(hasDuty({ worship: 'Third Day', service: 'Evening' }, 'Closing Prayer'));
+  assert.ok(!hasDuty({ worship: 'Prayer Week', service: 'Evening' }, 'Closing Prayer'));
+  assert.ok(hasDuty({ service: 'Afternoon' }, 'Closing Prayer'), 'no worship name means Sabbath Day');
+  assert.ok(hasDuty({ worship: 'Prayer Week', service: 'Evening' }, 'Usher Door'));
 });
