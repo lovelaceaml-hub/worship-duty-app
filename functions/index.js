@@ -1,5 +1,19 @@
 'use strict';
 
+/* The Cloud Functions of the LV Zion worship duty app. This file wires them
+   up; each area lives in its own module:
+   - accounts.js: sign-in, PINs and Manage, Leaders;
+   - department-handlers.js, workflows.js, membership.js: departments,
+     assignments, availability, change requests and adding members;
+   - notify.js and schedule-projection.js: what follows a schedule write,
+     every alert and the day-before reminders;
+   - sheet-io.js: the Google Sheet, both ways, and the planning year;
+   - public-endpoints.js: the calendar feed and the public schedule.
+   Every callable goes through callable() below, which checks who is calling
+   and turns any error into one the app can show: an HttpsError whose
+   details.reason is a short stable code (refusals.js). The export names are
+   what scripts/deploy-functions.mjs deploys; they never change. */
+
 const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
@@ -9,23 +23,18 @@ const { getFirestore } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
 const { TIME_ZONE: TZ, pacificDate } = require('./time');
-const {
-  DEFAULT_PIN,
-  ORDINARY_DEFAULT_PIN,
-  hashPin,
-  createMemberAuthCallables
-} = require('./member-auth');
 const permissions = require('./permissions');
 const { createDepartmentHandlers } = require('./department-handlers');
 const { createWorkflowHandlers } = require('./workflows');
 const { createMembershipHandlers } = require('./membership');
 const { createSheets, accountEmail } = require('./sheets');
-const { canonicalName, usableMemberName } = require('./names');
+const { canonicalName } = require('./names');
 const { addServingMembers } = require('./serving-members');
 const { setDutyDefault } = require('./duty-defaults');
 const { renameMember: renameMemberEverywhere } = require('./rename-member');
 const appDocs = require('./app-docs');
-const { detailsFor } = require('./refusals');
+const { MESSAGES, refusal, detailsFor } = require('./refusals');
+const { createAccounts } = require('./accounts');
 const { createNotifier } = require('./notify');
 const { reconcileScheduleAssignmentProjection } = require('./schedule-projection');
 const { createPublicEndpoints } = require('./public-endpoints');
@@ -34,378 +43,22 @@ const { createSheetIo } = require('./sheet-io');
 initializeApp();
 const db = getFirestore();
 const REGION = 'us-central1';
-const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
-const departmentHandlers = createDepartmentHandlers({
-  db,
-  now: () => Date.now(),
-  logger
-});
+const departmentHandlers = createDepartmentHandlers({ db, now: () => Date.now() });
 const workflowHandlers = createWorkflowHandlers({ db, now: () => Date.now(), logger });
 const membershipHandlers = createMembershipHandlers({ db, now: () => Date.now() });
-
+const accounts = createAccounts({ db, auth: getAuth(), logger });
 const notifier = createNotifier({ db, messaging: getMessaging(), logger });
 const sheetIo = createSheetIo({ db, logger, notifier, createSheets, accountEmail });
-const loadNameMap = () => appDocs.loadNameMap(db);
+const publicEndpoints = createPublicEndpoints({ db });
+const loadSettings = () => appDocs.loadSettings(db);
+const switchOn = appDocs.switchOn;
 const runtimePermissionConfig = () => appDocs.runtimePermissionConfig(db);
 
-/* What the leader settings (app/leaderConfig, see runtimePermissionConfig)
-   give a member who has no roles stored yet: their roles, the departments
-   they lead, and whether they must choose their own PIN. */
-function memberRoleRecord(memberName, config) {
-  const actor = { name: memberName };
-  const admin = permissions.isAdmin(actor, config);
-  const globalLeaderManager = permissions.isGlobalManager(actor, config);
-  const departments = permissions.departmentsForLeader(actor, config);
-  const departmentLeader = departments.length > 0 && !admin;
-  const songEditor = permissions.canEditSongs(actor, {}, config);
-  const roles = [];
-  if (admin) roles.push('admin');
-  if (globalLeaderManager) roles.push('globalLeaderManager');
-  if (departmentLeader) roles.push('departmentLeader');
-  if (songEditor) roles.push('songEditor');
-  const role = admin
-    ? 'admin'
-    : globalLeaderManager
-      ? 'globalLeaderManager'
-      : departmentLeader
-        ? 'departmentLeader'
-        : songEditor
-          ? 'songEditor'
-          : 'member';
-  return {
-    id: memberName,
-    memberId: memberName,
-    name: memberName,
-    memberName,
-    role,
-    roles,
-    departments,
-    globalLeaderManager,
-    mustChangePin: admin || globalLeaderManager || departmentLeader || songEditor
-  };
-}
+/* ---- who is calling ---- */
 
-/* The departments a member belongs to: the name lists in app/departments,
-   plus any department where they have an active profile (members added in
-   Manage by name search or invite link). Only the PIN reset check uses this.
-   It is never stored or put into a sign-in token, where `departments` means
-   the departments someone leads. */
-async function departmentsForMember(name, nameMap) {
-  const found = new Set();
-  const listSnap = await db.collection('app').doc('departments').get().catch(() => null);
-  const lists = listSnap && listSnap.exists ? (listSnap.data().map || {}) : {};
-  Object.entries(lists).forEach(([department, names]) => {
-    if (Array.isArray(names) && names.some(item => canonicalName(item, nameMap) === name)) found.add(department);
-  });
-  await Promise.all(permissions.DEPARTMENTS.map(async department => {
-    const profiles = await db.collection('departments').doc(department).collection('members')
-      .where('memberName', '==', name).limit(1).get().catch(() => null);
-    if (profiles && !profiles.empty && (profiles.docs[0].data() || {}).status !== 'inactive') found.add(department);
-  }));
-  return Array.from(found);
-}
-
-/* An account as sign-in sees it. The roles and led departments stored on an
-   account are its own, even when empty: removing someone's last role in
-   Manage, Leaders stores []. Only an account that has never had them written
-   gets them from the leader settings, and membership never counts as
-   leading. */
-async function decorateMember(record, context) {
-  if (!record || typeof record !== 'object') return null;
-  const next = Object.assign({}, record);
-  const name = canonicalName(next.name || next.memberName || next.id || next.memberId, context.nameMap);
-  if (!name) return null;
-  next.id = String(next.id || next.memberId || name);
-  next.memberId = String(next.memberId || next.id);
-  next.name = name;
-  next.memberName = name;
-  if (!Array.isArray(next.roles) || !Array.isArray(next.departments) || next.mustChangePin === undefined) {
-    const defaults = memberRoleRecord(name, await context.config());
-    if (!Array.isArray(next.roles)) {
-      next.roles = defaults.roles;
-      if (!next.role) next.role = defaults.role;
-      if (next.globalLeaderManager === undefined) next.globalLeaderManager = defaults.globalLeaderManager;
-    }
-    if (!Array.isArray(next.departments)) next.departments = defaults.departments;
-    if (next.mustChangePin === undefined) next.mustChangePin = defaults.mustChangePin;
-  }
-  return next;
-}
-
-const LOCK_AFTER_ATTEMPTS = 5;
-const LOCK_MS = 15 * 60 * 1000;
-
-function createFirestoreMemberStore() {
-  const accounts = db.collection('accounts');
-
-  /* What one lookup reads: the name map, and the leader settings only when
-     an account needs them. */
-  function lookup(nameMap) {
-    let config = null;
-    return { nameMap, config: () => config || (config = runtimePermissionConfig()) };
-  }
-
-  async function accountById(id) {
-    const nameMap = await loadNameMap();
-    const requested = canonicalName(id, nameMap);
-    if (!usableMemberName(requested)) return null;
-    const context = lookup(nameMap);
-    const snapshot = await accounts.doc(requested).get();
-    if (snapshot.exists) return decorateMember(Object.assign({ id: snapshot.id }, snapshot.data()), context);
-    const query = await accounts.where('memberId', '==', requested).limit(1).get();
-    if (!query.empty) {
-      const document = query.docs[0];
-      return decorateMember(Object.assign({ id: document.id }, document.data()), context);
-    }
-    if (!(await appDocs.loadMemberNames(db, nameMap)).includes(requested)) return null;
-    // The first sign-in of someone on the member list makes their account,
-    // with the shared starting PIN (0000 for leaders, who must change it).
-    const defaults = memberRoleRecord(requested, await context.config());
-    defaults.pinHash = await hashPin(defaults.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN);
-    defaults.active = true;
-    defaults.roleVersion = 1;
-    try {
-      await accounts.doc(requested).create(defaults);
-    } catch (error) {
-      if (!alreadyExists(error)) throw error;
-      const made = await accounts.doc(requested).get();
-      return decorateMember(Object.assign({ id: made.id }, made.data()), context);
-    }
-    return defaults;
-  }
-
-  async function findByName(name) {
-    const direct = await accountById(name);
-    if (direct) return direct;
-    const nameMap = await loadNameMap();
-    const requested = canonicalName(name, nameMap);
-    if (!requested) return null;
-    const query = await accounts.where('name', '==', requested).limit(1).get();
-    if (query.empty) return null;
-    const document = query.docs[0];
-    return decorateMember(Object.assign({ id: document.id }, document.data()), lookup(nameMap));
-  }
-
-  return {
-    getById: accountById,
-    findByName,
-    /* Writes only what a PIN change or reset sets. Roles, departments and
-       names are never written back from a sign-in. */
-    async update(id, patch) {
-      const memberId = String(id == null ? '' : id).trim();
-      if (!memberId) throw new Error('Member id is required.');
-      await accounts.doc(memberId).set(Object.assign({}, patch), { merge: true });
-    },
-    /* One sign-in attempt, counted before the PIN is checked and in one
-       transaction, so attempts made at the same moment cannot all slip past
-       the limit. The fifth in a row locks the account for 15 minutes; a
-       correct PIN clears the count (clearFailedAttempts). */
-    async beginAttempt(id) {
-      const reference = accounts.doc(String(id));
-      await db.runTransaction(async transaction => {
-        const snapshot = await transaction.get(reference);
-        const data = snapshot.exists ? snapshot.data() || {} : {};
-        const now = Date.now();
-        if (Number(data.loginLockedUntil || 0) > now) {
-          throw Object.assign(new Error('Too many attempts. Try again later.'), { code: 'resource-exhausted', details: { reason: 'locked' } });
-        }
-        const attempts = Number(data.failedLoginAttempts || 0) + 1;
-        transaction.set(reference, {
-          failedLoginAttempts: attempts,
-          loginLockedUntil: attempts >= LOCK_AFTER_ATTEMPTS ? now + LOCK_MS : 0
-        }, { merge: true });
-      });
-    },
-    async clearFailedAttempts(id) {
-      await accounts.doc(String(id)).set({ failedLoginAttempts: 0, loginLockedUntil: 0 }, { merge: true });
-    }
-  };
-}
-
-function alreadyExists(error) {
-  return !!error && (error.code === 6 || error.code === 'already-exists' || /ALREADY_EXISTS/.test(String(error.message)));
-}
-
-function refusal(code, reason, message) {
-  return Object.assign(new Error(message), { code, details: { reason } });
-}
-
-/* Who may reset whose PIN. An administrator: anyone's. A leader manager or a
-   department leader: only someone who is not an administrator, leader
-   manager, department leader or song editor, and a department leader only
-   in a department they lead. */
-function memberPermissionAdapter() {
-  return {
-    async assertActorCanAct({ actor, action, target }) {
-      const identity = Object.assign({}, actor && actor.token, { uid: actor && actor.uid });
-      const config = await runtimePermissionConfig();
-      if (action !== 'member.pin.reset') {
-        if (permissions.canManageLeaders(identity, config)) return true;
-        throw refusal('permission-denied', 'not-allowed', 'You are not allowed to perform this action.');
-      }
-      if (permissions.isAdmin(identity, config)) return true;
-      const nameMap = await loadNameMap();
-      const targetName = canonicalName(target && (target.name || target.memberName || target.id), nameMap);
-      const targetIdentity = { name: targetName };
-      const privilegedTarget = Boolean(target && (target.privileged || target.songEditor)) ||
-        permissions.isAdmin(targetIdentity, config) ||
-        permissions.isGlobalManager(targetIdentity, config) ||
-        permissions.departmentsForLeader(targetIdentity, config).length > 0 ||
-        permissions.canEditSongs(targetIdentity, {}, config);
-      if (privilegedTarget) {
-        throw refusal('permission-denied', 'privileged-target', 'Only an administrator can reset the PIN of an administrator, a leader or a song editor.');
-      }
-      if (permissions.isGlobalManager(identity, config)) return true;
-      const memberships = await departmentsForMember(targetName, nameMap);
-      if (!permissions.canResetPin(identity, { name: targetName, departments: memberships }, config)) {
-        throw refusal('permission-denied', 'cross-department', 'Only a leader of one of their departments or an administrator can reset this PIN.');
-      }
-      return true;
-    }
-  };
-}
-
-const memberAuthCallables = createMemberAuthCallables({
-  memberStore: createFirestoreMemberStore(),
-  auth: getAuth(),
-  permission: memberPermissionAdapter(),
-  logger
-});
-
-const AUTH_ERROR_CODES = new Set([
-  'cancelled', 'invalid-argument', 'deadline-exceeded', 'not-found',
-  'already-exists', 'permission-denied', 'resource-exhausted',
-  'failed-precondition', 'aborted', 'out-of-range', 'unauthenticated',
-  'unavailable', 'data-loss', 'internal'
-]);
-
-function exposeMemberAuthCallable(handler) {
-  return onCall({ region: REGION }, async request => {
-    try {
-      return await handler(request);
-    } catch (error) {
-      const code = error && AUTH_ERROR_CODES.has(error.code) ? error.code : 'internal';
-      const message = code === 'internal'
-        ? 'The member authentication service is unavailable.'
-        : String(error.message || 'The requested authentication action failed.');
-      throw new HttpsError(code, message, detailsFor(error, code));
-    }
-  });
-}
-
-exports.verifyMemberPin = exposeMemberAuthCallable(memberAuthCallables.verifyMemberPin);
-
-/* Changing one's own PIN needs a session that is still current (not ended by
-   a reset or a role change), but not a changed PIN: this is how one is set. */
-exports.changeMemberPin = exposeMemberAuthCallable(async request => {
-  await readCurrentAccount(request);
-  return memberAuthCallables.changeMemberPin(request);
-});
-
-/* A leader or an administrator resets someone's PIN to 0000. Their own
-   account must be current with its PIN changed, and every reset is recorded
-   in audit (who, whom, when), as overrides and role changes are. */
-exports.resetMemberPin = exposeMemberAuthCallable(async request => {
-  const actor = await callableActor(request);
-  const result = await memberAuthCallables.resetMemberPin({ data: request.data, auth: actor });
-  try {
-    await db.collection('audit').add({
-      action: 'member-pin-reset', actor: actor.memberName || actor.uid, actorUid: actor.uid,
-      target: result.memberId, targetMemberId: result.memberId, timestamp: Date.now()
-    });
-  } catch (error) {
-    logger.error('Reset audit record failed', { error: String(error && error.message || error) });
-  }
-  return result;
-});
-
-function exposeDepartmentCallable(handler) {
-  return onCall({ region: REGION }, async request => {
-    try {
-      const actor = await callableActor(request);
-      return await handler({
-        ...request,
-        auth: actor
-      });
-    } catch (error) {
-      const code = error && AUTH_ERROR_CODES.has(error.code) ? error.code : 'internal';
-      if (code === 'internal') logger.error('Department callable failed', { error: String(error && error.message || error) });
-      const message = code === 'internal'
-        ? 'The department authorization service is unavailable.'
-        : String(error.message || 'The requested department action failed.');
-      throw new HttpsError(code, message, detailsFor(error, code));
-    }
-  });
-}
-
-exports.updateDepartmentProfile = exposeDepartmentCallable(
-  departmentHandlers.updateDepartmentProfile
-);
-exports.listDepartmentRoster = exposeDepartmentCallable(
-  departmentHandlers.listDepartmentRoster
-);
-exports.updateMemberAvailability = exposeDepartmentCallable(
-  departmentHandlers.updateMemberAvailability
-);
-exports.createDepartmentProfile = exposeDepartmentCallable(
-  departmentHandlers.createDepartmentProfile
-);
-exports.assignDepartmentDuty = exposeDepartmentCallable(
-  departmentHandlers.assignDepartmentDuty
-);
-exports.unassignDepartmentDuty = exposeDepartmentCallable(
-  departmentHandlers.unassignDepartmentDuty
-);
-exports.overrideDepartmentAssignment = exposeDepartmentCallable(
-  departmentHandlers.overrideDepartmentAssignment
-);
-exports.saveMemberAvailability = exposeDepartmentCallable(
-  workflowHandlers.saveMemberAvailability
-);
-exports.resolveDutyAttention = exposeDepartmentCallable(
-  workflowHandlers.resolveDutyAttention
-);
-
-/* The month planner's save. Members hear about their new duties in one
-   notification each, however many services the save touched. */
-exports.saveDepartmentAssignments = exposeDepartmentCallable(async request => {
-  const result = await departmentHandlers.saveDepartmentAssignments(request);
-  try {
-    await notifier.alertPlanned(result.saved);
-  } catch (error) {
-    logger.error('Planner alerts failed', { error: String(error && error.message || error) });
-  }
-  return result;
-});
-
-/* Adding members by name search or invite link. exposeDepartmentCallable
-   only establishes the verified, active, current-role, no-forced-PIN actor;
-   each handler checks rights on top. Search, create and revoke need a leader
-   of the department; accept does not, because any signed-in member may use
-   an invite link they were sent. */
-exports.searchDepartmentCandidates = exposeDepartmentCallable(
-  membershipHandlers.searchDepartmentCandidates
-);
-exports.createDepartmentInvitation = exposeDepartmentCallable(
-  membershipHandlers.createDepartmentInvitation
-);
-exports.revokeDepartmentInvitation = exposeDepartmentCallable(
-  membershipHandlers.revokeDepartmentInvitation
-);
-exports.acceptDepartmentInvitation = exposeDepartmentCallable(
-  membershipHandlers.acceptDepartmentInvitation
-);
-
-/* Every 30 minutes, record confirmed song lists as sung once their service
-   ended (three hours after it started). A second run finds them sung and
-   does nothing. */
-exports.songHistoryRecorder = onSchedule(
-  { schedule: 'every 30 minutes', timeZone: TZ, region: REGION },
-  async () => {
-    await workflowHandlers.recordSongHistory();
-  }
-);
-
+/* The signed-in member's account, checked against their sign-in token: the
+   same uid, a current role version (a role change or a PIN reset ends older
+   sessions) and still in use. */
 async function readCurrentAccount(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'A verified member session is required.', { reason: 'sign-in-required' });
   const token = request.auth.token || {};
@@ -438,6 +91,8 @@ function roleNames(account) {
   return Array.from(new Set(roles));
 }
 
+/* The caller's rights as their account holds them now, in the shape of a
+   sign-in token, so handlers never act on a token's older claims. */
 function currentTokenForAccount(requestToken, account, memberId) {
   const roles = roleNames(account);
   const normalizedRoles = new Set(roles.map(role => String(role).trim().toLocaleLowerCase().replace(/[^a-z0-9]/g, '')));
@@ -464,6 +119,7 @@ function currentTokenForAccount(requestToken, account, memberId) {
   });
 }
 
+/* A current member who has chosen their own PIN, as handlers see them. */
 async function callableActor(request) {
   const current = await readCurrentAccount(request);
   const token = currentTokenForAccount(request.auth.token || {}, current.account, current.memberId);
@@ -477,75 +133,110 @@ async function callableActor(request) {
   }, token);
 }
 
-exports.updateRoleConfiguration = onCall({ region: REGION }, async request => {
-  const actor = await callableActor(request);
-  const data = request.data || {};
-  const roleType = data.roleType === 'songEditor' ? 'songEditor' : 'departmentLeader';
-  const department = permissions.DEPARTMENTS.includes(String(data.department || '').trim()) ? String(data.department).trim() : '';
-  const nameMap = await loadNameMap();
-  const memberName = canonicalName(data.memberName, nameMap);
-  const enabled = data.enabled === true;
-  const current = await runtimePermissionConfig();
-  if (!usableMemberName(memberName) || (roleType === 'departmentLeader' && !department)) {
-    throw new HttpsError('invalid-argument', 'A valid role target is required.', { reason: 'invalid-input' });
+/* ---- one way in for every callable ---- */
+
+const ERROR_CODES = new Set([
+  'cancelled', 'invalid-argument', 'deadline-exceeded', 'not-found',
+  'already-exists', 'permission-denied', 'resource-exhausted',
+  'failed-precondition', 'aborted', 'out-of-range', 'unauthenticated',
+  'unavailable', 'data-loss'
+]);
+// Firestore's own errors carry gRPC numbers: a transaction that kept
+// meeting other writes (10), or a timeout or outage (4, 14).
+const GRPC_CODES = Object.freeze({ 4: 'deadline-exceeded', 10: 'aborted', 14: 'unavailable' });
+
+/* Any error as one the app can show. One the handlers did not expect is
+   logged and reported in general words, never with its own text. */
+function asHttpsError(error, unavailable) {
+  if (error && ERROR_CODES.has(error.code)) {
+    return new HttpsError(error.code, String(error.message || unavailable), detailsFor(error, error.code));
   }
-  if (!permissions.canManageLeaders(actor, current)) {
-    throw new HttpsError('permission-denied', 'Only global leader managers can change role assignments.', { reason: 'not-allowed' });
-  }
-  const next = {
-    admin: Array.from(PERMISSION_CONFIG.admin),
-    globalLeaderManager: Array.from(PERMISSION_CONFIG.globalLeaderManager),
-    departmentLeaders: Object.assign({}, current.departmentLeaders || PERMISSION_CONFIG.departmentLeaders),
-    songEditors: Array.from(current.songEditors || PERMISSION_CONFIG.songEditors)
-  };
-  const list = roleType === 'songEditor'
-    ? next.songEditors
-    : Array.from(next.departmentLeaders[department] || []);
-  const updated = enabled
-    ? Array.from(new Set(list.concat(memberName))).sort()
-    : list.filter(name => canonicalName(name, nameMap) !== memberName);
-  if (roleType === 'songEditor') next.songEditors = updated;
-  else next.departmentLeaders[department] = updated;
-  const actorName = canonicalName(actor.memberName || actor.name || actor.uid, nameMap);
-  await db.collection('app').doc('leaderConfig').set(next, { merge: false });
-  const memberActor = { name: memberName };
-  const departments = permissions.departmentsForLeader(memberActor, next);
-  const roles = [];
-  if (permissions.isAdmin(memberActor, next)) roles.push('admin');
-  if (permissions.isGlobalManager(memberActor, next)) roles.push('globalLeaderManager');
-  if (departments.length) roles.push('departmentLeader');
-  if (permissions.canEditSongs(memberActor, {}, next)) roles.push('songEditor');
-  const accountRef = db.collection('accounts').doc(memberName);
-  const beforeAccount = await accountRef.get();
-  const beforeData = beforeAccount.exists ? beforeAccount.data() : {};
-  const wasPrivileged = Array.isArray(beforeData.roles) && beforeData.roles.some(role => role !== 'member');
-  const nowPrivileged = roles.length > 0;
-  const accountPatch = {
-    roles, departments,
-    role: roles[0] || 'member',
-    globalLeaderManager: roles.includes('globalLeaderManager'),
-    mustChangePin: !wasPrivileged && nowPrivileged ? true : Boolean(beforeData.mustChangePin),
-    active: true,
-    roleVersion: Number(beforeData.roleVersion || 1) + 1
-  };
-  if (!beforeData.pinHash) accountPatch.pinHash = await hashPin(nowPrivileged ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN);
-  await accountRef.set(accountPatch, { merge: true });
-  try { await getAuth().revokeRefreshTokens(String(beforeData.authUid || 'member:' + memberName)); } catch (_error) { /* next token still uses the new role version */ }
-  await db.collection('audit').add({
-    actor: actorName, actorUid: request.auth.uid,
-    action: 'role-configuration-changed', target: memberName,
-    roleType, department: roleType === 'departmentLeader' ? department : '',
-    enabled, timestamp: Date.now()
+  const code = (error && GRPC_CODES[error.code]) || 'internal';
+  logger.error('Callable failed', { code, error: String(error && error.message || error) });
+  return code === 'aborted'
+    ? new HttpsError('aborted', MESSAGES.changed, { reason: 'changed' })
+    : new HttpsError(code, unavailable, { reason: 'server-error' });
+}
+
+/* A callable. `access` says who may call it: 'anyone' (signing in),
+   'session' (a current session, also one that must still choose its PIN),
+   'member' (a current member with their own PIN) or 'admin' (an
+   administrator). Handlers get the verified caller as request.auth. */
+function callable(access, handler, { unavailable = 'The server could not finish that. Try again.', refused } = {}) {
+  return onCall({ region: REGION }, async request => {
+    try {
+      if (access === 'anyone') return await handler(request);
+      if (access === 'session') {
+        await readCurrentAccount(request);
+        return await handler(request);
+      }
+      const actor = await callableActor(request);
+      if (access === 'admin' && !permissions.isAdmin(actor, await runtimePermissionConfig())) {
+        throw refusal('permission-denied', 'administrator-required', refused);
+      }
+      return await handler({ ...request, auth: actor });
+    } catch (error) {
+      throw asHttpsError(error, unavailable);
+    }
   });
-  return { ok: true, config: next };
+}
+
+/* ---- sign-in, PINs and leaders (accounts.js) ---- */
+
+const SIGN_IN = { unavailable: 'The member authentication service is unavailable.' };
+exports.verifyMemberPin = callable('anyone', accounts.verifyMemberPin, SIGN_IN);
+// Choosing one's own PIN needs a current session, not a changed PIN: this
+// is how a new or reset PIN is replaced.
+exports.changeMemberPin = callable('session', accounts.changeMemberPin, SIGN_IN);
+exports.resetMemberPin = callable('member', accounts.resetMemberPin, SIGN_IN);
+exports.updateRoleConfiguration = callable('member', accounts.updateRoleConfiguration);
+
+/* ---- departments, assignments, availability and requests ---- */
+
+const DEPARTMENT = { unavailable: 'The department authorization service is unavailable.' };
+exports.updateDepartmentProfile = callable('member', departmentHandlers.updateDepartmentProfile, DEPARTMENT);
+exports.listDepartmentRoster = callable('member', departmentHandlers.listDepartmentRoster, DEPARTMENT);
+exports.updateMemberAvailability = callable('member', departmentHandlers.updateMemberAvailability, DEPARTMENT);
+exports.createDepartmentProfile = callable('member', departmentHandlers.createDepartmentProfile, DEPARTMENT);
+exports.assignDepartmentDuty = callable('member', departmentHandlers.assignDepartmentDuty, DEPARTMENT);
+exports.unassignDepartmentDuty = callable('member', departmentHandlers.unassignDepartmentDuty, DEPARTMENT);
+exports.overrideDepartmentAssignment = callable('member', departmentHandlers.overrideDepartmentAssignment, DEPARTMENT);
+exports.saveMemberAvailability = callable('member', workflowHandlers.saveMemberAvailability, DEPARTMENT);
+exports.resolveDutyAttention = callable('member', workflowHandlers.resolveDutyAttention, DEPARTMENT);
+
+/* The month planner's save. Members hear about their new duties in one
+   notification each, however many services the save touched. */
+exports.saveDepartmentAssignments = callable('member', async request => {
+  const result = await departmentHandlers.saveDepartmentAssignments(request);
+  try {
+    await notifier.alertPlanned(result.saved);
+  } catch (error) {
+    logger.error('Planner alerts failed', { error: String(error && error.message || error) });
+  }
+  return result;
+}, DEPARTMENT);
+
+/* Adding members by name search or invite link. callable() only
+   establishes the verified, active, current-role, no-forced-PIN caller; each
+   handler checks rights on top. Search, create and revoke need a leader of
+   the department; accept does not, because any signed-in member may use an
+   invite link they were sent. */
+exports.searchDepartmentCandidates = callable('member', membershipHandlers.searchDepartmentCandidates, DEPARTMENT);
+exports.createDepartmentInvitation = callable('member', membershipHandlers.createDepartmentInvitation, DEPARTMENT);
+exports.revokeDepartmentInvitation = callable('member', membershipHandlers.revokeDepartmentInvitation, DEPARTMENT);
+exports.acceptDepartmentInvitation = callable('member', membershipHandlers.acceptDepartmentInvitation, DEPARTMENT);
+
+/* Manage, Worship: the default for Opening Prayer. The Worship leaders and
+   administrators (duty-defaults.js). */
+exports.setDutyDefault = callable('member', async request => {
+  const result = await setDutyDefault({ db, actor: request.auth, config: await runtimePermissionConfig(), data: request.data || {} });
+  logger.info('setDutyDefault', { duty: result.duty, set: !!result.memberName });
+  return result;
 });
 
-const loadSettings = () => appDocs.loadSettings(db);
-const switchOn = appDocs.switchOn;
-
-/* ---- 1. after every schedule write: the assignment records, the Sheet's
-   grid and new-duty alerts (switch: notifications). Each runs on its own, so
-   one that fails does not stop the others. ---- */
+/* ---- after every schedule write: the assignment records, the Sheet's
+   grid, new-duty alerts (switch: notifications) and deleted services. Each
+   runs on its own, so one that fails does not stop the others. ---- */
 exports.onScheduleWrite = onDocumentWritten(
   { document: 'schedule/{id}', region: REGION },
   async (event) => {
@@ -568,15 +259,17 @@ exports.onScheduleWrite = onDocumentWritten(
     }
   });
 
-/* ---- 2. day-before reminders (switch: reminders) ---- */
+/* ---- reminders and change-request alerts (notify.js) ---- */
+
+/* The day before a duty (switch: reminders). */
 exports.dutyReminders = onSchedule(
   { schedule: 'every 60 minutes', timeZone: TZ, region: REGION },
   async () => {
     await notifier.sendReminders();
   });
 
-/* ---- 3. change request sent: tell that department's leaders and the
-   scheduler (Manage, Features), never the member who asked ---- */
+/* A change request sent: that department's leaders and the scheduler
+   (Manage, Features) hear, never the member who asked. */
 exports.onRequestCreated = onDocumentCreated(
   { document: 'requests/{id}', region: REGION },
   async event => {
@@ -584,7 +277,7 @@ exports.onRequestCreated = onDocumentCreated(
     if (request) await notifier.alertRequestCreated(event.params.id, request);
   });
 
-/* ---- 4. change request answered: tell the member ---- */
+/* A change request answered: the member hears. */
 exports.onRequestResolved = onDocumentUpdated(
   { document: 'requests/{id}', region: REGION },
   async event => {
@@ -594,7 +287,7 @@ exports.onRequestResolved = onDocumentUpdated(
     await notifier.alertRequestResolved(event.params.id, before.data() || {}, after.data() || {});
   });
 
-/* ---- 4b. feedback marked done: tell the member who sent it ---- */
+/* Feedback marked done: the member who sent it hears. */
 exports.onFeedbackDone = onDocumentUpdated(
   { document: 'feedback/{id}', region: REGION },
   async event => {
@@ -604,16 +297,15 @@ exports.onFeedbackDone = onDocumentUpdated(
     await notifier.alertFeedbackDone(event.params.id, before.data() || {}, after.data() || {});
   });
 
-/* ---- 5 and 6. the public calendar feed and schedule (public-endpoints.js).
-   Few instances: neither needs more, and they are open to anyone. ---- */
-const publicEndpoints = createPublicEndpoints({ db });
+/* ---- the public calendar feed and schedule (public-endpoints.js). Few
+   instances: neither needs more, and they are open to anyone. ---- */
 exports.ics = onRequest({ region: REGION, maxInstances: 5 }, publicEndpoints.ics);
 exports.publicSchedule = onRequest({ region: REGION, maxInstances: 5 }, publicEndpoints.publicSchedule);
 
-/* ---- 7. the Google Sheet (sheet-io.js) ----
-   Every 2 hours (and when an administrator taps Import now in Manage, Data)
-   the Sheet is merged into the schedule. The Google Sheet import switch in
-   Manage, Features turns the automatic import off. */
+/* ---- the Google Sheet (sheet-io.js) ---- */
+
+/* Every 2 hours the Sheet is merged into the schedule. The Google Sheet
+   import switch in Manage, Features turns it off. */
 exports.scheduledSheetSync = onSchedule(
   { schedule: 'every 2 hours', timeZone: TZ, region: REGION },
   async () => {
@@ -625,30 +317,20 @@ exports.scheduledSheetSync = onSchedule(
     }
   });
 
+/* Manage, Data, Import now. Administrators only. */
+exports.syncSheetNow = callable('admin', async () => Object.assign({ ok: true }, await sheetIo.importSheet()),
+  { refused: 'Only an administrator can import the sheet.' });
+
 /* Manage, Data, Check the Sheet: compares the Sheet with the app, changing
    nothing. Administrators only. */
-exports.checkSheet = onCall({ region: REGION }, async request => {
-  const actor = await callableActor(request);
-  if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
-    throw new HttpsError('permission-denied', 'Only an administrator can check the Sheet.');
-  }
-  return sheetIo.checkSheet();
-});
+exports.checkSheet = callable('admin', () => sheetIo.checkSheet(), { refused: 'Only an administrator can check the Sheet.' });
 
 /* Manage, Data: a planning year of regular services. Administrators only. */
-exports.addServiceYear = onCall({ region: REGION }, async request => {
-  const actor = await callableActor(request);
-  if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
-    throw new HttpsError('permission-denied', 'Only an administrator can add a year of services.');
-  }
+exports.addServiceYear = callable('admin', async request => {
   const year = Number(request.data && request.data.year);
-  if (!Number.isInteger(year) || year < 2026 || year > 2100) throw new HttpsError('invalid-argument', 'Choose a year.');
-  try {
-    return Object.assign({ ok: true }, await sheetIo.addServiceYear(year));
-  } catch (error) {
-    throw new HttpsError('failed-precondition', String(error && error.message || error));
-  }
-});
+  if (!Number.isInteger(year) || year < 2026 || year > 2100) throw refusal('invalid-argument', 'invalid-input', 'Choose a year.');
+  return Object.assign({ ok: true }, await sheetIo.addServiceYear(year));
+}, { refused: 'Only an administrator can add a year of services.' });
 
 /* Every November 1: December through the next December. A run that fails
    is tried again (it only adds what is missing). */
@@ -658,6 +340,8 @@ exports.yearlyServices = onSchedule(
     logger.info('yearlyServices: done', await sheetIo.addServiceYear(Number(pacificDate().slice(0, 4))));
   });
 
+/* ---- members and song lists ---- */
+
 /* Every night: everyone who has served in a department's duties gets a
    profile there (inactive when they have not served there in 35 days), so
    the planner can offer them. Profiles that already exist are left alone. */
@@ -665,7 +349,7 @@ exports.servingMembers = onSchedule(
   { schedule: '30 3 * * *', timeZone: TZ, region: REGION },
   async () => {
     try {
-      const nameMap = await loadNameMap();
+      const nameMap = await appDocs.loadNameMap(db);
       const result = await addServingMembers(db, { today: pacificDate(), canonicalName: name => canonicalName(name, nameMap), logger });
       logger.info('servingMembers: done', { added: result.added.length, widened: result.widened.length, unmatched: result.unmatched });
     } catch (error) {
@@ -674,51 +358,28 @@ exports.servingMembers = onSchedule(
   });
 
 /* Manage, Data, Fix a member's name. Administrators only. */
-exports.renameMember = onCall({ region: REGION }, async request => {
-  const actor = await callableActor(request);
-  if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
-    throw new HttpsError('permission-denied', 'Only an administrator can fix a name.');
-  }
+exports.renameMember = callable('admin', async request => {
   const data = request.data || {};
   try {
-    const result = await renameMemberEverywhere(db, {
-      from: data.from, to: data.to, auth: getAuth(),
-      newAccount: async name => {
-        const record = memberRoleRecord(name, await runtimePermissionConfig());
-        return Object.assign(record, { pinHash: await hashPin(record.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN), active: true, roleVersion: 1 });
-      }
-    });
+    const result = await renameMemberEverywhere(db, { from: data.from, to: data.to, auth: getAuth(), newAccount: name => accounts.newAccount(name) });
     logger.info('renameMember', result);
     return Object.assign({ ok: true }, result);
   } catch (error) {
     if (error && ['invalid-argument', 'not-found'].includes(error.code)) {
-      throw new HttpsError(error.code, error.message, { reason: error.code === 'not-found' ? 'not-on-list' : 'invalid-input' });
+      throw refusal(error.code, error.code === 'not-found' ? 'not-on-list' : 'invalid-input', error.message);
     }
     // Every step can run again, so the same fix finishes the job.
     logger.error('renameMember failed', { error: String(error && error.message || error) });
-    throw new HttpsError('aborted', 'The name was only partly fixed. Fix the same name again to finish.', { reason: 'rename-incomplete' });
+    throw refusal('aborted', 'rename-incomplete');
   }
-});
+}, { refused: 'Only an administrator can fix a name.' });
 
-/* Manage, Worship: the default for Opening Prayer. The Worship leaders and
-   administrators (duty-defaults.js). */
-exports.setDutyDefault = onCall({ region: REGION }, async request => {
-  const actor = await callableActor(request);
-  try {
-    const result = await setDutyDefault({ db, actor, config: await runtimePermissionConfig(), data: request.data || {} });
-    logger.info('setDutyDefault', { duty: result.duty, set: !!result.memberName });
-    return result;
-  } catch (error) {
-    if (error && ['invalid-argument', 'permission-denied', 'failed-precondition'].includes(error.code)) throw new HttpsError(error.code, error.message);
-    throw error;
+/* Every 30 minutes, record confirmed song lists as sung once their service
+   ended (three hours after it started). A second run finds them sung and
+   does nothing. */
+exports.songHistoryRecorder = onSchedule(
+  { schedule: 'every 30 minutes', timeZone: TZ, region: REGION },
+  async () => {
+    await workflowHandlers.recordSongHistory();
   }
-});
-
-/* Manage, Data, Import now. Administrators only. */
-exports.syncSheetNow = onCall({ region: REGION }, async request => {
-  const actor = await callableActor(request);
-  if (!permissions.isAdmin(actor, await runtimePermissionConfig())) {
-    throw new HttpsError('permission-denied', 'Only an administrator can import the sheet.');
-  }
-  return Object.assign({ ok: true }, await sheetIo.importSheet());
-});
+);
