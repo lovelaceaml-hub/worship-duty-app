@@ -57,3 +57,16 @@ export function leadersOf(department) {
   const leaders = config().departmentLeaders || {};
   return Array.isArray(leaders[department]) ? leaders[department] : [];
 }
+
+/* Whether `name` holds a role beyond member: administrator, leader manager,
+   department leader or choir song editor. Only an administrator resets their
+   PIN (the server refuses anyone else). */
+export function isPrivileged(name) {
+  try {
+    const methods = rules(), settings = config();
+    return !!(methods.isAdmin(name, settings) || methods.canManageLeaders(name, settings) ||
+      (methods.departmentsForLeader(name, settings) || []).length || methods.canEditSongs(name, {}, settings));
+  } catch (_error) {
+    return false;
+  }
+}
