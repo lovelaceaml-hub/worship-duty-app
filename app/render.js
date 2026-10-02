@@ -4,7 +4,7 @@
    the member's place (ui/replace.js). A background redraw also waits while
    the member types in a field or chooses from a list, and runs when they
    leave it, so a live update never closes a list or the keyboard. */
-import { data, session, ui, feature } from './store.js';
+import { data, session, ui, feature, loaded } from './store.js';
 import { connected } from './firebase.js';
 import { paintHeader, accountView } from './ui/header.js';
 import { paintTabs } from './ui/tabs.js';
@@ -46,7 +46,12 @@ function isPresider() {
 function gate() {
   if (document.documentElement.dataset.maintenance === 'on') return lock.maintenance;
   if (session.status === 'loading' && !(ui.me && data.services.length)) return lock.opening;
-  if (feature('siteLock') && !siteUnlocked()) return lock.sitePasscode;
+  if (feature('siteLock') && !siteUnlocked()) {
+    // The passcode is checked against the settings: wait for them while the
+    // app is online, unless this device has them saved.
+    if (!loaded.settings && !data.settings.sitePinHash && session.status !== 'offline') return lock.opening;
+    return lock.sitePasscode;
+  }
   if (session.status === 'loading') return null;
   if (session.status === 'offline') return ui.me ? null : lock.offline;
   if (session.status === 'signedOut') return lock.signIn;

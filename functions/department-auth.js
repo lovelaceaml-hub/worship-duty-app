@@ -189,12 +189,15 @@ function isAuthenticated(actor) {
   return !!actorUid(actor) && token.mustChangePin !== true;
 }
 
+/* An account written before role versions existed counts as version 1, as
+   sign-in and the database rules count it. */
 function isCurrentRoleVersion(actor, account) {
   if (!account || typeof account !== 'object') return false;
   const token = actorToken(actor);
+  const roleVersion = account.roleVersion === undefined ? 1 : account.roleVersion;
   return Number.isSafeInteger(token.roleVersion)
-    && Number.isSafeInteger(account.roleVersion)
-    && token.roleVersion === account.roleVersion;
+    && Number.isSafeInteger(roleVersion)
+    && token.roleVersion === roleVersion;
 }
 
 function isAdministrator(actor) {

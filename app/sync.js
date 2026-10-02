@@ -8,10 +8,10 @@ import { notice } from './ui/banners.js';
 import { afterScheduleChange } from './services/notifications.js';
 import { todayISO } from './lib/dates.js';
 
-function listen(path, apply) {
+function listen(path, apply, failed = () => {}) {
   const target = path.includes('/') ? fb.doc(fb.db, ...path.split('/')) : fb.collection(fb.db, path);
   return fb.onSnapshot(target, snapshot => { apply(snapshot); renderSoon(); },
-    error => console.warn('Listener stopped: ' + path, error));
+    error => { console.warn('Listener stopped: ' + path, error); failed(); renderSoon(); });
 }
 
 /* Services by document id. A snapshot after the first carries only the
@@ -39,11 +39,12 @@ export function startSync() {
     canonicalizeNames();
     loaded.members = true;
   });
+  // Settled either way, so the passcode screen does not wait for ever.
   listen('app/settings', snapshot => {
     data.settings = snapshot.exists() ? snapshot.data() : {};
     loaded.settings = true;
     saveCache();
-  });
+  }, () => { loaded.settings = true; });
   listen('app/departments', snapshot => {
     data.rosters = snapshot.exists() ? (snapshot.data().map || {}) : {};
     canonicalizeRosters();

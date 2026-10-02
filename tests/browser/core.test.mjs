@@ -507,6 +507,18 @@ test('a list counted as sung stays as it was sung, even for a song editor', asyn
   await context.close();
 });
 
+test('on a new device, the passcode waits for the settings, so a changed passcode works', async () => {
+  // The passcode was changed to 1357 in Manage; the settings arrive a moment after the app opens.
+  const fixture = { patch: { 'app/settings': { sitePinHash: 'f3e055913a0b1eb0f07317896f9a1bc466b9a50db85a7f882f3ffde9ffb23aca' } },
+    delays: { 'app/settings': 1500, songStats: 40 } };
+  const { context, page, errors } = await openPage(browser, server.url, { fixture });
+  await page.locator('#site-passcode').fill('1357');
+  await page.locator('form[data-act="site-unlock"] button').click();
+  await page.locator('#sign-in-member').waitFor();
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 /* ---- releases and the offline copy ---- */
 
 function freePort() {

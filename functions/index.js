@@ -71,9 +71,12 @@ async function readCurrentAccount(request) {
   if (expectedUid !== request.auth.uid) {
     throw new HttpsError('permission-denied', 'The signed-in member account is invalid.', { reason: 'session-ended' });
   }
+  // An account written before role versions existed counts as version 1,
+  // as sign-in and the database rules count it.
+  const roleVersion = account.roleVersion === undefined ? 1 : account.roleVersion;
   if (!Number.isSafeInteger(token.roleVersion)
-      || !Number.isSafeInteger(account.roleVersion)
-      || token.roleVersion !== account.roleVersion) {
+      || !Number.isSafeInteger(roleVersion)
+      || token.roleVersion !== roleVersion) {
     throw new HttpsError('permission-denied', 'The member role has changed. Sign in again.', { reason: 'session-ended' });
   }
   if (account.active === false) {
@@ -115,7 +118,7 @@ function currentTokenForAccount(requestToken, account, memberId) {
     departmentLeader: account.departmentLeader === true || normalizedRoles.has('departmentleader') || normalizedRoles.has('leader'),
     songEditor: account.songEditor === true || normalizedRoles.has('songeditor'),
     mustChangePin: account.mustChangePin === true,
-    roleVersion: account.roleVersion
+    roleVersion: account.roleVersion === undefined ? 1 : account.roleVersion
   });
 }
 

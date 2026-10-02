@@ -37,6 +37,14 @@ test('department callables refuse with a reason the app can map', async () => {
     ['permission-denied', 'session-ended']);
 });
 
+test('an account written before role versions existed counts as version 1, as sign-in and the rules count it', async () => {
+  const older = docs();
+  delete older['accounts/S. Grace'].roleVersion;
+  const { functions } = loadIndex(older);
+  const result = await functions.listDepartmentRoster.run({ auth: leader, data: { departmentId: 'Usher Sisters' } });
+  assert.ok(Array.isArray(result.profiles || result.members || result.roster || []), 'the session holds');
+});
+
 test('an error without a reason gets the one for its code, and every listed reason has words', () => {
   assert.deepEqual(detailsFor(new Error('x'), 'invalid-argument'), { reason: 'invalid-input' });
   assert.deepEqual(detailsFor(Object.assign(new Error('x'), { details: { reason: 'not-holder', memberName: 'S. Leah' } }), 'failed-precondition'),
