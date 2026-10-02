@@ -45,10 +45,22 @@ function insertRows(tab, requests, at, count) {
   tab.lastRow += count;
 }
 
-/* Add services to one tab: rows in date order, month banners where needed.
-   Returns the value writes to make once the rows exist. */
+/* A row's values as part of the same request as its insert, written as
+   they are (as the values API's RAW does), '' as an empty cell. */
+function cellsRequest(sheetId, row, values) {
+  return { updateCells: {
+    start: { sheetId, rowIndex: row - 1, columnIndex: 0 },
+    rows: [{ values: values.map(value => (value === '' || value == null ? {}
+      : { userEnteredValue: typeof value === 'number' ? { numberValue: value } : { stringValue: String(value) } })) }],
+    fields: 'userEnteredValue'
+  } };
+}
+
+/* Add services to one tab: rows in date order, month banners where needed,
+   each row with its values. They go in one request, so a failure leaves no
+   empty row behind (a row without a date is never found again, and a retry
+   would add another). */
 function planInserts(tab, services, requests) {
-  const writes = [];
   const serviceLook = () => (tab.templates && tab.templates.service) || tab.rows[0];
   const bannerLook = () => (tab.templates && tab.templates.banner) || tab.banners[0];
   const sample = (tab.banners[0] && tab.banners[0].text) || (tab.templates && tab.templates.bannerText) || '';
@@ -65,22 +77,15 @@ function planInserts(tab, services, requests) {
         if (look) requests.push(...copyLook(tab.sheetId, look.row, at));
         const label = grid.bannerText(sample, month, Number(service.date.slice(0, 4)));
         tab.banners.push({ row: at, text: label, month });
-        writes.push({ row: at, values: [label] });
+        requests.push(cellsRequest(tab.sheetId, at, [label]));
         at += 1;
       }
       const look = serviceLook();
       insertRows(tab, requests, at, 1);
       if (look) requests.push(...copyLook(tab.sheetId, look.row, at));
       tab.rows.push({ row: at, iso: service.date, service: service.service, worship: service.worship || '', duties: {} });
-      writes.push({ row: at, values: grid.rowValues(tab, service) });
+      requests.push(cellsRequest(tab.sheetId, at, grid.rowValues(tab, service)));
     });
-  return writes;
-}
-
-async function applyWrites(sheets, tab, writes) {
-  // Each row is written where it ended up after every insert.
-  const final = writes.map(item => ({ range: grid.a1(tab.title, item.row, 0), values: [item.values] }));
-  await sheets.write(final);
 }
 
 /* A new year's tab: a copy of the latest Entry tab with its services removed.
@@ -151,9 +156,8 @@ async function addServices(sheets, services, { today } = {}) {
     if (!tab) continue;
     const requests = [];
     const before = tab.rows.length;
-    const writes = planInserts(tab, byYear.get(year), requests);
+    planInserts(tab, byYear.get(year), requests);
     await sheets.update(requests);
-    await applyWrites(sheets, tab, writes);
     if (tab.templates) await dropTemplates(sheets, tab);
     added += tab.rows.length - before;
   }
@@ -182,8 +186,10 @@ async function writeService(sheets, before, after, options = {}) {
 }
 
 /* A service as the app has it now, into its row: every cell that differs
-   from the app is written. After a failed write this puts back whatever the
-   Sheet missed, whichever change it was. */
+   from the app is written, or with `only` (fields: 'worship', 'choirSong',
+   duties) just those cells. After a failed write this puts back what the
+   Sheet missed, and only that, so a cell changed in the Sheet meanwhile is
+   not written over. */
 async function writeState(sheets, service, options = {}) {
   const metas = await entryTabs(sheets);
   const meta = metas.find(item => item.title === grid.yearTab(service.date));
@@ -191,7 +197,9 @@ async function writeState(sheets, service, options = {}) {
   const row = tab && grid.findRow(tab, service.date, service.service);
   if (!row) return (await addServices(sheets, [service], options)) ? 'row added' : 'not in the Sheet';
   const inSheet = { worship: row.worship, choirSong: row.duties[grid.CHOIR_SONG], assignments: row.duties };
-  const cells = grid.changedCells(tab, inSheet, service);
+  const columnOf = field => (field === 'worship' ? tab.columns.worship : tab.columns.duties[field === 'choirSong' ? grid.CHOIR_SONG : field]);
+  const only = options.only ? new Set(options.only.map(columnOf)) : null;
+  const cells = grid.changedCells(tab, inSheet, service).filter(cell => !only || only.has(cell.column));
   await sheets.write(cells.map(cell => ({ range: grid.a1(tab.title, row.row, cell.column), values: [[cell.value]] })));
   return cells.length + ' cells written';
 }

@@ -8,11 +8,12 @@
      and their department's name list, and members hear once about all of
      their new duties.
    - With "Write changes to the Sheet" on (Manage, Features), a change made
-     in the app goes into the grid. A write that fails waits in sheetQueue;
-     the next import first writes that service's whole state from the app,
-     and leaves the service out until it has, so the Sheet's older cells
-     cannot undo the app's change. Manage shows the Sheet as failing while
-     anything waits.
+     in the app goes into the grid. A write that fails waits in sheetQueue,
+     with the cells it was for; the next import first writes those cells
+     from the app's state, and leaves the service out until it has, so the
+     Sheet's older cells cannot undo the app's change, while a cell changed
+     in the Sheet meanwhile is not written over. Manage shows the Sheet as
+     failing while anything waits.
    - A service deleted in the app is remembered (deletedServices), so the
      import and the planning year do not make it again; making it again in
      the app forgets that.
@@ -53,29 +54,32 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
     await settingsRef().set({ sheetStatus: { ok: !error, message: error ? message(error) : '', at: now() } }, { merge: true });
   }
 
-  /* Whether a write changed anything the grid shows. Song lists, flags and
-     double-duty marks do not, and cost no Sheets calls. */
-  function changesSheet(before, after) {
-    if (['worship', 'choirSong'].some(field => String(before[field] || '') !== String(after[field] || ''))) return true;
+  /* The grid's fields a write changed: 'worship', 'choirSong' and the
+     duties. Song lists, flags and double-duty marks are none of them, and
+     cost no Sheets calls. */
+  function sheetFields(before, after) {
+    const fields = ['worship', 'choirSong'].filter(field => String(before[field] || '') !== String(after[field] || ''));
     const was = before.assignments || {};
     const next = after.assignments || {};
-    return Object.keys(Object.assign({}, was, next)).some(duty => String(was[duty] || '') !== String(next[duty] || ''));
+    return fields.concat(Object.keys(Object.assign({}, was, next)).filter(duty => String(was[duty] || '') !== String(next[duty] || '')));
   }
 
   /* What the Sheet says after the app wrote into it, kept as the service's
      sheetSeen (see sheet-lib planMerge), so the next import does not take the
-     app's own write for a change made in the Sheet. With `before`, only the
-     duties that changed were written; without it, the whole row was. */
-  async function rememberWritten(serviceId, before, after) {
-    const was = (before && before.assignments) || {};
-    const now = after.assignments || {};
-    const duties = before
-      ? Object.keys(Object.assign({}, was, now)).filter(duty => String(was[duty] || '') !== String(now[duty] || ''))
-      : Object.keys(Object.assign({}, after.sheetSeen || {}, now));
+     app's own write for a change made in the Sheet. `fields` are the ones
+     written; null means the whole row. A service deleted meanwhile is not
+     made again by this. */
+  async function rememberWritten(serviceId, after, fields) {
+    const assignments = after.assignments || {};
+    const duties = (fields || Object.keys(Object.assign({}, after.sheetSeen || {}, assignments)))
+      .filter(field => field !== 'worship' && field !== 'choirSong');
     if (!duties.length) return;
     const sheetSeen = {};
-    duties.forEach(duty => { sheetSeen[duty] = String(now[duty] || ''); });
-    await db.collection('schedule').doc(serviceId).set({ sheetSeen }, { merge: true });
+    duties.forEach(duty => { sheetSeen[duty] = String(assignments[duty] || ''); });
+    const reference = db.collection('schedule').doc(serviceId);
+    await db.runTransaction(async transaction => {
+      if ((await transaction.get(reference)).exists) transaction.set(reference, { sheetSeen }, { merge: true });
+    });
   }
 
   /* A change made in the app goes into the Sheet's grid. Writes that came
@@ -83,32 +87,37 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
      sheetSyncedAt and are not written back. */
   async function writeBack(serviceId, before, after, existed) {
     if (after && after.sheetSyncedAt && after.sheetSyncedAt !== (existed ? before.sheetSyncedAt : undefined)) return;
-    if (existed && after && !changesSheet(before, after)) return;
+    if (after && !/^\d{4}-\d{2}-\d{2}$/.test(String(after.date || ''))) return; // no date, no row
+    const changed = existed && after ? sheetFields(before, after) : null;
+    if (changed && !changed.length) return;
     const settings = await loadSettings();
     const sheets = gridSheets(settings);
     if (!sheets) return;
     const queueRef = db.collection('sheetQueue').doc(serviceId);
-    const waiting = (await queueRef.get()).exists;
+    const queued = await queueRef.get();
+    const waiting = queued.exists ? queued.data() || {} : null;
+    // The cells to write: this change's, and those of a write still waiting.
+    // null is the whole row: a new service, or a write queued without them.
+    const fields = waiting ? (Array.isArray(waiting.fields) && changed ? Array.from(new Set(waiting.fields.concat(changed))) : null) : changed;
     try {
-      // A service with an earlier failed write gets its whole state.
       const done = waiting && after
-        ? await sheetSync.writeState(sheets, after, { today: today() })
+        ? await sheetSync.writeState(sheets, after, { today: today(), only: fields })
         : await sheetSync.writeService(sheets, existed ? before : null, after, { today: today() });
       if (waiting) await queueRef.delete();
-      if (after && /written|added/.test(String(done))) {
-        await rememberWritten(serviceId, existed && !waiting && done !== 'row added' ? before : null, after);
-      }
+      if (after && /written|added/.test(String(done))) await rememberWritten(serviceId, after, done === 'row added' ? null : fields);
       logger.info('Sheet write', { service: serviceId, done });
       await noteSheetStatus(settings, null);
     } catch (error) {
       logger.error('Sheet write failed', { service: serviceId, error: message(error) });
       await queueRef.set(Object.assign({ at: now(), message: message(error) },
-        after ? { deleted: false } : { deleted: true, date: String(before.date || ''), service: String(before.service || '') }));
+        after ? Object.assign({ deleted: false }, fields ? { fields } : {})
+          : { deleted: true, date: String(before.date || ''), service: String(before.service || '') }));
       await noteSheetStatus(settings, error);
     }
   }
 
-  /* The writes that failed, done again from the app's current state.
+  /* The writes that failed, done again from the app's current state: the
+     cells each was for (all of them for an entry that does not say).
      Returns the ids still waiting. */
   async function retryWaitingWrites(sheets) {
     const waiting = new Set();
@@ -117,8 +126,9 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
       try {
         const service = await db.collection('schedule').doc(document.id).get();
         if (service.exists) {
-          await sheetSync.writeState(sheets, service.data() || {}, { today: today() });
-          await rememberWritten(document.id, null, service.data() || {});
+          const only = Array.isArray(item.fields) ? item.fields : null;
+          const done = await sheetSync.writeState(sheets, service.data() || {}, { today: today(), only });
+          if (/written|added/.test(String(done))) await rememberWritten(document.id, service.data() || {}, done === 'row added' ? null : only);
         }
         else if (item.date && item.service) await sheetSync.writeService(sheets, { date: item.date, service: item.service }, null, { today: today() });
         await document.ref.delete();

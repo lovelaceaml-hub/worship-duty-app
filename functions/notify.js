@@ -9,7 +9,7 @@
    uid on the document), never from a name typed into it. Services that have
    started send no alerts. */
 const { canonicalName, dutyName } = require('./names.js');
-const { DEFAULT_TIMES, longDate, clockTime, serviceStart, hasStarted } = require('./time.js');
+const { longDate, clockTime, startClock, serviceStart, hasStarted } = require('./time.js');
 const appDocs = require('./app-docs.js');
 const permissions = require('./permissions.js');
 const { readAccountForMemberUid } = require('./department-handlers.js');
@@ -25,10 +25,10 @@ const DEAD_TOKEN_CODES = new Set(['messaging/registration-token-not-registered',
 const clip = (text, max) => (text.length > max ? text.slice(0, max - 1) + '…' : text);
 const slug = value => String(value).replace(/[^a-zA-Z0-9]+/g, '-');
 
-/* "9:00 AM", with the label's usual time when the service has none. */
+/* "9:00 AM": when the service starts, read as everywhere else (startClock),
+   so the text names the time the reminder is timed for. */
 function startTime(svc) {
-  const time = /^\d{2}:\d{2}$/.test(svc.time || '') ? svc.time : DEFAULT_TIMES[svc.service];
-  return time ? clockTime(time) : '';
+  return clockTime(startClock(svc));
 }
 
 /* The duty line in a notification: "Presider · Sabbath Day Morning ·
@@ -105,17 +105,20 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
   async function alertPlanned(saved) {
     if (!appDocs.switchOn(await appDocs.loadSettings(db), 'notifications')) return;
     const at = now();
+    // By the member's current spelling, so two spellings of one name make one alert.
+    const nameMap = await appDocs.loadNameMap(db);
     const byName = {};
-    saved.filter(item => item.memberName && !hasStarted(item, at))
-      .forEach(item => { (byName[item.memberName] = byName[item.memberName] || []).push(item); });
+    saved.filter(item => item.memberName && !hasStarted(item, at)).forEach(item => {
+      const name = canonicalName(item.memberName, nameMap);
+      if (name) (byName[name] = byName[name] || []).push(item);
+    });
     const names = Object.keys(byName);
     if (!names.length) return;
-    const nameMap = await appDocs.loadNameMap(db);
     const targets = await loadTargets(nameMap);
     for (const name of names) {
       const items = byName[name];
       try {
-        await send(targets, [canonicalName(name, nameMap)], items.length > 1 ? 'New duties for you' : 'New duty for you', () => dutyList(items));
+        await send(targets, [name], items.length > 1 ? 'New duties for you' : 'New duty for you', () => dutyList(items));
       } catch (error) {
         logger.error('alertPlanned: send failed', { error: String(error && error.message || error) });
       }
@@ -161,16 +164,24 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
      once, in one push naming all of those duties. Each duty is marked sent
      before the push, with create(), so two runs at once cannot both send: a
      rare missed reminder is preferred over a double one. The mark names the
-     member's current spelling, so a name fixed since does not remind them
-     again. A duty that could not be marked, or was marked but nothing was
-     sent for it (the devices could not be read, or the whole send failed),
-     is left to the next run. */
+     member's current spelling; a mark under another spelling of that name
+     (the stored one, or one the name map now maps to it) counts too, so a
+     name fixed before or after the reminder does not remind them again. A
+     duty that could not be marked, or was marked but nothing was sent for it
+     (the devices could not be read, or the whole send failed), is left to
+     the next run. */
   async function sendReminders() {
     if (!appDocs.switchOn(await appDocs.loadSettings(db), 'reminders')) return { sent: 0 };
     const at = now();
     const cutoff = new Date(at - DAY_MS).toISOString().slice(0, 10);
     const snapshot = await db.collection('schedule').where('date', '>=', cutoff).get();
     const nameMap = await appDocs.loadNameMap(db);
+    // The older spellings that are now each name (name map keys).
+    const olderSpellings = {};
+    Object.keys(nameMap).forEach(old => {
+      const name = canonicalName(old, nameMap);
+      if (name) (olderSpellings[name] = olderSpellings[name] || []).push(old);
+    });
     const due = {};
     for (const document of snapshot.docs) {
       const svc = document.data() || {};
@@ -180,7 +191,13 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
       for (const [duty, raw] of Object.entries(svc.assignments || {})) {
         const name = canonicalName(raw, nameMap);
         if (!name) continue;
-        const marker = db.collection('sent').doc(document.id + '_' + slug(duty) + '_' + slug(name));
+        const prefix = document.id + '_' + slug(duty) + '_';
+        const marker = db.collection('sent').doc(prefix + slug(name));
+        const others = Array.from(new Set([raw].concat(olderSpellings[name] || []).map(slug))).filter(id => id !== slug(name));
+        if (others.length) {
+          const earlier = await Promise.all(others.map(id => db.collection('sent').doc(prefix + id).get()));
+          if (earlier.some(snapshot => snapshot.exists)) continue;
+        }
         try {
           await marker.create({ t: at });
         } catch (error) {

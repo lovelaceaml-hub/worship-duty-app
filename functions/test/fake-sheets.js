@@ -2,7 +2,8 @@
 
 /* TEST ONLY. A stand-in for sheets.js's createSheets(): tabs are plain 2-D
    arrays. Inserts, deletes, tab copies and cell writes change them the way
-   the Sheets API would; format copies are only recorded. */
+   the Sheets API would, as do cell values sent with them (updateCells);
+   format copies are only recorded. */
 
 function fakeSheets(tabs) {
   const sheets = Object.entries(tabs).map(([title, values], index) => ({ sheetId: 100 + index, title, index, values: values.map(row => row.slice()) }));
@@ -62,6 +63,19 @@ function fakeSheets(tabs) {
           sheets.push(copy);
           log.push({ duplicate: newSheetName });
           return { duplicateSheet: { properties: { sheetId: copy.sheetId, title: newSheetName, index: insertSheetIndex } } };
+        }
+        if (request.updateCells) {
+          const { start, rows } = request.updateCells;
+          const sheet = byId(start.sheetId);
+          rows.forEach((row, r) => row.values.forEach((cell, c) => {
+            while (sheet.values.length <= start.rowIndex + r) sheet.values.push([]);
+            const line = sheet.values[start.rowIndex + r];
+            while (line.length <= start.columnIndex + c) line.push('');
+            const value = cell.userEnteredValue || {};
+            line[start.columnIndex + c] = value.numberValue != null ? value.numberValue : value.stringValue != null ? value.stringValue : '';
+          }));
+          log.push({ cells: [sheet.title, start.rowIndex + 1] });
+          return {};
         }
         if (request.copyPaste) {
           log.push({ look: [byId(request.copyPaste.source.sheetId).title, request.copyPaste.source.startRowIndex + 1, request.copyPaste.destination.startRowIndex + 1, request.copyPaste.pasteType] });

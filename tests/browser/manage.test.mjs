@@ -359,6 +359,20 @@ test('a service with Fill\'s proposals waiting is not moved or deleted until the
   await context.close();
 });
 
+test('a service moved to another date leaves what the Sheet said about the old date behind', async () => {
+  const id = '2026-07-18_morning';
+  const fixture = { patch: { ['schedule/' + id]: { sheetSeen: { 'Usher Door': 'S. Leah' }, sheetSyncedAt: 5 } } };
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, fixture });
+  await monthPlan(page);
+  await page.locator(`#view [data-act="plan-open"][data-service="${id}"]`).click();
+  await page.locator('#view .plan-detail input[data-field="date"]').fill('2026-07-19');
+  await page.waitForFunction(() => !!window.__fake.get('schedule/2026-07-19_morning'));
+  const moved = await fakeDoc(page, 'schedule/2026-07-19_morning');
+  assert.deepEqual([moved.sheetSeen, moved.sheetSyncedAt, moved.date], [undefined, undefined, '2026-07-19']);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Requests: a past request leaves the count, and one for a deleted service can be closed', async () => {
   const base = { name: 'S. Naomi', memberId: 'S. Naomi', requesterUid: 'member:S. Naomi', worship: 'Sabbath Day', department: 'Usher Sisters', duty: 'Usher Door', status: 'pending', createdAt: 1 };
   const fixture = { patch: {

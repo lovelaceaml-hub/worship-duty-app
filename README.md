@@ -340,11 +340,15 @@ Sheet's own script copies them into "Raw Data".
   where the two differ. The first import after this was released takes the
   Sheet's names once, as before. Times set in the app stay, and a service
   deleted in the app is not added again; add it again in the app to bring
-  it back. A row's year follows its weekday.
+  it back. A row's year follows its weekday (a word before the date that is
+  not a weekday, such as a feast's name, is left out).
 - With **Write changes to the Sheet** on (Manage, Features), the app writes
   every duty change and new service into the Entry tabs within seconds, adds
   each new year's tab, and reads the Entry tabs directly. A blank cell never
-  clears a duty in the app; clear it in the app, which blanks the cell.
+  clears a duty in the app; clear it in the app, which blanks the cell. A
+  write that fails is tried again at the next import, for the cells it was
+  for only, so a cell changed in the Sheet meanwhile is kept. A new row goes
+  in with its values in one step, so a failure never leaves an empty row.
 - Setting it up, once:
   1. Turn on the Google Sheets API for the project:
      `gcloud services enable sheets.googleapis.com --project lv-zion-duties`

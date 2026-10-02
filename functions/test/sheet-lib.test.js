@@ -45,7 +45,8 @@ test('accepts optional weekday prefixes, rejects impossible calendar dates, and 
   assert.deepEqual(parseSheetDate('Sat, May 02'), { month: 4, day: 2, weekday: 6 });
   assert.deepEqual(parseSheetDate('Sat May 02'), { month: 4, day: 2, weekday: 6 });
   assert.deepEqual(parseSheetDate('May 02'), { month: 4, day: 2, weekday: null });
-  assert.equal(parseSheetDate('Xyz, May 02'), null);
+  assert.deepEqual(parseSheetDate('Feast, Apr 02'), { month: 3, day: 2, weekday: null }, 'a word that is no weekday is left out');
+  assert.deepEqual(parseSheetDate('Passover, Apr 02'), { month: 3, day: 2, weekday: null });
   assert.equal(parseSheetDate('Feb 30'), null);
   assert.equal(parseSheetDate('Apr 31'), null);
   assert.equal(inferYearISO(4, 2, TODAY), '2026-05-02');
@@ -232,6 +233,7 @@ test('the year of a Raw Data row follows its weekday, or its worship\'s', () => 
   assert.equal(date('Tue, Jan 05', 'Third Day').date, '2027-01-05');
   assert.equal(date('Jan 03', 'Sabbath Day').date, '2026-01-03', 'the worship gives the weekday');
   assert.equal(date('Sat, Jan 03', 'Pentecost').date, '2026-01-03');
+  assert.deepEqual(date('Feast, Nov 14', ''), { date: '2026-11-14', warnings: [] }, 'a word before the comma that is no weekday keeps the row');
   const typo = date('Sun, Jan 03', 'Sabbath Day');
   assert.equal(typo.date, null);
   assert.deepEqual(typo.warnings, ['Rows for "Sun, Jan 03" were skipped: Sabbath Day is on a Saturday.']);

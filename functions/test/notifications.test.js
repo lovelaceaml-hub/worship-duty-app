@@ -299,3 +299,39 @@ test('a send that fails for one member does not stop the next member\'s new-duty
   assert.deepEqual(recipients(sent), ['leader-phone']);
   assert.equal(errors.length, 1, 'the failed send is logged');
 });
+
+test('a name fixed after its reminder went out, or a mark from an earlier release, does not remind the member again', async () => {
+  const docs = Object.assign({
+    'schedule/soon': serviceSoon({ 'Usher Door': 'S. Zedd', 'Usher Front': 'S. Monica S.' }),
+    'tokens/zed-phone': { name: 'S. Zedd' },
+    'tokens/monica-phone': { name: 'S. Monica S' },
+    // An earlier release marked the stored spelling.
+    'sent/soon_Usher-Front_S-Monica-S-': { t: Date.now() - 3600 * 1000 }
+  }, tokens);
+  const { notifier, sent } = notifierFor(docs);
+  await notifier.sendReminders();
+  assert.deepEqual(recipients(sent), ['zed-phone'], 'S. Monica S was reminded by the earlier release');
+  // The name is fixed as renameMember does: the name map, the duty and the device.
+  docs['app/nameMap'] = { map: { 'S. Zedd': 'S. Zed' } };
+  docs['schedule/soon'] = Object.assign({}, docs['schedule/soon'], { assignments: { 'Usher Door': 'S. Zed', 'Usher Front': 'S. Monica S.' } });
+  docs['tokens/zed-phone'] = { name: 'S. Zed' };
+  await notifier.sendReminders();
+  assert.equal(sent.length, 1, 'no second reminder');
+});
+
+test('a planner save holding two spellings of one member sends them one alert', async () => {
+  const docs = Object.assign({ 'app/nameMap': { map: { 'S. Melisaa': 'S. Melissa' } }, 'tokens/melissa-phone': { name: 'S. Melissa' } }, tokens);
+  const { notifier, sent } = notifierFor(docs);
+  const saved = (name, duty) => ({ memberName: name, duty, date: '2030-10-05', service: 'Morning' });
+  await notifier.alertPlanned([saved('S. Melisaa', 'Usher Door'), saved('S. Melissa', 'Usher Front')]);
+  assert.equal(sent.length, 1);
+  assert.deepEqual([sent[0].tokens, sent[0].data.title], [['melissa-phone'], 'New duties for you']);
+  assert.match(sent[0].data.body, /Usher Door.*Usher Front/);
+});
+
+test('an alert names the time the service starts, a stored time that is not a clock time read as the usual one', async () => {
+  const { notifier, sent } = notifierFor(Object.assign({}, tokens));
+  const evening = assignments => ({ date: '2030-10-05', time: '24:00', service: 'Evening', worship: 'Sabbath Day', assignments });
+  await notifier.alertScheduleWrite(evening({}), evening({ 'Usher Door': 'S. Leah' }), true);
+  assert.match(sent[0].data.body, / at 7:30 PM$/);
+});

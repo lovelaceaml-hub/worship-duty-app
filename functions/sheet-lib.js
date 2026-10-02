@@ -122,8 +122,8 @@ function parseSheetDate(raw) {
   if (mon == null) return null;
   const day = parseInt(m[2], 10);
   if (!isValidMonthDay(mon, day)) return null;
+  // Another word before the comma (a feast's name, say) is no weekday.
   const weekday = weekdayWord ? weekdayOf(weekdayWord) : null;
-  if (weekdayWord && weekday == null) return null;
   return { month: mon, day: day, weekday };
 }
 

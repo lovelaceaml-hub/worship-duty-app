@@ -9,7 +9,7 @@
    department filter, month navigation, past services, "You serve here",
    "Edit assignments" for leaders, and the list of all services, a page at a
    time. Until a member picks a day, the Schedule follows the service under
-   way (for three hours after it starts, shown as "Now"), else the next one. */
+   way (for 20 minutes after it starts, shown as "Now"), else the next one. */
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';

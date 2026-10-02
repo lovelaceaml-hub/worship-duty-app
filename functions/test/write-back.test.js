@@ -279,3 +279,79 @@ test('a planning year saves its services even when the Sheet fails, and does not
   assert.equal(docs['app/settings'].feastNotice.year, 2027);
   assert.equal(docs['app/settings'].sheetStatus.ok, false);
 });
+
+test('a failed write is retried for its own cells only, so a cell changed in the Sheet meanwhile is not written over', async () => {
+  await onOctober1(async () => {
+    const id = '2026-10-03_morning';
+    const sheets = sheet();
+    const docs = Object.assign({ ['schedule/' + id]: morning({ Presider: 'B. Adam', 'Usher Door': 'S. Leah' }) }, writing);
+    const { functions } = loadIndex(docs, { sheets });
+    await functions.scheduledSheetSync.run({});
+    // The app gives Usher Front to S. Grace while the Sheet cannot be written.
+    const realWrite = sheets.write;
+    sheets.write = async () => { throw new Error('Quota exceeded.'); };
+    const before = docs['schedule/' + id];
+    const after = Object.assign({}, before, { assignments: Object.assign({}, before.assignments, { 'Usher Front': 'S. Grace' }) });
+    docs['schedule/' + id] = after;
+    await functions.onScheduleWrite.run(write(before, after));
+    assert.deepEqual(docs['sheetQueue/' + id].fields, ['Usher Front']);
+    sheets.write = realWrite;
+    // Meanwhile someone changes the Presider in the Sheet.
+    sheets.tab('2026 Entry')[3][HEADER.indexOf('Presider')] = 'B. Caleb';
+    await functions.scheduledSheetSync.run({});
+    const row = sheets.tab('2026 Entry')[3];
+    assert.deepEqual([row[HEADER.indexOf('Presider')], row[HEADER.indexOf('Usher Front')]], ['B. Caleb', 'S. Grace']);
+    assert.deepEqual([docs['schedule/' + id].assignments.Presider, docs['schedule/' + id].sheetSeen.Presider], ['B. Caleb', 'B. Caleb'], 'the Sheet\'s change came in');
+    assert.equal(docs['sheetQueue/' + id], undefined);
+  });
+});
+
+test('a service deleted while its change is being written to the Sheet stays deleted', async () => {
+  await onOctober1(async () => {
+    const id = '2026-10-03_morning';
+    const sheets = sheet();
+    const before = morning({ Presider: 'B. Adam', 'Usher Door': 'S. Leah' });
+    const after = morning({ Presider: 'B. Adam', 'Usher Door': 'S. Grace' });
+    const docs = Object.assign({ ['schedule/' + id]: after }, writing);
+    const { functions } = loadIndex(docs, { sheets });
+    const realWrite = sheets.write;
+    sheets.write = async data => {
+      // An administrator deletes the service while this write is on its way.
+      delete docs['schedule/' + id];
+      await functions.onScheduleWrite.run(write(after, null));
+      return realWrite(data);
+    };
+    await functions.onScheduleWrite.run(write(before, after));
+    assert.equal(docs['schedule/' + id], undefined, 'not made again');
+    assert.ok(docs['deletedServices/' + id], 'and remembered as deleted');
+  });
+});
+
+test('a new service whose row cannot be written leaves no empty row, however often it is tried again', async () => {
+  await onOctober1(async () => {
+    const sheets = sheet();
+    const docs = Object.assign({}, writing);
+    const { functions } = loadIndex(docs, { sheets });
+    // The first two tries to put the row's values in fail.
+    let failures = 2;
+    const failing = () => failures > 0 && failures-- > 0;
+    const realWrite = sheets.write;
+    const realUpdate = sheets.update;
+    sheets.write = async data => { if (failing()) throw new Error('The Sheet could not be reached.'); return realWrite(data); };
+    sheets.update = async requests => {
+      if (requests.some(request => request.updateCells) && failing()) throw new Error('The Sheet could not be reached.');
+      return realUpdate(requests);
+    };
+    const added = { date: '2026-10-10', service: 'Morning', worship: 'Sabbath Day', time: '10:00', assignments: { Presider: 'B. Adam' } };
+    docs['schedule/2026-10-10_morning'] = added;
+    await functions.onScheduleWrite.run({ data: { before: { exists: false, data: () => undefined }, after: { exists: true, data: () => added } }, params: { id: '2026-10-10_morning' } });
+    assert.ok(docs['sheetQueue/2026-10-10_morning']);
+    await functions.scheduledSheetSync.run({});
+    await functions.scheduledSheetSync.run({});
+    const rows = sheets.tab('2026 Entry');
+    assert.equal(rows.filter(row => row.every(cell => cell === '' || cell == null)).length, 0, 'no empty rows');
+    const mine = rows.filter(row => row[0] === serial('2026-10-10'));
+    assert.deepEqual(mine.map(row => row[HEADER.indexOf('Presider')]), ['B. Adam']);
+    assert.equal(docs['sheetQueue/2026-10-10_morning'], undefined);
+  });
+});

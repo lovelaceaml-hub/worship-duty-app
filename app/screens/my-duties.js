@@ -1,5 +1,5 @@
 /* My Duties: the signed-in member's duties, one card per day, starting with
-   the next one. A duty stays here until three hours after its service
+   the next one. A duty stays here until 20 minutes after its service
    starts, shown as "Now" meanwhile. A member can ask for a change to a duty
    still to come and withdraw the request while it waits, open the song
    planner for a Presider duty, and see everyone else serving at the same

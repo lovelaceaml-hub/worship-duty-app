@@ -10,10 +10,11 @@ import { doubleDuties } from '../lib/conflicts.js';
 import { DUTY_DEFAULTS, dutyDefault } from '../config/duties.js';
 
 /* A whole service record, as a new document. The server's bookkeeping from
-   the old document (it came from the Sheet, it was saved by the planner) does
-   not carry over, so the server writes the new one to the Sheet. */
+   the old document (it came from the Sheet, what the Sheet said there, it
+   was saved by the planner) does not carry over, so the server writes the
+   new one to the Sheet, and a Sheet row on the new date is read afresh. */
 function save(service) {
-  const { sheetSyncedAt, planBatch, ...record } = service;
+  const { sheetSyncedAt, sheetSeen, planBatch, ...record } = service;
   return write(() => fb.setDoc(fb.doc(fb.db, 'schedule', serviceId(service)), record));
 }
 
