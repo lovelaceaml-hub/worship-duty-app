@@ -303,20 +303,29 @@ const handlers = {
     const assignments = Object.assign({}, service.assignments);
     const needsReplacement = Object.assign({}, service.needsReplacement);
     const holder = assignments[data.duty] || '';
+    // As the server, names are compared in their current spelling (app/nameMap;
+    // the made-up names need no built-in spellings).
+    const nameMap = ((await getDoc(doc(null, 'app', 'nameMap'))).data() || {}).map || {};
+    const current = name => {
+      let value = String(name || '').replace(/\s+/g, ' ').trim();
+      for (const seen = new Set(); nameMap[value] && !seen.has(value);) { seen.add(value); value = nameMap[value]; }
+      return value;
+    };
+    const differs = (name, other) => current(name) !== current(other);
     if (data.decision === 'keep') {
       // As the server: the flag names who is kept; once it is gone, the name
       // the leader saw (expectedMemberName), and with neither nothing is checked.
       const marker = needsReplacement[data.duty];
       const expected = marker ? marker.memberName : data.expectedMemberName;
-      if (expected != null && holder !== expected) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: holder });
+      if (expected != null && differs(holder, expected)) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: holder });
       delete needsReplacement[data.duty];
       await setDoc(ref, Object.assign({}, service, { needsReplacement }));
       return { ok: true, kept: true };
     }
-    if (data.expectedMemberName != null && holder !== data.expectedMemberName) {
+    if (data.expectedMemberName != null && differs(holder, data.expectedMemberName)) {
       fail('aborted', 'This record changed since you loaded it. Reload to see the newer version.', 'changed', { memberName: holder });
     }
-    if (request && holder !== request.name) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: holder });
+    if (request && (!holder || differs(holder, request.name))) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: holder });
     if (data.replacementMemberUid) {
       const person = (await getDoc(profileRef(data.departmentId, data.replacementMemberUid))).data() || null;
       const why = refusal(person, service, data.duty, assignments);

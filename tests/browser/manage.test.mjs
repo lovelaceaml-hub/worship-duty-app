@@ -260,7 +260,13 @@ test('a flag on a duty stored under an older spelling of the name still shows', 
   await page.locator('#view .sections [data-section="services"] .count', { hasText: '1' }).waitFor();
   await cellAt(page, '2026-07-11_morning', 'Usher Door').locator('.plan-note', { hasText: 'Can no longer make it' }).waitFor();
   await page.locator('#view [data-act="plan-open"][data-service="2026-07-11_morning"]').click();
-  await page.locator('#view form[data-act="replace-duty"]', { hasText: 'S. Naomi can no longer make Usher Door.' }).waitFor();
+  const form = page.locator('#view form[data-act="replace-duty"]', { hasText: 'S. Naomi can no longer make Usher Door.' });
+  await form.waitFor();
+  // The server compares names in their current spelling, and so does the fake.
+  await form.locator('select').selectOption('__open');
+  await form.locator('button[type="submit"]').click();
+  await banner(page, 'Usher Door is open now.');
+  assert.equal((await fakeDoc(page, 'schedule/2026-07-11_morning')).assignments['Usher Door'], '');
   assert.deepEqual(errors, []);
   await context.close();
 });
