@@ -6,6 +6,14 @@ answer requests, and keep their department rosters.
 
 Live at https://lv-zion-duties.web.app.
 
+## Quick links
+
+- Live app: https://lv-zion-duties.web.app
+- Current status and what is next: [docs/HANDOFF.md](docs/HANDOFF.md)
+- Repository: https://github.com/lovelaceaml-hub/worship-duty-app
+- Duty Sheet ("LV Zion Worship Duty Schedule"): https://docs.google.com/spreadsheets/d/17YrNykmijnJ_LQPky512X47LZUDUot3KfiWJbeWnLuQ/edit
+- Firebase console: https://console.firebase.google.com/project/lv-zion-duties/overview
+
 ## How it is built
 
 Plain JavaScript modules in the browser, with no framework and no build step
@@ -349,6 +357,9 @@ Sheet's own script copies them into "Raw Data".
   write that fails is tried again at the next import, for the cells it was
   for only, so a cell changed in the Sheet meanwhile is kept. A new row goes
   in with its values in one step, so a failure never leaves an empty row.
+- Live since 2026-10-02: the Sheet's link is set in Manage, Data and
+  **Write changes to the Sheet** is on, so the app writes into the
+  "2026 Entry" tab and imports from it.
 - Setting it up, once:
   1. Turn on the Google Sheets API for the project:
      `gcloud services enable sheets.googleapis.com --project lv-zion-duties`
