@@ -63,6 +63,9 @@ test('problem() decides by the code and the reason, never by words in the messag
   assert.equal(problem(error('invalid-argument', 'Choose a year.', { reason: 'invalid-input' })), 'Choose a year.');
   assert.equal(problem(error('permission-denied', 'The member role has changed. Sign in again.', { reason: 'session-ended' })), 'Your sign-in has ended. Sign out, then sign in again.');
   assert.equal(problem(new Error('The roster did not load.'), 'The roster did not load.'), 'The roster did not load.', 'a plain error gets the fallback');
+  // An answer without a body (a function not deployed yet) names only its code: never shown.
+  assert.equal(problem(error('not-found', 'not-found')), 'That did not work. Try again.');
+  assert.equal(problem(error('invalid-argument', 'invalid-argument [400]'), 'The default was not saved.'), 'The default was not saved.');
   assert.equal(problem(Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' })), 'Your account is not allowed to do that.', 'a Firestore write');
 });
 
