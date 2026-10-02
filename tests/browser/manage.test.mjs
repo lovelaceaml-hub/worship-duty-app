@@ -421,6 +421,21 @@ test('Checks lists the usual duties not filled in the next 4 weeks, unplanned se
   await context.close();
 });
 
+test('a leader is not offered Reset PIN for someone inactive in the department', async () => {
+  const fixture = { patch: { 'departments/Usher Sisters/members/member:S. Leah': { status: 'inactive' } } };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'departments');
+  await page.locator('#view [data-act="department-member"]', { hasText: 'S. Leah' }).click();
+  await page.locator('#view [data-act="department-status"]', { hasText: 'Make active' }).waitFor();
+  assert.equal(await page.locator('#view [data-act="department-reset-pin"]').count(), 0);
+  await page.locator('#view [data-act="department-member-back"]').click();
+  await page.locator('#view [data-act="department-member"]', { hasText: 'S. Naomi' }).click();
+  await page.locator('#view [data-act="department-reset-pin"]').waitFor();
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Make inactive changes only the status; unsaved edits stay and are marked', async () => {
   const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
   await tab(page, 'manage');

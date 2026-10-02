@@ -220,8 +220,9 @@ function memberProfile(department, uid) {
   const saving = profileSaving(department, uid);
   const inactive = profile.status !== 'active';
   const waiting = notReady(profile);
-  // Only administrators reset the PIN of a leader, an administrator or a song editor.
-  const reset = canResetPin(profile.memberName, department) && (isAdmin() || !isPrivileged(profile.memberName));
+  // Only administrators reset the PIN of a leader, an administrator or a song
+  // editor, or of someone inactive here (the server counts active members only).
+  const reset = canResetPin(profile.memberName, department) && (isAdmin() || (!inactive && !isPrivileged(profile.memberName)));
   return html`<button type="button" class="link" data-act="department-member-back">Back to ${department}</button>
     <h2 class="screen-title">${nameOf(profile.memberName)} <span class="status profile-status${inactive ? ' is-inactive' : ''}">${inactive ? 'Inactive' : 'Active'}</span></h2>
     ${lastChange(profile)}
