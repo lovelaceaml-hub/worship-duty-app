@@ -5,8 +5,9 @@ Updated 2026-10-02.
 ## Where things stand
 
 - Live at https://lv-zion-duties.web.app, released from `main` at
-  [PR #31](https://github.com/lovelaceaml-hub/worship-duty-app/pull/31)'s
-  merge (`f9e51b1`).
+  [PR #33](https://github.com/lovelaceaml-hub/worship-duty-app/pull/33)'s
+  merge (`5f5d50e`) on 2026-10-02: the round feedback button is back on
+  phones, smaller and above the tabs; the account menu keeps it too.
 - [PR #30](https://github.com/lovelaceaml-hub/worship-duty-app/pull/30)
   (Fill and duty rules, whole-app review fixes) is merged. Functions, Firestore
   rules and the app were all deployed on 2026-10-02, in that order.
