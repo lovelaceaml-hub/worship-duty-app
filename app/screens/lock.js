@@ -139,8 +139,8 @@ defineActions({
     public: true,
     run: form => memberSignIn(form.querySelector('#sign-in-member').value, form.querySelector('#sign-in-pin').value)
   },
-  // The first PIN change before the app opens, and a member's own change in
-  // Settings. Both sign in again with the new PIN.
+  // The first PIN change before the app opens, which signs in again with the
+  // new PIN, and a member's own change in Settings.
   'change-pin': {
     public: true,
     run: async form => {

@@ -162,7 +162,10 @@ export async function changePin(first, second) {
   renderSoon();
   try {
     await call('changeMemberPin', { memberId: member.memberId, newPin: first });
-    await signInWith(member.memberId, member.memberName, first);
+    // The first PIN change signs in again, for a session that no longer has
+    // to change it. A member already in the app keeps their session, so a
+    // refused sign-in cannot make a done change look failed.
+    if (!signedIn) await signInWith(member.memberId, member.memberName, first);
     if (session.status !== 'verified') throw new Error('The PIN still needs to be changed.');
     ui.signIn = { member: member.memberName, busy: false, error: '' };
   } catch (error) {
