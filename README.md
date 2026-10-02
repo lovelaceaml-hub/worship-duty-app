@@ -353,9 +353,13 @@ Sheet's own script copies them into "Raw Data".
   1. Turn on the Google Sheets API for the project:
      `gcloud services enable sheets.googleapis.com --project lv-zion-duties`
   2. Paste the Sheet's address in Manage, Data, then press **Check the
-     Sheet**. It reads the Sheet, compares it with the app, changes nothing,
-     and says which Google account the app uses.
-  3. Share the Sheet with that account as an Editor, and check again.
+     Sheet**. It reads the Sheet, compares it with the app, and changes
+     nothing.
+  3. The app reads and writes the Sheet as
+     `lv-zion-worship@lv-zion-duties.iam.gserviceaccount.com`, which the live
+     Sheet is already shared with as an Editor. The server's own account
+     borrows it (Service Account Token Creator on that account, given
+     2026-10-02). Never share the Sheet with another account.
   4. Try the writing on a copy of the Sheet first (File, Make a copy):
      `node scripts/sheet-try.mjs "<the copy's address>"`, then look at the copy.
   5. Update the Sheet's script so it reads every year's Entry tab.
