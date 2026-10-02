@@ -114,7 +114,11 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
     const targets = await loadTargets(nameMap);
     for (const name of names) {
       const items = byName[name];
-      await send(targets, [canonicalName(name, nameMap)], items.length > 1 ? 'New duties for you' : 'New duty for you', () => dutyList(items));
+      try {
+        await send(targets, [canonicalName(name, nameMap)], items.length > 1 ? 'New duties for you' : 'New duty for you', () => dutyList(items));
+      } catch (error) {
+        logger.error('alertPlanned: send failed', { error: String(error && error.message || error) });
+      }
     }
   }
 
@@ -142,8 +146,12 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
     const ttlSeconds = Math.max(HOUR_S, (serviceStart(after) - now()) / 1000);
     const targets = await loadTargets(nameMap);
     for (const name of names) {
-      await send(targets, [name], perName[name].length > 1 ? 'New duties for you' : 'New duty for you',
-        () => bodyFor(perName[name], after), { ttlSeconds });
+      try {
+        await send(targets, [name], perName[name].length > 1 ? 'New duties for you' : 'New duty for you',
+          () => bodyFor(perName[name], after), { ttlSeconds });
+      } catch (error) {
+        logger.error('alertScheduleWrite: send failed', { error: String(error && error.message || error) });
+      }
     }
   }
 
@@ -152,7 +160,11 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
   /* Every hour: each member with a duty starting in the next 24 hours hears
      once, in one push naming all of those duties. Each duty is marked sent
      before the push, with create(), so two runs at once cannot both send: a
-     rare missed reminder is preferred over a double one. */
+     rare missed reminder is preferred over a double one. The mark names the
+     member's current spelling, so a name fixed since does not remind them
+     again. A duty that could not be marked, or was marked but nothing was
+     sent for it (the devices could not be read, or the whole send failed),
+     is left to the next run. */
   async function sendReminders() {
     if (!appDocs.switchOn(await appDocs.loadSettings(db), 'reminders')) return { sent: 0 };
     const at = now();
@@ -168,18 +180,25 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
       for (const [duty, raw] of Object.entries(svc.assignments || {})) {
         const name = canonicalName(raw, nameMap);
         if (!name) continue;
-        const marker = db.collection('sent').doc(document.id + '_' + slug(duty) + '_' + slug(raw));
+        const marker = db.collection('sent').doc(document.id + '_' + slug(duty) + '_' + slug(name));
         try {
           await marker.create({ t: at });
         } catch (error) {
-          if (alreadyExists(error)) continue;
-          throw error;
+          if (!alreadyExists(error)) logger.error('dutyReminders: could not mark a duty', { service: document.id, duty, error: String(error && error.message || error) });
+          continue;
         }
-        (due[name] = due[name] || []).push({ duty, svc, start });
+        (due[name] = due[name] || []).push({ duty, svc, start, marker });
       }
     }
     const names = Object.keys(due);
-    const targets = names.length ? await loadTargets(nameMap) : [];
+    const unmark = items => Promise.all(items.map(item => item.marker.delete().catch(() => {})));
+    let targets = [];
+    try {
+      targets = names.length ? await loadTargets(nameMap) : [];
+    } catch (error) {
+      await unmark(names.flatMap(name => due[name]));
+      throw error;
+    }
     for (const name of names) {
       const items = due[name];
       const byService = new Map();
@@ -191,6 +210,7 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
         });
       } catch (error) {
         logger.error('dutyReminders: send failed', { error: String(error && error.message || error) });
+        await unmark(items);
       }
     }
     const old = await db.collection('sent').where('t', '<', at - 7 * DAY_MS).get();

@@ -187,6 +187,24 @@ test('a member changes their own PIN in Settings; the PINs everyone knows are re
   await context.close();
 });
 
+test('a PIN changed in Settings is reported as changed, even when signing in right then would be refused', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  // Someone else's wrong guesses have locked the account for 15 minutes.
+  await page.evaluate(() => { window.__fakeFail = { verifyMemberPin: { code: 'resource-exhausted', reason: 'locked', message: 'Too many attempts. Try again later.' } }; });
+  await openAccount(page, 'settings');
+  await page.locator('[data-act="pin-open"]').click();
+  const form = page.locator('form[data-act="change-pin"]');
+  await form.locator('#new-pin').fill('5678');
+  await form.locator('#new-pin-again').fill('5678');
+  await form.locator('button[type="submit"]').click();
+  await banner(page, 'Your PIN is changed.');
+  assert.equal(await page.locator('.account-pin .form-error').count(), 0, 'no word of a failure');
+  assert.deepEqual(await calls(page, 'changeMemberPin'), [{ memberId: 'S. Naomi', newPin: '5678' }]);
+  assert.equal(await page.locator('nav.tabs').isHidden(), false, 'still signed in');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a member who must choose a PIN cannot pick 0000; a failed sign-in puts the cursor back in the PIN', async () => {
   const { context, page, errors } = await openPage(browser, server.url);
   await unlock(page);

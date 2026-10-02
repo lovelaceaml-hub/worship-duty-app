@@ -7,7 +7,8 @@
    the server can reach the phone by push, it sends them instead, so they are
    not shown twice. */
 import { fb } from '../firebase.js';
-import { data, ui, feature, readJSON, writeJSON, readText, writeText } from '../store.js';
+import { data, ui, feature, canonical, readJSON, writeJSON, readText, writeText } from '../store.js';
+import { endSession } from './session.js';
 import { renderSoon } from '../render.js';
 import { notice, banner, dismiss } from '../ui/banners.js';
 import { dutiesOf, upcoming, serviceId, startsAt, serviceClock, isUpcoming } from '../lib/services.js';
@@ -62,6 +63,10 @@ function dutiesChangedText(added, removed) {
 
 function checkNewDuties() {
   if (!ui.me) return;
+  // The member's name was fixed while they were signed in: their duties now
+  // carry the new spelling, so none of this is news, and the server has
+  // ended the session. They sign in again under the new name.
+  if (canonical(ui.me) !== ui.me) { endSession(); return; }
   const seenKey = 'wds-seen-' + ui.me;
   const current = {};
   dutiesOf(ui.me, upcoming(data.services)).forEach(item => { current[serviceId(item.service) + '|' + item.duty] = item; });

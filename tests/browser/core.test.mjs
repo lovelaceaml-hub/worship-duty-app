@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
-import { repo, startServer, launch, openPage, unlock, signIn, tab, section, PHONE, DESKTOP, TODAY } from './harness.mjs';
+import { repo, startServer, launch, openPage, unlock, signIn, tab, section, PHONE, DESKTOP, TODAY, NOW } from './harness.mjs';
 
 let server, browser;
 before(async () => { server = await startServer(); browser = await launch(); });
@@ -273,6 +273,28 @@ test('start-up shows the saved schedule while the app connects', async () => {
   await context.close();
 });
 
+test('signing out before the app has connected is refused, so the saved sign-in cannot come back', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await context.route('**/tests/fake/firebase-auth.js', async route => { await held; await route.continue(); });
+  await page.reload();
+  await page.locator('[data-slot="sync"]', { hasText: 'Connecting' }).waitFor();
+  await page.locator('[data-slot="member"]').click();
+  await page.locator('[data-slot="menu"] [data-act="sign-out"]').click();
+  await page.locator('#banners .banner', { hasText: 'The app is still opening. Try again in a moment.' }).waitFor();
+  assert.equal(await page.locator('nav.tabs').isHidden(), false, 'the app stays as it was');
+  release();
+  await page.locator('[data-slot="sync"]', { hasText: 'Live' }).waitFor();
+  await signOut(page);
+  assert.equal(await page.locator('.gate .form-error').count(), 0, 'a member who signs out is not asked to sign in again');
+  await page.reload();
+  await page.locator('#sign-in-member').waitFor();
+  assert.equal(await page.locator('nav.tabs').isHidden(), true, 'signed out once connected, it stays signed out');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a session the server ended (PIN reset, role change, name fix) signs the member out cleanly', async () => {
   const { context, page, errors } = await as('S. Naomi');
   await fromMenu(page, 'account', 'availability');
@@ -285,6 +307,52 @@ test('a session the server ended (PIN reset, role change, name fix) signs the me
   await page.locator('.gate .form-error', { hasText: 'Please sign in again.' }).waitFor();
   assert.equal(await page.locator('nav.tabs').isHidden(), true);
   assert.equal(await page.evaluate(() => localStorage.getItem('wds-me')), null);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('a session Firebase ends by itself asks the member to sign in again, and the device forgets them', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  // A session the server revoked (PIN reset, role change, name fix) ends in
+  // the Firebase SDK at its next token refresh: it signs the user out.
+  await page.evaluate(() => import('/tests/fake/firebase-auth.js').then(module => module.signOut()));
+  await page.locator('.gate .form-error', { hasText: 'Please sign in again.' }).waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem('wds-me')), null);
+  await context.route('**/tests/fake/firebase-app.js', route => route.abort());
+  await page.reload();
+  await page.locator('.gate-title', { hasText: 'You are offline' }).waitFor();
+  assert.equal(await page.locator('nav.tabs').isHidden(), true, 'offline, the app does not open as the member');
+  assert.deepEqual(errors.filter(text => !/Failed to load|ERR_FAILED|firebase-app/.test(text)), []);
+  await context.close();
+});
+
+test('a member whose name is fixed while the app is open is signed out, and told nothing false about their duties', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  // What Manage, Data, Fix a member's name writes (functions/rename-member.js):
+  // the name map, every service the member serves in, then the member list.
+  // The server ends the old name's session at the same time.
+  await page.evaluate(() => {
+    const fix = name => (name === 'S. Naomi' ? 'S. Naomi Reyes' : name);
+    window.__fakeAccounts['S. Naomi Reyes'] = { pin: '1234', claims: Object.assign({}, window.__fakeAccounts['S. Naomi'].claims, { memberId: 'S. Naomi Reyes', memberName: 'S. Naomi Reyes' }) };
+    window.__fake.set('app/nameMap', { map: { 'S. Naomi': 'S. Naomi Reyes' } });
+    window.__fake.paths('schedule/').forEach(path => {
+      const service = window.__fake.get(path);
+      if (!Object.values(service.assignments || {}).includes('S. Naomi')) return;
+      const assignments = Object.fromEntries(Object.entries(service.assignments).map(([duty, name]) => [duty, fix(name)]));
+      window.__fake.set(path, Object.assign({}, service, { assignments, planBatch: 'rename-1' }));
+    });
+    const members = window.__fake.get('app/members');
+    window.__fake.set('app/members', Object.assign({}, members, { list: members.list.map(fix).sort() }));
+  });
+  await page.locator('.gate .form-error', { hasText: 'Please sign in again.' }).waitFor();
+  assert.equal(await page.locator('#banners .banner', { hasText: 'no longer on' }).count(), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem('wds-alerts-S. Naomi')), null);
+
+  // Signed in again under the new name, the duties are there and are not news.
+  await signIn(page, 'S. Naomi Reyes');
+  await tab(page, 'my');
+  await page.locator('#view .duty-card').first().waitFor();
+  assert.equal(await page.locator('#banners .banner', { hasText: /new dut|no longer on/i }).count(), 0);
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -599,6 +667,61 @@ test('a release that cannot be stored whole leaves the last offline copy in char
     await stop(); stop = null;
     await page.reload();
     await page.locator('#site-passcode').waitFor();
+  } finally {
+    await context.close();
+    if (stop) await stop();
+    await fs.rm(out, { recursive: true, force: true });
+  }
+});
+
+test('"The app was updated" shows on a page left open across a release, not on the first open of the new one', async () => {
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), 'wds-banner-'));
+  const port = await freePort();
+  const context = await browser.newContext({ viewport: PHONE, serviceWorkers: 'allow', reducedMotion: 'reduce', timezoneId: 'America/Los_Angeles' });
+  let stop = null;
+  // That release's worker has stored it, taken over the page, and removed the last copy.
+  const settled = async (page, release) => {
+    for (let tries = 0; tries < 150; tries++) {
+      const done = await page.evaluate(async release => {
+        const names = await caches.keys();
+        const registration = await navigator.serviceWorker.getRegistration();
+        return names.length === 1 && names[0] === 'wds-' + release && !!navigator.serviceWorker.controller &&
+          !!registration && registration.active === navigator.serviceWorker.controller && !registration.installing;
+      }, release).catch(() => false);
+      if (done) return;
+      await page.waitForTimeout(200);
+    }
+    throw new Error('The ' + release + ' worker did not take over.');
+  };
+  const updated = page => page.locator('#banners .banner', { hasText: 'The app was updated.' });
+  try {
+    for (const release of ['r1', 'r2', 'r3']) await build(path.join(out, release), release);
+    const site = path.join(out, 'site');
+    await publish(path.join(out, 'r1'), site);
+    stop = await serveAt(site, port);
+    const page = await context.newPage();
+    await page.clock.setSystemTime(new Date(NOW));
+    await page.goto('http://localhost:' + port + '/?today=' + TODAY);
+    await unlock(page);
+    await signIn(page, 'S. Naomi');
+    await settled(page, 'r1');
+    // The app opens again, now under the r1 worker.
+    await page.reload();
+    await page.locator('nav.tabs:not([hidden])').waitFor();
+
+    // A release goes live while the page is open: its worker takes over a page of the last release.
+    await publish(path.join(out, 'r2'), site);
+    await page.evaluate(() => navigator.serviceWorker.getRegistration().then(registration => registration.update()));
+    await updated(page).waitFor();
+
+    // The first open after a release loads the new page, then the new worker takes over.
+    await publish(path.join(out, 'r3'), site);
+    await page.reload();
+    await page.locator('nav.tabs:not([hidden])').waitFor();
+    assert.match(await page.evaluate(() => document.querySelector('script[type="module"]').src), /v=r3/);
+    await settled(page, 'r3');
+    await page.waitForTimeout(500);
+    assert.equal(await updated(page).count(), 0, 'the page already runs the new release');
   } finally {
     await context.close();
     if (stop) await stop();

@@ -9,6 +9,7 @@ import { resetDepartments, acceptPendingInvite } from './departments.js';
 import { watchRequests } from './requests.js';
 import { afterSignIn, unregisterPush, forgetDutyAlerts } from './notifications.js';
 import { countOnce } from './usage.js';
+import { notice } from '../ui/banners.js';
 
 /* The site passcode is a light curtain for the device, not a lock: the
    schedule is readable without it, and the hash of a 4-digit code is easy to
@@ -77,10 +78,18 @@ function setMember(member, user) {
   watchRequests();
 }
 
-/* Firebase tells us when a saved sign-in is restored or ends. */
+/* Firebase tells us when a saved sign-in is restored or ends. A session the
+   server revoked (PIN reset, role change, name fix) ends here when Firebase
+   next refreshes it, unless a call was refused first: the member is asked
+   to sign in again, as after a refused call, and no one is remembered for
+   offline viewing. */
+let leaving = false; // signOut() is ending the session itself
 export async function onAuthChange(user) {
   if (!user) {
+    const ended = !!session.member && !leaving;
+    writeText('wds-me', null);
     setMember(null, null);
+    if (ended) ui.signIn.error = 'Please sign in again.';
     renderSoon();
     return;
   }
@@ -153,7 +162,10 @@ export async function changePin(first, second) {
   renderSoon();
   try {
     await call('changeMemberPin', { memberId: member.memberId, newPin: first });
-    await signInWith(member.memberId, member.memberName, first);
+    // The first PIN change signs in again, for a session that no longer has
+    // to change it. A member already in the app keeps their session, so a
+    // refused sign-in cannot make a done change look failed.
+    if (!signedIn) await signInWith(member.memberId, member.memberName, first);
     if (session.status !== 'verified') throw new Error('The PIN still needs to be changed.');
     ui.signIn = { member: member.memberName, busy: false, error: '' };
   } catch (error) {
@@ -167,14 +179,26 @@ export async function changePin(first, second) {
    still do it), their name is no longer remembered for offline viewing, and
    their duty alerts and everything they left on the screen are cleared. */
 export async function signOut() {
+  // Until the app has connected, the sign-in saved on this device cannot be
+  // ended: it would come back as soon as the app connects.
+  if (!fb.auth) {
+    notice(session.status === 'offline' ? 'You are offline. Connect to do that.' : 'The app is still opening. Try again in a moment.', true);
+    renderSoon();
+    return;
+  }
   const name = (session.member && session.member.memberName) || ui.me;
-  await unregisterPush().catch(() => {});
-  try { if (fb.auth) await fb.signOut(fb.auth); }
-  catch (_error) { /* the local session is cleared below either way */ }
-  writeText('wds-me', null);
-  forgetDutyAlerts(name);
-  if (!session.member) { forgetMemberState(); setLeaveGuard(null); }
-  setMember(null, null);
+  leaving = true;
+  try {
+    await unregisterPush().catch(() => {});
+    try { if (fb.auth) await fb.signOut(fb.auth); }
+    catch (_error) { /* the local session is cleared below either way */ }
+    writeText('wds-me', null);
+    forgetDutyAlerts(name);
+    if (!session.member) { forgetMemberState(); setLeaveGuard(null); }
+    setMember(null, null);
+  } finally {
+    leaving = false;
+  }
   renderSoon();
 }
 
@@ -184,9 +208,10 @@ export function rememberedMember() { return readText('wds-me'); }
 /* The server ends a member's session after a PIN reset, a role change or a
    name fix: its callables then refuse with reason 'session-ended'. Any call
    refused that way signs the member out, and the sign-in screen asks them to
-   sign in again; no other message is shown for it. */
+   sign in again; no other message is shown for it. A name fix is also seen
+   in the name map (notifications.js). */
 let ending = false;
-async function endSession() {
+export async function endSession() {
   if (ending || !session.member) return;
   ending = true;
   try {

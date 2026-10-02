@@ -523,7 +523,14 @@ async function setClaimsIfSupported(auth, member, uid, claims) {
   // A generated uid may not exist in Firebase Auth yet. Persist claims only
   // when the member record explicitly identifies an existing Auth account.
   if (!member.authUid || !setter) return;
-  await setter(uid, claims);
+  try {
+    await setter(uid, claims);
+  } catch (error) {
+    // A name fixed before the member's first sign-in keeps a uid that has no
+    // Auth user yet. The custom token carries the claims, and its first use
+    // makes the user.
+    if (!error || error.code !== 'auth/user-not-found') throw error;
+  }
 }
 
 async function issueToken(auth, uid, claims) {
@@ -660,7 +667,7 @@ function createMemberAuthService(dependencies = {}) {
 
     if (member.authUid && auth && typeof auth.setCustomUserClaims === 'function') {
       const nextClaims = sessionClaims(Object.assign({}, member, { mustChangePin: true, roleVersion }));
-      await auth.setCustomUserClaims(member.authUid, nextClaims);
+      await setClaimsIfSupported(auth, member, member.authUid, nextClaims);
     }
     audit(logger, 'reset', 'success', actor, member);
     return { ok: true, memberId: member.id, mustChangePin: true };
