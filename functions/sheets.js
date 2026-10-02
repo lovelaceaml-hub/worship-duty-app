@@ -1,14 +1,26 @@
 'use strict';
 
-/* The Google Sheets API, called with the server's own Google account. The
-   Sheet must be shared with that account as an Editor. createSheets() takes
-   a request function so tests (and scripts/sheet-try.mjs) can use their own. */
+/* The Google Sheets API, called as the Sheet account below, which the duty
+   Sheet is shared with as an Editor. The server's own account borrows it
+   (it holds Service Account Token Creator on it). createSheets() takes a
+   request function so tests (and scripts/sheet-try.mjs) can use their own. */
 
-const { GoogleAuth } = require('google-auth-library');
+const { GoogleAuth, Impersonated } = require('google-auth-library');
 
 const API = 'https://sheets.googleapis.com/v4/spreadsheets/';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
-let auth = null;
+const SHEET_ACCOUNT = 'lv-zion-worship@lv-zion-duties.iam.gserviceaccount.com';
+let client = null;
+
+/* A client signed in as the Sheet account. A failed sign-in is not kept, so
+   the next call tries again. */
+function sheetClient() {
+  client = client || (async () => {
+    const source = await new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] }).getClient();
+    return new Impersonated({ sourceClient: source, targetPrincipal: SHEET_ACCOUNT, targetScopes: [SCOPE], lifetime: 3600 });
+  })().catch(error => { client = null; throw error; });
+  return client;
+}
 
 /* The ID in a Sheet's address (".../spreadsheets/d/<id>/edit"), or a bare ID. */
 function sheetIdFrom(value) {
@@ -23,30 +35,24 @@ function sheetIdFrom(value) {
 const RETRY = Object.freeze({ retry: 3, statusCodesToRetry: [[429, 429]], httpMethodsToRetry: ['GET', 'POST'], noResponseRetries: 0 });
 
 async function googleRequest(options) {
-  auth = auth || new GoogleAuth({ scopes: [SCOPE] });
-  const client = await auth.getClient();
   try {
-    return (await client.request(Object.assign({ retry: true, retryConfig: Object.assign({}, RETRY) }, options))).data;
+    return (await (await sheetClient()).request(Object.assign({ retry: true, retryConfig: Object.assign({}, RETRY) }, options))).data;
   } catch (error) {
     throw await explain(error);
   }
 }
 
-/* The server account's address, for "share the Sheet with ..." messages. */
+/* The Sheet account's address, for "share the Sheet with ..." messages. */
 async function accountEmail() {
-  try {
-    auth = auth || new GoogleAuth({ scopes: [SCOPE] });
-    return (await auth.getCredentials()).client_email || '';
-  } catch (_error) {
-    return '';
-  }
+  return SHEET_ACCOUNT;
 }
 
 async function explain(error) {
   const status = error && error.response && error.response.status;
   const detail = error && error.response && error.response.data && error.response.data.error && error.response.data.error.message;
   let message = detail || (error && error.message) || 'The Sheet could not be reached.';
-  if (status === 403) message = 'The Sheet is not shared with the app\'s server account' + (await accountEmail().then(email => email ? ' (' + email + ')' : '')) + '. Share it as an Editor.';
+  if (/impersonate/i.test(String(error && error.message))) message = 'The app could not sign in as the Sheet account (' + SHEET_ACCOUNT + ').';
+  else if (status === 403) message = 'The Sheet is not shared with the Sheet account (' + SHEET_ACCOUNT + '). Share it as an Editor.';
   if (status === 404) message = 'No Sheet was found at that link.';
   return Object.assign(new Error(message), { status: status || 0 });
 }
