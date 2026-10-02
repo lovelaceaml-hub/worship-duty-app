@@ -249,6 +249,22 @@ test('a member who can no longer make a duty can be kept on it', async () => {
   await context.close();
 });
 
+test('a flag on a duty stored under an older spelling of the name still shows', async () => {
+  // The schedule holds the Sheet's older spelling; the server's flag carries the name as stored.
+  const fixture = { patch: {
+    'app/nameMap': { map: { 'B. Adam A': 'B. Adam', 'S. Naomii': 'S. Naomi' } },
+    'schedule/2026-07-11_morning': { assignments: { 'Usher Door': 'S. Naomii' }, needsReplacement: { 'Usher Door': { memberName: 'S. Naomii', reason: 'unavailable' } } }
+  } };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
+  await monthPlan(page);
+  await page.locator('#view .sections [data-section="services"] .count', { hasText: '1' }).waitFor();
+  await cellAt(page, '2026-07-11_morning', 'Usher Door').locator('.plan-note', { hasText: 'Can no longer make it' }).waitFor();
+  await page.locator('#view [data-act="plan-open"][data-service="2026-07-11_morning"]').click();
+  await page.locator('#view form[data-act="replace-duty"]', { hasText: 'S. Naomi can no longer make Usher Door.' }).waitFor();
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a flagged duty another leader gave away meanwhile is not kept or emptied', async () => {
   const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
   const id = '2026-07-11_morning', path = 'schedule/' + id;

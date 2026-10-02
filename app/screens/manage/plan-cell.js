@@ -14,7 +14,7 @@
    rule the server and Fill use too. */
 import { html } from '../../html.js';
 import { defineActions } from '../../actions.js';
-import { data, ui, nameOf } from '../../store.js';
+import { data, ui, nameOf, canonical } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { DUTY_DEFAULTS, PRAYER_DUTIES, departmentOf, dutyName, dutyDefault } from '../../config/duties.js';
@@ -116,7 +116,7 @@ function dutyState(service, duty, context) {
     state.why = why;
     const marker = (service.needsReplacement || {})[duty];
     if (why) say(holderNote(why, { department, duty: dutyName(duty), also: also.map(dutyName) }), 'danger', 'is-flagged');
-    else if (!proposal && marker && marker.memberName === holder) say('Can no longer make it', 'warn', 'is-flagged');
+    else if (!proposal && marker && marker.memberName && canonical(marker.memberName) === holder) say('Can no longer make it', 'warn', 'is-flagged');
     const prayer = isUsher(duty) && prayerOf(assignments, shown);
     if (prayer) say('Also ' + dutyName(prayer), 'calm', 'is-paired');
   }
