@@ -317,8 +317,11 @@ test('a service with Fill\'s proposals waiting is not moved or deleted until the
   await page.waitForTimeout(300);
   assert.ok(await fakeDoc(page, 'schedule/' + id), 'the service stays where it was');
   assert.equal(await page.locator('#view .plan-cell.is-proposed').count(), proposed, 'its proposals still show');
+  // Another administrator deletes the other service on their device: the save names it by its day.
+  await page.evaluate(() => window.__fake.remove('schedule/2026-07-25_morning'));
   await page.locator('#view [data-act="plan-save"]').click();
-  await banner(page, 'Saved ' + proposed + ' duties.');
+  await banner(page, 'Saved 2 of ' + proposed + ' duties. Not saved: Usher Door on Sat, Jul 25 Morning (');
+  assert.equal(await page.locator('#banners .banner', { hasText: '2026-07-25_morning' }).count(), 0, 'no service id on screen');
   assert.deepEqual(errors, []);
   await context.close();
 });

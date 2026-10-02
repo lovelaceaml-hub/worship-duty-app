@@ -77,12 +77,20 @@ export function fillBar() {
       ${notes.join(' ')} Check them, then save.</span>${buttons}</div>`;
 }
 
+/* "Sat, Jul 18 Morning" for a service, read from its id ("2026-07-18_morning")
+   once it was moved or deleted. */
+function serviceName(id) {
+  const service = serviceById(id);
+  if (service) return shortDate(service.date) + ' ' + service.service;
+  const [date, label] = [String(id).slice(0, 10), String(id).slice(11)];
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? shortDate(date) + ' ' + label.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) : 'a service';
+}
+
 /* "Usher Door on Sat, Jul 18 Morning (S. Leah: not available then)" for each
    duty the save skipped, at most four. */
 function skippedList(skipped) {
   const words = skipped.slice(0, 4).map(item => {
-    const service = serviceById(item.serviceId);
-    const where = service ? shortDate(service.date) + ' ' + service.service : item.serviceId;
+    const where = serviceName(item.serviceId);
     const why = item.reason === 'already-serving' && Array.isArray(item.duties) && item.duties.length
       ? 'already ' + item.duties.map(dutyName).join(' and ') + ' there' : reasonNote(item.reason);
     return dutyName(item.duty) + ' on ' + where + ' (' + (item.memberName ? nameOf(item.memberName) + ': ' : '') + why + ')';
