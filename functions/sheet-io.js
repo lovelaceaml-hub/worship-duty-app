@@ -155,7 +155,7 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
     existingSnap.forEach(document => { existing[document.id] = document.data() || {}; });
     const deleted = new Map(deletedSnap.docs.map(document => [document.id, document.data() || {}]));
     // A service waiting for a Sheet write keeps the app's state until then.
-    const plan = sheetLib.planMerge(parsed.services.filter(service => !waiting.has(sheetLib.svcId(service))), existing, { patchTime: false });
+    const plan = sheetLib.planMerge(parsed.services.filter(service => !waiting.has(sheetLib.svcId(service))), existing, { patchTime: false, canonical });
     const notAgain = plan.creates.filter(item => deleted.has(item.id)).map(item => item.id);
     plan.creates = plan.creates.filter(item => !deleted.has(item.id));
     if (notAgain.length) {

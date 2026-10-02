@@ -289,8 +289,9 @@ function sheetRowsToServices(rows, today) {
    said for each duty at the last import (`sheetSeen`), and the Sheet's name
    replaces the app's only when the Sheet's cell changed since then. A
    service imported for the first time has nothing to compare with, so the
-   Sheet wins once, as it always did. */
-function planMerge(sheetServices, existingById, { patchTime = true } = {}) {
+   Sheet wins once, as it always did. `canonical` puts a remembered name in
+   today's spelling (app/nameMap). */
+function planMerge(sheetServices, existingById, { patchTime = true, canonical = name => name } = {}) {
   const creates = [], updates = [];
   (Array.isArray(sheetServices) ? sheetServices : []).forEach(sheetSvc => {
     if (!sheetSvc || typeof sheetSvc !== 'object') return;
@@ -328,7 +329,8 @@ function planMerge(sheetServices, existingById, { patchTime = true } = {}) {
     const seenNow = {};
     Object.keys(sheetSvc.assignments || {}).forEach(duty => {
       const sheetName = sheetSvc.assignments[duty];
-      const before = Object.prototype.hasOwnProperty.call(seen, duty) ? seen[duty] : undefined;
+      // In today's spelling, so a name fixed since then is not a change.
+      const before = Object.prototype.hasOwnProperty.call(seen, duty) ? canonical(seen[duty]) : undefined;
       if (before !== sheetName) seenNow[duty] = sheetName;
       if (existingAssignments[duty] === sheetName) return;
       if (before === sheetName) return; // changed in the app since the Sheet said so

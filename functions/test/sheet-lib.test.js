@@ -193,6 +193,18 @@ test('a duty changed in the app stays; a duty changed in the Sheet wins', () => 
   assert.deepEqual(same.updates, []);
 });
 
+test('a name fixed since the last import is not a change in the Sheet', () => {
+  const parsed = sheetRowsToServices([HEADER, row('May 02', 'Morning', 'Presider', 'Alice Smith')], TODAY);
+  const service = parsed.services[0];
+  const id = svcId(service);
+  const canonical = name => (name === 'Alice' ? 'Alice Smith' : name);
+  const plan = planMerge(parsed.services, {
+    [id]: { date: service.date, service: service.service, time: service.time, worship: service.worship,
+      assignments: { Presider: 'Carol' }, sheetSeen: { Presider: 'Alice' } }
+  }, { canonical });
+  assert.deepEqual(plan.updates, [], 'the app\'s change stays, and nothing needs writing');
+});
+
 test('a service the import has not compared yet takes the Sheet once, and remembers it', () => {
   const parsed = sheetRowsToServices([HEADER, row('May 02', 'Morning', 'Presider', 'Alice')], TODAY);
   const service = parsed.services[0];
