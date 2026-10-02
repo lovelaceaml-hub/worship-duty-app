@@ -283,7 +283,13 @@ function sheetRowsToServices(rows, today) {
    Sheet only has each label's usual time, so it would undo a time set in the
    app. Instead of writing, returns { creates: [{id, svc}], updates:
    [{id, patch}] } so the caller controls Firestore I/O and can count
-   zero-write runs. */
+   zero-write runs.
+
+   A duty changed in the app stays changed: each service keeps what the Sheet
+   said for each duty at the last import (`sheetSeen`), and the Sheet's name
+   replaces the app's only when the Sheet's cell changed since then. A
+   service imported for the first time has nothing to compare with, so the
+   Sheet wins once, as it always did. */
 function planMerge(sheetServices, existingById, { patchTime = true } = {}) {
   const creates = [], updates = [];
   (Array.isArray(sheetServices) ? sheetServices : []).forEach(sheetSvc => {
@@ -299,7 +305,8 @@ function planMerge(sheetServices, existingById, { patchTime = true } = {}) {
           service: sheetSvc.service,
           worship: sheetSvc.worship || '',
           choirSong: sheetSvc.choirSong || '',
-          assignments: Object.assign({}, sheetSvc.assignments)
+          assignments: Object.assign({}, sheetSvc.assignments),
+          sheetSeen: Object.assign({}, sheetSvc.assignments)
         }
       });
       return;
@@ -316,15 +323,19 @@ function planMerge(sheetServices, existingById, { patchTime = true } = {}) {
       patch.choirSong = sheetSvc.choirSong;
     }
     const existingAssignments = existing.assignments || {};
+    const seen = existing.sheetSeen && typeof existing.sheetSeen === 'object' ? existing.sheetSeen : {};
     const changedAssignments = {};
-    let assignmentsChanged = false;
+    const seenNow = {};
     Object.keys(sheetSvc.assignments || {}).forEach(duty => {
-      if (existingAssignments[duty] !== sheetSvc.assignments[duty]) {
-        changedAssignments[duty] = sheetSvc.assignments[duty];
-        assignmentsChanged = true;
-      }
+      const sheetName = sheetSvc.assignments[duty];
+      const before = Object.prototype.hasOwnProperty.call(seen, duty) ? seen[duty] : undefined;
+      if (before !== sheetName) seenNow[duty] = sheetName;
+      if (existingAssignments[duty] === sheetName) return;
+      if (before === sheetName) return; // changed in the app since the Sheet said so
+      changedAssignments[duty] = sheetName;
     });
-    if (assignmentsChanged) patch.assignments = changedAssignments;
+    if (Object.keys(changedAssignments).length) patch.assignments = changedAssignments;
+    if (Object.keys(seenNow).length) patch.sheetSeen = seenNow;
     if (Object.keys(patch).length) updates.push({ id: id, patch: patch });
   });
   return { creates: creates, updates: updates };

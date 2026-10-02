@@ -47,9 +47,10 @@ if (window.matchMedia) window.matchMedia('(min-width: 900px)').addEventListener(
 function notes() {
   const settings = data.settings || {};
   const out = [];
-  // While the app does not write to the Sheet, the Sheet's import wins.
+  // While the app does not write to the Sheet, the two can differ: the app
+  // keeps its changes until the Sheet changes that duty (see sheet-lib.js).
   if (feature('sheetSync') && !feature('sheetWrite')) {
-    out.push(html`<p class="card-note">The Google Sheet is the main copy. A duty the Sheet already fills goes back to the Sheet's name at its next import (every 2 hours), so change it in the Sheet too.</p>`);
+    out.push(html`<p class="card-note">Changes made here stay in the app, but the Google Sheet is not updated. Change the Sheet too if people use it. A later change to the same duty in the Sheet replaces the app's.</p>`);
   }
   if (settings.sheetStatus && settings.sheetStatus.ok === false) {
     out.push(html`<p class="card-note is-warning">Changes are not reaching the Google Sheet: ${settings.sheetStatus.message}${isAdmin() ? ' See Manage, Data.' : ''}</p>`);

@@ -326,11 +326,15 @@ tabs (one row per service, one column per duty, header on row 2); the
 Sheet's own script copies them into "Raw Data".
 
 - By default the app only reads the Sheet: every 2 hours (or Import now in
-  Manage, Data) from the published Raw Data link. Then the Sheet wins: a
-  name the Sheet lists comes back at the next import, so change it in the
-  Sheet too (the month plan says so). Times set in the app stay, and a
-  service deleted in the app is not added again; add it again in the app to
-  bring it back. A row's year follows its weekday.
+  Manage, Data) from the published Raw Data link. A duty changed in the app
+  stays changed: each service remembers what the Sheet said at the last
+  import (`sheetSeen`), and the Sheet's name replaces the app's only when
+  that cell changed in the Sheet since then. The Sheet itself is not
+  updated, so change it there too if people use it; Check the Sheet lists
+  where the two differ. The first import after this was released takes the
+  Sheet's names once, as before. Times set in the app stay, and a service
+  deleted in the app is not added again; add it again in the app to bring
+  it back. A row's year follows its weekday.
 - With **Write changes to the Sheet** on (Manage, Features), the app writes
   every duty change and new service into the Entry tabs within seconds, adds
   each new year's tab, and reads the Entry tabs directly. A blank cell never

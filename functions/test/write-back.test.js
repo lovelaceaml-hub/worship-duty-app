@@ -187,6 +187,30 @@ test('the Raw Data import: one alert per member for new duties to come, deleted 
   });
 });
 
+test('the Raw Data import keeps a duty changed in the app until the Sheet changes it', async () => {
+  await onOctober1(async () => {
+    const docs = { 'app/settings': {}, 'app/members': { list: ['S. Leah', 'S. Naomi', 'S. Ruth'] }, 'schedule/2026-10-10_morning': upcoming('2026-10-10', { 'Usher Door': 'S. Leah' }) };
+    let sheetName = 'S. Leah';
+    const loaded = loadIndex(docs, { fetch: async () => ({ ok: true, text: async () => csv([rawRow('"Sat, Oct 10"', 'Usher Door', sheetName)]) }) });
+    const service = () => docs['schedule/2026-10-10_morning'];
+    try {
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.deepEqual(service().sheetSeen, { 'Usher Door': 'S. Leah' }, 'the first import remembers what the Sheet said');
+
+      service().assignments['Usher Door'] = 'S. Naomi'; // a leader changes it in the app
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.equal(service().assignments['Usher Door'], 'S. Naomi', 'the Sheet did not change, so the app\'s change stays');
+
+      sheetName = 'S. Ruth'; // someone changes the Sheet
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.equal(service().assignments['Usher Door'], 'S. Ruth', 'a change in the Sheet wins');
+      assert.deepEqual(service().sheetSeen, { 'Usher Door': 'S. Ruth' });
+    } finally {
+      loaded.restore();
+    }
+  });
+});
+
 test('a service deleted in the app is remembered until it is made again in the app', async () => {
   const docs = { 'app/settings': {} };
   const { functions } = loadIndex(docs);
