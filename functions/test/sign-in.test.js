@@ -147,3 +147,37 @@ test('the shared starting PINs cannot be chosen as a new PIN', async () => {
   }
   await functions.changeMemberPin.run({ auth: as('E. Simon'), data: { newPin: '9753' } });
 });
+
+/* Firebase Auth has a user record only for a uid that has signed in with a
+   custom token; setting claims on any other uid fails, as the Admin SDK's
+   setCustomUserClaims does. */
+function authWithUsers(auth, uids) {
+  const users = new Set(uids);
+  auth.setCustomUserClaims = async (uid, claims) => {
+    if (!users.has(uid)) throw Object.assign(new Error('There is no user record corresponding to the provided identifier.'), { code: 'auth/user-not-found' });
+    auth.claims.push({ uid, claims });
+  };
+  return users;
+}
+
+test('a member whose name was fixed before they ever signed in can have their PIN reset, sign in and choose a PIN', async () => {
+  const docs = await church({ 'app/members': { list: ['B. Anthony', 'E. Simon', 'M. Chloe', 'S. Leah', 'Bridgette'] } });
+  const { functions, auth } = loadIndex(docs);
+  const users = authWithUsers(auth, ['member:B. Anthony']);
+  await functions.renameMember.run({ auth: as('B. Anthony'), data: { from: 'Bridgette', to: 'S. Bridgette' } });
+  assert.equal(docs['accounts/S. Bridgette'].authUid, 'member:Bridgette', 'she keeps the uid her profiles are filed under');
+
+  await functions.resetMemberPin.run({ auth: as('B. Anthony'), data: { memberId: 'S. Bridgette' } });
+  const audit = Object.entries(docs).filter(([path]) => path.startsWith('audit/')).map(([, entry]) => [entry.action, entry.target]);
+  assert.deepEqual(audit.filter(([action]) => action === 'member-pin-reset'), [['member-pin-reset', 'S. Bridgette']]);
+
+  const result = await signIn(functions, 'S. Bridgette', '0000');
+  assert.equal(JSON.parse(result.token).uid, 'member:Bridgette');
+  assert.equal(result.mustChangePin, true);
+  users.add('member:Bridgette'); // the app signs in with the token, which makes the user
+  const claims = claimsOf(result);
+  await functions.changeMemberPin.run({ auth: { uid: 'member:Bridgette', token: claims }, data: { newPin: '8642' } });
+  const again = await signIn(functions, 'S. Bridgette', '8642');
+  assert.equal(again.mustChangePin, false);
+  assert.equal(claimsOf(again).memberId, 'S. Bridgette');
+});
