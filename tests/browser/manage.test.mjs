@@ -249,6 +249,41 @@ test('a member who can no longer make a duty can be kept on it', async () => {
   await context.close();
 });
 
+test('a flagged duty another leader gave away meanwhile is not kept or emptied', async () => {
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
+  const id = '2026-07-11_morning', path = 'schedule/' + id;
+  const service = await fakeDoc(page, path);
+  const holder = service.assignments['Usher Door'];
+  const other = ['S. Leah', 'S. Naomi', 'S. Esther'].find(name => !Object.values(service.assignments).includes(name));
+  const flag = () => setDoc(page, path, Object.assign({}, service, { needsReplacement: { 'Usher Door': { memberName: holder, reason: 'unavailable' } } }));
+  // Another leader gives Usher Door to someone else (which removes the flag)
+  // just before this leader's answer reaches the server.
+  const handOverFirst = () => page.evaluate(([path, other]) => {
+    window.__fakeFail = { resolveDutyAttention: () => {
+      const now = window.__fake.get(path);
+      window.__fake.set(path, Object.assign(now, { assignments: Object.assign(now.assignments, { 'Usher Door': other }), needsReplacement: {} }));
+      window.__fakeFail = {};
+      return '';
+    } };
+  }, [path, other]);
+  await flag();
+  await monthPlan(page);
+  await page.locator(`#view [data-act="plan-open"][data-service="${id}"]`).click();
+  const form = page.locator('#view form[data-act="replace-duty"]');
+  for (const choice of ['__keep', '__open']) {
+    if (choice !== '__keep') await flag();
+    await form.locator('select').selectOption(choice);
+    await handOverFirst();
+    await form.locator('button[type="submit"]').click();
+    await banner(page, 'That was not saved: ' + holder + ' is no longer on Usher Door.');
+    assert.equal((await fakeDoc(page, path)).assignments['Usher Door'], other, choice + ': the other leader\'s change stays');
+    await page.locator('#banners .banner-close').first().click();
+  }
+  assert.deepEqual((await calls(page, 'resolveDutyAttention')).map(payload => payload.expectedMemberName), [holder, holder]);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Requests: a past request leaves the count, and one for a deleted service can be closed', async () => {
   const base = { name: 'S. Naomi', memberId: 'S. Naomi', requesterUid: 'member:S. Naomi', worship: 'Sabbath Day', department: 'Usher Sisters', duty: 'Usher Door', status: 'pending', createdAt: 1 };
   const fixture = { patch: {

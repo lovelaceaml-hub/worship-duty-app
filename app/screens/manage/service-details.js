@@ -219,7 +219,10 @@ defineActions({
         }
         delete departmentState.choices[choiceKey];
       } catch (error) {
-        notice('That was not saved: ' + problem(error), true);
+        // Someone else changed the duty first: the flag no longer applies.
+        const reason = error && error.details && error.details.reason;
+        notice('That was not saved: ' + (['not-holder', 'changed'].includes(reason) && marker.memberName
+          ? nameOf(marker.memberName) + ' is no longer on ' + dutyName(duty) + '. Someone else changed it first.' : problem(error)), true);
       }
       delete departmentState.busy[choiceKey];
       renderSoon();

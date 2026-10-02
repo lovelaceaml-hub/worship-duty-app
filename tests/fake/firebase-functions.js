@@ -302,14 +302,21 @@ const handlers = {
     if (hasStarted(service)) fail('failed-precondition', 'That service has already started.', 'service-started');
     const assignments = Object.assign({}, service.assignments);
     const needsReplacement = Object.assign({}, service.needsReplacement);
+    const holder = assignments[data.duty] || '';
     if (data.decision === 'keep') {
+      // As the server: the flag names who is kept; once it is gone, the name
+      // the leader saw (expectedMemberName), and with neither nothing is checked.
       const marker = needsReplacement[data.duty];
-      if (!marker || assignments[data.duty] !== marker.memberName) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: marker ? marker.memberName : '' });
+      const expected = marker ? marker.memberName : data.expectedMemberName;
+      if (expected != null && holder !== expected) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: holder });
       delete needsReplacement[data.duty];
       await setDoc(ref, Object.assign({}, service, { needsReplacement }));
       return { ok: true, kept: true };
     }
-    if (request && assignments[data.duty] !== request.name) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: request.name });
+    if (data.expectedMemberName != null && holder !== data.expectedMemberName) {
+      fail('aborted', 'This record changed since you loaded it. Reload to see the newer version.', 'changed', { memberName: holder });
+    }
+    if (request && holder !== request.name) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: holder });
     if (data.replacementMemberUid) {
       const person = (await getDoc(profileRef(data.departmentId, data.replacementMemberUid))).data() || null;
       const why = refusal(person, service, data.duty, assignments);

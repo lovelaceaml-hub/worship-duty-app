@@ -148,9 +148,12 @@ export async function answerRequest(request, decision, replacementUid, acknowled
   return call('resolveDutyAttention', payload);
 }
 
-/* Fill or open a duty flagged "needs replacement" without a request. */
+/* Fill or open a duty flagged "needs replacement" without a request. The
+   name on it as the leader saw it goes along, so the server refuses
+   (changed) once someone else has it, instead of replacing them. */
 export async function replaceDuty(service, duty, replacementUid, acknowledgeConflict = false) {
-  const payload = { departmentId: departmentForDuty(duty), serviceId: serviceId(service), duty };
+  const payload = { departmentId: departmentForDuty(duty), serviceId: serviceId(service), duty,
+    expectedMemberName: (service.assignments || {})[duty] || '' };
   if (replacementUid) payload.replacementMemberUid = replacementUid;
   if (acknowledgeConflict) payload.acknowledgeConflict = true;
   return call('resolveDutyAttention', payload);
