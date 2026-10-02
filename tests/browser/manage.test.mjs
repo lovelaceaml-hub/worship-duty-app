@@ -249,6 +249,22 @@ test('a member who can no longer make a duty can be kept on it', async () => {
   await context.close();
 });
 
+test('a duty someone can no longer make in another month is named above the month, with a way to it', async () => {
+  const fixture = { patch: { 'schedule/2026-08-08_morning': { needsReplacement: { 'Usher Door': { memberName: 'S. Naomi', reason: 'unavailable' } } } } };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
+  assert.equal((await fakeDoc(page, 'schedule/2026-08-08_morning')).assignments['Usher Door'], 'S. Naomi');
+  await monthPlan(page);
+  await page.locator('#view .sections [data-section="services"] .count', { hasText: '1' }).waitFor();
+  const note = page.locator('#view .card-note', { hasText: 'S. Naomi can no longer make Usher Door on Sat, Aug 8 Morning.' });
+  await note.waitFor();
+  await note.locator('button', { hasText: 'Open' }).click();
+  await page.locator('#view .plan-toolbar .month-title', { hasText: 'August 2026' }).waitFor();
+  await page.locator('#view .plan-detail form[data-act="replace-duty"]', { hasText: 'S. Naomi can no longer make Usher Door.' }).waitFor();
+  assert.equal(await page.locator('#view .card-note', { hasText: 'can no longer make Usher Door on' }).count(), 0, 'in its own month the cell says it');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a flag on a duty stored under an older spelling of the name still shows', async () => {
   // The schedule holds the Sheet's older spelling; the server's flag carries the name as stored.
   const fixture = { patch: {

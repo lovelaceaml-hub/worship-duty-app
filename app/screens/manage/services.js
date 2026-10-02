@@ -8,18 +8,19 @@
    plan-fill.js (Fill and its bar) and service-details.js. */
 import { html } from '../../html.js';
 import { defineActions } from '../../actions.js';
-import { data, ui, feature } from '../../store.js';
+import { data, ui, feature, nameOf, canonical } from '../../store.js';
 import { render as redraw, renderSoon, goTo } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { empty } from '../../ui/components.js';
-import { SERVICE_LABELS, DEFAULT_TIMES } from '../../config/duties.js';
+import { SERVICE_LABELS, DEFAULT_TIMES, departmentOf, dutyName } from '../../config/duties.js';
 import { serviceId, byStart, isUpcoming } from '../../lib/services.js';
-import { todayISO, addMonths, monthName } from '../../lib/dates.js';
+import { todayISO, addMonths, monthName, shortDate } from '../../lib/dates.js';
 import { fillDuties } from '../../lib/fill.js';
 import { isAdmin, canCreateService, canEditDuty } from '../../services/access.js';
 import { loadRoster, refreshRosters } from '../../services/departments.js';
 import { addService } from '../../services/schedule.js';
 import { saveSettings } from '../../services/data-tools.js';
+import { replacementsNeeded } from '../../services/attention.js';
 import { departmentsShown, planMonth, serviceById, managedDepartment, mayShow, setManagedDepartment } from './scope.js';
 import { planContext } from './plan-cell.js';
 import { grid, list, legend, rosterNotes } from './plan-grid.js';
@@ -54,6 +55,12 @@ function notes() {
   if (settings.sheetStatus && settings.sheetStatus.ok === false) {
     out.push(html`<p class="card-note is-warning">Changes are not reaching the Google Sheet: ${settings.sheetStatus.message}${isAdmin() ? ' See Manage, Data.' : ''}</p>`);
   }
+  // The count on Month plan is every duty someone can no longer make; the
+  // ones in another month or department than this view are named here.
+  const shown = departmentsShown().map(department => department.name);
+  replacementsNeeded().filter(({ service, duty }) => !service.date.startsWith(planMonth()) || !shown.includes(departmentOf(duty).name))
+    .forEach(({ service, duty, marker }) => out.push(html`<p class="card-note is-warning">${nameOf(canonical(marker.memberName))} can no longer make ${dutyName(duty)} on ${shortDate(service.date)} ${service.service}.
+      <button type="button" class="link" data-act="planning-open" data-service="${serviceId(service)}">Open</button></p>`));
   if (isAdmin() && settings.feastNotice && settings.feastNotice.year) {
     out.push(html`<p class="card-note">The regular services for ${settings.feastNotice.year} are in. Add that year's feast services.
       <button type="button" class="link" data-act="feast-done">Done</button></p>`);
