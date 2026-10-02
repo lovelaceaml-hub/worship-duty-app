@@ -5,7 +5,7 @@
    member is told either way. A request whose service was moved or deleted
    can only be closed; one whose service has started is past and leaves the
    list. */
-import { html } from '../../html.js';
+import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, ui, nameOf, canonical } from '../../store.js';
 import { render as redraw, renderSoon } from '../../render.js';
@@ -18,8 +18,8 @@ import { workload, suggestReplacements } from '../../lib/workload.js';
 import { problem } from '../../firebase.js';
 import { roster, rosterLoaded, loadRoster, refreshRosters, departments as state } from '../../services/departments.js';
 import { answerRequest } from '../../services/requests.js';
-import { canResolveRequest } from '../../services/access.js';
-import { managedDepartment } from './scope.js';
+import { canResolveRequest, managedDepartments } from '../../services/access.js';
+import { managedDepartment, setManagedDepartment } from './scope.js';
 
 const OPEN = '__open';
 const departmentOfRequest = request => request.department || (departmentOf(request.duty) || {}).name || '';
@@ -87,14 +87,30 @@ function openCard(request, stats) {
   </article>`;
 }
 
+/* The count on Requests is every request this leader answers; the list is
+   the department picked. Where the others wait, with a way to show them. */
+function elsewhere() {
+  const department = managedDepartment();
+  if (department === 'All') return '';
+  const counts = {};
+  data.requests.filter(canResolveRequest).filter(request => isOpen(request, data.services, canonical)).forEach(request => {
+    const name = departmentOfRequest(request);
+    if (name !== department && managedDepartments().includes(name)) counts[name] = (counts[name] || 0) + 1;
+  });
+  return Object.entries(counts).map(([name, count]) => html`<p class="card-note">${plural(count, 'request waits', 'requests wait')} in ${name}.
+    <button type="button" class="link" data-act="requests-show" data-department="${name}">Show ${name}</button></p>`);
+}
+
 export function render() {
   const list = visible();
   const open = list.filter(request => isOpen(request, data.services, canonical));
   const done = list.filter(request => !isOpen(request, data.services, canonical)).slice(0, 10);
   const stats = workload(data.services, data.members, todayISO());
   const showDone = !!ui.expanded['requests-done'];
+  const others = elsewhere();
   return html`
-    ${open.length ? open.map(request => openCard(request, stats)) : empty('No requests waiting.')}
+    ${others}
+    ${open.length ? open.map(request => openCard(request, stats)) : empty(others.length ? 'No requests waiting in ' + managedDepartment() + '.' : 'No requests waiting.')}
     ${done.length ? html`<button type="button" class="link" data-act="expand" data-key="requests-done">${showDone ? 'Hide answered and past requests' : 'Show answered and past requests'}</button>
       ${showDone ? done.map(request => html`<div class="list-item">
         <div class="list-item-head"><span>${nameOf(request.name)} · ${dutyName(request.duty)} · ${shortDate(request.date)}</span>${statusChip(shownStatus(request, data.services, canonical))}</div>
@@ -133,6 +149,8 @@ async function answer(id, decision, choice, { closing = false } = {}) {
 const resolvable = el => canResolveRequest(data.requests.find(item => item.id === el.dataset.id));
 
 defineActions({
+  // The department picker's change, from a note about requests waiting there.
+  'requests-show': el => { if (setManagedDepartment(el.dataset.department)) { opened(); redraw(); } },
   'request-choice': el => { state.choices[choiceKey(el.dataset.id)] = el.value; redraw(); },
   'request-approve': {
     allowed: resolvable,

@@ -6,7 +6,7 @@
    and changes nothing. */
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
-import { data, ui, nameOf } from '../../store.js';
+import { data, ui, nameOf, canonical } from '../../store.js';
 import { render as redraw, renderSoon } from '../../render.js';
 import { notice } from '../../ui/banners.js';
 import { WORSHIP_TYPES, departmentOf, dutyName } from '../../config/duties.js';
@@ -23,7 +23,7 @@ import { updateService, deleteService, markDoubleDuty } from '../../services/sch
 import { replaceDuty } from '../../services/requests.js';
 import { overrideDuty, keepOnDuty } from '../../services/planner.js';
 import { problem } from '../../firebase.js';
-import { departmentsShown, serviceById, mayShow } from './scope.js';
+import { departmentsShown, serviceById, mayShow, mayMove } from './scope.js';
 import { field, planned, atService, showsPrayers, prayers } from './plan-cell.js';
 
 const KEEP = '__keep', OPEN = '__open', OTHER = '__other';
@@ -67,8 +67,8 @@ function overrideForm(service, duty, context) {
 }
 
 /* What the replacement form's button says for a choice. */
-function replaceLabel(choice, marker, people) {
-  if (choice === KEEP) return 'Keep ' + nameOf(marker.memberName);
+function replaceLabel(choice, holder, people) {
+  if (choice === KEEP) return 'Keep ' + nameOf(holder);
   if (choice === OPEN) return 'Leave it open';
   const profile = people.find(item => item.memberUid === choice);
   return profile ? 'Give it to ' + nameOf(profile.memberName) : 'Save';
@@ -78,28 +78,30 @@ function replaceLabel(choice, marker, people) {
    them on it, gives it to someone else, or leaves it open; every member who
    can take it is listed, the best suggestions first. */
 function replacementPanel(service) {
+  // A flag carries the name as stored, which may be an older spelling.
   const flags = Object.entries(service.needsReplacement || {})
-    .filter(([duty, marker]) => marker && (service.assignments || {})[duty] === marker.memberName && canEditDuty(duty));
+    .filter(([duty, marker]) => marker && marker.memberName && (service.assignments || {})[duty] === canonical(marker.memberName) && canEditDuty(duty));
   if (!flags.length) return '';
   const stats = workload(data.services, data.members, todayISO());
   return html`<div class="replacements">${flags.map(([duty, marker]) => {
     const people = roster(departmentOf(duty).name);
-    const ranked = suggestReplacements(service, duty, people, stats, { exclude: marker.memberName, limit: Infinity });
+    const holder = canonical(marker.memberName);
+    const ranked = suggestReplacements(service, duty, people, stats, { exclude: holder, limit: Infinity });
     const choiceKey = 'replace::' + serviceId(service) + '|' + duty;
     const choice = departmentState.choices[choiceKey] || '';
     const option = profile => html`<option value="${profile.memberUid}"${choice === profile.memberUid ? ' selected' : ''}>${nameOf(profile.memberName)}</option>`;
     const busy = departmentState.busy[choiceKey];
     return html`<form class="card-note is-warning replacement" data-act="replace-duty" data-service="${serviceId(service)}" data-duty="${duty}">
-      <p><strong>${nameOf(marker.memberName)}</strong> can no longer make ${dutyName(duty)}.</p>
+      <p><strong>${nameOf(holder)}</strong> can no longer make ${dutyName(duty)}.</p>
       <div class="inline-form">
         <select name="uid" data-change="replace-choice" data-key="${choiceKey}" aria-label="What to do with ${dutyName(duty)}"${busy ? ' disabled' : ''}>
           <option value=""${choice ? '' : ' selected'} disabled>Choose…</option>
-          <option value="${KEEP}"${choice === KEEP ? ' selected' : ''}>Keep ${nameOf(marker.memberName)} on it</option>
+          <option value="${KEEP}"${choice === KEEP ? ' selected' : ''}>Keep ${nameOf(holder)} on it</option>
           <option value="${OPEN}"${choice === OPEN ? ' selected' : ''}>Leave it open</option>
           ${ranked.length ? html`<optgroup label="Suggested">${ranked.slice(0, 3).map(option)}</optgroup>` : ''}
           ${ranked.length > 3 ? html`<optgroup label="Others who can take it">${ranked.slice(3).map(option)}</optgroup>` : ''}
         </select>
-        <button type="submit" class="ghost small"${choice && !busy ? '' : ' disabled'}>${busy ? 'Saving…' : replaceLabel(choice, marker, people)}</button>
+        <button type="submit" class="ghost small"${choice && !busy ? '' : ' disabled'}>${busy ? 'Saving…' : replaceLabel(choice, holder, people)}</button>
       </div>
       ${ranked.length ? '' : html`<p class="hint small">No one else on the ${departmentOf(duty).name} list can take it then.</p>`}
     </form>`;
@@ -156,7 +158,7 @@ defineActions({
       if (!isUpcoming(service)) { notice(reasonText('service-started'), true); redraw(); return; }
       if (el.dataset.field === 'date') {
         // The planner follows the service to its new month.
-        if (!mayShow({ month: value.slice(0, 7) })) { redraw(); return; }
+        if (!mayShow({ month: value.slice(0, 7) }) || !mayMove(service)) { redraw(); return; }
         const moved = Object.assign({}, service, { date: value });
         Object.assign(ui.plan, { open: serviceId(moved), month: value.slice(0, 7) });
       }
@@ -167,6 +169,7 @@ defineActions({
     allowed: () => isAdmin(),
     run: el => {
       const service = serviceById(el.dataset.service);
+      if (service && !mayMove(service)) return;
       const people = service ? Object.values(service.assignments || {}).filter(Boolean).length : 0;
       if (service && confirm('Delete the ' + service.service + ' service on ' + longDate(service.date) + '? ' +
         (people ? 'Its ' + plural(people, 'duty', 'duties') + ' are deleted with it.' : 'It has no duties filled.'))) {
@@ -206,20 +209,23 @@ defineActions({
       const choiceKey = 'replace::' + form.dataset.service + '|' + duty;
       const choice = departmentState.choices[choiceKey];
       if (!service || !choice || departmentState.busy[choiceKey]) return;
-      const marker = (service.needsReplacement || {})[duty] || {};
+      const holder = canonical(((service.needsReplacement || {})[duty] || {}).memberName);
       departmentState.busy[choiceKey] = true;
       renderSoon();
       try {
         if (choice === KEEP) {
           await keepOnDuty(service, duty);
-          notice(nameOf(marker.memberName) + ' stays on ' + dutyName(duty) + '.');
+          notice(nameOf(holder) + ' stays on ' + dutyName(duty) + '.');
         } else {
           await replaceDuty(service, duty, choice === OPEN ? '' : choice);
           notice(choice === OPEN ? dutyName(duty) + ' is open now. Fill it in the month plan.' : 'Replacement saved.');
         }
         delete departmentState.choices[choiceKey];
       } catch (error) {
-        notice('That was not saved: ' + problem(error), true);
+        // Someone else changed the duty first: the flag no longer applies.
+        const reason = error && error.details && error.details.reason;
+        notice('That was not saved: ' + (['not-holder', 'changed'].includes(reason) && holder
+          ? nameOf(holder) + ' is no longer on ' + dutyName(duty) + '. Someone else changed it first.' : problem(error)), true);
       }
       delete departmentState.busy[choiceKey];
       renderSoon();

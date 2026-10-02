@@ -31,13 +31,16 @@ export function openConflicts() {
   return out;
 }
 
-function replacementsNeeded() {
+/* Duties someone can no longer make, in services still to come, that this
+   member answers for: [{ service, duty, marker }]. */
+export function replacementsNeeded() {
   const out = [];
   upcoming(data.services).forEach(service => {
     Object.entries(service.needsReplacement || {}).forEach(([duty, marker]) => {
       const department = departmentOf(duty);
       if (!department || !mine([department.name])) return;
-      if ((service.assignments || {})[duty] !== (marker && marker.memberName)) return; // already changed
+      // The flag carries the name as stored, which may be an older spelling.
+      if (!marker || !marker.memberName || (service.assignments || {})[duty] !== canonical(marker.memberName)) return; // already changed
       out.push({ service, duty, marker });
     });
   });

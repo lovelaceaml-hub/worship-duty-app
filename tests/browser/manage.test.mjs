@@ -249,6 +249,105 @@ test('a member who can no longer make a duty can be kept on it', async () => {
   await context.close();
 });
 
+test('a duty someone can no longer make in another month is named above the month, with a way to it', async () => {
+  const fixture = { patch: { 'schedule/2026-08-08_morning': { needsReplacement: { 'Usher Door': { memberName: 'S. Naomi', reason: 'unavailable' } } } } };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
+  assert.equal((await fakeDoc(page, 'schedule/2026-08-08_morning')).assignments['Usher Door'], 'S. Naomi');
+  await monthPlan(page);
+  await page.locator('#view .sections [data-section="services"] .count', { hasText: '1' }).waitFor();
+  const note = page.locator('#view .card-note', { hasText: 'S. Naomi can no longer make Usher Door on Sat, Aug 8 Morning.' });
+  await note.waitFor();
+  await note.locator('button', { hasText: 'Open' }).click();
+  await page.locator('#view .plan-toolbar .month-title', { hasText: 'August 2026' }).waitFor();
+  await page.locator('#view .plan-detail form[data-act="replace-duty"]', { hasText: 'S. Naomi can no longer make Usher Door.' }).waitFor();
+  assert.equal(await page.locator('#view .card-note', { hasText: 'can no longer make Usher Door on' }).count(), 0, 'in its own month the cell says it');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('a flag on a duty stored under an older spelling of the name still shows', async () => {
+  // The schedule holds the Sheet's older spelling; the server's flag carries the name as stored.
+  const fixture = { patch: {
+    'app/nameMap': { map: { 'B. Adam A': 'B. Adam', 'S. Naomii': 'S. Naomi' } },
+    'schedule/2026-07-11_morning': { assignments: { 'Usher Door': 'S. Naomii' }, needsReplacement: { 'Usher Door': { memberName: 'S. Naomii', reason: 'unavailable' } } }
+  } };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
+  await monthPlan(page);
+  await page.locator('#view .sections [data-section="services"] .count', { hasText: '1' }).waitFor();
+  await cellAt(page, '2026-07-11_morning', 'Usher Door').locator('.plan-note', { hasText: 'Can no longer make it' }).waitFor();
+  await page.locator('#view [data-act="plan-open"][data-service="2026-07-11_morning"]').click();
+  const form = page.locator('#view form[data-act="replace-duty"]', { hasText: 'S. Naomi can no longer make Usher Door.' });
+  await form.waitFor();
+  // The server compares names in their current spelling, and so does the fake.
+  await form.locator('select').selectOption('__open');
+  await form.locator('button[type="submit"]').click();
+  await banner(page, 'Usher Door is open now.');
+  assert.equal((await fakeDoc(page, 'schedule/2026-07-11_morning')).assignments['Usher Door'], '');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('a flagged duty another leader gave away meanwhile is not kept or emptied', async () => {
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
+  const id = '2026-07-11_morning', path = 'schedule/' + id;
+  const service = await fakeDoc(page, path);
+  const holder = service.assignments['Usher Door'];
+  const other = ['S. Leah', 'S. Naomi', 'S. Esther'].find(name => !Object.values(service.assignments).includes(name));
+  const flag = () => setDoc(page, path, Object.assign({}, service, { needsReplacement: { 'Usher Door': { memberName: holder, reason: 'unavailable' } } }));
+  // Another leader gives Usher Door to someone else (which removes the flag)
+  // just before this leader's answer reaches the server.
+  const handOverFirst = () => page.evaluate(([path, other]) => {
+    window.__fakeFail = { resolveDutyAttention: () => {
+      const now = window.__fake.get(path);
+      window.__fake.set(path, Object.assign(now, { assignments: Object.assign(now.assignments, { 'Usher Door': other }), needsReplacement: {} }));
+      window.__fakeFail = {};
+      return '';
+    } };
+  }, [path, other]);
+  await flag();
+  await monthPlan(page);
+  await page.locator(`#view [data-act="plan-open"][data-service="${id}"]`).click();
+  const form = page.locator('#view form[data-act="replace-duty"]');
+  for (const choice of ['__keep', '__open']) {
+    if (choice !== '__keep') await flag();
+    await form.locator('select').selectOption(choice);
+    await handOverFirst();
+    await form.locator('button[type="submit"]').click();
+    await banner(page, 'That was not saved: ' + holder + ' is no longer on Usher Door.');
+    assert.equal((await fakeDoc(page, path)).assignments['Usher Door'], other, choice + ': the other leader\'s change stays');
+    await page.locator('#banners .banner-close').first().click();
+  }
+  assert.deepEqual((await calls(page, 'resolveDutyAttention')).map(payload => payload.expectedMemberName), [holder, holder]);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('a service with Fill\'s proposals waiting is not moved or deleted until they are saved or discarded', async () => {
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, fixture: { patch: emptyMornings } });
+  await monthPlan(page);
+  await page.locator('#view select[data-change="manage-department"]').selectOption('Usher Sisters');
+  await page.locator('#view [data-act="plan-fill"]').click();
+  await page.locator('#view .plan-cell.is-proposed').first().waitFor();
+  const proposed = await page.locator('#view .plan-cell.is-proposed').count();
+  const id = '2026-07-18_morning';
+  await page.locator(`#view [data-act="plan-open"][data-service="${id}"]`).click();
+  // Another day in the same month: the proposals for this service would be left behind.
+  await page.locator('#view .plan-detail input[data-field="date"]').fill('2026-07-19');
+  await banner(page, 'waiting in Usher Sisters, July 2026 first.');
+  page.on('dialog', dialog => dialog.accept());
+  await page.locator('#view [data-act="service-delete"]').click();
+  await page.waitForTimeout(300);
+  assert.ok(await fakeDoc(page, 'schedule/' + id), 'the service stays where it was');
+  assert.equal(await page.locator('#view .plan-cell.is-proposed').count(), proposed, 'its proposals still show');
+  // Another administrator deletes the other service on their device: the save names it by its day.
+  await page.evaluate(() => window.__fake.remove('schedule/2026-07-25_morning'));
+  await page.locator('#view [data-act="plan-save"]').click();
+  await banner(page, 'Saved 2 of ' + proposed + ' duties. Not saved: Usher Door on Sat, Jul 25 Morning (');
+  assert.equal(await page.locator('#banners .banner', { hasText: '2026-07-25_morning' }).count(), 0, 'no service id on screen');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Requests: a past request leaves the count, and one for a deleted service can be closed', async () => {
   const base = { name: 'S. Naomi', memberId: 'S. Naomi', requesterUid: 'member:S. Naomi', worship: 'Sabbath Day', department: 'Usher Sisters', duty: 'Usher Door', status: 'pending', createdAt: 1 };
   const fixture = { patch: {
@@ -266,6 +365,26 @@ test('Requests: a past request leaves the count, and one for a deleted service c
   assert.equal((await fakeDoc(page, 'requests/gone')).status, 'declined');
   await page.locator('#view [data-act="expand"][data-key="requests-done"]').click();
   await page.locator('#view .list-item', { hasText: 'Sat, Jul 4' }).locator('.status', { hasText: /past/i }).waitFor();
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('a leader of two departments is told where the requests counted wait', async () => {
+  const fixture = { patch: { 'requests/media-1': { id: 'media-1', svcId: '2026-07-11_morning', name: 'B. Titus', memberId: 'B. Titus', requesterUid: 'member:B. Titus',
+    date: '2026-07-11', service: 'Morning', worship: 'Sabbath Day', duty: 'Media Booth #1', department: 'Media', status: 'pending', createdAt: 1 },
+  'schedule/2026-07-11_morning': { assignments: { 'Media Booth #1': 'B. Titus' } } } };
+  const { context, page, errors } = await as('E. Joseph', { viewport: DESKTOP, fixture });
+  await tab(page, 'manage');
+  assert.equal(await activeSection(page), 'requests');
+  assert.equal(await page.locator('#view select[data-change="manage-department"]').inputValue(), 'Worship');
+  await page.locator('#view .sections [data-section="requests"] .count', { hasText: '1' }).waitFor();
+  await page.locator('#view .empty', { hasText: 'No requests waiting in Worship.' }).waitFor();
+  const note = page.locator('#view .card-note', { hasText: '1 request waits in Media.' });
+  await note.waitFor();
+  await note.locator('button', { hasText: 'Show Media' }).click();
+  await page.locator('#view .request', { hasText: 'Media Booth #1' }).waitFor();
+  assert.equal(await page.locator('#view select[data-change="manage-department"]').inputValue(), 'Media');
+  assert.equal(await page.locator('#view .card-note', { hasText: 'waits in' }).count(), 0);
   assert.deepEqual(errors, []);
   await context.close();
 });

@@ -14,7 +14,7 @@ import { serviceId } from '../../lib/services.js';
 import { todayISO, monthName } from '../../lib/dates.js';
 import { managedDepartments } from '../../services/access.js';
 import { legacyRoster } from '../../services/departments.js';
-import { waitingScope, proposalCount, forgetNotes } from '../../services/planner.js';
+import { waitingScope, proposals, proposalCount, forgetNotes } from '../../services/planner.js';
 
 /* The department being managed: the one picked, while this member may still
    manage it, else the first they may ('All' for administrators). */
@@ -50,17 +50,29 @@ export const currentScope = () => ({ department: managedDepartment(), month: pla
 /* "Usher Sisters, July 2026" */
 export const scopeName = scope => (scope.department === 'All' ? 'all departments' : scope.department) + ', ' + monthName(scope.month);
 
+const saveFirst = () => notice('Save or discard the ' + plural(proposalCount(), 'filled duty', 'filled duties') + ' waiting in ' + scopeName(waitingScope()) + ' first.', true);
+
 /* Whether the planner may move to `next` ({ department, month }, either one)
    now. While Fill's proposals wait somewhere else, it says where and stays. */
 export function mayShow(next) {
   const target = Object.assign(currentScope(), next);
   const waiting = waitingScope();
   if (waiting && (waiting.department !== target.department || waiting.month !== target.month)) {
-    notice('Save or discard the ' + plural(proposalCount(), 'filled duty', 'filled duties') + ' waiting in ' + scopeName(waiting) + ' first.', true);
+    saveFirst();
     return false;
   }
   if (target.month !== planMonth() || target.department !== managedDepartment()) forgetNotes();
   return true;
+}
+
+/* Whether a service may move to another day or be deleted now. Its
+   proposals are kept by its id, which the date is part of, so they would be
+   left behind and never saved. */
+export function mayMove(service) {
+  const id = serviceId(service);
+  if (!Object.keys(proposals()).some(key => key.startsWith(id + '|'))) return true;
+  saveFirst();
+  return false;
 }
 
 /* Manage another department, when the planner may move there. */

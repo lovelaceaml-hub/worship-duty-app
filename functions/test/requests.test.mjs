@@ -101,6 +101,21 @@ test('a flagged member can be kept on their duty, only while they still hold it'
     refused('invalid-argument', 'invalid-input'), 'keep is for a flagged duty, not a request');
 });
 
+test('a flagged duty that changed hands, flag and all, is answered only for the member the leader saw', async () => {
+  // S. Leah was flagged; another leader then gave the duty to S. Naomi, which removed the flag.
+  const { db, resolve } = setup({ [LATER]: { date: '2026-10-10', service: 'Morning', time: '10:00', assignments: { 'Usher Door': 'S. Naomi' } } });
+  const answer = extra => resolve(Object.assign({ serviceId: '2026-10-10_morning', duty: 'Usher Door' }, extra));
+  // Without the name the leader saw, nothing tells the server the answer is stale.
+  assert.equal((await answer({ decision: 'keep' })).kept, true, 'a keep with no flag and no name checks nothing');
+  await assert.rejects(answer({ decision: 'keep', expectedMemberName: 'S. Leah' }), refused('failed-precondition', 'not-holder'));
+  await assert.rejects(answer({ expectedMemberName: 'S. Leah' }), refused('aborted', 'changed'));
+  await assert.rejects(answer({ expectedMemberName: 'S. Leah', replacementMemberUid: 'uid-S. Leah' }), refused('aborted', 'changed'));
+  assert.equal(db.store.get(LATER).assignments['Usher Door'], 'S. Naomi', 'the other leader\'s change stays');
+  // The name the leader saw still holds it: the answer goes through.
+  assert.equal((await answer({ expectedMemberName: 'S. Naomi' })).memberName, '');
+  assert.equal(db.store.get(LATER).assignments['Usher Door'], '');
+});
+
 test('names are compared in their current spelling and a duty in its stored one', async () => {
   const { db, resolve } = setup({
     [LATER]: { date: '2026-10-10', service: 'Morning', time: '10:00', assignments: { 'Usher Door': 'S. Melisaa' } },

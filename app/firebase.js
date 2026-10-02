@@ -86,5 +86,8 @@ export function problem(error, fallback = 'That did not work. Try again.') {
   if (code === 'permission-denied') {
     return /role has changed/i.test(message) ? reasonText('role-changed') : 'Your account is not allowed to do that.';
   }
-  return message && code && code !== 'unknown' && code !== 'cancelled' ? message : fallback;
+  // An answer without a body (a function not deployed yet: 404) leaves the
+  // SDK's message as the code alone, "not-found" or "not-found [404]".
+  const bare = message.replace(/\s*\[\d+\]$/, '') === code;
+  return message && !bare && code && code !== 'unknown' && code !== 'cancelled' ? message : fallback;
 }
