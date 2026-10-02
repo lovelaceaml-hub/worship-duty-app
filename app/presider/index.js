@@ -13,7 +13,7 @@ import { roleLines, songSections, missingSongs } from './cards.js';
 import { updateService } from '../services/schedule.js';
 import {
   listen, ensureSetlist, addSong, removeSong, moveSong, setSlot, clearSlot, confirmSongs,
-  markSung, undoSung, deleteSetlist, addPastDate, removePastEntry
+  deleteSetlist, addPastDate, removePastEntry
 } from './data.js';
 import { frame, home, library, services, history } from './screens.js';
 import { serviceId } from '../lib/services.js';
@@ -179,14 +179,6 @@ defineActions({
       confirmSongs(el.dataset.id);
       draw();
     }
-  },
-  'song-mark-sung': {
-    allowed: canEditList,
-    run: el => { if (confirm('Mark these songs as sung? This adds one to each song’s count. Do this after the service.')) markSung(el.dataset.id); }
-  },
-  'song-undo-sung': {
-    allowed: canEditList,
-    run: el => { if (confirm('Undo Mark as sung? Each song’s count goes back down.')) undoSung(el.dataset.id); }
   },
   'song-delete': {
     allowed: canEditList,

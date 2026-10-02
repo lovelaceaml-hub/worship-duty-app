@@ -153,43 +153,6 @@ export function changedSinceConfirmed(setlist) {
   return !!(setlist && setlist.confirmedAt && setlist.confirmedAt < (setlist.updatedAt || 0));
 }
 
-/* Mark sung / undo: one transaction over the list and every song's count. */
-async function recount(id, apply, listPatch) {
-  const by = ui.me || 'Someone', at = Date.now();
-  await fb.runTransaction(fb.db, async transaction => {
-    const listRef = fb.doc(fb.db, 'setlists', id);
-    const fresh = await transaction.get(listRef);
-    if (!fresh.exists()) return;
-    const setlist = fresh.data();
-    const refs = {}, stats = {};
-    for (const songId of setlist.songs || []) {
-      if (refs[songId]) continue;
-      refs[songId] = fb.doc(fb.db, 'songStats', songId);
-      const snapshot = await transaction.get(refs[songId]);
-      if (snapshot.exists()) stats[songId] = snapshot.data();
-    }
-    const result = apply(stats, setlist, { by, markedAt: at });
-    if (!result) return;
-    Object.keys(result.changed).forEach(songId => transaction.set(refs[songId], result.changed[songId]));
-    (result.removed || []).forEach(songId => transaction.delete(refs[songId]));
-    transaction.update(listRef, Object.assign({ updatedAt: at, updatedBy: by }, listPatch(at)));
-  });
-}
-
-export function markSung(id) {
-  const setlist = planner.setlists[id];
-  if (!setlist || !canEdit(setlist) || setlist.status === 'sung') return;
-  recount(id, (stats, fresh, opts) => fresh.status === 'sung' ? null : lib().applySung(stats, fresh, opts), at => ({ status: 'sung', sungAt: at }))
-    .catch(failed('The songs were not marked as sung.'));
-}
-
-export function undoSung(id) {
-  const setlist = planner.setlists[id];
-  if (!setlist || !canEdit(setlist)) return;
-  recount(id, (stats, fresh) => lib().applyUndo(stats, fresh), () => ({ status: 'planned', sungAt: null }))
-    .catch(failed('That was not undone.'));
-}
-
 export async function deleteSetlist(id) {
   const setlist = planner.setlists[id];
   if (!setlist || !canEdit(setlist)) return;
@@ -229,7 +192,7 @@ export async function removePastEntry(songId, service) {
 /* ---- services ---- */
 
 /* A service stays current for three hours after it starts, so the runsheet
-   and Mark as sung work during and right after it. */
+   works during it. The server counts a confirmed list as sung after that. */
 export function current(service) { return isUpcoming(service) || isInProgress(service); }
 
 export function myServices() {

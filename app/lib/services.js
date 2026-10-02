@@ -2,7 +2,7 @@
    A service is "upcoming" until its Pacific start minute; from then on it is
    past. The Schedule and My Duties still show it as "Now" for 20 minutes. The
    Presider planner treats a service as "in progress" for three hours after it
-   starts, so the runsheet and Mark as sung stay reachable.
+   starts, so the runsheet stays reachable during it.
    Functions that take `now` accept a Date or a Pacific wall time already
    read (pacificNow().wall), so a list is checked against one clock reading. */
 import { DEPARTMENTS, DEFAULT_TIMES, SERVICE_LABELS } from '../config/duties.js';

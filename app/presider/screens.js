@@ -84,7 +84,7 @@ export function home() {
 /* How the Library works, until a list is open or the tip is hidden. */
 function help() {
   if (view.helpHidden || view.setlist) return '';
-  return html`<div class="banner"><span>Choose your service, add songs from the list below, then confirm them. After the service, tap Mark as sung on Home.</span>
+  return html`<div class="banner"><span>Choose your service, add songs from the list below, then confirm them. Confirmed songs are counted as sung after the service.</span>
     <button type="button" class="banner-close" data-act="song-help-hide" aria-label="Hide these tips">&times;</button></div>`;
 }
 

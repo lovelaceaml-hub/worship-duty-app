@@ -8,7 +8,7 @@ import { isConfirmed, changedSinceConfirmed, totalTime } from './data.js';
 import { songNumber, minutes } from './catalog.js';
 import { dutyName } from '../config/duties.js';
 import { hasChoir, hasThanks } from '../lib/worship.js';
-import { serviceId, isUpcoming, serviceClock } from '../lib/services.js';
+import { serviceId, serviceClock } from '../lib/services.js';
 import { shortDate, dayBadge, todayISO } from '../lib/dates.js';
 
 function songStatus(setlist) {
@@ -105,10 +105,8 @@ export function serviceCard(service, setlist, { home = false } = {}) {
   if (editable && !sung) {
     if (needsConfirm) actions.push(html`<button type="button" class="primary small" data-act="song-confirm" data-id="${id}">${changedSinceConfirmed(setlist) ? 'Confirm again' : 'Confirm songs'}</button>`);
     actions.push(html`<button type="button" class="${needsConfirm || (home && today) ? 'ghost' : 'primary'} small" data-act="song-edit" data-id="${id}">${songs.length ? 'Edit songs' : 'Add songs'}</button>`);
-    if (setlist && songs.length && !(service && isUpcoming(service))) actions.push(html`<button type="button" class="ghost small" data-act="song-mark-sung" data-id="${id}">Mark as sung</button>`);
   }
-  if (editable && sung) actions.push(html`<button type="button" class="ghost small" data-act="song-edit" data-id="${id}">Edit songs</button>`,
-    html`<button type="button" class="link danger" data-act="song-undo-sung" data-id="${id}">Undo sung</button>`);
+  if (editable && sung) actions.push(html`<button type="button" class="ghost small" data-act="song-edit" data-id="${id}">Edit songs</button>`);
   if (!editable) actions.push(html`<span class="hint small">View only</span>`);
   if (songs.length) actions.push(html`<button type="button" class="ghost small" data-act="song-toggle-songs" data-id="${id}" aria-expanded="${open}">${open ? 'Hide songs' : 'Show songs'}</button>`);
   if (songs.length) actions.push(html`<button type="button" class="ghost small" data-act="song-copy" data-id="${id}">Copy for Signal</button>`);
