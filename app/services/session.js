@@ -78,10 +78,18 @@ function setMember(member, user) {
   watchRequests();
 }
 
-/* Firebase tells us when a saved sign-in is restored or ends. */
+/* Firebase tells us when a saved sign-in is restored or ends. A session the
+   server revoked (PIN reset, role change, name fix) ends here when Firebase
+   next refreshes it, unless a call was refused first: the member is asked
+   to sign in again, as after a refused call, and no one is remembered for
+   offline viewing. */
+let leaving = false; // signOut() is ending the session itself
 export async function onAuthChange(user) {
   if (!user) {
+    const ended = !!session.member && !leaving;
+    writeText('wds-me', null);
     setMember(null, null);
+    if (ended) ui.signIn.error = 'Please sign in again.';
     renderSoon();
     return;
   }
@@ -176,13 +184,18 @@ export async function signOut() {
     return;
   }
   const name = (session.member && session.member.memberName) || ui.me;
-  await unregisterPush().catch(() => {});
-  try { if (fb.auth) await fb.signOut(fb.auth); }
-  catch (_error) { /* the local session is cleared below either way */ }
-  writeText('wds-me', null);
-  forgetDutyAlerts(name);
-  if (!session.member) { forgetMemberState(); setLeaveGuard(null); }
-  setMember(null, null);
+  leaving = true;
+  try {
+    await unregisterPush().catch(() => {});
+    try { if (fb.auth) await fb.signOut(fb.auth); }
+    catch (_error) { /* the local session is cleared below either way */ }
+    writeText('wds-me', null);
+    forgetDutyAlerts(name);
+    if (!session.member) { forgetMemberState(); setLeaveGuard(null); }
+    setMember(null, null);
+  } finally {
+    leaving = false;
+  }
   renderSoon();
 }
 

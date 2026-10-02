@@ -287,6 +287,7 @@ test('signing out before the app has connected is refused, so the saved sign-in 
   release();
   await page.locator('[data-slot="sync"]', { hasText: 'Live' }).waitFor();
   await signOut(page);
+  assert.equal(await page.locator('.gate .form-error').count(), 0, 'a member who signs out is not asked to sign in again');
   await page.reload();
   await page.locator('#sign-in-member').waitFor();
   assert.equal(await page.locator('nav.tabs').isHidden(), true, 'signed out once connected, it stays signed out');
@@ -307,6 +308,21 @@ test('a session the server ended (PIN reset, role change, name fix) signs the me
   assert.equal(await page.locator('nav.tabs').isHidden(), true);
   assert.equal(await page.evaluate(() => localStorage.getItem('wds-me')), null);
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('a session Firebase ends by itself asks the member to sign in again, and the device forgets them', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  // A session the server revoked (PIN reset, role change, name fix) ends in
+  // the Firebase SDK at its next token refresh: it signs the user out.
+  await page.evaluate(() => import('/tests/fake/firebase-auth.js').then(module => module.signOut()));
+  await page.locator('.gate .form-error', { hasText: 'Please sign in again.' }).waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem('wds-me')), null);
+  await context.route('**/tests/fake/firebase-app.js', route => route.abort());
+  await page.reload();
+  await page.locator('.gate-title', { hasText: 'You are offline' }).waitFor();
+  assert.equal(await page.locator('nav.tabs').isHidden(), true, 'offline, the app does not open as the member');
+  assert.deepEqual(errors.filter(text => !/Failed to load|ERR_FAILED|firebase-app/.test(text)), []);
   await context.close();
 });
 
