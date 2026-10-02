@@ -57,14 +57,16 @@ function failed(message) {
 /* Make the list if it does not exist yet. The document is only created when
    it is truly missing, so opening a service never blanks a list someone
    else already filled. */
-export function ensureSetlist(service, source = 'manual') {
+export function ensureSetlist(service, source = 'manual', { noService = false } = {}) {
   const id = serviceId(service);
   if (planner.setlists[id]) return id;
-  const setlist = stamp({
+  const setlist = stamp(Object.assign({
     id, date: service.date, worshipType: service.worship || 'Sabbath Day', serviceLabel: service.service,
     // Only the service's own Presider: a song editor who makes the list is not one.
     presider: (service.assignments || {}).Presider || '', notes: '', songs: [], status: 'planned', sungAt: null, source
-  });
+  // A list for a date with no scheduled service is counted at its own date
+  // (functions/workflows.js recordSongHistory).
+  }, noService ? { noService: true } : {}));
   planner.setlists[id] = setlist;
   pending[id] = setlist;
   const ref = fb.doc(fb.db, 'setlists', id);

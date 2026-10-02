@@ -433,6 +433,10 @@ function createWorkflowHandlers(options = {}) {
 
   /* ============================ 4.3 automatic recorder ============================ */
 
+  /* A list counts once it has been confirmed, even if it changed after
+     (a song swapped during the service): its songs then are what was sung. */
+  const confirmedOnce = data => Number(data.confirmedAt || 0) > 0;
+
   async function recordSongHistory() {
     const nowMs = now();
     const snapshot = await db.collection('setlists').where('status', '==', 'planned').get();
@@ -441,17 +445,26 @@ function createWorkflowHandlers(options = {}) {
       // The floor is applied in memory, not as a Firestore inequality, so no
       // composite index is needed. A missing or malformed date fails closed.
       .filter(({ data }) => Array.isArray(data.songs) && data.songs.length &&
-        text(data.date) >= SONG_HISTORY_FLOOR_DATE &&
-        Number(data.confirmedAt || 0) >= Number(data.updatedAt || 0) && Number(data.confirmedAt || 0) > 0);
+        text(data.date) >= SONG_HISTORY_FLOOR_DATE && confirmedOnce(data));
 
     let recorded = 0;
     let skipped = 0;
 
     for (const candidate of candidates) {
       const scheduleSnapshot = await db.collection('schedule').doc(candidate.id).get();
-      if (!scheduleSnapshot.exists) { skipped += 1; continue; }
-      const scheduleData = scheduleSnapshot.data() || {};
-      if (scheduleData.status === 'canceled' || scheduleData.status === 'cancelled') { skipped += 1; continue; }
+      let scheduleData;
+      if (scheduleSnapshot.exists) {
+        scheduleData = scheduleSnapshot.data() || {};
+        if (scheduleData.status === 'canceled' || scheduleData.status === 'cancelled') { skipped += 1; continue; }
+      } else if (candidate.data.noService === true) {
+        // Planned for a date with no scheduled service ("Plan another date"):
+        // it counts at its own date and label.
+        scheduleData = { date: candidate.data.date, service: candidate.data.serviceLabel || '' };
+      } else {
+        // Its service was deleted or moved, so it was not sung there.
+        skipped += 1;
+        continue;
+      }
       const start = serviceStart(scheduleData);
       if (!Number.isFinite(start) || start + THREE_HOURS_MS > nowMs) { skipped += 1; continue; }
 
@@ -464,7 +477,7 @@ function createWorkflowHandlers(options = {}) {
           if (setlist.status === 'sung') return;
           if (text(setlist.date) < SONG_HISTORY_FLOOR_DATE) return;
           if (!Array.isArray(setlist.songs) || !setlist.songs.length) return;
-          if (!(Number(setlist.confirmedAt || 0) >= Number(setlist.updatedAt || 0) && Number(setlist.confirmedAt || 0) > 0)) return;
+          if (!confirmedOnce(setlist)) return;
 
           const songIds = Array.from(new Set(setlist.songs));
           const statsRefs = songIds.map(id => db.collection('songStats').doc(id));

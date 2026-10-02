@@ -36,7 +36,11 @@ function findService(id) { return data.services.find(service => serviceId(servic
 function openList(id) {
   const service = findService(id);
   const target = planner.setlists[id] || service;
-  if (!target || !canEdit(target)) { notice('Only the assigned Presider or a song editor can change these songs.', true); return false; }
+  if (!target || !canEdit(target)) {
+    notice(target && target.status === 'sung' ? 'These songs were counted as sung after the service, so they stay as they are.'
+      : 'Only the assigned Presider or a song editor can change these songs.', true);
+    return false;
+  }
   if (!planner.setlists[id] && service) ensureSetlist(service, 'schedule');
   view.setlist = id;
   view.section = 'library';
@@ -135,7 +139,8 @@ defineActions({
       const values = new FormData(form);
       const service = { date: String(values.get('date')), service: String(values.get('label')), worship: String(values.get('worship')), assignments: {} };
       if (!/^\d{4}-\d{2}-\d{2}$/.test(service.date)) return;
-      view.setlist = ensureSetlist(findService(serviceId(service)) || service, 'manual');
+      const scheduled = findService(serviceId(service));
+      view.setlist = ensureSetlist(scheduled || service, 'manual', { noService: !scheduled });
       view.otherDate = false;
       draw();
     }

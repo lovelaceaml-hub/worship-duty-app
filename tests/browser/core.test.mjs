@@ -422,6 +422,23 @@ test('a song editor with no Presider duty starts on every service, and history d
   await context.close();
 });
 
+test('a list counted as sung stays as it was sung, even for a song editor', async () => {
+  const sung = { id: '2026-07-04_morning', date: '2026-07-04', worshipType: 'Sabbath Day', serviceLabel: 'Morning', presider: 'S. Hannah',
+    songs: ['001', '015', '002'], status: 'sung', sungAt: 1, confirmedAt: 1, updatedAt: 1, source: 'manual' };
+  const { context, page, errors } = await as('M. Ruth', { viewport: DESKTOP, fixture: { patch: { 'setlists/2026-07-04_morning': sung } } });
+  await tab(page, 'songs');
+  await page.locator('#song-root [data-act="song-scope"][data-scope="all"]').click();
+  await page.locator('#song-root [data-act="song-toggle-past"]').click();
+  const card = page.locator('#song-root .svc-card', { has: page.locator('[data-id="2026-07-04_morning"]') });
+  await card.locator('[data-act="song-toggle-songs"]').waitFor();
+  assert.match(await card.innerText(), /Sung/);
+  for (const act of ['song-edit', 'song-delete', 'song-confirm']) {
+    assert.equal(await card.locator('[data-act="' + act + '"]').count(), 0, 'no ' + act + ' on a sung list');
+  }
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 /* ---- releases and the offline copy ---- */
 
 function freePort() {

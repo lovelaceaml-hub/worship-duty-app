@@ -129,7 +129,8 @@ function builder(setlist) {
   const service = serviceFor(setlist);
   if (!canEdit(setlist)) {
     return html`<section class="card"><h3 class="card-subtitle">${setlist.worshipType} <span class="service-label">${setlist.serviceLabel}</span></h3>
-      <p class="hint">View only. The assigned Presider, a song editor or an administrator can change these songs.</p>
+      <p class="hint">${setlist.status === 'sung' ? 'These songs were counted as sung after the service, so they stay as they are.'
+        : 'View only. The assigned Presider, a song editor or an administrator can change these songs.'}</p>
       ${serviceSheet(setlist, service)}
       <button type="button" class="link" data-act="song-close-list">Choose another service</button></section>`;
   }
@@ -179,7 +180,7 @@ function songRow(song, setlist) {
   const open = view.openSong === song.id;
   const inList = setlist ? (setlist.songs || []).filter(id => id === song.id).length : 0;
   const recent = daysSince(stats.lastSung) <= RECENT_DAYS;
-  const canAdd = setlist && canEdit(setlist) && setlist.status !== 'sung';
+  const canAdd = setlist && canEdit(setlist);
   const manage = canManageSongs();
   return html`<div class="song${open ? ' is-open' : ''}">
     <button type="button" class="song-row" data-act="song-open" data-id="${song.id}" aria-expanded="${open}">

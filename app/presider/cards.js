@@ -106,8 +106,7 @@ export function serviceCard(service, setlist, { home = false } = {}) {
     if (needsConfirm) actions.push(html`<button type="button" class="primary small" data-act="song-confirm" data-id="${id}">${changedSinceConfirmed(setlist) ? 'Confirm again' : 'Confirm songs'}</button>`);
     actions.push(html`<button type="button" class="${needsConfirm || (home && today) ? 'ghost' : 'primary'} small" data-act="song-edit" data-id="${id}">${songs.length ? 'Edit songs' : 'Add songs'}</button>`);
   }
-  if (editable && sung) actions.push(html`<button type="button" class="ghost small" data-act="song-edit" data-id="${id}">Edit songs</button>`);
-  if (!editable) actions.push(html`<span class="hint small">View only</span>`);
+  if (!editable && !sung) actions.push(html`<span class="hint small">View only</span>`);
   if (songs.length) actions.push(html`<button type="button" class="ghost small" data-act="song-toggle-songs" data-id="${id}" aria-expanded="${open}">${open ? 'Hide songs' : 'Show songs'}</button>`);
   if (songs.length) actions.push(html`<button type="button" class="ghost small" data-act="song-copy" data-id="${id}">Copy for Signal</button>`);
   // An empty list for a scheduled service comes back when the planner opens, so only a real list can be deleted.
