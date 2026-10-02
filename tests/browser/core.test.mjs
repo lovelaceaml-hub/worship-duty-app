@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
-import { repo, startServer, launch, openPage, unlock, signIn, tab, section, PHONE, DESKTOP, TODAY, NOW } from './harness.mjs';
+import { repo, startServer, launch, openPage, unlock, signIn, tab, section, PHONE, DESKTOP, TODAY, NOW, PASSCODE } from './harness.mjs';
 
 let server, browser;
 before(async () => { server = await startServer(); browser = await launch(); });
@@ -516,6 +516,19 @@ test('on a new device, the passcode waits for the settings, so a changed passcod
   await page.locator('form[data-act="site-unlock"] button').click();
   await page.locator('#sign-in-member').waitFor();
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('a passcode typed while the app is still connecting is taken once it connects', async () => {
+  const { context, page, errors } = await openPage(browser, server.url, {});
+  // Firebase is slow: the app opens as offline after 8 seconds, then connects.
+  await context.route('**/tests/fake/firebase-app.js', route => setTimeout(() => route.continue().catch(() => {}), 9500));
+  await page.reload();
+  await page.locator('#site-passcode').waitFor({ timeout: 15000 });
+  await page.locator('#site-passcode').fill(PASSCODE);
+  await page.locator('form[data-act="site-unlock"] button').click();
+  await page.locator('#sign-in-member').waitFor({ timeout: 20000 });
+  assert.deepEqual(errors.filter(text => !/Failed to load|ERR_FAILED/.test(text)), []);
   await context.close();
 });
 

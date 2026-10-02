@@ -2,7 +2,7 @@
    first PIN change, offline without a saved member, and maintenance. */
 import { html } from '../html.js';
 import { defineActions } from '../actions.js';
-import { data, session, ui, nameOf } from '../store.js';
+import { data, session, ui, loaded, nameOf } from '../store.js';
 import { render } from '../render.js';
 import { notice } from '../ui/banners.js';
 import { unlockSite, signIn as memberSignIn, changePin as memberChangePin } from '../services/session.js';
@@ -129,7 +129,8 @@ defineActions({
     public: true,
     run: async form => {
       const ok = await unlockSite(form.querySelector('#site-passcode').value);
-      ui.sitePinError = ok ? '' : 'That passcode is not right.';
+      ui.sitePinError = ok ? '' : loaded.settings ? 'That passcode is not right.'
+        : 'The app is still connecting. Your passcode is checked as soon as it does.';
       render();
     }
   },

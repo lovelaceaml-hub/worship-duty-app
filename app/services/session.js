@@ -3,7 +3,7 @@
    checks it and returns a sign-in token whose claims say who they are and
    what they lead. A new or reset PIN must be changed before the app opens. */
 import { fb, call, problem } from '../firebase.js';
-import { data, session, ui, canonical, readText, writeText, forgetMemberState } from '../store.js';
+import { data, session, ui, loaded, canonical, readText, writeText, forgetMemberState } from '../store.js';
 import { renderSoon, setLeaveGuard } from '../render.js';
 import { resetDepartments, acceptPendingInvite } from './departments.js';
 import { watchRequests } from './requests.js';
@@ -28,14 +28,25 @@ function siteHash() { return data.settings.sitePinHash || DEFAULT_SITE_HASH; }
    for the new one the next time the app opens, as Manage tells the
    administrator. */
 let openedHere = false;
+/* A passcode typed before the settings arrived (the app opened offline) is
+   kept, and taken as soon as the settings say it is right. */
+let typedEarly = '';
 export function siteUnlocked() {
+  if (!openedHere && typedEarly && typedEarly === siteHash()) {
+    writeText('wds-site-unlock', typedEarly);
+    ui.sitePinError = '';
+    openedHere = true;
+  }
   if (!openedHere) openedHere = readText('wds-site-unlock') === siteHash();
   return openedHere;
 }
 
 export async function unlockSite(passcode) {
   const hash = await sha256(passcode);
-  if (hash !== siteHash()) return false;
+  if (hash !== siteHash()) {
+    typedEarly = loaded.settings ? '' : hash;
+    return false;
+  }
   writeText('wds-site-unlock', hash);
   openedHere = true;
   return true;

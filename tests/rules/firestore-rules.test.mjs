@@ -122,9 +122,11 @@ test('the callables check the same session facts as the rules', () => {
     .filter(file => file.endsWith('.js'))
     .map(file => read(path.join('functions', file)))
     .join('\n');
-  // The role version on the token is the account's, the account is in use,
-  // and the session uid is the account's authUid or member:<memberId>.
-  assert.match(server, /token\.roleVersion\s*[!=]==\s*account\.roleVersion/);
+  // The role version on the token is the account's (a missing one is 1, as in
+  // the rules), the account is in use, and the session uid is the account's
+  // authUid or member:<memberId>.
+  assert.match(server, /const roleVersion = account\.roleVersion === undefined \? 1 : account\.roleVersion;/);
+  assert.match(server, /token\.roleVersion\s*[!=]==\s*roleVersion/);
   assert.match(server, /account\.active === false/);
   assert.match(server, /authUid \|\| `member:\$\{/);
   assert.match(rules, /acct\.get\('active', true\) != false/);
