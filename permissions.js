@@ -32,6 +32,48 @@ const DUTY_TO_DEPARTMENT = Object.freeze(Object.keys(DEPARTMENT_DUTIES).reduce((
   return out;
 }, {}));
 
+/* One person, one duty per service, with one exception: Thanks Prayer or
+   Closing Prayer together with an usher duty (Lobby Security is not an usher
+   duty here). Opening Prayer (stored as Sermon) is never paired: whoever
+   gives it delivers the sermon and holds no other duty. The app's
+   app/lib/conflicts.js has the same rule; a test keeps the two in step. */
+const PRAYER_DUTIES = Object.freeze(['Prayer of Thanks', 'Closing Prayer']);
+const USHER_DUTIES = Object.freeze(['Usher Door', 'Usher Front', 'Usher Back', 'Usher #1', 'Usher #2']);
+
+function dutiesAllowedTogether(duties) {
+  const list = Array.isArray(duties) ? duties : [];
+  if (list.length < 2) return true;
+  if (list.length > 2) return false;
+  const prayer = duty => PRAYER_DUTIES.indexOf(duty) !== -1;
+  const usher = duty => USHER_DUTIES.indexOf(duty) !== -1;
+  return (prayer(list[0]) && usher(list[1])) || (usher(list[0]) && prayer(list[1]));
+}
+
+/* Duties with a default member: Fill always gives the duty to its default
+   when they can take it, and new services start with them on it. Opening
+   Prayer goes to the church overseer unless a Worship leader or an
+   administrator chooses someone else, or no one (app/settings dutyDefaults);
+   another preacher is put on by hand. app/config/duties.js holds the same. */
+const DUTY_DEFAULTS = Object.freeze({ Sermon: 'E. Simon' });
+
+/* The default member for `duty` with these app settings: the saved choice
+   ('' when a leader chose none), else the built-in one. */
+function dutyDefault(settings, duty) {
+  const saved = settings && settings.dutyDefaults;
+  if (saved && typeof saved === 'object' && Object.prototype.hasOwnProperty.call(saved, duty)) return String(saved[duty] || '').trim();
+  return DUTY_DEFAULTS[duty] || '';
+}
+
+/* The duties `memberName` already holds in a service's `assignments` that
+   rule out also taking `duty` there; empty when they may take it. */
+function blockingDuties(assignments, memberName, duty) {
+  const map = assignments && typeof assignments === 'object' ? assignments : {};
+  const name = String(memberName || '');
+  if (!name) return [];
+  const others = Object.keys(map).filter(other => other !== duty && String(map[other] || '') === name);
+  return dutiesAllowedTogether(others.concat([duty])) ? [] : others;
+}
+
 const ROLE_ALIASES = Object.freeze({
   admin: Object.freeze(['admin', 'administrator']),
   globalManager: Object.freeze([
@@ -889,6 +931,12 @@ const API = {
   DUTY_DEPARTMENTS: DUTY_TO_DEPARTMENT,
   DEPARTMENT_BY_DUTY: DUTY_TO_DEPARTMENT,
   DUTY_DEPARTMENT_MAP: DUTY_TO_DEPARTMENT,
+  PRAYER_DUTIES,
+  USHER_DUTIES,
+  dutiesAllowedTogether,
+  blockingDuties,
+  DUTY_DEFAULTS,
+  dutyDefault,
   DEFAULT_PERMISSION_CONFIG,
   DEFAULT_AUTH_CONFIG: DEFAULT_PERMISSION_CONFIG,
   AUTH_CONFIG: DEFAULT_PERMISSION_CONFIG,

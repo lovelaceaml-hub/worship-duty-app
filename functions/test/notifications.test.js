@@ -1,9 +1,12 @@
 'use strict';
 
-/* Who gets a phone notification: for a change request and its answer, a new
-   duty, and a reminder, and that the switches in Manage, Features turn the
-   last two off. index.js runs on a small in-memory Firestore and a messaging
-   stub that records what would be sent. */
+/* Who gets a phone notification and how: a change request and its answer
+   (from the verified member who holds the duty, never a typed name), feedback
+   marked done, new duties (all of a member's new duties in one alert, none
+   once a service has started) and reminders (one per member per run, once,
+   with a time to live). A payload error keeps the device's token; only a
+   gone device's token is deleted. index.js runs on the in-memory Firestore
+   and a messaging stub that records what would be sent. */
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { loadIndex: loadWith } = require('./load-index.js');
@@ -14,83 +17,125 @@ const tokens = {
   'tokens/member-phone': { name: 'S. Leah' },
   'tokens/other-phone': { name: 'B. Caleb' }
 };
+const accounts = {
+  'accounts/S. Leah': { memberName: 'S. Leah', active: true, roleVersion: 1 },
+  'accounts/S. Ruth': { memberName: 'S. Ruth', active: true, roleVersion: 1 }
+};
+const SERVICE = 'schedule/2030-10-05_morning';
+const service = assignments => ({ date: '2030-10-05', time: '10:00', service: 'Morning', worship: 'Sabbath Day', assignments });
 const request = {
-  name: 'S. Leah', duty: 'Usher Door', department: 'Usher Sisters', date: '2026-10-03',
-  service: 'Morning', note: 'Family visiting.', status: 'pending'
+  name: 'S. Leah', requesterUid: 'member:S. Leah', duty: 'Usher Door', department: 'Usher Sisters', svcId: '2030-10-05_morning',
+  date: '2030-10-05', service: 'Morning', note: 'Family visiting.', status: 'pending'
 };
 const created = data => ({ data: { exists: true, data: () => data }, params: { id: 'r1' } });
+const updated = (from, to, id = 'r1') => ({ data: { before: { exists: true, data: () => from }, after: { exists: true, data: () => to } }, params: { id } });
 const recipients = sent => sent.flatMap(message => message.tokens).sort();
+const church = (extra = {}) => Object.assign({
+  'app/settings': { schedulerName: 'E. Joseph' },
+  'app/leaderConfig': { departmentLeaders: { 'Usher Sisters': ['S. Grace'], Media: ['B. Caleb'] } },
+  [SERVICE]: service({ 'Usher Door': 'S. Leah' })
+}, accounts, tokens, extra);
 
 test('a new change request reaches the scheduler and that department\'s leaders, not the member', async () => {
-  const { functions, sent } = loadWith(Object.assign({
-    'app/settings': { schedulerName: 'E. Joseph' },
-    'app/leaderConfig': { departmentLeaders: { 'Usher Sisters': ['S. Grace'], Media: ['B. Caleb'] } }
-  }, tokens));
+  const { functions, sent } = loadWith(church());
   await functions.onRequestCreated.run(created(request));
   assert.deepEqual(recipients(sent), ['leader-phone', 'scheduler-phone']);
   assert.equal(sent[0].data.title, 'Change request');
-  assert.match(sent[0].data.body, /^S\. Leah asks to change Usher Door · Saturday, October 3 Morning · "Family visiting\."$/);
+  assert.match(sent[0].data.body, /^S\. Leah asks to change Usher Door · Saturday, October 5 Morning · "Family visiting\."$/);
 });
 
 test('a leader who asks for a change is not told about their own request', async () => {
-  const { functions, sent } = loadWith(Object.assign({
+  const { functions, sent } = loadWith(church({
     'app/settings': {},
     'app/leaderConfig': { departmentLeaders: { 'Usher Sisters': ['S. Leah', 'S. Grace'] } }
-  }, tokens));
+  }));
   await functions.onRequestCreated.run(created(request));
   assert.deepEqual(recipients(sent), ['leader-phone']);
 });
 
-test('the member hears when their request is approved or declined', async () => {
-  for (const [status, title] of [['approved', 'Your change request was approved'], ['declined', 'Your change request was declined']]) {
-    const { functions, sent } = loadWith(Object.assign({}, tokens));
-    await functions.onRequestResolved.run({
-      data: {
-        before: { exists: true, data: () => request },
-        after: { exists: true, data: () => Object.assign({}, request, { status }) }
-      },
-      params: { id: 'r1' }
-    });
+test('a request in another member\'s name, for a duty its member does not hold, or for a started service sends nothing', async () => {
+  for (const [label, docs, data] of [
+    ['another name', church(), Object.assign({}, request, { requesterUid: 'member:S. Ruth' })],
+    ['no verified member', church(), Object.assign({}, request, { requesterUid: '' })],
+    ['not their duty', church({ [SERVICE]: service({ 'Usher Door': 'S. Naomi' }) }), request],
+    ['started', church({ 'schedule/2020-10-03_morning': Object.assign(service({ 'Usher Door': 'S. Leah' }), { date: '2020-10-03' }) }),
+      Object.assign({}, request, { svcId: '2020-10-03_morning' })]
+  ]) {
+    const { functions, sent } = loadWith(docs);
+    await functions.onRequestCreated.run(created(data));
+    assert.deepEqual(sent, [], label);
+  }
+});
+
+test('the member who asked hears when their request is approved or declined, not when they withdraw it', async () => {
+  for (const [status, title] of [['approved', 'Your change request was approved'], ['declined', 'Your change request was declined'], ['withdrawn', null]]) {
+    // The typed name says someone else; the verified member is told.
+    const { functions, sent } = loadWith(church());
+    await functions.onRequestResolved.run(updated(Object.assign({}, request, { name: 'B. Caleb' }), Object.assign({}, request, { name: 'B. Caleb', status })));
+    if (!title) { assert.deepEqual(sent, [], status); continue; }
     assert.deepEqual(recipients(sent), ['member-phone']);
     assert.equal(sent[0].data.title, title);
   }
 });
 
-test('the member who sent feedback hears when it is marked done, once', async () => {
-  const note = { name: 'S. Leah', kind: 'bug', message: 'The Schedule tab is slow.', status: 'new' };
-  const updated = (from, to) => ({
-    data: { before: { exists: true, data: () => Object.assign({}, note, from) }, after: { exists: true, data: () => Object.assign({}, note, to) } },
-    params: { id: 'f1' }
-  });
-  let { functions, sent } = loadWith(Object.assign({}, tokens));
-  await functions.onFeedbackDone.run(updated({ status: 'new' }, { status: 'done' }));
+test('the member who sent feedback hears when it is marked done, once, by their account', async () => {
+  const note = { uid: 'member:S. Leah', name: 'B. Caleb', kind: 'bug', message: 'The Schedule tab is slow.', status: 'new' };
+  let { functions, sent } = loadWith(church());
+  await functions.onFeedbackDone.run(updated(note, Object.assign({}, note, { status: 'done' }), 'f1'));
   assert.deepEqual(recipients(sent), ['member-phone']);
   assert.equal(sent[0].data.title, 'Your feedback was marked done');
   assert.match(sent[0].data.body, /The Schedule tab is slow\./);
-  ({ functions, sent } = loadWith(Object.assign({}, tokens)));
-  await functions.onFeedbackDone.run(updated({ status: 'done' }, { status: 'done' }));
+  ({ functions, sent } = loadWith(church()));
+  await functions.onFeedbackDone.run(updated(Object.assign({}, note, { status: 'done' }), Object.assign({}, note, { status: 'done' }), 'f1'));
+  await functions.onFeedbackDone.run(updated(Object.assign({}, note, { uid: '' }), Object.assign({}, note, { uid: '', status: 'done' }), 'f2'));
   assert.deepEqual(sent, []);
 });
 
 /* A service 12 hours from now, in Pacific time, as the schedule stores it. */
-function serviceSoon() {
+function serviceSoon(assignments) {
   const start = new Date(Date.now() + 12 * 3600 * 1000);
   const part = type => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
     .formatToParts(start).find(item => item.type === type).value;
   return { date: part('year') + '-' + part('month') + '-' + part('day'), time: part('hour') + ':' + part('minute'), service: 'Evening', worship: 'Third Day',
-    assignments: { 'Usher Door': 'S. Leah' } };
+    assignments: assignments || { 'Usher Door': 'S. Leah' } };
 }
 
+const scheduleWrite = (before, after, id = '2030-10-05_morning') => ({
+  data: { before: { exists: !!before, data: () => before }, after: { exists: !!after, data: () => after } }, params: { id }
+});
+
 test('a member hears about a new duty, unless New duty alerts is off', async () => {
-  const before = { date: '2026-10-03', time: '09:00', service: 'Morning', assignments: { 'Usher Door': 'S. Naomi' } };
-  const after = Object.assign({}, before, { assignments: { 'Usher Door': 'S. Leah' } });
-  const event = { data: { before: { exists: true, data: () => before }, after: { exists: true, data: () => after } }, params: { id: '2026-10-03_morning' } };
+  const before = service({ 'Usher Door': 'S. Naomi' });
+  const after = service({ 'Usher Door': 'S. Leah' });
   for (const [features, expected] of [[{}, ['member-phone']], [{ notifications: false }, []]]) {
     const { functions, sent } = loadWith(Object.assign({ 'app/settings': { features } }, tokens));
-    await functions.onScheduleWrite.run(event);
+    await functions.onScheduleWrite.run(scheduleWrite(before, after));
     assert.deepEqual(recipients(sent), expected, JSON.stringify(features));
     if (expected.length) assert.equal(sent[0].data.title, 'New duty for you');
   }
+});
+
+test('two new duties in one write make one alert naming both; a started service alerts no one', async () => {
+  let { functions, sent } = loadWith(Object.assign({}, tokens));
+  await functions.onScheduleWrite.run(scheduleWrite(service({}), service({ 'Closing Prayer': 'S. Leah', 'Usher Door': 'S. Leah' })));
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].data.title, 'New duties for you');
+  assert.match(sent[0].data.body, /^Closing Prayer and Usher Door · Sabbath Day Morning · Saturday, October 5 at 10:00 AM$/);
+  ({ functions, sent } = loadWith(Object.assign({}, tokens)));
+  const past = Object.assign(service({}), { date: '2020-10-03' });
+  await functions.onScheduleWrite.run(scheduleWrite(past, Object.assign({}, past, { assignments: { 'Usher Door': 'S. Leah' } }), '2020-10-03_morning'));
+  assert.deepEqual(sent, []);
+});
+
+test('a payload error keeps the device\'s token; a device that is gone loses it', async () => {
+  const docs = Object.assign({ 'tokens/second-phone': { name: 'S. Leah' } }, tokens);
+  const { functions, sent } = loadWith(docs, { messagingErrors: {
+    'member-phone': 'messaging/invalid-argument', 'second-phone': 'messaging/registration-token-not-registered'
+  } });
+  await functions.onScheduleWrite.run(scheduleWrite(service({}), service({ 'Usher Door': 'S. Leah' })));
+  assert.deepEqual(recipients(sent), ['member-phone', 'second-phone']);
+  assert.ok(docs['tokens/member-phone'], 'kept');
+  assert.equal(docs['tokens/second-phone'], undefined, 'deleted');
 });
 
 test('reminders go out in the 24 hours before a duty, unless Day-before reminders is off', async () => {
@@ -100,4 +145,193 @@ test('reminders go out in the 24 hours before a duty, unless Day-before reminder
     assert.deepEqual(recipients(sent), expected, JSON.stringify(features));
     if (expected.length) assert.equal(sent[0].data.title, 'Duty reminder');
   }
+});
+
+test('a member with two duties gets one reminder, once, that expires when the service starts', async () => {
+  const docs = Object.assign({ 'schedule/soon': serviceSoon({ 'Closing Prayer': 'S. Leah', 'Usher Door': 'S. Leah' }) }, tokens);
+  const { functions, sent } = loadWith(docs);
+  await Promise.all([functions.dutyReminders.run({}), functions.dutyReminders.run({})]);
+  await functions.dutyReminders.run({});
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].data.body, /^Closing Prayer and Usher Door · Third Day Evening · /);
+  const ttl = Number(sent[0].webpush.headers.TTL);
+  assert.ok(ttl > 11 * 3600 && ttl <= 12 * 3600, String(ttl));
+  assert.equal(sent[0].webpush.headers.Urgency, 'high');
+});
+
+test('the assignment records follow the service as it is now, and one failing job does not stop the others', async () => {
+  const profile = name => ({ memberUid: 'uid-' + name, departmentId: 'Usher Sisters', memberName: name, status: 'active' });
+  const docs = Object.assign({
+    'departments/Usher Sisters/members/uid-S. Leah': profile('S. Leah'),
+    'departments/Usher Sisters/members/uid-S. Naomi': profile('S. Naomi'),
+    [SERVICE]: service({ 'Usher Door': 'S. Naomi' })
+  }, tokens);
+  const { functions, sent } = loadWith(docs);
+  // A late event says S. Leah; the service already says S. Naomi.
+  await functions.onScheduleWrite.run(scheduleWrite(service({}), service({ 'Usher Door': 'S. Leah' })));
+  const records = Object.entries(docs).filter(([path]) => path.startsWith('departmentAssignments/')).map(([, record]) => record.memberName);
+  assert.deepEqual(records, ['S. Naomi']);
+  assert.equal(sent.length, 1, 'the alert still went out');
+
+  const broken = loadWith(Object.assign({ 'app/nameMap': { map: 'not a map' } }, tokens));
+  broken.db.runTransaction = async () => { throw new Error('contention'); };
+  await broken.functions.onScheduleWrite.run(scheduleWrite(service({}), service({ 'Usher Door': 'S. Leah' })));
+  assert.equal(broken.sent.length, 1, 'alerts are sent even when the projection fails');
+});
+
+/* ---- one failure costs no one else's alert ---- */
+
+const { createNotifier } = require('../notify.js');
+const { memoryDb } = require('./memory-db.js');
+
+/* The notifier on its own, on the in-memory Firestore. `throws(message)`
+   may give an error for a whole send, as FCM does when a request fails
+   (a 503, say); nothing of that send is delivered. */
+function notifierFor(docs, { throws = () => null, db = memoryDb(docs, { live: true }) } = {}) {
+  const sent = [];
+  const errors = [];
+  const messaging = {
+    async sendEachForMulticast(message) {
+      const error = throws(message);
+      if (error) throw error;
+      sent.push(message);
+      return { responses: message.tokens.map(() => ({ success: true })) };
+    }
+  };
+  const logger = { error: (text, details) => errors.push(text), warn() {}, info() {} };
+  return { notifier: createNotifier({ db, messaging, logger }), sent, errors };
+}
+
+const unavailable = () => Object.assign(new Error('14 UNAVAILABLE: The service is currently unavailable.'), { code: 14 });
+
+/* The in-memory Firestore with transient errors: creating the marker ids in
+   `markers` fails once each, and reading the tokens fails `tokenReads`
+   times. */
+function flaky(docs, { markers = [], tokenReads = 0 } = {}) {
+  const db = memoryDb(docs, { live: true });
+  const failing = new Set(markers);
+  let tokenFailures = tokenReads;
+  const collection = db.collection;
+  return Object.assign({}, db, {
+    collection: name => {
+      const real = collection(name);
+      if (name === 'sent') {
+        return Object.assign({}, real, {
+          doc: id => {
+            const ref = real.doc(id);
+            return Object.assign({}, ref, {
+              create: async value => {
+                if (failing.delete(id)) throw unavailable();
+                return ref.create(value);
+              }
+            });
+          }
+        });
+      }
+      if (name === 'tokens') {
+        return Object.assign({}, real, {
+          get: async () => {
+            if (tokenFailures > 0) { tokenFailures -= 1; throw unavailable(); }
+            return real.get();
+          }
+        });
+      }
+      return real;
+    }
+  });
+}
+
+test('a duty whose reminder could not be marked, or a run that could not read the devices, is reminded by the next run', async () => {
+  const docs = () => Object.assign({ 'schedule/soon': serviceSoon({ 'Usher Door': 'S. Leah', 'Usher Front': 'S. Grace' }) }, tokens);
+  // Marking S. Grace's duty fails once: S. Leah is still reminded now, S. Grace by the next run.
+  let store = docs();
+  let { notifier, sent } = notifierFor(store, { db: flaky(store, { markers: ['soon_Usher-Front_S-Grace'] }) });
+  await notifier.sendReminders().catch(() => {});
+  await notifier.sendReminders().catch(() => {});
+  assert.deepEqual(recipients(sent), ['leader-phone', 'member-phone']);
+
+  // Reading the devices fails once: nothing is sent, and the next run reminds both.
+  store = docs();
+  ({ notifier, sent } = notifierFor(store, { db: flaky(store, { tokenReads: 1 }) }));
+  await notifier.sendReminders().catch(() => {});
+  await notifier.sendReminders().catch(() => {});
+  assert.deepEqual(recipients(sent), ['leader-phone', 'member-phone']);
+
+  // S. Leah's whole send fails once: S. Grace is reminded now, S. Leah by the next run, each once.
+  let failures = 1;
+  const leahFailsOnce = message => (message.tokens.includes('member-phone') && failures-- > 0 ? Object.assign(new Error('FCM 503'), { code: 'app/network-error' }) : null);
+  ({ notifier, sent } = notifierFor(docs(), { throws: leahFailsOnce }));
+  await notifier.sendReminders();
+  assert.deepEqual(recipients(sent), ['leader-phone']);
+  await notifier.sendReminders();
+  await notifier.sendReminders();
+  assert.deepEqual(recipients(sent), ['leader-phone', 'member-phone']);
+});
+
+test('a reminder already sent is not sent again after the stored name changes to its current spelling', async () => {
+  const docs = Object.assign({
+    'app/nameMap': { map: { Bridgette: 'S. Bridgette' } },
+    'schedule/soon': serviceSoon({ 'Usher Door': 'Bridgette', 'Usher Front': 'S. Monica S.' }),
+    'tokens/bridgette-phone': { name: 'S. Bridgette' },
+    'tokens/monica-phone': { name: 'S. Monica S' }
+  }, tokens);
+  const { notifier, sent } = notifierFor(docs);
+  await notifier.sendReminders();
+  assert.deepEqual(recipients(sent), ['bridgette-phone', 'monica-phone']);
+  // A name fix and a Sheet import write the current spellings.
+  docs['schedule/soon'] = Object.assign({}, docs['schedule/soon'], { assignments: { 'Usher Door': 'S. Bridgette', 'Usher Front': 'S. Monica S' } });
+  await notifier.sendReminders();
+  assert.equal(sent.length, 2, 'no second reminder');
+});
+
+test('a send that fails for one member does not stop the next member\'s new-duty alert', async () => {
+  const leahFails = message => (message.tokens.includes('member-phone') ? Object.assign(new Error('FCM 503'), { code: 'messaging/server-unavailable' }) : null);
+  // A service write that gives S. Leah and S. Grace a duty each.
+  let { notifier, sent, errors } = notifierFor(Object.assign({}, tokens), { throws: leahFails });
+  await notifier.alertScheduleWrite(service({}), service({ 'Usher Door': 'S. Leah', 'Usher Front': 'S. Grace' }), true).catch(() => {});
+  assert.deepEqual(recipients(sent), ['leader-phone']);
+  assert.equal(errors.length, 1, 'the failed send is logged');
+
+  // The month planner's save, one alert per member.
+  ({ notifier, sent, errors } = notifierFor(Object.assign({}, tokens), { throws: leahFails }));
+  const saved = name => ({ memberName: name, duty: 'Usher Door', date: '2030-10-05', service: 'Morning' });
+  await notifier.alertPlanned([saved('S. Leah'), saved('S. Grace')]).catch(() => {});
+  assert.deepEqual(recipients(sent), ['leader-phone']);
+  assert.equal(errors.length, 1, 'the failed send is logged');
+});
+
+test('a name fixed after its reminder went out, or a mark from an earlier release, does not remind the member again', async () => {
+  const docs = Object.assign({
+    'schedule/soon': serviceSoon({ 'Usher Door': 'S. Zedd', 'Usher Front': 'S. Monica S.' }),
+    'tokens/zed-phone': { name: 'S. Zedd' },
+    'tokens/monica-phone': { name: 'S. Monica S' },
+    // An earlier release marked the stored spelling.
+    'sent/soon_Usher-Front_S-Monica-S-': { t: Date.now() - 3600 * 1000 }
+  }, tokens);
+  const { notifier, sent } = notifierFor(docs);
+  await notifier.sendReminders();
+  assert.deepEqual(recipients(sent), ['zed-phone'], 'S. Monica S was reminded by the earlier release');
+  // The name is fixed as renameMember does: the name map, the duty and the device.
+  docs['app/nameMap'] = { map: { 'S. Zedd': 'S. Zed' } };
+  docs['schedule/soon'] = Object.assign({}, docs['schedule/soon'], { assignments: { 'Usher Door': 'S. Zed', 'Usher Front': 'S. Monica S.' } });
+  docs['tokens/zed-phone'] = { name: 'S. Zed' };
+  await notifier.sendReminders();
+  assert.equal(sent.length, 1, 'no second reminder');
+});
+
+test('a planner save holding two spellings of one member sends them one alert', async () => {
+  const docs = Object.assign({ 'app/nameMap': { map: { 'S. Melisaa': 'S. Melissa' } }, 'tokens/melissa-phone': { name: 'S. Melissa' } }, tokens);
+  const { notifier, sent } = notifierFor(docs);
+  const saved = (name, duty) => ({ memberName: name, duty, date: '2030-10-05', service: 'Morning' });
+  await notifier.alertPlanned([saved('S. Melisaa', 'Usher Door'), saved('S. Melissa', 'Usher Front')]);
+  assert.equal(sent.length, 1);
+  assert.deepEqual([sent[0].tokens, sent[0].data.title], [['melissa-phone'], 'New duties for you']);
+  assert.match(sent[0].data.body, /Usher Door.*Usher Front/);
+});
+
+test('an alert names the time the service starts, a stored time that is not a clock time read as the usual one', async () => {
+  const { notifier, sent } = notifierFor(Object.assign({}, tokens));
+  const evening = assignments => ({ date: '2030-10-05', time: '24:00', service: 'Evening', worship: 'Sabbath Day', assignments });
+  await notifier.alertScheduleWrite(evening({}), evening({ 'Usher Door': 'S. Leah' }), true);
+  assert.match(sent[0].data.body, / at 7:30 PM$/);
 });

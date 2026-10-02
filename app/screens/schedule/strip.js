@@ -1,32 +1,29 @@
 /* Aurora's Schedule: the chosen day at the top, a strip of the month's
-   service days to move between them, then that day's service. "All
-   services" lists them instead. */
+   service days to move between them, the tools, then that day's service.
+   "All services" lists them instead; a search lists the matches. */
 import { html } from '../../html.js';
 import { ui } from '../../store.js';
-import { serviceCard, serviceList, departmentSelect } from '../../ui/components.js';
+import { departmentSelect } from '../../ui/components.js';
 import {
-  selection, shownServices, monthNav, modeToggle, searchBox, pastToggle, dayButton, datesIn,
-  timeButtons, dayHero, myDutiesAt, editLink, noServices
+  selection, monthNav, modeToggle, todayButton, searchBox, pastControl, dayScroller, timeButtons, dayHero,
+  servicePanel, allServicesList, noServices, emptyText
 } from './index.js';
 
 export function render() {
-  const { month, date, service, onDate, inMonth } = selection();
+  const sel = selection();
+  const { month, date, service, onDate } = sel;
   const listView = ui.schedule.mode === 'all' || !!ui.schedule.query;
-  const days = datesIn(inMonth);
   return html`<div class="schedule-strip">
     ${!listView && service ? dayHero(service) : ''}
     <section class="card strip-card">
       ${monthNav(month)}
-      ${days.length
-        ? html`<div class="day-strip scroll-x" role="group" aria-label="Service days">${days.map(day => dayButton(day, inMonth.filter(item => item.date === day), date))}</div>`
-        : noServices('No services this month.')}
+      ${dayScroller(sel, 'day-strip')}
     </section>
-    <div class="schedule-filters">${modeToggle('Day', 'All services')}${departmentSelect()}${searchBox()}</div>
+    <div class="schedule-filters">${modeToggle('Day')}${departmentSelect()}${searchBox()}${todayButton()}${pastControl()}</div>
     ${listView
-      ? html`<section class="month-list">${serviceList(shownServices(), ui.departmentFilter)}</section>`
+      ? allServicesList(sel)
       : service
-        ? html`${timeButtons(onDate, service)}${myDutiesAt(service)}${serviceCard(service, { only: ui.departmentFilter })}${editLink(service)}`
-        : noServices('Pick a day above.')}
-    ${pastToggle()}
+        ? html`${timeButtons(onDate, service)}${servicePanel(service)}`
+        : noServices(date ? emptyText('on this day') : 'Pick a day above.')}
   </div>`;
 }

@@ -7,12 +7,14 @@ import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
 import { serviceId } from '../lib/services.js';
 import { doubleDuties } from '../lib/conflicts.js';
+import { DUTY_DEFAULTS, dutyDefault } from '../config/duties.js';
 
 /* A whole service record, as a new document. The server's bookkeeping from
-   the old document (it came from the Sheet, it was saved by the planner) does
-   not carry over, so the server writes the new one to the Sheet. */
+   the old document (it came from the Sheet, what the Sheet said there, it
+   was saved by the planner) does not carry over, so the server writes the
+   new one to the Sheet, and a Sheet row on the new date is read afresh. */
 function save(service) {
-  const { sheetSyncedAt, planBatch, ...record } = service;
+  const { sheetSyncedAt, sheetSeen, planBatch, ...record } = service;
   return write(() => fb.setDoc(fb.doc(fb.db, 'schedule', serviceId(service)), record));
 }
 
@@ -22,8 +24,12 @@ function patch(service, fields) {
   return write(() => fb.updateDoc(fb.doc(fb.db, 'schedule', serviceId(service)), fields));
 }
 
+/* A new service starts with each duty's default member on it (Opening
+   Prayer: see DUTY_DEFAULTS). */
 export async function addService(fields) {
-  const service = { date: fields.date, time: fields.time, service: fields.service, worship: fields.worship || 'Sabbath Day', choirSong: '', assignments: {} };
+  const assignments = {};
+  Object.keys(DUTY_DEFAULTS).forEach(duty => { const name = dutyDefault(data.settings, duty); if (name) assignments[duty] = name; });
+  const service = { date: fields.date, time: fields.time, service: fields.service, worship: fields.worship || 'Sabbath Day', choirSong: '', assignments };
   if (data.services.some(item => serviceId(item) === serviceId(service))) {
     notice('There is already a ' + service.service + ' service on that date.', true);
     return null;

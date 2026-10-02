@@ -1,14 +1,14 @@
-/* Prism's Schedule: a month calendar beside the chosen day. "List" shows the
-   month's services one after another instead; a search shows the list too. */
+/* Prism's Schedule: a month calendar beside the chosen day. "All services"
+   lists them one after another instead; a search lists the matches. */
 import { html, plural } from '../../html.js';
 import { ui } from '../../store.js';
-import { serviceCard, serviceList, departmentSelect } from '../../ui/components.js';
-import { toISO, clockTime, longDate, monthName } from '../../lib/dates.js';
-import { selection, monthNav, modeToggle, searchBox, pastToggle, timeButtons, myDutiesAt, editLink, noServices } from './index.js';
-
-function serves(service) {
-  return Object.values(service.assignments || {}).includes(ui.me);
-}
+import { departmentSelect } from '../../ui/components.js';
+import { serviceClock } from '../../lib/services.js';
+import { toISO, longDate, monthName } from '../../lib/dates.js';
+import {
+  selection, serves, monthNav, modeToggle, todayButton, searchBox, pastControl, timeButtons, servicePanel,
+  allServicesList, noServices, emptyText
+} from './index.js';
 
 function monthGrid(month, services, selected) {
   const first = new Date(month + '-01T12:00:00');
@@ -32,7 +32,7 @@ function monthGrid(month, services, selected) {
       return html`<button type="button" class="calendar-day${outside ? ' is-outside' : ''}${iso === selected ? ' is-selected' : ''}${onDay.length ? ' has-services' : ''}"
         data-act="schedule-date" data-date="${iso}" aria-pressed="${iso === selected}" aria-label="${label}">
         <span class="calendar-date">${Number(iso.slice(8))}${mine ? html`<span class="calendar-you">You</span>` : ''}</span>
-        <span class="calendar-services">${onDay.map(service => html`<span class="calendar-service is-${service.service.toLowerCase().replace(/\s+/g, '-')}${serves(service) ? ' is-mine' : ''}">${clockTime(service.time)}</span>`)}</span>
+        <span class="calendar-services">${onDay.map(service => html`<span class="calendar-service is-${service.service.toLowerCase().replace(/\s+/g, '-')}${serves(service) ? ' is-mine' : ''}">${serviceClock(service)}</span>`)}</span>
       </button>`;
     })}</div>
   </section>`;
@@ -42,33 +42,30 @@ function inspector(date, service, onDate) {
   if (!service) {
     return html`<aside class="day-panel" aria-label="Chosen day">
       ${date ? html`<h2 class="day-panel-title">${longDate(date)}</h2>` : ''}
-      ${noServices('No services on this day. Pick a day with a service.')}
+      ${noServices(ui.departmentFilter === 'All' ? 'No services on this day. Pick a day with a service.' : emptyText('on this day'))}
     </aside>`;
   }
   return html`<aside class="day-panel" aria-label="Chosen service">
     <h2 class="day-panel-title">${longDate(service.date)}</h2>
     ${timeButtons(onDate, service)}
-    ${myDutiesAt(service)}
-    ${serviceCard(service, { only: ui.departmentFilter })}
-    ${editLink(service)}
+    ${servicePanel(service)}
   </aside>`;
 }
 
 export function render() {
-  const { month, date, service, onDate, inMonth } = selection();
+  const sel = selection();
+  const { month, date, service, onDate, inMonth } = sel;
   const listView = ui.schedule.mode === 'all' || !!ui.schedule.query;
   return html`<div class="schedule-calendar">
     <div class="schedule-toolbar">
       ${monthNav(month)}
       <p class="month-count">${plural(inMonth.length, 'service')}</p>
-      <button type="button" class="ghost small" data-act="schedule-today">Next service</button>
-      ${modeToggle('Month', 'List')}
+      ${todayButton()}
+      ${modeToggle('Month')}
     </div>
-    <div class="schedule-filters">${searchBox()}${departmentSelect()}${pastToggle()}</div>
+    <div class="schedule-filters">${searchBox()}${departmentSelect()}${pastControl()}</div>
     <div class="schedule-body">
-      ${listView
-        ? html`<section class="month-list">${inMonth.length ? serviceList(inMonth, ui.departmentFilter) : noServices('No services match your search this month.')}</section>`
-        : html`${monthGrid(month, inMonth, date)}${inspector(date, service, onDate)}`}
+      ${listView ? allServicesList(sel) : html`${monthGrid(month, inMonth, date)}${inspector(date, service, onDate)}`}
     </div>
   </div>`;
 }

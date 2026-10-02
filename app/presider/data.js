@@ -10,7 +10,7 @@ import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
 import { planner } from './state.js';
 import { canEdit } from './access.js';
-import { serviceId, isUpcoming, isInProgress } from '../lib/services.js';
+import { serviceId, isUpcoming, isInProgress, byStart } from '../lib/services.js';
 
 const lib = () => window.SongLib;
 
@@ -57,13 +57,17 @@ function failed(message) {
 /* Make the list if it does not exist yet. The document is only created when
    it is truly missing, so opening a service never blanks a list someone
    else already filled. */
-export function ensureSetlist(service, source = 'manual') {
+export function ensureSetlist(service, source = 'manual', { noService = false } = {}) {
   const id = serviceId(service);
   if (planner.setlists[id]) return id;
-  const setlist = stamp({
+  const setlist = stamp(Object.assign({
     id, date: service.date, worshipType: service.worship || 'Sabbath Day', serviceLabel: service.service,
-    presider: (service.assignments || {}).Presider || ui.me || '', notes: '', songs: [], status: 'planned', sungAt: null, source
-  });
+    // Only the service's own Presider: a song editor who makes the list is not one.
+    presider: (service.assignments || {}).Presider || '', notes: '', songs: [], status: 'planned', sungAt: null, source
+  // A list made with "Plan another date" says whether its date has a
+  // scheduled service; one without is counted at its own date
+  // (functions/workflows.js recordSongHistory).
+  }, source === 'manual' ? { noService } : {}));
   planner.setlists[id] = setlist;
   pending[id] = setlist;
   const ref = fb.doc(fb.db, 'setlists', id);
@@ -78,11 +82,12 @@ export function ensureSetlist(service, source = 'manual') {
 }
 
 /* Every change to a list: wait for its creation, update it, or write it
-   whole if the document went missing. */
-function change(id, patch) {
+   whole if the document went missing. A `quiet` change (who presides) is
+   not a change to the songs, so it leaves updatedAt and a confirmation be. */
+function change(id, patch, { quiet = false } = {}) {
   const setlist = planner.setlists[id];
   if (!setlist) return;
-  if (patch.updatedAt == null) stamp(patch); // a confirm stamps its own, equal to confirmedAt
+  if (patch.updatedAt == null && !quiet) stamp(patch); // a confirm stamps its own, equal to confirmedAt
   Object.assign(setlist, patch);
   renderSoon();
   const ref = fb.doc(fb.db, 'setlists', id);
@@ -151,43 +156,6 @@ export function changedSinceConfirmed(setlist) {
   return !!(setlist && setlist.confirmedAt && setlist.confirmedAt < (setlist.updatedAt || 0));
 }
 
-/* Mark sung / undo: one transaction over the list and every song's count. */
-async function recount(id, apply, listPatch) {
-  const by = ui.me || 'Someone', at = Date.now();
-  await fb.runTransaction(fb.db, async transaction => {
-    const listRef = fb.doc(fb.db, 'setlists', id);
-    const fresh = await transaction.get(listRef);
-    if (!fresh.exists()) return;
-    const setlist = fresh.data();
-    const refs = {}, stats = {};
-    for (const songId of setlist.songs || []) {
-      if (refs[songId]) continue;
-      refs[songId] = fb.doc(fb.db, 'songStats', songId);
-      const snapshot = await transaction.get(refs[songId]);
-      if (snapshot.exists()) stats[songId] = snapshot.data();
-    }
-    const result = apply(stats, setlist, { by, markedAt: at });
-    if (!result) return;
-    Object.keys(result.changed).forEach(songId => transaction.set(refs[songId], result.changed[songId]));
-    (result.removed || []).forEach(songId => transaction.delete(refs[songId]));
-    transaction.update(listRef, Object.assign({ updatedAt: at, updatedBy: by }, listPatch(at)));
-  });
-}
-
-export function markSung(id) {
-  const setlist = planner.setlists[id];
-  if (!setlist || !canEdit(setlist) || setlist.status === 'sung') return;
-  recount(id, (stats, fresh, opts) => fresh.status === 'sung' ? null : lib().applySung(stats, fresh, opts), at => ({ status: 'sung', sungAt: at }))
-    .catch(failed('The songs were not marked as sung.'));
-}
-
-export function undoSung(id) {
-  const setlist = planner.setlists[id];
-  if (!setlist || !canEdit(setlist)) return;
-  recount(id, (stats, fresh) => lib().applyUndo(stats, fresh), () => ({ status: 'planned', sungAt: null }))
-    .catch(failed('That was not undone.'));
-}
-
 export async function deleteSetlist(id) {
   const setlist = planner.setlists[id];
   if (!setlist || !canEdit(setlist)) return;
@@ -227,12 +195,11 @@ export async function removePastEntry(songId, service) {
 /* ---- services ---- */
 
 /* A service stays current for three hours after it starts, so the runsheet
-   and Mark as sung work during and right after it. */
+   works during it. The server counts a confirmed list as sung after that. */
 export function current(service) { return isUpcoming(service) || isInProgress(service); }
 
 export function myServices() {
-  return data.services.filter(service => current(service) && (service.assignments || {}).Presider === ui.me)
-    .sort((a, b) => a.date.localeCompare(b.date) || String(a.time).localeCompare(String(b.time)));
+  return data.services.filter(service => current(service) && (service.assignments || {}).Presider === ui.me).sort(byStart);
 }
 
 /* Each presider's own upcoming services get a song list as soon as they
@@ -243,7 +210,7 @@ function createMine() {
     const id = serviceId(service);
     const setlist = planner.setlists[id];
     if (!setlist) { ensureSetlist(service, 'schedule'); return; }
-    if (setlist.presider !== ui.me && canEdit(setlist)) change(id, { presider: ui.me });
+    if (setlist.presider !== ui.me && canEdit(setlist)) change(id, { presider: ui.me }, { quiet: true });
   });
 }
 

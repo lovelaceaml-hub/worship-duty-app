@@ -30,9 +30,12 @@
   --shadow: 0 10px 28px rgba(23, 74, 107, 0.07);
   --shadow-soft: 0 4px 14px rgba(23, 74, 107, 0.06);
   --shadow-bar: 0 14px 34px rgba(23, 74, 107, 0.26), 0 3px 10px rgba(23, 74, 107, 0.14);
-  --focus: rgba(35, 131, 198, 0.4);
+  --focus: #2383c6;         /* solid: 3.8:1 on the canvas, 4.1:1 on white */
   --radius: 14px;
   --radius-small: 8px;
+  --field-radius: 8px;      /* text fields and selects */
+  --small-h: 36px;          /* small buttons */
+  --above-tabs: 0px;        /* on phones, the room the floating tab bar takes */
   --font: "Avenir Next", Avenir, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --gutter: 22px;
   --page: 760px;
@@ -56,10 +59,12 @@ button:disabled { cursor: default; opacity: 0.55; }
 h1, h2, h3, h4 { margin: 0; color: var(--heading); line-height: 1.25; }
 p { margin: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.scroll-x { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.scroll-x { position: relative; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .scroll-x::-webkit-scrollbar { display: none; }
-/* A scrolling row clips anything outside it, so its focus rings sit inside. */
+/* A scrolling row clips anything outside it, so its focus rings sit inside,
+   and turn white on a filled (chosen) button so they still show. */
 .scroll-x :focus-visible { outline-offset: -3px; }
+.scroll-x :is(.is-active, [aria-pressed="true"]):focus-visible { outline-color: var(--on-accent); }
 .center { text-align: center; margin: 12px 0; }
 .right { text-align: right; margin-top: 12px; }
 
@@ -75,10 +80,11 @@ p { margin: 0; }
 .brand-text { display: block; min-width: 0; }
 .brand-name { display: block; color: var(--heading); font-size: 17px; font-weight: 750; letter-spacing: 0.04em; line-height: 1.15; white-space: nowrap; }
 .brand-screen { display: block; margin-top: 3px; overflow: hidden; color: var(--accent); font-size: 11.5px; font-weight: 700; letter-spacing: 0.15em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.sync-status { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 650; box-shadow: var(--shadow-soft); }
+.sync-status { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 650; }
 .sync-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
 .sync-status.is-live { color: var(--ok); }
 .sync-status.is-live::before { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 15%, transparent); }
+.sync-status[data-link="connecting"]::before { background: var(--warn); }
 .header-tools { position: relative; display: flex; align-items: center; gap: 6px; }
 .icon-button { display: inline-grid; place-items: center; min-width: 40px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 18px; line-height: 1; }
 .icon-button:hover { background: var(--accent-soft); color: var(--accent); }
@@ -93,6 +99,8 @@ p { margin: 0; }
 .account-menu button:hover, .account-menu button:focus-visible { background: var(--accent-soft); color: var(--accent); }
 .account-menu .account-sign-out { margin-top: 4px; border-top: 1px solid var(--hairline); border-radius: 0 0 9px 9px; color: var(--danger); }
 .account-who { display: none; padding: 8px 12px 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
+/* On computers the round button sends feedback; on phones this menu item does. */
+.account-menu .account-feedback { display: none; }
 
 /* ---- main tabs (top on wide screens, floating bar on phones) ---- */
 
@@ -108,10 +116,19 @@ p { margin: 0; }
 /* ---- banners ---- */
 
 #banners:not(:empty) { margin-bottom: 14px; }
-.banner { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 10px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--surface)); border-left: 4px solid var(--brand); border-radius: 10px; background: var(--accent-soft); font-size: 14px; }
+.banner { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--surface)); border-left: 4px solid var(--brand); border-radius: 10px; background: var(--accent-soft); font-size: 14px; }
 .banner.is-alert { border-color: color-mix(in srgb, var(--brand-rose) 30%, var(--surface)); border-left-color: var(--brand-rose); background: var(--danger-soft); }
 .banner > span { flex: 1; }
-.banner-close { margin-left: auto; padding: 0 4px; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; }
+/* A 44px target that does not make the banner taller. */
+.banner-close { display: grid; flex: none; place-items: center; width: 44px; height: 44px; margin: -10px -8px -10px auto; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 22px; line-height: 1; }
+.banner-close:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+.banner-action { flex: none; min-height: 44px; margin: -10px 0; white-space: nowrap; }
+
+/* ---- toasts: confirmations, above the tab bar for a few seconds ---- */
+
+.toasts { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 130; display: grid; justify-items: center; gap: 8px; width: min(480px, calc(100vw - 32px)); transform: translateX(-50%); pointer-events: none; }
+.toast { max-width: 100%; padding: 12px 16px; border-radius: 12px; background: var(--heading); color: var(--surface); box-shadow: 0 10px 28px rgba(16, 30, 44, 0.24); font-size: 14px; font-weight: 600; line-height: 1.45; text-align: center; pointer-events: auto; cursor: default; animation: toast-in 0.2s ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 /* ---- common pieces ---- */
 
@@ -123,7 +140,8 @@ p { margin: 0; }
 .screen-title { margin: 4px 2px 12px; font-size: 22px; }
 .screen-title:focus { outline: none; }
 .section-heading { margin: 26px 2px 11px; font-size: 20px; letter-spacing: -0.01em; }
-.section-heading .count { margin-left: 6px; color: var(--muted); font-size: 14px; font-weight: 600; }
+/* A number inside a title is muted; in a section menu it is a badge. */
+:is(.section-heading, .card-subtitle, .card-title) .count { margin-left: 6px; color: var(--muted); font-size: 14px; font-weight: 600; }
 .hint { margin: 6px 0 12px; color: var(--muted); font-size: 13px; }
 .hint.small, .small { font-size: 12px; }
 .hint.warn { color: var(--warn); }
@@ -134,12 +152,14 @@ p { margin: 0; }
 .plain-list { margin: 8px 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
 .plain-list li { margin: 3px 0; }
 .dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.duty-line .dot { background: var(--dept, var(--accent)); }
 .tag { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
 .tag.is-done { background: var(--ok-soft); color: var(--ok); }
-.status { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+.status { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .status-pending, .status-new { background: var(--warn-soft); color: var(--warn); }
 .status-approved, .status-done, .status-completed { background: var(--ok-soft); color: var(--ok); }
 .status-declined { background: var(--danger-soft); color: var(--danger); }
+.status-withdrawn, .status-past { background: var(--canvas); color: var(--muted); }
 .card-note { margin: 10px 0; padding: 10px 12px; border-radius: var(--radius-small); background: var(--canvas); color: var(--muted); font-size: 13px; }
 .card-note.is-warning { background: var(--warn-soft); color: var(--warn); }
 .card-note .inline-form { margin-top: 8px; }
@@ -151,7 +171,7 @@ p { margin: 0; }
 .ghost { border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--surface)); background: var(--surface); color: var(--accent); }
 .ghost.is-on { border-color: color-mix(in srgb, var(--ok) 45%, var(--surface)); color: var(--ok); }
 .primary:active, .ghost:active { transform: translateY(1px); }
-.primary.small, .ghost.small { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+.primary.small, .ghost.small { min-height: var(--small-h); padding: 6px 12px; font-size: 13px; }
 .link { min-height: 36px; padding: 6px 0; border: 0; background: none; color: var(--accent); font-size: 14px; font-weight: 650; text-align: left; }
 .link.danger, .danger { color: var(--danger); }
 .link.small { min-height: 28px; font-size: 12.5px; }
@@ -160,8 +180,12 @@ p { margin: 0; }
 /* ---- forms ---- */
 
 input[type=text], input[type=password], input[type=search], input[type=date], input[type=time], input[type=url], select, textarea {
-  width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--field-line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 16px; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--field-line); border-radius: var(--field-radius); background: var(--surface); color: var(--ink); font-size: 16px; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
 }
+/* What a member typed or chose reads as plain text, and a placeholder as an
+   example, never as a saved value. */
+.field > :is(input, select, textarea), .picker select { color: var(--ink); font-weight: 400; }
+::placeholder { color: var(--faint); font-weight: 400; opacity: 1; }
 textarea { min-height: 76px; resize: vertical; line-height: 1.5; }
 input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent); }
 select.is-flagged { border-color: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 12%, transparent); }
@@ -197,29 +221,41 @@ input[role="switch"]:disabled { opacity: 0.5; cursor: default; }
 .segmented button { min-height: 38px; padding: 6px 14px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 13.5px; font-weight: 650; }
 .segmented button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .sections { display: flex; gap: 7px; margin: 0 0 18px; }
-.sections button { flex: none; min-height: 44px; padding: 8px 13px; border: 1px solid var(--field-line); border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; white-space: nowrap; }
-.sections button.is-active { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
-.sections .count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--brand-rose); color: #fff; font-size: 11px; }
+/* A screen's section menu, in the page and in the phone row under the header. */
+:is(.sections, .subnav-top) button { flex: none; min-height: 44px; padding: 8px 13px; border: 1px solid var(--field-line); border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; white-space: nowrap; }
+:is(.sections, .subnav-top) button.is-active { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+:is(.sections, .subnav-top) .count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--brand-rose); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+/* On computers, rows of chips and sections wrap instead of hiding buttons
+   past the edge, where a mouse cannot scroll to them. */
+@media (min-width: 641px) {
+  :is(.chips, .sections).scroll-x { flex-wrap: wrap; overflow: visible; }
+  :is(.chips, .sections).scroll-x :focus-visible { outline-offset: 2px; }
+}
 
 /* ---- services and duties ---- */
 
 .date-heading { display: flex; align-items: center; gap: 12px; margin: 26px 2px 11px; font-size: 20px; letter-spacing: -0.01em; }
-.day-badge { padding: 3px 9px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.day-badge { padding: 3px 9px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .service-head { display: flex; width: 100%; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 8px; padding: 0 0 11px; border: 0; border-bottom: 1px solid var(--hairline); background: none; text-align: left; }
 button.service-head { cursor: pointer; }
 .service-title { color: var(--heading); font-size: 17px; font-weight: 700; }
 .service-label { color: var(--muted); font-size: 13px; font-weight: 500; }
 .service-label::before { content: "· "; }
 .service-time { color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.service-card.is-open .service-head { margin-bottom: 12px; }
+.service-name { min-width: 0; }
+.service-date { margin-top: 3px; color: var(--muted); font-size: 13.5px; font-weight: 600; }
+.service-date .day-badge { margin-left: 6px; vertical-align: 1px; }
+/* "Now": a service under way, on the Schedule and My Duties. */
+.service-now { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 4px; background: var(--ok); color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; line-height: 1.4; text-transform: uppercase; vertical-align: 2px; }
+.service-empty { margin: 10px 0 2px; color: var(--faint); font-size: 13.5px; font-style: italic; }
 .choir-song { margin: 4px 0 8px; color: var(--muted); font-size: 13px; }
 .duty-group { margin-top: 14px; }
-.duty-group-name { display: flex; align-items: center; gap: 9px; margin: 0 0 4px; color: var(--faint); font-size: 11px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.duty-group-name { display: flex; align-items: center; gap: 9px; margin: 0 0 4px; color: var(--faint); font-size: 12px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; }
 .duty-group-name::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dept, var(--accent)); }
 .duty-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0 4px 17px; font-size: 15px; }
 .duty-name { flex: 0 0 128px; color: var(--muted); font-size: 13px; }
 .person { font-weight: 650; }
-.person.is-me { padding: 2px 9px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.person.is-me { padding: 2px 9px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
 .person.is-empty { color: var(--faint); font-weight: 400; font-style: italic; font-size: 13px; }
 .flag { display: inline-grid; place-items: center; width: 17px; height: 17px; margin-left: 4px; border-radius: 50%; background: var(--brand-rose); color: #fff; font-size: 11px; font-weight: 800; line-height: 1; }
 .flag.is-ok { background: var(--warn); }
@@ -228,59 +264,120 @@ button.service-head { cursor: pointer; }
 .override { margin: -2px 0 10px; font-size: 12.5px; }
 .override summary { color: var(--warn); font-weight: 700; cursor: pointer; }
 .replacements { margin: 10px 0; }
-.suggest-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; font-size: 13px; }
-.suggest-label { min-width: 110px; color: var(--muted); }
 .add-service { align-items: center; }
 
-/* ---- the month planner (Manage, Services) ---- */
+/* ---- the month planner (Manage, Month plan) ---- */
 
-.plan-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 8px 0 12px; }
+.plan-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 8px 0 4px; }
 .plan-toolbar .month-nav { flex: 1 1 260px; }
 .fill-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.fill-controls select { width: auto; min-height: 42px; }
+.fill-mode { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.fill-mode select { width: auto; min-height: 42px; }
+.fill-hint { margin: 2px 2px 10px; }
+.plan-status { margin: 8px 0; }
+.plan-status p { margin: 0; }
+.plan-status .ghost { margin-top: 8px; }
 .plan-add { margin: 0 0 12px; font-size: 13.5px; }
 .plan-add summary { color: var(--accent); font-weight: 700; cursor: pointer; }
-.plan-scroll { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.plan-worship { display: flex; flex: 1 1 220px; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.plan-worship > * { flex: 1 1 150px; min-width: 0; }
+/* What the marks mean, once, above the month. */
+.plan-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 2px 10px; padding: 0; list-style: none; color: var(--muted); font-size: 12.5px; }
+.plan-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.plan-key { display: inline-block; width: 16px; height: 16px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); }
+.plan-key.is-empty { background: var(--warn-soft); box-shadow: inset 3px 0 0 var(--warn); }
+.plan-key.is-proposed { border: 2px dashed var(--accent); background: var(--accent-soft); }
+.plan-key.is-flagged { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
+.plan-key.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
+.plan-key.is-none { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 5px); }
+/* The grid scrolls sideways inside its box (positioned, so nothing in it
+   widens the page), with a scrollbar for mouse users. On a computer the
+   page takes the window's width while the grid is on it. */
+.plan-scroll { position: relative; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+@media (hover: hover) and (pointer: fine) {
+  .plan-scroll.scroll-x { scrollbar-width: thin; scrollbar-color: var(--field-line) transparent; }
+  .plan-scroll.scroll-x::-webkit-scrollbar { display: block; height: 10px; }
+  .plan-scroll.scroll-x::-webkit-scrollbar-thumb { border-radius: 5px; background: var(--field-line); }
+}
+@media (min-width: 900px) {
+  .app:has(.plan-grid) { max-width: 1600px; }
+}
 .plan-grid { border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .plan-grid th, .plan-grid td { padding: 0; border-right: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface); }
+.plan-grid td.plan-cell { min-width: 112px; vertical-align: top; }
 .plan-grid thead th { position: sticky; top: 0; z-index: 2; vertical-align: bottom; }
 .plan-grid tbody th[scope="row"], .plan-grid .plan-corner { position: sticky; left: 0; z-index: 1; padding: 6px 12px; color: var(--heading); font-weight: 650; text-align: left; white-space: nowrap; }
 .plan-grid .plan-corner { z-index: 3; color: var(--muted); font-size: 12px; font-weight: 700; }
-.plan-service { display: grid; gap: 1px; width: 100%; min-width: 96px; padding: 8px 10px; border: 0; background: none; color: var(--heading); font-size: 12px; line-height: 1.3; text-align: left; }
+.plan-service { display: grid; gap: 1px; width: 100%; min-width: 112px; padding: 8px 10px; border: 0; background: none; color: var(--heading); font-size: 12px; line-height: 1.3; text-align: left; }
 .plan-service b { font-size: 13.5px; }
 .plan-service span { color: var(--muted); }
-.plan-service .plan-flag { color: var(--warn); font-weight: 700; }
+.plan-service .plan-count { font-weight: 700; }
+.plan-service .plan-count.is-empty { color: var(--warn); }
+.plan-service .plan-count.is-look { color: var(--danger); }
 .plan-service[aria-expanded="true"] { background: var(--accent-soft); }
 .plan-head.is-past .plan-service, .plan-day.is-past .plan-service { opacity: 0.6; }
 .plan-grid .plan-group th { padding: 14px 12px 4px; border-right: 0; text-align: left; }
 .plan-group span { color: var(--dept, var(--muted)); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 /* The label spans the whole row, so it is the label that stays in view. */
 .plan-grid .plan-group span { position: sticky; left: 12px; }
-.plan-grid .plan-cell select, .plan-lines .plan-cell select {
-  width: 100%; min-width: 96px; min-height: 0; height: 38px; padding: 0 8px; border: 0; border-radius: 0; box-shadow: none;
-  background-color: transparent; color: var(--ink); font-size: 13px; text-overflow: ellipsis;
-}
-.plan-grid .plan-cell select:focus, .plan-lines .plan-cell select:focus { border: 0; box-shadow: none; }
-.plan-grid .plan-cell select:focus-visible, .plan-lines .plan-cell select:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
-.plan-cell.is-unusual { background: color-mix(in srgb, var(--canvas) 70%, var(--surface)); }
-.plan-cell.is-proposed { background: var(--accent-soft); }
-.plan-grid .plan-cell.is-proposed select, .plan-lines .plan-cell.is-proposed select { color: var(--accent); font-weight: 700; }
-.plan-grid .plan-cell.is-flagged select, .plan-lines .plan-cell.is-flagged select { color: var(--danger); font-weight: 700; }
-.plan-cell.is-busy { opacity: 0.55; }
+.plan-context th[scope="row"] { color: var(--muted); font-weight: 600; }
+/* One duty: the name as it shows (long names wrap), with its select laid
+   over it, then one short line saying why when something needs saying. */
+.plan-pick { position: relative; display: block; }
+.plan-pick select { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.plan-pick:focus-within { outline: 3px solid var(--focus); outline-offset: -3px; }
+.plan-value { display: block; min-height: 38px; padding: 9px 22px 9px 9px; color: var(--ink); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.plan-pick .plan-value::after { content: "\25BE"; position: absolute; top: 10px; right: 8px; color: var(--faint); font-size: 11px; }
+.plan-name .plan-value { padding-right: 9px; color: var(--muted); }
+.plan-note { display: block; padding: 0 9px 8px; font-size: 11.5px; font-weight: 650; line-height: 1.3; }
+.plan-note.is-danger { color: var(--danger); }
+.plan-note.is-warn { color: var(--warn); }
+.plan-note.is-calm { color: var(--ok); }
+.plan-note.is-quiet { color: var(--faint); }
+.plan-cell.is-empty { background: var(--warn-soft); box-shadow: inset 3px 0 0 var(--warn); }
+.plan-cell.is-empty .plan-value, .plan-cell.is-unusual .plan-value { font-style: italic; font-weight: 400; }
+.plan-cell.is-empty .plan-value { color: var(--warn); }
+.plan-cell.is-unusual .plan-value { color: var(--faint); }
+.plan-cell.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
+/* A proposal is dashed (not saved yet), so it never reads as a problem. */
+.plan-cell.is-proposed { background: var(--accent-soft); box-shadow: none; outline: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: -4px; }
+.plan-cell.is-proposed .plan-value { color: var(--accent); font-weight: 700; }
+.plan-cell.is-proposed.is-paired { box-shadow: inset 3px 0 0 var(--ok); }
+.plan-cell.is-flagged { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
+.plan-cell.is-flagged .plan-value { color: var(--danger); font-weight: 700; }
+.plan-cell.is-unfilled { box-shadow: inset 3px 0 0 var(--warn), inset 0 0 0 2px color-mix(in srgb, var(--warn) 45%, transparent); }
+.plan-cell.is-busy { opacity: 0.6; }
 .plan-cell.is-none { background: repeating-linear-gradient(135deg, transparent 0 6px, var(--hairline) 6px 7px); }
-.plan-name { display: block; padding: 10px; color: var(--muted); white-space: nowrap; }
 .plan-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-top: 12px; font-size: 13.5px; }
+.plan-actions > span { flex: 1 1 280px; }
 .plan-actions .button-row { margin: 0; }
 .plan-days { display: grid; gap: 10px; }
 .plan-day { padding: 4px 14px 8px; }
-.plan-day .plan-service { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 8px 0; font-size: 13px; }
+.plan-day.is-collapsed { padding-bottom: 4px; }
+.plan-day .plan-service { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-height: 44px; padding: 8px 0; font-size: 13px; }
 .plan-day .plan-service b { font-size: 15px; }
-.plan-day .plan-service .plan-flag { margin-left: auto; }
+.plan-day .plan-service .plan-count:first-of-type { margin-left: auto; }
+.plan-praying { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
 .plan-lines { width: 100%; border-collapse: collapse; }
-.plan-lines th[scope="row"] { width: 44%; padding: 0 8px 0 0; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: left; }
+.plan-lines th[scope="row"] { width: 40%; padding: 0 8px 0 0; color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: left; vertical-align: top; padding-top: 12px; }
 .plan-lines th, .plan-lines td { border-top: 1px solid var(--hairline); }
-.plan-lines .plan-group th { padding: 12px 0 2px; border-top: 0; }
-.plan-lines .plan-cell select { height: 42px; padding: 0 4px; font-size: 16px; }
+.plan-lines .plan-value { min-height: 44px; padding: 11px 24px 11px 8px; font-size: 15px; }
+.plan-lines .plan-pick .plan-value::after { top: 13px; }
+/* A duty in a service's details: the same control, in a field's box. */
+.plan-field .plan-pick, .plan-field .plan-name { display: block; border: 1px solid var(--field-line); border-radius: 8px; background: var(--surface); }
+.plan-field .plan-value { min-height: 44px; padding: 11px 26px 11px 12px; font-size: 15px; }
+.plan-field .plan-pick .plan-value::after { top: 14px; right: 10px; }
+.plan-field .plan-note { padding: 4px 2px 0; }
+.plan-field.is-empty .plan-pick { border-color: color-mix(in srgb, var(--warn) 45%, var(--surface)); background: var(--warn-soft); }
+.plan-field.is-empty .plan-value { color: var(--warn); font-style: italic; font-weight: 400; }
+.plan-field.is-unusual .plan-value { color: var(--faint); font-style: italic; font-weight: 400; }
+.plan-field.is-paired .plan-pick { box-shadow: inset 3px 0 0 var(--ok); }
+.plan-field.is-proposed .plan-pick { border: 2px dashed var(--accent); background: var(--accent-soft); }
+.plan-field.is-proposed .plan-value { color: var(--accent); font-weight: 700; }
+.plan-field.is-flagged .plan-pick { border-color: var(--danger); background: var(--danger-soft); }
+.plan-field.is-flagged .plan-value { color: var(--danger); font-weight: 700; }
+.plan-field.is-busy { opacity: 0.6; }
+.plan-detail { scroll-margin-top: 72px; }
 .plan-day .plan-detail { padding-top: 4px; }
 .sheet-check { margin-top: 10px; font-size: 13.5px; }
 
@@ -295,15 +392,23 @@ button.service-head { cursor: pointer; }
 .schedule-toolbar .month-nav { flex: 1 1 260px; }
 .schedule-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0 14px; }
 .schedule-filters select { flex: 0 1 220px; width: auto; }
+.schedule-filters .schedule-past { flex: none; margin-left: auto; }
+/* Navy keeps its tools in the toolbar, one row each. */
+.schedule-toolbar > .schedule-filters, .schedule-toolbar > .chips { flex: 1 1 100%; margin: 0; }
+.schedule-count { margin: 4px 2px 0; color: var(--muted); font-size: 14px; }
+.schedule-all .month-title { font-size: 18px; }
+.schedule-empty .link { display: inline-block; margin-top: 8px; text-align: center; }
 .search { position: relative; flex: 1 1 240px; }
 .search kbd { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--faint); font: 12px var(--font); }
 .day-strip, .day-rail { display: flex; gap: 8px; margin: 12px 0; padding: 2px; }
 .day-button { display: grid; flex: none; justify-items: center; gap: 2px; min-width: 62px; padding: 9px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
 .day-button.is-selected { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
-.day-weekday { font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.day-weekday { font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .day-number { font-size: 21px; font-weight: 750; line-height: 1.1; }
 .day-dots { display: flex; gap: 3px; min-height: 5px; }
 .day-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+/* A service the member serves at. */
+.day-button:not(.is-selected) .day-dots i.is-mine { background: var(--brand-rose); opacity: 1; }
 .time-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .time-buttons button { min-height: 42px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-weight: 700; }
 .time-buttons button span { color: var(--muted); font-weight: 500; }
@@ -328,9 +433,9 @@ button.service-head { cursor: pointer; }
 .calendar-day.is-outside { opacity: 0.4; }
 .calendar-day.is-selected { background: var(--accent); color: var(--on-accent); border-radius: 8px; }
 .calendar-date { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; }
-.calendar-you { padding: 0 4px; border-radius: 4px; background: var(--brand-rose); color: #fff; font-size: 9px; }
+.calendar-you { padding: 0 4px; border-radius: 4px; background: var(--brand-rose); color: #fff; font-size: 11px; }
 .calendar-services { display: grid; gap: 2px; }
-.calendar-service { overflow: hidden; padding: 1px 4px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 700; white-space: nowrap; }
+.calendar-service { overflow: hidden; padding: 1px 4px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .calendar-day.is-selected .calendar-service { background: color-mix(in srgb, #fff 20%, transparent); color: inherit; }
 .calendar-service.is-mine { box-shadow: inset 2px 0 0 var(--brand-rose); }
 .day-panel-title { margin: 0 0 8px; font-size: 18px; }
@@ -347,10 +452,19 @@ button.service-head { cursor: pointer; }
 .duty-card-toggle { position: absolute; inset: 0; z-index: 0; border: 0; border-radius: inherit; background: transparent; }
 .duty-card-toggle:focus-visible { outline-offset: -3px; }
 .duty-card .duty-body button, .duty-card .request-form, .duty-card .duty-team { position: relative; z-index: 1; }
-.duty-date { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 58px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); line-height: 1; }
+.duty-date { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 62px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); line-height: 1; }
 .duty-date b { font-size: 23px; font-weight: 750; }
-.duty-date small { margin-top: 5px; color: var(--muted); font-size: 10.5px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
-.duty-body { min-width: 0; min-height: 58px; padding-left: 14px; border-left: 1px solid var(--hairline); display: flex; flex-direction: column; justify-content: center; }
+/* Month, day, weekday: duties across a month change stay apart. */
+.duty-date small { margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
+.duty-date small.duty-month { margin: 0 0 3px; color: inherit; font-weight: 750; }
+.duty-card.is-next { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.duty-card.is-next .duty-time { font-size: 18px; }
+.duty-count { margin: -6px 2px 14px; }
+.duty-state { margin: 0 0 4px 16px; color: var(--muted); font-size: 13px; }
+.duty-state .link { min-height: 32px; padding: 4px 2px; font-size: 13px; }
+.duty-availability { margin: 18px 2px; color: var(--muted); font-size: 14px; }
+.duty-availability .link { padding: 6px 2px; }
+.duty-body { min-width: 0; min-height: 62px; padding-left: 14px; border-left: 1px solid var(--hairline); display: flex; flex-direction: column; justify-content: center; }
 .duty-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; color: var(--heading); }
 .duty-time { font-size: 16px; font-weight: 750; white-space: nowrap; }
 .duty-worship { color: var(--muted); font-size: 14px; }
@@ -360,6 +474,9 @@ button.service-head { cursor: pointer; }
 .duty-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding-left: 16px; }
 .duty-divider { margin: 8px 0; border: 0; border-top: 1px solid var(--hairline); }
 .duty-team, .request-form { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+/* The team sits in the narrow column beside the date: names get more room. */
+.duty-team .duty-row { flex-wrap: wrap; padding-left: 8px; font-size: 14px; }
+.duty-team .duty-name { flex-basis: 96px; }
 .list-item { padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 13px; }
 .list-item:last-child { border-bottom: 0; }
 .list-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 650; }
@@ -369,6 +486,12 @@ button.service-head { cursor: pointer; }
 .availability-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .availability-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; }
 .availability-row select { width: auto; min-height: 38px; padding: 6px 9px; font-size: 13px; }
+.availability-label { display: grid; }
+.availability-label small { color: var(--muted); font-size: 12px; font-weight: 500; }
+/* Shown while there are changes not saved. */
+.availability .availability-unsaved { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 16px; border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line)); background: var(--surface); }
+.availability-unsaved .button-row { margin: 0; }
+.availability-unsaved-text { color: var(--warn); font-size: 14px; font-weight: 700; }
 .exceptions { display: grid; gap: 7px; }
 .exception { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 .exception-status { color: var(--muted); font-size: 12px; font-weight: 750; }
@@ -381,18 +504,17 @@ button.service-head { cursor: pointer; }
 .conflict-list { padding: 0; }
 .conflict { display: grid; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
 .conflict:last-child { border-bottom: 0; }
-.conflict-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.conflict-head { display: flex; flex-wrap: nowrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
 .conflict-who { margin: 0; color: var(--heading); font-size: 15.5px; font-weight: 700; }
 .conflict-who span { color: var(--muted); font-weight: 600; }
 .conflict-swap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .conflict-duty { color: var(--muted); font-size: 13px; }
 .conflict-swap .chip { min-height: 32px; padding: 4px 11px; color: var(--accent); font-size: 13px; }
 .conflict-when { justify-self: start; min-height: 24px; margin-top: -4px; text-align: left; }
-.conflict-head { flex-wrap: nowrap; }
 .conflict-head .link { flex: none; white-space: nowrap; }
 .open-duty { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0; padding: 6px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
 .open-duty:last-child { border-bottom: 0; }
-.open-duty-when { min-width: 140px; color: var(--heading); font-weight: 650; }
+.open-duty-when { min-width: 140px; min-height: 0; padding: 0; color: var(--heading); font-weight: 650; }
 
 /* Departments: one row each, name then who leads it. */
 .department-list { padding: 4px 0; }
@@ -405,24 +527,42 @@ button.service-head { cursor: pointer; }
 .list { display: grid; }
 .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
 .list-row:last-child { border-bottom: 0; }
-.member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--line); border-bottom: 0; background: var(--surface); }
+/* The roster: each member one row that opens their profile. */
+.member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 11px 14px; border: 1px solid var(--line); border-bottom: 0; background: var(--surface); color: inherit; font: inherit; text-align: left; }
 .member-row:first-child { border-radius: 9px 9px 0 0; }
 .member-row:last-child { border-bottom: 1px solid var(--line); border-radius: 0 0 9px 9px; }
 .member-row:only-child { border-radius: 9px; }
+.member-row:hover { background: var(--accent-soft); }
 .member-row.is-inactive { background: var(--canvas); }
-.member-row .button-row { margin: 0; }
-.member-open { display: grid; gap: 2px; min-width: 0; padding: 0; border: 0; background: none; text-align: left; }
+.member-open { display: grid; gap: 2px; min-width: 0; }
 .member-name { font-weight: 750; }
 .member-open .hint { margin: 0; }
-.member-open .tag { justify-self: start; }
+.member-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.member-tags:empty { display: none; }
+.member-tags .tag.is-warning { background: var(--warn-soft); color: var(--warn); }
+.member-go { color: var(--faint); font-size: 22px; line-height: 1; }
+/* A member's profile. */
+.profile-status { background: var(--ok-soft); color: var(--ok); vertical-align: middle; }
+.profile-status.is-inactive { border: 1px solid var(--line); background: var(--canvas); color: var(--muted); }
+.profile-actions { margin: 0 0 12px; }
+.profile-covers { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+.profile-save > span { flex: 1 1 160px; color: var(--muted); font-size: 13px; }
 .invite { margin: 10px 0; padding: 12px; border: 1px dashed var(--line); border-radius: 10px; }
 .invite input { font-size: 13px; }
 .invite .button-row { margin-top: 8px; }
 .pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 10px 0; color: var(--muted); font-size: 13px; }
-.sticky-actions { position: sticky; bottom: 12px; z-index: 5; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: var(--shadow-soft); }
+.sticky-actions { position: sticky; bottom: 12px; z-index: 5; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-soft); }
 .table-wrap { margin-top: 10px; }
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table th, .table td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+/* The first column (who) stays while the rest scroll sideways. */
+.table-wrap.scroll-x :is(th, td):first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
+/* A mouse cannot swipe: wide tables show their scrollbar. */
+@media (hover: hover) and (pointer: fine) {
+  .table-wrap.scroll-x { scrollbar-width: thin; }
+  .table-wrap.scroll-x::-webkit-scrollbar { display: block; height: 10px; }
+  .table-wrap.scroll-x::-webkit-scrollbar-thumb { border-radius: 5px; background: var(--field-line); }
+}
 .table th, .table tr.is-idle td { color: var(--muted); }
 .request .field { margin-top: 12px; }
 
@@ -457,7 +597,7 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
 .choice-row input:checked + span { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 .choice-row input:focus-visible + span { outline: 3px solid var(--focus); }
 .appearance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
-.appearance-choice { display: grid; gap: 4px; padding: 10px; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); text-align: left; }
+.appearance-choice { display: grid; align-content: start; gap: 4px; padding: 10px; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); text-align: left; }
 .appearance-choice[aria-pressed="true"] { border-color: var(--accent); }
 .appearance-swatch { display: flex; height: 44px; overflow: hidden; border-radius: 8px; }
 .appearance-swatch i { flex: 1; }
@@ -471,13 +611,13 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
 /* ---- phones ---- */
 
 @media (max-width: 640px) {
-  :root { --gutter: 16px; }
-  .app { padding-bottom: calc(142px + env(safe-area-inset-bottom)); }
+  :root { --gutter: 16px; --above-tabs: calc(84px + env(safe-area-inset-bottom)); }
+  .app { padding-bottom: calc(var(--above-tabs) + 58px); }
   .header { flex-wrap: nowrap; gap: 6px 8px; padding: 14px 2px 10px; }
   .brand { gap: 10px; }
   .brand-mark { width: 38px; height: 38px; font-size: 14px; }
   .brand-name { font-size: 15px; }
-  .brand-screen { font-size: 10.5px; letter-spacing: 0.13em; }
+  .brand-screen { font-size: 11px; letter-spacing: 0.13em; }
   .account-chip { gap: 6px; font-size: 12px; }
   .account-initials { width: 30px; height: 30px; font-size: 11px; }
   .account-name { max-width: 84px; }
@@ -492,10 +632,15 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
   .tab:active { transform: scale(0.96); }
   .tab-dot { top: 6px; right: calc(50% - 19px); box-shadow: 0 0 0 2px var(--surface); }
   html[data-keyboard="open"] .tabs { display: none; }
-  /* Save bars stay above the floating tabs (and drop down when the keyboard hides them). */
-  .sticky-actions { bottom: calc(84px + env(safe-area-inset-bottom)); }
+  /* Save bars and toasts stay above the floating tabs (and drop down when the keyboard hides them). */
+  .sticky-actions { bottom: var(--above-tabs); }
   html[data-keyboard="open"] .sticky-actions { bottom: 12px; }
-  .feedback-button { right: 14px; bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .toasts { bottom: calc(var(--above-tabs) + 10px); }
+  body:has(#view .sticky-actions) .toasts { bottom: calc(var(--above-tabs) + 78px); }
+  html[data-keyboard="open"] .toasts { bottom: 12px; }
+  /* The round feedback button covered row buttons at the right edge; the account menu has it. */
+  .feedback-button { display: none; }
+  .account-menu .account-feedback { display: flex; }
   dialog { margin: 12px auto auto; padding: 16px; }
   .card { padding: 17px 16px; }
   .duty-name { flex-basis: 104px; }
@@ -506,15 +651,13 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
   .department-meta { grid-area: meta; }
   .department-go { grid-area: go; }
   .duty-card { grid-template-columns: 48px minmax(0, 1fr); gap: 0 12px; padding: 10px 12px 10px 10px; }
-  .duty-date { width: 48px; height: 54px; border-radius: 11px; }
+  .duty-date { width: 48px; height: 58px; border-radius: 11px; }
   .duty-date b { font-size: 21px; }
-  .duty-body { min-height: 54px; padding-left: 12px; }
+  .duty-body { min-height: 58px; padding-left: 12px; }
   .exception { grid-template-columns: 1fr auto; }
   .exception .link { grid-column: 1 / -1; justify-self: start; }
   /* A screen's section menu sits right under the header, one scrolling row. */
   html[data-subnav="on"] .subnav-top:not([hidden]) { display: flex; gap: 7px; margin: 12px 0 14px; }
-  .subnav-top button { flex: none; min-height: 42px; padding: 8px 12px; border: 1px solid var(--field-line); border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 650; white-space: nowrap; }
-  .subnav-top button.is-active { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
   html[data-subnav="on"] #view [data-subnav] { display: none; }
 }
 @media (max-width: 380px) {
@@ -523,6 +666,12 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
   .account-name { display: none; }
   .account-who { display: block; }
 }
+/* Fingers need 44px: small buttons, links, chips and icon buttons grow on touch screens. */
+@media (pointer: coarse) {
+  .primary.small, .ghost.small, .link, .chip, .help summary, .segmented button { min-height: 44px; }
+  .icon-button { min-width: 44px; min-height: 44px; }
+  .request-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+}
 @media (min-width: 900px) {
   .schedule-calendar .schedule-body { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); align-items: start; }
 }
@@ -530,5 +679,5 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
 @media print {
-  .tabs, .feedback-button, .header-tools { display: none !important; }
+  .tabs, .feedback-button, .header-tools, .toasts { display: none !important; }
 }

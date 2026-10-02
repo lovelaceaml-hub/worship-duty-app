@@ -11,7 +11,11 @@ function withPresider(setlist) {
   return Object.assign({}, service || {}, setlist, { presider });
 }
 
+/* Whether this member may change a list. A list counted as sung is history:
+   it stays as it was sung, so the song counts stay right (song editors
+   correct a song's history in History). */
 export function canEdit(setlistOrService) {
+  if (setlistOrService && setlistOrService.status === 'sung') return false;
   return !!setlistOrService && canEditSongsFor(withPresider(setlistOrService));
 }
 

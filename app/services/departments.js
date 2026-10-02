@@ -1,45 +1,82 @@
 /* Department rosters and member profiles. Profiles live on the server at
    departments/{department}/members/{member}; leaders read a roster one
    department at a time through listDepartmentRoster, and every change goes
-   through a Cloud Function that checks the leader's rights. */
+   through a Cloud Function that checks the leader's rights. A roster is read
+   again once it is two minutes old, and right before Fill, so changes made
+   on other devices (a member's day off, the nightly job, another leader)
+   reach an open app. */
 import { fb, call, problem } from '../firebase.js';
-import { data, session, nameOf, readJSON, writeJSON } from '../store.js';
+import { data, ui, session, nameOf, readJSON, writeJSON } from '../store.js';
+import { plural } from '../html.js';
 import { renderSoon } from '../render.js';
-import { notice } from '../ui/banners.js';
-import { DEPARTMENTS, departmentOf, dutyName } from '../config/duties.js';
-import { normalizeProfile, normalizeAvailability, canTake, timeKey } from '../lib/availability.js';
-import { serviceId } from '../lib/services.js';
+import { notice, banner } from '../ui/banners.js';
+import { DEPARTMENTS, departmentNamed, dutyName } from '../config/duties.js';
+import { normalizeProfile, normalizeAvailability, availabilityOn, timeKey, dutiesFor, statusFor } from '../lib/availability.js';
+import { serviceId, upcoming } from '../lib/services.js';
+import { addDays, shortDate } from '../lib/dates.js';
+
+const FRESH_MS = 2 * 60 * 1000;   // a roster older than this is read again
+const RETRY_MS = 20 * 1000;       // a roster that did not load is tried again after this
 
 /* Loaded rosters and in-progress edits, cleared when the member changes. */
 export const departments = {
   rosters: {},     // department -> [profile]
+  loadedAt: {},    // department -> when it was last read (or tried)
   loading: {},     // department -> promise
-  errors: {},      // department -> message
+  errors: {},      // department -> message, while no roster could be read
   own: null,       // [profile] for the signed-in member, once loaded
   ownLoading: null,
   ownError: '',
-  drafts: {},      // 'department::uid' -> unsaved patch
-  busy: {},        // 'serviceId::duty' -> true while an assignment saves
+  drafts: {},      // 'department::uid' -> unsaved changes (see draftOf)
+  busy: {},        // 'default::duty', 'profile::department::uid', 'request::id' -> true while it saves
   search: null,    // { department, query, page, members, total, busy, error, adding }
-  invites: {}      // department -> [{ token, expiresAt }] made on this device
+  invites: {},     // department -> [{ token, expiresAt }] made on this device
+  addingAll: false,// "Add all" in a department's "Not on the list yet"
+  choices: {}      // 'request::id' or 'replace::serviceId|duty' -> what the leader picked
 };
 
+/* A new member (or none) starts with nothing: no rosters, edits, saves in
+   flight or planner proposals of the one before. */
 export function resetDepartments() {
-  Object.assign(departments, { rosters: {}, loading: {}, errors: {}, own: null, ownLoading: null, ownError: '', drafts: {}, busy: {}, search: null });
+  Object.assign(departments, { rosters: {}, loadedAt: {}, loading: {}, errors: {}, own: null, ownLoading: null, ownError: '', drafts: {}, busy: {}, search: null, addingAll: false, choices: {} });
   departments.invites = readJSON('wds-invites', {});
+  Object.assign(ui.plan, { open: '', proposals: {}, scope: null, unfilled: {}, skipped: {}, saving: {}, busy: false });
 }
 
 const key = (department, uid) => department + '::' + uid;
+const code = error => String(error && error.code || '').replace(/^functions\//, '');
 
 export function roster(department) { return departments.rosters[department] || []; }
+
+/* Whether a department's roster has loaded. A loaded roster can be empty. */
+export function rosterLoaded(department) { return Array.isArray(departments.rosters[department]); }
 
 export function profileOf(department, uid) {
   return roster(department).find(profile => profile.memberUid === uid) ||
     (departments.own || []).find(profile => profile.departmentId === department && profile.memberUid === uid) || null;
 }
 
-export function profileNamed(department, name) {
-  return roster(department).find(profile => profile.memberName === name || nameOf(profile.memberName) === nameOf(name)) || null;
+/* Names are matched as stored: two members can share a display name. */
+function profileNamed(department, name) {
+  return roster(department).find(profile => profile.memberName === name) || null;
+}
+
+/* ---- unsaved edits ---- */
+
+/* An availability edit: { week: key, value }, { day: date, key, status } or
+   { remove: date, key }. Kept one by one and laid over the latest profile,
+   so a day off the member added meanwhile is not lost. */
+function applyEdits(availability, edits) {
+  const out = normalizeAvailability(availability);
+  (edits || []).forEach(edit => {
+    if (edit.week) out.recurring[edit.week] = edit.value;
+    else if (edit.day) out.exceptions[edit.day] = Object.assign({}, out.exceptions[edit.day], { [edit.key]: edit.status });
+    else if (edit.remove && out.exceptions[edit.remove]) {
+      delete out.exceptions[edit.remove][edit.key];
+      if (!Object.keys(out.exceptions[edit.remove]).length) delete out.exceptions[edit.remove];
+    }
+  });
+  return out;
 }
 
 /* The profile with any unsaved edits applied. */
@@ -47,14 +84,21 @@ export function draftOf(department, uid) {
   const profile = profileOf(department, uid);
   const draft = departments.drafts[key(department, uid)];
   if (!profile || !draft) return profile;
-  return Object.assign({}, profile, draft, { availability: normalizeAvailability(draft.availability || profile.availability) });
+  const { edits, ...fields } = draft;
+  return Object.assign({}, profile, fields, { availability: applyEdits(profile.availability, edits) });
 }
 
 export function hasDraft(department, uid) { return !!departments.drafts[key(department, uid)]; }
 
+/* Change the duties they can take or whether they can be scheduled. */
 export function editDraft(department, uid, patch) {
-  const current = departments.drafts[key(department, uid)] || {};
-  departments.drafts[key(department, uid)] = Object.assign({}, current, patch);
+  departments.drafts[key(department, uid)] = Object.assign({}, departments.drafts[key(department, uid)], patch);
+  renderSoon();
+}
+
+export function editAvailability(department, uid, edit) {
+  const draft = departments.drafts[key(department, uid)] || {};
+  departments.drafts[key(department, uid)] = Object.assign({}, draft, { edits: (draft.edits || []).concat(edit) });
   renderSoon();
 }
 
@@ -63,7 +107,7 @@ export function dropDraft(department, uid) {
   renderSoon();
 }
 
-function store(profile) {
+function store(profile, { keepDraft = false } = {}) {
   const clean = normalizeProfile(profile, profile && (profile.departmentId || profile.department));
   if (!clean) return null;
   const list = departments.rosters[clean.departmentId];
@@ -76,52 +120,73 @@ function store(profile) {
     const at = departments.own.findIndex(item => item.departmentId === clean.departmentId && item.memberUid === clean.memberUid);
     if (at !== -1) departments.own[at] = clean;
   }
-  delete departments.drafts[key(clean.departmentId, clean.memberUid)];
+  if (!keepDraft) delete departments.drafts[key(clean.departmentId, clean.memberUid)];
   return clean;
 }
 
+/* ---- loading ---- */
+
 export function loadRoster(department, force = false) {
   if (!department || department === 'All' || session.status !== 'verified') return Promise.resolve([]);
-  if (!force && departments.rosters[department]) return Promise.resolve(departments.rosters[department]);
-  if (!force && departments.errors[department]) return Promise.resolve([]);
   if (departments.loading[department]) return departments.loading[department];
-  departments.errors[department] = '';
+  const have = rosterLoaded(department);
+  const age = Date.now() - (departments.loadedAt[department] || 0);
+  if (!force && have && age < FRESH_MS) return Promise.resolve(departments.rosters[department]);
+  if (!force && !have && departments.errors[department] && age < RETRY_MS) return Promise.resolve([]);
+  const before = have ? JSON.stringify(departments.rosters[department]) : '';
   const request = call('listDepartmentRoster', { departmentId: department }).then(result => {
     if (!result || result.departmentId !== department || !Array.isArray(result.members)) throw new Error('The roster did not load.');
     departments.rosters[department] = result.members.map(profile => normalizeProfile(profile, department)).filter(Boolean)
       .sort((a, b) => a.memberName.localeCompare(b.memberName));
+    departments.errors[department] = '';
     return departments.rosters[department];
   }).catch(error => {
-    departments.errors[department] = problem(error, 'The roster did not load.');
-    return [];
+    // A list already on screen stays while a newer copy cannot be read.
+    if (!rosterLoaded(department)) departments.errors[department] = problem(error, 'The roster did not load.');
+    return roster(department);
   }).finally(() => {
+    departments.loadedAt[department] = Date.now();
     delete departments.loading[department];
-    renderSoon();
+    if (!have || JSON.stringify(roster(department)) !== before) renderSoon();
   });
   departments.loading[department] = request;
-  renderSoon();
+  if (!have) {
+    departments.errors[department] = '';
+    renderSoon();
+  }
   return request;
 }
 
-/* The signed-in member's own profile in each department they belong to. */
+/* Read these departments' rosters now (opening a planner section, Fill). */
+export function refreshRosters(names) {
+  return Promise.all(names.map(name => loadRoster(name, true)));
+}
+
+/* The signed-in member's own profile in each department they belong to.
+   The rules refuse to read a profile that does not exist, so a refusal
+   means "not in that department"; any other failure (offline, the server)
+   is shown with "Try again" and not remembered as "on no roster". */
 export function loadOwnProfiles(force = false) {
   if (session.status !== 'verified' || !fb.db) return Promise.resolve([]);
   if (departments.own && !force) return Promise.resolve(departments.own);
   if (departments.ownLoading) return departments.ownLoading;
+  if (departments.ownError && !force) return Promise.resolve([]);
   const uid = session.user ? session.user.uid : '';
   departments.ownError = '';
   departments.ownLoading = Promise.all(DEPARTMENTS.map(async department => {
     try {
       const snapshot = await fb.getDoc(fb.doc(fb.db, 'departments', department.name, 'members', uid));
       return snapshot.exists() ? normalizeProfile(snapshot.data(), department.name) : null;
-    } catch (_error) {
-      return null;
+    } catch (error) {
+      if (['permission-denied', 'not-found'].includes(code(error))) return null;
+      throw error;
     }
   })).then(profiles => {
     departments.own = profiles.filter(Boolean);
     return departments.own;
   }).catch(error => {
-    departments.ownError = problem(error, 'Your availability did not load.');
+    departments.own = null;
+    departments.ownError = problem(error, 'Your availability did not load. Check your connection, then try again.');
     return [];
   }).finally(() => {
     departments.ownLoading = null;
@@ -133,42 +198,115 @@ export function loadOwnProfiles(force = false) {
 
 /* ---- leader edits ---- */
 
+/* The profile's revision and last change, so the server refuses a save made
+   over a newer one. Sent only when the profile has them. */
+function freshness(profile) {
+  const out = {};
+  if (Number.isSafeInteger(profile.revision) && profile.revision >= 0) out.expectedRevision = profile.revision;
+  if (typeof profile.updatedAt === 'number') out.expectedUpdatedAt = profile.updatedAt;
+  return out;
+}
+
+/* Upcoming duties `profile` holds in its department on days it is marked
+   not available: [{ service, duty }]. */
+function dutiesOnDaysOff(profile) {
+  const own = (departmentNamed(profile.departmentId) || { duties: [] }).duties;
+  return upcoming(data.services).flatMap(service => own
+    .filter(duty => (service.assignments || {})[duty] === profile.memberName)
+    .filter(() => availabilityOn(profile, service.date, timeKey(service)) === 'unavailable')
+    .map(duty => ({ service, duty })));
+}
+
+/* "Usher Door on Sat, Jul 18 Morning and Usher Front on Tue, Jul 21 Evening",
+   for at most three, then "and 2 more". */
+function dutyList(items) {
+  const words = items.slice(0, 3).map(({ service, duty }) => dutyName(duty) + ' on ' + shortDate(service.date) + ' ' + service.service);
+  if (items.length > 3) words.push(plural(items.length - 3, 'more', 'more'));
+  return words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words.join('');
+}
+
+/* Send a change to one profile. A clash with a newer change reloads the
+   roster and keeps the leader's edits, laid over the newer profile. */
+async function updateProfile(department, profile, patch, { keepDraft = false } = {}) {
+  const busyKey = 'profile::' + key(department, profile.memberUid);
+  if (departments.busy[busyKey]) return null;
+  departments.busy[busyKey] = true;
+  renderSoon();
+  try {
+    const result = await call('updateDepartmentProfile', Object.assign({ departmentId: department, memberUid: profile.memberUid, patch }, freshness(profile)));
+    const saved = result && store(result.profile, { keepDraft });
+    if (!saved) throw new Error('The saved profile did not come back.');
+    return Object.assign({}, result, { profile: saved });
+  } catch (error) {
+    if (code(error) === 'aborted') {
+      loadRoster(department, true);
+      notice(nameOf(profile.memberName) + '’s profile changed while you were editing it. Your changes are still here, on top of the newer profile. Look again, then save.', true);
+    } else {
+      notice(nameOf(profile.memberName) + '’s profile was not saved: ' + problem(error), true);
+    }
+    return null;
+  } finally {
+    delete departments.busy[busyKey];
+    renderSoon();
+  }
+}
+
+export function profileSaving(department, uid) { return !!departments.busy['profile::' + key(department, uid)]; }
+
 export async function saveProfile(department, uid) {
   const profile = profileOf(department, uid);
   const draft = departments.drafts[key(department, uid)];
   if (!profile || !draft) return;
+  const next = draftOf(department, uid);
   const patch = {};
-  ['status', 'eligibleDuties', 'schedulable', 'availability'].forEach(field => {
-    if (Object.prototype.hasOwnProperty.call(draft, field)) patch[field] = draft[field];
-  });
-  try {
-    const result = await call('updateDepartmentProfile', { departmentId: department, memberUid: uid, patch });
-    if (!result || !store(result.profile)) throw new Error('The saved profile did not come back.');
-    notice(nameOf(profile.memberName) + '’s profile was saved.');
-  } catch (error) {
-    notice('The profile was not saved: ' + problem(error), true);
-  }
-  renderSoon();
+  if ('eligibleDuties' in draft) patch.eligibleDuties = next.eligibleDuties;
+  if ('schedulable' in draft) patch.schedulable = next.schedulable;
+  if ((draft.edits || []).length) patch.availability = next.availability;
+  const result = await updateProfile(department, profile, patch);
+  if (!result) return;
+  const name = nameOf(profile.memberName);
+  // The server flags the duties on days now not available (older servers
+  // did not, so the app looks for them itself).
+  const marked = result.replacements && Array.isArray(result.replacements.marked) ? result.replacements.marked : null;
+  const clashes = marked ? marked.map(atService) : (patch.availability ? dutiesOnDaysOff(result.profile) : []);
+  if (clashes.length) notice(name + '’s profile was saved. ' + name + ' can no longer make ' + dutyList(clashes) + '. Find someone else in the month plan.', true);
+  else notice(name + '’s profile was saved.');
 }
 
+/* Make a member inactive, or active again. Only the status is sent; other
+   unsaved edits to the profile stay unsaved. */
 export async function setStatus(department, uid, status) {
-  editDraft(department, uid, { status });
-  await saveProfile(department, uid);
+  const profile = profileOf(department, uid);
+  if (!profile) return;
+  const result = await updateProfile(department, profile, { status }, { keepDraft: true });
+  if (!result) return;
+  const name = nameOf(profile.memberName);
+  const own = (departmentNamed(department) || { duties: [] }).duties;
+  const held = upcoming(data.services).flatMap(service => own.filter(duty => (service.assignments || {})[duty] === profile.memberName).map(duty => ({ service, duty })));
+  if (status === 'active') notice(name + ' is active again.');
+  else notice(name + ' is inactive now, so Fill and the planner no longer offer them.' +
+    (held.length ? ' They still have ' + dutyList(held) + '. Find someone else in the month plan.' : ''), held.length > 0);
 }
 
-export async function addMember(department, member, { eligibleDuties = [], quiet = false } = {}) {
+/* ---- adding members ---- */
+
+export async function addMember(department, member, { eligibleDuties = [], status = 'active', quiet = false } = {}) {
   const search = departments.search;
   if (search) search.adding = true;
   renderSoon();
-  let added = false;
+  let added = null;
   try {
     const result = await call('createDepartmentProfile', {
       departmentId: department, memberUid: member.memberUid, memberName: member.memberName,
-      status: 'active', eligibleDuties, schedulable: eligibleDuties.length > 0, availability: { recurring: {}, exceptions: {} }
+      status, eligibleDuties, schedulable: eligibleDuties.length > 0, availability: { recurring: {}, exceptions: {} }
     });
-    if (!result || !store(result.profile)) throw new Error('The new profile did not come back.');
-    added = true;
-    if (!quiet) notice(nameOf(member.memberName) + ' was added to ' + department + '.');
+    added = result && store(result.profile);
+    if (!added) throw new Error('The new profile did not come back.');
+    if (!quiet) {
+      notice(nameOf(member.memberName) + ' was added to ' + department + (eligibleDuties.length
+        ? ', able to take ' + (eligibleDuties.length === (departmentNamed(department) || { duties: [] }).duties.length ? 'any ' + department + ' duty' : eligibleDuties.map(dutyName).join(' and ')) + '. Check their duties and when they are available.'
+        : '. Choose the duties they can take, then turn on Can be scheduled.'));
+    }
   } catch (error) {
     notice(nameOf(member.memberName) + ' was not added: ' + problem(error), true);
   }
@@ -177,35 +315,44 @@ export async function addMember(department, member, { eligibleDuties = [], quiet
   return added;
 }
 
+/* The duties `name` has held in `department`, from the schedule. */
+export function servedDuties(department, name) {
+  const own = (departmentNamed(department) || { duties: [] }).duties;
+  return own.filter(duty => data.services.some(service => (service.assignments || {})[duty] === name));
+}
+
 /* People who serve in a department's duties (the last six months and
    coming up) or are on its old name list, but have no profile in it, so the
-   planner cannot offer them. Each comes with the duties they have held. */
+   planner cannot offer them. Each comes with the duties and status Add gives
+   them (see dutiesFor and statusFor); someone only on the old list is
+   active. */
 export function missingMembers(department, today) {
-  const own = (DEPARTMENTS.find(item => item.name === department) || { duties: [] }).duties;
-  const since = new Date(new Date(today + 'T12:00:00').getTime() - 182 * 864e5).toISOString().slice(0, 10);
+  const own = (departmentNamed(department) || { duties: [] }).duties;
+  const since = addDays(today, -182);
   const held = {};
-  legacyRoster(department).forEach(name => { held[name] = held[name] || new Set(); });
+  const record = name => held[name] || (held[name] = { duties: new Set(), last: '' });
+  legacyRoster(department).forEach(record);
   data.services.filter(service => service.date >= since).forEach(service => own.forEach(duty => {
     const name = (service.assignments || {})[duty];
-    if (name) (held[name] = held[name] || new Set()).add(duty);
+    if (!name) return;
+    record(name).duties.add(duty);
+    if (service.date > held[name].last) held[name].last = service.date;
   }));
   return Object.keys(held).filter(name => name && !profileNamed(department, name))
-    .map(name => ({ name, duties: own.filter(duty => held[name].has(duty)) }))
+    .map(name => ({ name, duties: dutiesFor(department, Array.from(held[name].duties)), status: held[name].last ? statusFor(held[name].last, today) : 'active' }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/* Add someone by name: find their account (or their place on the member
-   list) with the member search, then add them able to take `duties`, or
-   every duty of the department when they have held none yet. */
-export async function addByName(department, name, duties, options = {}) {
+/* Add someone by name (an entry from missingMembers): find their account,
+   or their place on the member list, with the member search. */
+export async function addByName(department, item, options = {}) {
   let found = null;
   try {
-    const result = await call('searchDepartmentCandidates', { departmentId: department, query: name.slice(0, 160), page: 1 });
-    found = ((result && result.members) || []).find(member => member.memberName === name) || null;
+    const result = await call('searchDepartmentCandidates', { departmentId: department, query: item.name.slice(0, 160), page: 1 });
+    found = ((result && result.members) || []).find(member => member.memberName === item.name) || null;
   } catch (_error) { /* reported below */ }
-  if (!found) { notice(nameOf(name) + ' is not on the member list, so they were not added.', true); return false; }
-  const own = (DEPARTMENTS.find(item => item.name === department) || { duties: [] }).duties;
-  return addMember(department, found, Object.assign({ eligibleDuties: duties.length ? duties : own }, options));
+  if (!found) { notice(nameOf(item.name) + ' is not on the member list, so they were not added.', true); return null; }
+  return addMember(department, found, Object.assign({ eligibleDuties: item.duties, status: item.status }, options));
 }
 
 export async function searchMembers(department, query, page = 1) {
@@ -225,10 +372,14 @@ export async function searchMembers(department, query, page = 1) {
   renderSoon();
 }
 
+/* The PIN a reset gives (functions/member-auth.js), which the member
+   replaces at their next sign-in. */
+export const TEMPORARY_PIN = '0000';
+
 export async function resetPin(name) {
   try {
     await call('resetMemberPin', { memberId: name });
-    notice(nameOf(name) + '’s PIN was reset. They will choose a new one when they sign in.');
+    notice(nameOf(name) + '’s PIN was reset. Tell them to sign in with ' + TEMPORARY_PIN + ' and choose a new PIN.');
   } catch (error) {
     notice('The PIN was not reset: ' + problem(error), true);
   }
@@ -298,13 +449,14 @@ export function acceptPendingInvite() {
 async function acceptInvite(token) {
   try {
     const result = await call('acceptDepartmentInvitation', { token });
-    notice(result.alreadyMember ? 'You are already in ' + result.departmentId + '.' : 'You joined ' + result.departmentId + '.');
+    notice(result.inactive ? 'You are already in ' + result.departmentId + ', but inactive. Ask your leader to make you active.'
+      : result.alreadyMember ? 'You are already in ' + result.departmentId + '.' : 'You joined ' + result.departmentId + '.', !!result.inactive);
     departments.own = null;
     loadOwnProfiles(true);
   } catch (error) {
-    const code = String(error && error.code || '').replace(/^functions\//, '');
-    notice(code === 'already-exists' ? 'That invite link was already used.'
-      : code === 'failed-precondition' ? 'That invite link has expired or was cancelled. Ask your leader for a new one.'
+    const reason = code(error);
+    notice(reason === 'already-exists' ? 'That invite link was already used.'
+      : reason === 'failed-precondition' ? 'That invite link has expired or was cancelled. Ask your leader for a new one.'
         : 'The invite link did not work: ' + problem(error), true);
   }
   renderSoon();
@@ -312,82 +464,62 @@ async function acceptInvite(token) {
 
 /* ---- the member's own availability, one editor for every department ---- */
 
+/* A duty the server flagged ({ serviceId, duty, date, service }) as
+   { service, duty }, finding the service when the server named only its id. */
+function atService(item) {
+  const known = data.services.find(service => serviceId(service) === item.serviceId);
+  const service = item.date ? { date: item.date, service: item.service || '' } : known ||
+    { date: String(item.serviceId).slice(0, 10), service: String(item.serviceId).slice(11).replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) };
+  return { service, duty: item.duty };
+}
+
+const flaggedList = marked => dutyList(marked.map(atService));
+
 export async function saveOwnAvailability(availability) {
   const own = departments.own || [];
   if (!own.length) return false;
   try {
     const result = await call('saveMemberAvailability', {
       memberUid: own[0].memberUid,
-      departments: own.map(profile => ({
-        departmentId: profile.departmentId,
-        availability,
-        expectedRevision: profile.revision,
-        expectedUpdatedAt: profile.updatedAt
-      }))
+      departments: own.map(profile => Object.assign({ departmentId: profile.departmentId, availability }, freshness(profile)))
     });
     (result.departments || []).forEach(item => store(item.profile));
-    const flagged = (result.replacements && result.replacements.marked || []).length;
-    notice(flagged
-      ? 'Saved. ' + flagged + (flagged === 1 ? ' duty you can no longer make was' : ' duties you can no longer make were') + ' flagged for your leader.'
-      : 'Your availability was saved.');
+    const marked = (result.replacements && result.replacements.marked) || [];
+    // The duties a leader was told about stay on screen to read; a plain save
+    // is a short confirmation.
+    if (marked.length) banner('Saved. Your leader was told you cannot make ' + flaggedList(marked) + '.');
+    else notice('Your availability was saved.');
     return true;
   } catch (error) {
-    notice('Your availability was not saved: ' + problem(error), true);
+    if (code(error) === 'aborted') {
+      // Saved meanwhile on another device, or by a leader: load the newer
+      // record; the changes on screen stay, ready to save again.
+      loadOwnProfiles(true);
+      notice('Your availability changed on another device, or your leader changed it. Your changes are still here: look again, then save.', true);
+    } else {
+      notice('Your availability was not saved: ' + problem(error), true);
+    }
     return false;
   } finally {
     renderSoon();
   }
 }
 
-/* ---- assignments ---- */
-
-function assignmentPayload(service, duty, extra) {
-  return Object.assign({
-    departmentId: departmentOf(duty).name,
-    duty,
-    serviceId: serviceId(service),
-    serviceDate: service.date,
-    serviceTime: timeKey(service)
-  }, extra);
-}
-
-/* A normal assignment needs an eligible, available member (see canTake).
-   An administrator override needs a reason, which the server records. */
-export async function assign(service, duty, profile, { override = false, reason = '' } = {}) {
-  const busyKey = serviceId(service) + '::' + duty;
-  if (departments.busy[busyKey]) return;
-  if (!override && !canTake(profile, service, duty)) {
-    notice(nameOf(profile.memberName) + ' cannot take ' + dutyName(duty) + ' at this service.', true);
-    return;
-  }
-  const conflict = Object.keys(service.assignments || {}).find(other => other !== duty && service.assignments[other] === profile.memberName);
-  if (conflict && !override) {
-    notice(nameOf(profile.memberName) + ' is already serving as ' + conflict + ' at this service.', true);
-    return;
-  }
-  departments.busy[busyKey] = true;
-  try {
-    const payload = assignmentPayload(service, duty, { memberUid: profile.memberUid, memberName: profile.memberName });
-    if (override) Object.assign(payload, { override: true, overrideReason: reason });
-    await call(override ? 'overrideDepartmentAssignment' : 'assignDepartmentDuty', payload);
-    service.assignments = Object.assign({}, service.assignments, { [duty]: profile.memberName });
-    if (override) notice('Override recorded: ' + nameOf(profile.memberName) + ' is on ' + dutyName(duty) + '.');
-  } catch (error) {
-    notice('The assignment was not saved: ' + problem(error), true);
-  }
-  delete departments.busy[busyKey];
+/* The default member for a duty that has one (Opening Prayer), or '' for
+   none. The server checks the leader's rights and that the member takes the
+   duty; app/settings then carries the choice to every device. */
+export async function saveDutyDefault(duty, memberName) {
+  if (departments.busy['default::' + duty]) return;
+  departments.busy['default::' + duty] = true;
   renderSoon();
-}
-
-export async function unassign(service, duty) {
   try {
-    await call('unassignDepartmentDuty', assignmentPayload(service, duty, {}));
-    const assignments = Object.assign({}, service.assignments);
-    delete assignments[duty];
-    service.assignments = assignments;
+    await call('setDutyDefault', { duty, memberName });
+    data.settings.dutyDefaults = Object.assign({}, data.settings.dutyDefaults, { [duty]: memberName });
+    notice(memberName ? nameOf(memberName) + ' is the default for ' + dutyName(duty) + '.' : dutyName(duty) + ' has no default now.');
   } catch (error) {
-    notice('The duty was not cleared: ' + problem(error), true);
+    notice('The default was not saved: ' + problem(error), true);
   }
+  delete departments.busy['default::' + duty];
   renderSoon();
 }
 

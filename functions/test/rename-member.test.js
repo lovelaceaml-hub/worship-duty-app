@@ -89,3 +89,62 @@ test('when the right name is already a member, the two become one', async () => 
   assert.equal(db.store.has('departments/Lobby/members/member:Bridgette'), false);
   assert.equal(db.store.get('schedule/2026-10-03_morning').assignments['Usher Back'], 'S. Bridgette');
 });
+
+test('a fix that stopped part way finishes when run again, and the member list changes last', async () => {
+  const db = fakeDb({
+    'app/members': { list: ['Bridgette', 'S. Leah'] },
+    'accounts/Bridgette': { memberName: 'Bridgette', pinHash: 'her-own-pin', active: true, roleVersion: 2 },
+    'schedule/2026-10-03_morning': { date: '2026-10-03', assignments: { 'Usher Door': 'Bridgette' } }
+  });
+  const schedule = db.collection('schedule');
+  let failOnce = true;
+  const real = db.collection;
+  db.collection = name => (name === 'schedule' && failOnce
+    ? Object.assign({}, schedule, { get: async () => { failOnce = false; throw new Error('deadline exceeded'); } })
+    : real(name));
+  await assert.rejects(renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 5 }), /deadline/);
+  assert.deepEqual(db.store.get('app/members').list, ['Bridgette', 'S. Leah'], 'the list is untouched until the end');
+  assert.equal(db.store.get('accounts/S. Bridgette').active, true);
+  await renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 6 });
+  assert.deepEqual(db.store.get('app/members').list, ['S. Bridgette', 'S. Leah']);
+  assert.equal(db.store.get('schedule/2026-10-03_morning').assignments['Usher Door'], 'S. Bridgette');
+  const account = db.store.get('accounts/S. Bridgette');
+  assert.deepEqual([account.active, account.renamedTo, account.pinHash, account.authUid], [true, undefined, 'her-own-pin', 'member:Bridgette']);
+  assert.equal(db.store.get('accounts/Bridgette').roleVersion, 3, 'the old name\'s sessions end once');
+});
+
+test('a fix an older version left with the list already changed can be finished', async () => {
+  const db = fakeDb({
+    'app/members': { list: ['S. Bridgette', 'S. Leah'] },
+    'app/nameMap': { map: { Bridgette: 'S. Bridgette' } },
+    'schedule/2026-10-03_morning': { date: '2026-10-03', assignments: { 'Usher Door': 'Bridgette' } }
+  });
+  await renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 7 });
+  assert.equal(db.store.get('schedule/2026-10-03_morning').assignments['Usher Door'], 'S. Bridgette');
+  await assert.rejects(renameMember(db, { from: 'Nobody', to: 'S. Bridgette', newAccount }), error => error.code === 'not-found');
+});
+
+test('a merge gives the kept account its roles and the old uid\'s requests and flags; sessions end; devices follow', async () => {
+  const revoked = [];
+  const auth = { async revokeRefreshTokens(uid) { revoked.push(uid); } };
+  const leaderAccount = async name => ({ id: name, memberName: name, role: 'departmentLeader', roles: ['departmentLeader'], departments: ['Usher Sisters'], globalLeaderManager: false, pinHash: 'default-hash', active: true });
+  const db = fakeDb({
+    'app/members': { list: ['Bridgette', 'S. Bridgette'] },
+    'app/leaderConfig': { departmentLeaders: { 'Usher Sisters': ['Bridgette'] } },
+    'accounts/S. Bridgette': { memberName: 'S. Bridgette', authUid: 'sb-uid', pinHash: 'her-pin', roles: [], departments: [], role: 'member', roleVersion: 4 },
+    'accounts/Bridgette': { memberName: 'Bridgette', pinHash: 'other-pin', roleVersion: 1 },
+    'schedule/2026-10-03_morning': { date: '2026-10-03', assignments: { 'Usher Back': 'Bridgette' },
+      needsReplacement: { 'Usher Back': { memberName: 'Bridgette', memberUid: 'member:Bridgette', reason: 'unavailable' } } },
+    'requests/r1': { name: 'Bridgette', requesterUid: 'member:Bridgette', duty: 'Usher Back' },
+    'tokens/phone': { name: 'Bridgette' }
+  });
+  const result = await renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount: leaderAccount, auth, now: 9 });
+  assert.equal(result.devices, 1);
+  const kept = db.store.get('accounts/S. Bridgette');
+  assert.deepEqual([kept.roles, kept.departments, kept.roleVersion, kept.pinHash], [['departmentLeader'], ['Usher Sisters'], 5, 'her-pin']);
+  assert.deepEqual(revoked.sort(), ['member:Bridgette', 'sb-uid']);
+  assert.equal(db.store.get('requests/r1').requesterUid, 'sb-uid');
+  assert.deepEqual(db.store.get('schedule/2026-10-03_morning').needsReplacement['Usher Back'],
+    { memberName: 'S. Bridgette', memberUid: 'sb-uid', reason: 'unavailable' });
+  assert.equal(db.store.get('tokens/phone').name, 'S. Bridgette');
+});

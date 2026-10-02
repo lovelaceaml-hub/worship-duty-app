@@ -94,8 +94,9 @@ function parseTab(title, values) {
 }
 
 /* Every Entry tab -> services in the shape planMerge takes (see sheet-lib).
-   A blank cell adds nothing, as with Raw Data, so clearing a duty is done in
-   the app, which writes the blank back. */
+   A blank cell never clears a duty, so clearing one is done in the app, which
+   writes the blank back. Blank duty cells are listed in `_blank`, so the
+   import still knows the Sheet now says nothing there. */
 function servicesFromTabs(tabs, nameMap = {}) {
   const byKey = new Map();
   const warnings = [];
@@ -105,7 +106,7 @@ function servicesFromTabs(tabs, nameMap = {}) {
     if (byKey.has(key)) warnings.push('Two rows for ' + row.iso + ' ' + row.service + ' (tab ' + tab.title + ', row ' + row.row + '); the later row wins.');
     const service = {
       date: row.iso, service: row.service, worship: row.worship, time: timeFor(row.service, row.iso),
-      assignments: {}, choirSong: '', _sheetChoirSongSeen: false
+      assignments: {}, choirSong: '', _sheetChoirSongSeen: false, _blank: []
     };
     Object.entries(row.duties).forEach(([duty, raw]) => {
       if (duty === CHOIR_SONG) {
@@ -114,7 +115,7 @@ function servicesFromTabs(tabs, nameMap = {}) {
         return;
       }
       const name = cleanName(raw, nameMap);
-      if (!name) return;
+      if (!name) { service._blank.push(duty); return; }
       service.assignments[duty] = name;
       members.add(name);
     });

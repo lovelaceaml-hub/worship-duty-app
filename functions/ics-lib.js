@@ -6,7 +6,8 @@
  * so a subscribed feed and a one-off download produce identical events.
  */
 
-const { dutyName } = require('./names');
+const { dutyName, canonicalName } = require('./names');
+const { startClock } = require('./time');
 
 function icsEscape(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n')
@@ -41,19 +42,43 @@ function svcId(svc) {
   return svc.date + '_' + String(svc.service || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
-/* Canonical spelling via the shared app/nameMap doc ({variant: canonical}). */
-function canonName(name, nameMap) {
-  return (nameMap && nameMap[name]) || name;
+/* RFC 5545: a line longer than 75 octets goes on in the next line after a
+   space, without splitting a character. */
+function fold(line) {
+  if (Buffer.byteLength(line, 'utf8') <= 75) return line;
+  const parts = [];
+  let current = '';
+  let size = 0;
+  let limit = 75;
+  for (const char of line) {
+    const length = Buffer.byteLength(char, 'utf8');
+    if (size + length > limit) {
+      parts.push(current);
+      current = '';
+      size = 0;
+      limit = 74; // the leading space counts
+    }
+    current += char;
+    size += length;
+  }
+  parts.push(current);
+  return parts.join('\r\n ');
 }
 
-/* All (duty, svc) pairs assigned to `member` (canonicalized both sides). */
+/* A service's start time as HHMM: its own, or its label's usual time. */
+function startTime(svc) {
+  return startClock(svc).replace(':', '');
+}
+
+/* All (duty, svc) pairs assigned to `member` (both sides in their current
+   spelling, see names.js). */
 function dutiesForMember(services, member, nameMap) {
-  const me = canonName(member, nameMap);
+  const me = canonicalName(member, nameMap);
   const out = [];
   services.forEach(svc => {
     const assignments = svc.assignments || {};
     Object.keys(assignments).forEach(duty => {
-      if (assignments[duty] && canonName(assignments[duty], nameMap) === me) {
+      if (assignments[duty] && canonicalName(assignments[duty], nameMap) === me) {
         out.push({ duty: duty, svc: svc });
       }
     });
@@ -75,13 +100,13 @@ function buildIcsForMember(services, member, nameMap) {
     'VERSION:2.0',
     'PRODID:-//LV Zion//Worship Duties//EN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:' + icsEscape('LV Zion Duties — ' + canonName(member, nameMap)),
+    'X-WR-CALNAME:' + icsEscape('LV Zion Duties for ' + canonicalName(member, nameMap)),
     'X-WR-TIMEZONE:America/Los_Angeles',
     'REFRESH-INTERVAL;VALUE=DURATION:PT12H',
     'X-PUBLISHED-TTL:PT12H'
   ].concat(LA_VTIMEZONE);
   duties.forEach(d => {
-    const dt = d.svc.date.replace(/-/g, '') + 'T' + (d.svc.time || '12:00').replace(':', '') + '00';
+    const dt = d.svc.date.replace(/-/g, '') + 'T' + startTime(d.svc) + '00';
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + svcId(d.svc) + '-' + d.duty.replace(/[^a-zA-Z0-9]/g, '') + '@lvzion',
@@ -96,7 +121,7 @@ function buildIcsForMember(services, member, nameMap) {
     );
   });
   lines.push('END:VCALENDAR');
-  return lines.join('\r\n') + '\r\n';
+  return lines.map(fold).join('\r\n') + '\r\n';
 }
 
-module.exports = { buildIcsForMember, dutiesForMember, canonName };
+module.exports = { buildIcsForMember, dutiesForMember };

@@ -2,22 +2,29 @@
    and asks for a redraw. The schedule is also saved on the device so the
    next start-up can show it at once, and offline. */
 import { fb } from './firebase.js';
-import { data, loaded, canonicalizeNames, saveCache } from './store.js';
+import { data, loaded, canonicalizeNames, canonicalizeService, canonicalizeRosters, saveCache } from './store.js';
 import { renderSoon } from './render.js';
 import { notice } from './ui/banners.js';
 import { afterScheduleChange } from './services/notifications.js';
 import { todayISO } from './lib/dates.js';
 
-function listen(path, apply) {
+function listen(path, apply, failed = () => {}) {
   const target = path.includes('/') ? fb.doc(fb.db, ...path.split('/')) : fb.collection(fb.db, path);
   return fb.onSnapshot(target, snapshot => { apply(snapshot); renderSoon(); },
-    error => console.warn('Listener stopped: ' + path, error));
+    error => { console.warn('Listener stopped: ' + path, error); failed(); renderSoon(); });
 }
+
+/* Services by document id. A snapshot after the first carries only the
+   services that changed, so only those are read and respelled. */
+const services = new Map();
 
 export function startSync() {
   fb.onSnapshot(fb.collection(fb.db, 'schedule'), snapshot => {
-    data.services = snapshot.docs.map(doc => doc.data());
-    canonicalizeNames();
+    snapshot.docChanges().forEach(change => {
+      if (change.type === 'removed') services.delete(change.doc.id);
+      else services.set(change.doc.id, canonicalizeService(change.doc.data()));
+    });
+    data.services = Array.from(services.values());
     loaded.schedule = true;
     saveCache();
     afterScheduleChange();
@@ -32,14 +39,15 @@ export function startSync() {
     canonicalizeNames();
     loaded.members = true;
   });
+  // Settled either way, so the passcode screen does not wait for ever.
   listen('app/settings', snapshot => {
     data.settings = snapshot.exists() ? snapshot.data() : {};
     loaded.settings = true;
     saveCache();
-  });
+  }, () => { loaded.settings = true; });
   listen('app/departments', snapshot => {
     data.rosters = snapshot.exists() ? (snapshot.data().map || {}) : {};
-    canonicalizeNames();
+    canonicalizeRosters();
     loaded.rosters = true;
   });
   listen('app/leaderConfig', snapshot => {

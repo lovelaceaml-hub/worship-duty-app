@@ -6,41 +6,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { createDepartmentHandlers } = require('../department-handlers.js');
-
-const clone = value => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
-
-/* Just enough Firestore: documents by path, and transactions whose merge
-   writes merge one level deep. */
-function memoryDb(docs) {
-  const store = new Map(Object.entries(clone(docs)));
-  const ref = path => ({
-    path,
-    collection: name => ({ doc: id => ref(path + '/' + name + '/' + id) }),
-    get: async () => ({ exists: store.has(path), data: () => clone(store.get(path)) })
-  });
-  return {
-    store,
-    collection: name => ({ doc: id => ref(name + '/' + id) }),
-    async runTransaction(work) {
-      const writes = [];
-      await work({
-        getAll: (...refs) => Promise.all(refs.map(item => item.get())),
-        get: item => item.get(),
-        set: (item, value, options) => writes.push([item.path, clone(value), options]),
-        delete: item => writes.push([item.path, undefined])
-      });
-      writes.forEach(([path, value, options]) => {
-        if (value === undefined) { store.delete(path); return; }
-        if (!(options && options.merge)) { store.set(path, value); return; }
-        const next = Object.assign({}, store.get(path));
-        Object.entries(value).forEach(([key, field]) => {
-          next[key] = field && typeof field === 'object' && !Array.isArray(field) ? Object.assign({}, next[key], field) : field;
-        });
-        store.set(path, next);
-      });
-    }
-  };
-}
+const { memoryDb } = require('./memory-db.js');
 
 const person = (name, extra = {}) => ({
   uid: 'uid-' + name, memberUid: 'uid-' + name, departmentId: 'Usher Sisters', department: 'Usher Sisters',

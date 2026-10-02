@@ -17,10 +17,43 @@ const DISPLAY_FIXES = {
   'H.Elena': 'H. Elena', 'S. Melisaa': 'S. Melissa'
 };
 
+/* The current spelling of a stored name, exactly as the server works it out
+   (functions/names.js canonicalName), so the app and the server always name
+   a member the same way: spaces tidied, then app/nameMap, else the built-in
+   spellings, again and again until the name stops changing (a member renamed
+   twice is found under their first spelling). A spelling a rename chose (a
+   value in app/nameMap) is kept even when the built-in list would change it
+   back; a loop stops at the last new name. Answers are kept per name map, because every redraw asks for the
+   same few hundred names. */
+const canonicals = new WeakMap();
+const NO_MAP = {};
+
 export function canonicalName(name, nameMap) {
-  const value = String(name == null ? '' : name).trim();
-  if (!value) return '';
-  return (nameMap && nameMap[value]) || BUILT_IN_NAME_MAP[value] || value;
+  const map = nameMap && typeof nameMap === 'object' ? nameMap : NO_MAP;
+  let known = canonicals.get(map);
+  if (!known) canonicals.set(map, known = new Map());
+  const key = String(name == null ? '' : name);
+  let value = known.get(key);
+  if (value === undefined) {
+    value = currentSpelling(key, map);
+    known.set(key, value);
+  }
+  return value;
+}
+
+const oneSpaced = value => String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+const has = (map, key) => Object.prototype.hasOwnProperty.call(map, key);
+
+function currentSpelling(raw, map) {
+  let value = oneSpaced(raw);
+  const seen = new Set([value]);
+  const chosen = new Set(Object.values(map).map(oneSpaced));
+  for (;;) {
+    const next = oneSpaced(has(map, value) ? map[value] : !chosen.has(value) && has(BUILT_IN_NAME_MAP, value) ? BUILT_IN_NAME_MAP[value] : '');
+    if (!next || next === value || seen.has(next)) return value;
+    seen.add(next);
+    value = next;
+  }
 }
 
 function split(name) {
@@ -32,22 +65,66 @@ function split(name) {
   return { title: match[1].toUpperCase() + '.', first: (words[0] || '').replace(/[.,]+$/g, ''), words };
 }
 
-/* "B. Anthony". Adds a last initial when two members share a title and
-   first name ("S. Monica C."). */
-export function displayName(name, members = []) {
+function tidy(name) {
   const raw = String(name == null ? '' : name).trim().replace(/\s+/g, ' ');
+  return DISPLAY_FIXES[raw] || raw;
+}
+
+const shortKey = parts => (parts.title + ' ' + parts.first).toLowerCase();
+const lastWord = parts => parts.words.length > 1 ? parts.words[parts.words.length - 1].replace(/[^A-Za-z]/g, '') : '';
+
+/* Who shares a title and first name, built once per member list (the list
+   is replaced whenever it changes), with every name shown so far. */
+const indexes = new WeakMap();
+function indexOf(members) {
+  let index = indexes.get(members);
+  if (!index || index.size !== members.length) {
+    index = { size: members.length, groups: new Map(), shown: new Map() };
+    members.forEach(member => {
+      const name = tidy(member);
+      const parts = split(name);
+      if (!parts || !parts.first) return;
+      const key = shortKey(parts);
+      if (!index.groups.has(key)) index.groups.set(key, new Set());
+      index.groups.get(key).add(name);
+    });
+    indexes.set(members, index);
+  }
+  return index;
+}
+
+/* "B. Anthony". When two people share a title and first name, a last
+   initial tells them apart ("S. Monica C."), and the whole last name when
+   the initials match too ("B. Adam Hill", "B. Adam Hart"). A name missing
+   from the member list still counts, so it never looks like a member's. */
+export function displayName(name, members = []) {
+  const index = indexOf(members);
+  const key = String(name == null ? '' : name);
+  let shown = index.shown.get(key);
+  if (shown === undefined) {
+    shown = showName(tidy(key), index);
+    index.shown.set(key, shown);
+  }
+  return shown;
+}
+
+function showName(raw, index) {
   if (!raw) return '';
-  const parts = split(DISPLAY_FIXES[raw] || raw);
+  const parts = split(raw);
   if (!parts) return raw;
   if (!parts.first) return parts.title;
-  const key = (parts.title + ' ' + parts.first).toLowerCase();
-  const sharing = members.filter(member => {
-    const other = split(member);
-    return other && (other.title + ' ' + other.first).toLowerCase() === key;
+  const short = parts.title + ' ' + parts.first;
+  const sharing = new Set(index.groups.get(shortKey(parts)) || []);
+  sharing.add(raw);
+  const last = lastWord(parts);
+  if (sharing.size < 2 || !last) return short;
+  const initial = last.charAt(0).toUpperCase();
+  const clash = Array.from(sharing).some(other => {
+    if (other === raw) return false;
+    const otherLast = lastWord(split(other));
+    return otherLast && otherLast.charAt(0).toUpperCase() === initial && otherLast.toLowerCase() !== last.toLowerCase();
   });
-  if (sharing.length < 2 || parts.words.length < 2) return parts.title + ' ' + parts.first;
-  const lastInitial = parts.words[parts.words.length - 1].replace(/[^A-Za-z]/g, '').charAt(0).toUpperCase();
-  return parts.title + ' ' + parts.first + (lastInitial ? ' ' + lastInitial + '.' : '');
+  return short + ' ' + (clash ? last : initial + '.');
 }
 
 export function initials(name) {

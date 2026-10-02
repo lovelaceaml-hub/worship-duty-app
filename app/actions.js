@@ -5,8 +5,11 @@
    and the module that owns that part of the screen registers the handler:
      defineActions({ name: { run(el, event), allowed(el), public: true } })
    `run` may be the whole definition. An action needs a signed-in member
-   unless it is `public`, and `allowed` can narrow it further. */
+   unless it is `public`, and `allowed` can narrow it further: it returns
+   false, or a sentence saying why not ("This duty is no longer yours.").
+   When `run` fails, the member is told. */
 import { session } from './store.js';
+import { problem } from './firebase.js';
 import { notice } from './ui/banners.js';
 
 const registry = new Map();
@@ -18,16 +21,34 @@ export function defineActions(map) {
   });
 }
 
-function signedIn() { return session.status === 'verified'; }
+/* Why the member cannot do this now, in plain words, or ''. */
+function refusal(action, el) {
+  if (!action.public && session.status !== 'verified') {
+    if (session.status === 'offline') return 'You are offline. Connect to do that.';
+    if (session.status === 'loading') return 'The app is still opening. Try again in a moment.';
+    return 'Sign in first.';
+  }
+  const answer = action.allowed ? action.allowed(el) : true;
+  if (typeof answer === 'string') return answer;
+  return answer ? '' : 'Your account is not allowed to do that.';
+}
+
+function failed(error) {
+  console.warn('That action failed:', error);
+  notice(problem(error), true);
+}
 
 function runAction(name, el, event) {
   const action = registry.get(name);
   if (!action) { console.warn('No handler for action:', name); return; }
-  if ((!action.public && !signedIn()) || (action.allowed && !action.allowed(el))) {
-    notice('Your account is not allowed to do that.', true);
-    return;
+  const refused = refusal(action, el);
+  if (refused) { notice(refused, true); return; }
+  try {
+    const result = action.run(el, event);
+    if (result && typeof result.then === 'function') result.catch(failed);
+  } catch (error) {
+    failed(error);
   }
-  action.run(el, event);
 }
 
 document.addEventListener('click', event => {
@@ -39,8 +60,14 @@ document.addEventListener('submit', event => {
   const form = event.target.closest('form[data-act]');
   if (!form) return;
   event.preventDefault();
-  // Submitting ends the typing, so the screen may redraw with the result.
-  if (form.contains(document.activeElement)) document.activeElement.blur();
+  // Submitting ends the typing, so the screen may redraw with the result:
+  // focus moves from the field to the button that sent the form.
+  const active = document.activeElement;
+  if (form.contains(active) && active.matches('input, select, textarea')) {
+    const button = event.submitter || form.querySelector('[type="submit"]');
+    if (button && !button.disabled) button.focus({ preventScroll: true });
+    else active.blur();
+  }
   runAction(form.dataset.act, form, event);
 });
 document.addEventListener('change', event => {

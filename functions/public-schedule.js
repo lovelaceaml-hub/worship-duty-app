@@ -1,15 +1,13 @@
 'use strict';
 
+const { startClock } = require('./time');
+
 function safeText(value, maximum) {
   return typeof value === 'string' ? value.trim().slice(0, maximum) : '';
 }
 
 function validDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function validTime(value) {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
 /**
@@ -19,8 +17,9 @@ function validTime(value) {
  */
 function publicScheduleService(service) {
   const date = safeText(service?.date, 10);
-  const time = safeText(service?.time, 5);
-  if (!validDate(date) || !validTime(time)) return null;
+  if (!validDate(date)) return null;
+  // A time that cannot be read shows as the label's usual time, as in the app.
+  const time = startClock(service);
 
   const assignments = {};
   for (const [duty, member] of Object.entries(service?.assignments || {})) {

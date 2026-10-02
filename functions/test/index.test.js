@@ -5,12 +5,15 @@ const fs = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
 const test = require('node:test');
+const { loadIndex } = require('./load-index.js');
 
-const sourcePath = path.join(__dirname, '..', 'index.js');
-const source = fs.readFileSync(sourcePath, 'utf8');
+const root = path.join(__dirname, '..');
+const sourcePath = path.join(root, 'index.js');
+const sources = fs.readdirSync(root).filter(file => file.endsWith('.js')).map(file => fs.readFileSync(path.join(root, file), 'utf8'));
 
-/* Load index.js with the Firebase Admin SDK stubbed out, to see what it
-   exports without a project or credentials. */
+/* Load index.js with the Firebase Admin SDK stubbed out, as
+   scripts/deploy-functions.mjs does, to see what it exports without a
+   project or credentials. */
 function loadExports() {
   const original = Module._load;
   const db = { collection: () => ({ doc: () => ({}) }), runTransaction: () => {}, batch: () => {} };
@@ -35,25 +38,43 @@ test('exports exactly the functions the app and the public site use', () => {
     'createDepartmentInvitation', 'createDepartmentProfile', 'dutyReminders', 'ics', 'listDepartmentRoster',
     'onFeedbackDone', 'onRequestCreated', 'onRequestResolved', 'onScheduleWrite', 'overrideDepartmentAssignment', 'publicSchedule',
     'renameMember', 'resetMemberPin', 'resolveDutyAttention', 'revokeDepartmentInvitation', 'saveDepartmentAssignments',
-    'saveMemberAvailability', 'scheduledSheetSync', 'searchDepartmentCandidates', 'servingMembers', 'songHistoryRecorder',
+    'saveMemberAvailability', 'scheduledSheetSync', 'searchDepartmentCandidates', 'servingMembers', 'setDutyDefault', 'songHistoryRecorder',
     'syncSheetNow', 'unassignDepartmentDuty', 'updateDepartmentProfile', 'updateMemberAvailability',
     'updateRoleConfiguration', 'verifyMemberPin', 'yearlyServices'
   ]);
 });
 
 test('keeps member PIN material out of the logs', () => {
-  assert.match(source, /collection\('accounts'\)/);
-  assert.match(source, /hashPin\(/);
-  assert.doesNotMatch(source, /logger\.(info|warn|error)\([^\n]*\bpin\b/i);
-  assert.doesNotMatch(source, /console\.(log|warn|error)\([^\n]*\bpin\b/i);
+  for (const source of sources) {
+    assert.doesNotMatch(source, /logger\.(info|warn|error)\([^\n]*\bpin\b/i);
+    assert.doesNotMatch(source, /console\.(log|warn|error)\([^\n]*\bpin\b/i);
+  }
 });
 
-test('role changes need a leader manager and are recorded', () => {
-  assert.match(source, /canManageLeaders\(actor, current\)/);
-  assert.match(source, /collection\('audit'\)\.add\(/);
+const signedIn = (name, extra = {}) => ({ uid: 'member:' + name, token: Object.assign({ memberId: name, memberName: name, roleVersion: 1 }, extra) });
+const account = (name, roles) => ({ memberName: name, active: true, roleVersion: 1, roles, departments: [], mustChangePin: false });
+
+test('role changes need a leader manager and are recorded', async () => {
+  const docs = { 'accounts/B. Anthony': account('B. Anthony', ['admin']), 'accounts/S. Leah': account('S. Leah', []) };
+  const { functions } = loadIndex(docs);
+  const change = auth => functions.updateRoleConfiguration.run({ auth, data: { roleType: 'songEditor', memberName: 'S. Ruth', enabled: true } });
+  await assert.rejects(change(signedIn('S. Leah')), error => error.code === 'permission-denied' && error.details.reason === 'not-allowed');
+  await change(signedIn('B. Anthony'));
+  const audit = Object.entries(docs).filter(([key]) => key.startsWith('audit/')).map(([, entry]) => [entry.action, entry.actor, entry.target]);
+  assert.deepEqual(audit, [['role-configuration-changed', 'B. Anthony', 'S. Ruth']]);
+  assert.deepEqual(docs['accounts/S. Ruth'].roles, ['songEditor']);
 });
 
-test('the sheet import needs an administrator when started by hand, and respects its switch', () => {
-  assert.match(source, /exports\.syncSheetNow[\s\S]*permissions\.isAdmin\(actor/);
-  assert.match(source, /exports\.scheduledSheetSync[\s\S]*switchOn\(await loadSettings\(\), 'sheetSync'\)/);
+test('the sheet import needs an administrator when started by hand, and respects its switch', async () => {
+  const docs = { 'accounts/S. Leah': account('S. Leah', []), 'app/settings': { features: { sheetSync: false } } };
+  let fetched = 0;
+  const loaded = loadIndex(docs, { fetch: async () => { fetched += 1; throw new Error('not reached'); } });
+  try {
+    await assert.rejects(loaded.functions.syncSheetNow.run({ auth: signedIn('S. Leah'), data: {} }),
+      error => error.code === 'permission-denied' && error.details.reason === 'administrator-required');
+    await loaded.functions.scheduledSheetSync.run({});
+  } finally {
+    loaded.restore();
+  }
+  assert.equal(fetched, 0);
 });

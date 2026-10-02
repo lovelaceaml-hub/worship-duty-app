@@ -1,21 +1,24 @@
 /* The planner's sections. */
-import { html } from '../html.js';
+import { html, plural } from '../html.js';
 import { data, ui, nameOf } from '../store.js';
 import { planner, view, SECTIONS, SECTION_NAMES, SORTS, RECENT_DAYS } from './state.js';
 import { canEdit, canManageSongs } from './access.js';
 import { myServices, current, isConfirmed, changedSinceConfirmed, totalTime, countedSongs } from './data.js';
-import { serviceCard, serviceSheet, kindOf } from './cards.js';
+import { serviceCard, serviceSheet, kindOf, missingSongs } from './cards.js';
 import { filteredSongs, pages, categories, categoryColor, songNumber, minutes, statsFor } from './catalog.js';
-import { serviceId } from '../lib/services.js';
-import { shortDate, longDate, dayBadge, todayISO, daysSince, relativeDay } from '../lib/dates.js';
+import { serviceId, byStart } from '../lib/services.js';
+import { shortDate, longDate, dayBadge, todayISO, daysSince, daysUntil, relativeDay } from '../lib/dates.js';
 import { SERVICE_LABELS, WORSHIP_TYPES } from '../config/duties.js';
 
 /* ---- frame ---- */
 
+/* A song editor with no Presider duty coming up works on everyone's lists. */
+function editorOnly() { return !myServices().length && canManageSongs(); }
+
 function header() {
   const next = myServices()[0];
   return html`<div class="planner-head">
-    <span class="planner-role">Presider</span><span class="planner-name">${nameOf(ui.me)}</span>
+    <span class="planner-role">${editorOnly() ? 'Song editor' : 'Presider'}</span><span class="planner-name">${nameOf(ui.me)}</span>
     ${next ? html`<span class="planner-next">Next: ${shortDate(next.date)} · ${next.service}</span>` : ''}
   </div>`;
 }
@@ -36,7 +39,8 @@ function allCurrent() {
     if (byId[setlist.id] || setlist.status === 'sung' || setlist.date < todayISO()) return;
     byId[setlist.id] = { service: null, setlist };
   });
-  return Object.values(byId).sort((a, b) => ((a.service || a.setlist).date + (a.service ? a.service.time : '')).localeCompare((b.service || b.setlist).date + (b.service ? b.service.time : '')));
+  const asService = item => item.service || { date: item.setlist.date, service: item.setlist.serviceLabel };
+  return Object.values(byId).sort((a, b) => byStart(asService(a), asService(b)));
 }
 
 function pastLists() {
@@ -56,10 +60,10 @@ function pastBlock(list) {
 /* ---- Home ---- */
 
 export function home() {
-  const mine = view.scope === 'mine';
+  const mine = view.scope === 'mine' && (view.scopeChosen || !editorOnly());
   const items = mine ? myServices().map(service => ({ service, setlist: planner.setlists[serviceId(service)] || null })) : allCurrent();
   // A Presider duty in the next three days with no songs yet.
-  const soon = mine && items.find(item => daysSince(todayISO(), item.service.date) <= 3 && !(item.setlist && (item.setlist.songs || []).length));
+  const soon = mine && items.find(item => daysUntil(item.service.date) <= 3 && !(item.setlist && (item.setlist.songs || []).length));
   const loading = !data.services.length || !planner.loaded.setlists;
   const past = pastLists().filter(setlist => !mine || setlist.presider === ui.me || (serviceFor(setlist) || { assignments: {} }).assignments.Presider === ui.me);
   return html`
@@ -77,10 +81,11 @@ export function home() {
 
 /* ---- Library: the song list being built, then the songs ---- */
 
+/* How the Library works, until a list is open or the tip is hidden. */
 function help() {
-  if (view.helpHidden) return '';
-  return html`<div class="banner"><span>Choose your service, add songs from the list below, then confirm them. After the service, tap Mark as sung on Home.</span>
-    <button type="button" class="banner-close" data-act="song-help-hide" aria-label="Hide">&times;</button></div>`;
+  if (view.helpHidden || view.setlist) return '';
+  return html`<div class="banner"><span>Choose your service, add songs from the list below, then confirm them. Confirmed songs are counted as sung after the service.</span>
+    <button type="button" class="banner-close" data-act="song-help-hide" aria-label="Hide these tips">&times;</button></div>`;
 }
 
 function servicePicker() {
@@ -115,7 +120,7 @@ function slotRow(slot, song, text = '') {
     <span class="title${title ? '' : ' is-empty'}">${title || SLOT_NAMES[slot] + ' song not chosen'}</span>
     <span class="time">${song ? minutes(song.durationSec) : ''}</span>
     <button type="button" class="slot-tag" data-act="song-slot" data-slot="${slot}" aria-pressed="${selecting}"
-      aria-label="${(title ? 'Change the ' : 'Choose the ') + SLOT_NAMES[slot] + ' song'}">${SLOT_NAMES[slot]}</button>
+      aria-label="${(title ? 'Change the ' : 'Choose the ') + SLOT_NAMES[slot] + ' song'}">${title ? 'Change' : 'Choose'}</button>
     ${title ? html`<button type="button" class="icon-button" data-act="song-slot-clear" data-slot="${slot}" aria-label="Remove the ${SLOT_NAMES[slot]} song">&times;</button>` : ''}
   </li>`;
 }
@@ -124,7 +129,8 @@ function builder(setlist) {
   const service = serviceFor(setlist);
   if (!canEdit(setlist)) {
     return html`<section class="card"><h3 class="card-subtitle">${setlist.worshipType} <span class="service-label">${setlist.serviceLabel}</span></h3>
-      <p class="hint">View only. The assigned Presider, a song editor or an administrator can change these songs.</p>
+      <p class="hint">${setlist.status === 'sung' ? 'These songs were counted as sung after the service, so they stay as they are.'
+        : 'View only. The assigned Presider, a song editor or an administrator can change these songs.'}</p>
       ${serviceSheet(setlist, service)}
       <button type="button" class="link" data-act="song-close-list">Choose another service</button></section>`;
   }
@@ -156,7 +162,8 @@ function builder(setlist) {
     ${sung ? '' : isConfirmed(setlist)
       ? html`<p class="confirm is-done">Songs confirmed${setlist.confirmedBy ? ' by ' + nameOf(setlist.confirmedBy) : ''}. Change them any time and confirm again.</p>`
       : songs.length ? html`<div class="confirm${changedSinceConfirmed(setlist) ? ' is-changed' : ''}">
-          <p>${changedSinceConfirmed(setlist) ? 'You changed the songs after confirming. Confirm again so others see the final list.' : 'Ready? Confirm so the list shows as done.'}</p>
+          <p>${changedSinceConfirmed(setlist) ? 'You changed the songs after confirming. Confirm again so others see the final list.' : 'Ready? Confirm so the list shows as done.'}
+            ${missingSongs(setlist, service).length ? html`<strong class="confirm-missing">${missingSongs(setlist, service).join(' ')}</strong>` : ''}</p>
           <button type="button" class="primary" data-act="song-confirm" data-id="${setlist.id}">${changedSinceConfirmed(setlist) ? 'Confirm again' : 'Confirm songs'}</button></div>` : ''}
   </section>`;
 }
@@ -165,7 +172,7 @@ function builder(setlist) {
 function selecting() {
   if (!view.slot) return '';
   return html`<div class="banner selecting" role="status"><span><strong>Selecting ${SLOT_NAMES[view.slot]} song</strong>. Tap + next to a song below.</span>
-    <button type="button" class="banner-close" data-act="song-slot-cancel" aria-label="Cancel">&times;</button></div>`;
+    <button type="button" class="banner-close" data-act="song-slot-cancel" aria-label="Stop choosing the ${SLOT_NAMES[view.slot]} song">&times;</button></div>`;
 }
 
 function songRow(song, setlist) {
@@ -173,7 +180,7 @@ function songRow(song, setlist) {
   const open = view.openSong === song.id;
   const inList = setlist ? (setlist.songs || []).filter(id => id === song.id).length : 0;
   const recent = daysSince(stats.lastSung) <= RECENT_DAYS;
-  const canAdd = setlist && canEdit(setlist) && setlist.status !== 'sung';
+  const canAdd = setlist && canEdit(setlist);
   const manage = canManageSongs();
   return html`<div class="song${open ? ' is-open' : ''}">
     <button type="button" class="song-row" data-act="song-open" data-id="${song.id}" aria-expanded="${open}">
@@ -238,7 +245,10 @@ export function services() {
 export function history() {
   const byNumber = (a, b) => String(a.number).localeCompare(String(b.number), undefined, { numeric: true });
   const least = planner.songs.slice().sort((a, b) => statsFor(a.id).timesSung - statsFor(b.id).timesSung || byNumber(a, b)).slice(0, 15);
-  const longest = planner.songs.slice().sort((a, b) => daysSince(statsFor(b.id).lastSung) - daysSince(statsFor(a.id).lastSung) || byNumber(a, b)).slice(0, 15);
+  // Songs never sung already lead "Sung least"; this list is of songs sung before.
+  const sungBefore = planner.songs.filter(song => statsFor(song.id).timesSung > 0);
+  const longest = sungBefore.slice().sort((a, b) => daysSince(statsFor(b.id).lastSung) - daysSince(statsFor(a.id).lastSung) || byNumber(a, b)).slice(0, 15);
+  const neverSung = planner.songs.length - sungBefore.length;
   const row = song => html`<div class="song-row is-static"><span class="num">${songNumber(song)}</span>
     <span class="dot" style="background: ${categoryColor(song.category)}"></span><span class="title">${song.title}</span>
     <span class="times">${statsFor(song.id).timesSung}×</span><span class="time">${relativeDay(statsFor(song.id).lastSung)}</span></div>`;
@@ -250,7 +260,9 @@ export function history() {
   const backfill = view.backfill;
   return html`
     <section class="card"><h3 class="card-subtitle">Sung least</h3>${least.map(row)}</section>
-    <section class="card"><h3 class="card-subtitle">Not sung for the longest</h3>${longest.map(row)}</section>
+    <section class="card"><h3 class="card-subtitle">Not sung for the longest</h3>
+      ${neverSung ? html`<p class="hint">Of songs sung before. ${plural(neverSung, 'song has', 'songs have')} never been sung.</p>` : ''}
+      ${longest.length ? longest.map(row) : html`<p class="hint">No song has been sung yet.</p>`}</section>
     <section class="card"><h3 class="card-subtitle">Songs sung, by category</h3>
       ${byCategory.map(item => html`<div class="bar-row"><span>${item.category}</span>
         <span class="bar"><span style="width: ${item.total ? Math.round(item.sung / item.total * 100) : 0}%"></span></span>

@@ -1,27 +1,33 @@
-/* The Schedule tab. Each appearance lays it out its own way (see
-   appearance/registry.js), all from the same selection and the same pieces:
-     list      Original: next service, then every service by date
+/* The Schedule tab. Each appearance arranges the same pieces its own way
+   (see appearance/registry.js):
+     list      Original: the service under way or the next one, then every
+               service from the chosen month on
      calendar  Prism: a month calendar beside the chosen day
      strip     Aurora: a strip of service days above the chosen day
      rail      Navy & Cream: a date rail and a day card
-   Until a member picks a day, the Schedule follows the next service to
-   start (Pacific time), and moves on at each service's start minute. */
+   The tools are the same in every layout and are built here: search, the
+   department filter, month navigation, past services, "You serve here",
+   "Edit assignments" for leaders, and the list of all services, a page at a
+   time. Until a member picks a day, the Schedule follows the service under
+   way (for 20 minutes after it starts, shown as "Now"), else the next one. */
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { DEPARTMENTS, dutyName } from '../../config/duties.js';
-import { upcoming, past, nextService, serviceId, byStart, isUpcoming, departmentHasAssignments, assignedCount } from '../../lib/services.js';
-import { addMonths, monthName, clockTime, longDate, dayOfMonth, monthShort, weekdayShort, todayISO } from '../../lib/dates.js';
+import { serviceId, byStart, startsAt, isUpcoming, isNow, departmentHasAssignments, assignedCount, serviceClock } from '../../lib/services.js';
+import { addMonths, monthName, longDate, shortDate, dayOfMonth, monthShort, weekdayShort, todayISO } from '../../lib/dates.js';
 import { canManageAnyDepartment } from '../../services/access.js';
 import { openService } from '../manage/services.js';
 import { layoutFor, currentAppearance } from '../../appearance/picker.js';
+import { serviceCard, serviceList, isCurrent } from '../../ui/components.js';
 import * as list from './list.js';
 import * as calendar from './calendar.js';
 import * as strip from './strip.js';
 import * as rail from './rail.js';
 
 const LAYOUTS = { list, calendar, strip, rail };
+const PAGE = 12; // services in the list before "Show more services"
 
 ui.departmentFilter = (function saved() {
   const value = readText('wds-dept', 'All');
@@ -35,40 +41,60 @@ export function render() {
 
 /* ---- what is on the schedule ---- */
 
+/* Search looks at what the screen shows: duty names as members know them
+   ("Opening Prayer", not the stored "Sermon"), names, dates and services. */
 function matches(service, query) {
-  const text = [service.worship, service.service, service.date, longDate(service.date), service.choirSong]
-    .concat(Object.entries(service.assignments || {}).flatMap(([duty, name]) => name ? [duty, name, nameOf(name)] : []))
+  const text = [service.worship, service.service, service.date, longDate(service.date), shortDate(service.date), service.choirSong]
+    .concat(Object.entries(service.assignments || {}).flatMap(([duty, name]) => name ? [dutyName(duty), name, nameOf(name)] : []))
     .join(' ').toLowerCase();
   return query.toLowerCase().split(/\s+/).filter(Boolean).every(word => text.includes(word));
 }
 
-/* Services the member can see with the current department filter and
-   search, oldest first. Past services only when "Show past" is on. */
-export function shownServices({ includePast = pastShown() } = {}) {
-  const list = includePast ? upcoming(data.services).concat(past(data.services)).sort(byStart) : upcoming(data.services);
-  return list.filter(service => (ui.departmentFilter === 'All' || departmentHasAssignments(service, ui.departmentFilter)) &&
-    (!ui.schedule.query || matches(service, ui.schedule.query)));
+function fits(service) {
+  return ui.departmentFilter === 'All' || departmentHasAssignments(service, ui.departmentFilter);
 }
 
-export function pastShown() { return feature('pastServices') && ui.showPast; }
-export function pastCount() { return feature('pastServices') ? past(data.services).length : 0; }
+function pastShown() { return feature('pastServices') && ui.showPast; }
+
+/* Services the member can see with the current department filter and
+   search, oldest first: those still to come or under way, and the past ones
+   too while "Show past services" is on. */
+export function shownServices({ includePast = pastShown() } = {}) {
+  return data.services.filter(service => Number.isFinite(startsAt(service)) && (includePast || isCurrent(service)) &&
+    fits(service) && (!ui.schedule.query || matches(service, ui.schedule.query))).sort(byStart);
+}
+
+/* Of services in start order: the one under way (the later one if two
+   overlap), else the next to start, else none. */
+export function nowOrNext(services) {
+  return services.filter(service => isNow(service)).pop() || services.find(service => isUpcoming(service)) || null;
+}
+
+/* The service a day or month opens on: under way or next, else the last. */
+function openingService(services) {
+  return nowOrNext(services) || services[services.length - 1] || null;
+}
 
 /* The chosen month, day and service. Without a member's choice, these
-   follow the next service to start. */
+   follow the service under way or the next one to start. */
 export function selection() {
   const all = shownServices();
   const pick = ui.schedule;
   let service = pick.chosen ? all.find(item => serviceId(item) === pick.service) : null;
   if (!pick.chosen) {
-    service = nextService(all);
+    service = openingService(all);
     pick.month = service ? service.date.slice(0, 7) : (pick.month || todayISO().slice(0, 7));
     pick.date = service ? service.date : '';
   }
   const month = pick.month;
   const date = service ? service.date : pick.date;
   const onDate = all.filter(item => item.date === date);
-  if (!service && onDate.length) service = nextService(onDate);
+  if (!service && onDate.length) service = openingService(onDate);
   return { all, month, date, service, onDate, inMonth: all.filter(item => item.date.startsWith(month)) };
+}
+
+export function serves(service) {
+  return !!ui.me && Object.values(service.assignments || {}).includes(ui.me);
 }
 
 /* ---- shared pieces ---- */
@@ -83,11 +109,18 @@ export function monthNav(month) {
   </div>`;
 }
 
-export function modeToggle(dayLabel, allLabel) {
+/* The layout's own view of a day or month, or the list of all services.
+   The list has the same name in every appearance. */
+export function modeToggle(dayLabel) {
   return html`<div class="segmented" role="group" aria-label="View">
     <button type="button" data-act="schedule-mode" data-mode="day" aria-pressed="${ui.schedule.mode !== 'all'}">${dayLabel}</button>
-    <button type="button" data-act="schedule-mode" data-mode="all" aria-pressed="${ui.schedule.mode === 'all'}">${allLabel}</button>
+    <button type="button" data-act="schedule-mode" data-mode="all" aria-pressed="${ui.schedule.mode === 'all'}">All services</button>
   </div>`;
+}
+
+/* Back to the service under way or the next one, from any month or day. */
+export function todayButton() {
+  return html`<button type="button" class="ghost small" data-act="schedule-today">Next service</button>`;
 }
 
 export function searchBox() {
@@ -98,29 +131,47 @@ export function searchBox() {
   </label>`;
 }
 
-export function pastToggle() {
+/* Past services: one switch, the same words in every layout. */
+export function pastControl() {
   if (!feature('pastServices')) return '';
-  return html`<label class="check"><input type="checkbox" data-change="schedule-past"${ui.showPast ? ' checked' : ''}> Include past services</label>`;
+  return html`<button type="button" class="link schedule-past" data-act="toggle-past">${ui.showPast ? 'Hide past services' : 'Show past services'}</button>`;
 }
 
-export function dayButton(date, services, selected) {
+function dayButton(date, services, selected) {
+  const mine = services.some(serves);
   return html`<button type="button" class="day-button${date === selected ? ' is-selected' : ''}" data-act="schedule-date"
-    data-date="${date}" aria-pressed="${date === selected}" aria-label="${longDate(date)}, ${plural(services.length, 'service')}">
+    data-date="${date}" aria-pressed="${date === selected}" aria-label="${longDate(date)}, ${plural(services.length, 'service')}${mine ? ', you serve' : ''}">
     <span class="day-weekday">${weekdayShort(date)}</span>
     <span class="day-number">${dayOfMonth(date)}</span>
-    <span class="day-dots" aria-hidden="true">${services.map(() => html`<i></i>`)}</span>
+    <span class="day-dots" aria-hidden="true">${services.map(service => html`<i${serves(service) ? html` class="is-mine"` : ''}></i>`)}</span>
   </button>`;
 }
 
-export function datesIn(services) {
-  return Array.from(new Set(services.map(service => service.date))).sort();
+/* The month's service days as one scrolling row of buttons. Its month is in
+   its address, so a redraw keeps its sideways scroll only within a month. */
+export function dayScroller({ inMonth, date }, className) {
+  const days = Array.from(new Set(inMonth.map(service => service.date))).sort();
+  if (!days.length) return noServices(emptyText('this month'));
+  return html`<div class="${className} scroll-x" role="group" aria-label="Service days" data-month="${days[0].slice(0, 7)}">${days.map(day =>
+    dayButton(day, inMonth.filter(item => item.date === day), date))}</div>`;
+}
+
+/* After a redraw, the chosen day's button is in view in its row. */
+export function mounted(view) {
+  view.querySelectorAll('[role="group"][aria-label="Service days"]').forEach(row => {
+    const chosen = row.querySelector('.day-button.is-selected');
+    if (!chosen) return;
+    const start = chosen.offsetLeft, end = start + chosen.offsetWidth;
+    if (start < row.scrollLeft) row.scrollLeft = Math.max(0, start - 12);
+    else if (end > row.scrollLeft + row.clientWidth) row.scrollLeft = end - row.clientWidth + 12;
+  });
 }
 
 export function timeButtons(services, selected) {
   if (services.length < 2) return '';
   return html`<div class="time-buttons" role="group" aria-label="Service time">
     ${services.map(service => html`<button type="button" data-act="schedule-service" data-service="${serviceId(service)}"
-      aria-pressed="${!!selected && serviceId(selected) === serviceId(service)}">${clockTime(service.time)} <span>${service.service}</span></button>`)}
+      aria-pressed="${!!selected && serviceId(selected) === serviceId(service)}">${serviceClock(service)} <span>${service.service}</span></button>`)}
   </div>`;
 }
 
@@ -131,31 +182,69 @@ export function dayHero(service) {
     <div class="day-hero-date"><span class="day-hero-day">${dayOfMonth(service.date)}</span><span class="day-hero-month">${monthShort(service.date)}</span></div>
     <div class="day-hero-text">
       <h2>${longDate(service.date)}</h2>
-      <p>${clockTime(service.time)} · ${service.service} · Pacific time</p>
+      <p>${isNow(service) ? 'Now · ' : ''}${serviceClock(service)} · ${service.service} · Pacific time</p>
     </div>
     <p class="day-hero-count">${assignedCount(service)} duties filled · ${plural(people, 'person', 'people')}</p>
   </section>`;
 }
 
 /* "You serve here: Presider, Opening Prayer" when the member has duties at it. */
-export function myDutiesAt(service) {
+function myDutiesAt(service) {
   const duties = Object.entries(service.assignments || {}).filter(([, name]) => name && name === ui.me).map(([duty]) => dutyName(duty));
   return duties.length ? html`<p class="my-duties-note">You serve here: <strong>${duties.join(', ')}</strong></p>` : '';
 }
 
-export function editLink(service) {
+function editLink(service) {
   if (!canManageAnyDepartment()) return '';
   return html`<button type="button" class="link edit-link" data-act="schedule-edit" data-service="${serviceId(service)}">Edit assignments</button>`;
 }
 
-export function noServices(text = 'No services match.') {
-  return html`<p class="empty">${text}</p>`;
+/* One service as every layout shows it: "You serve here", its team, and
+   "Edit assignments" for leaders. */
+export function servicePanel(service, { withDate = false } = {}) {
+  return html`${myDutiesAt(service)}${serviceCard(service, { only: ui.departmentFilter, withDate })}${editLink(service)}`;
+}
+
+/* Why nothing shows, given the search and the department filter. `where`
+   is "this month", "on this day" and so on. */
+export function emptyText(where) {
+  if (ui.schedule.query) return 'No services match your search.';
+  return ui.departmentFilter === 'All' ? 'No services ' + where + '.' : 'No services for ' + ui.departmentFilter + ' ' + where + '.';
+}
+
+/* An empty view, with a way out when a department filter caused it. */
+export function noServices(text) {
+  return html`<div class="empty schedule-empty"><p>${text}</p>${ui.departmentFilter !== 'All'
+    ? html`<button type="button" class="link" data-act="department-filter" data-department="All">Show all departments</button>` : ''}</div>`;
+}
+
+/* Every shown service from the chosen month on, or every match while
+   searching, a page at a time. `skip` leaves out a service shown above. */
+export function allServicesList(sel, { skip = null } = {}) {
+  const query = ui.schedule.query;
+  const from = query ? '' : sel.month + '-01';
+  const services = sel.all.filter(service => service !== skip && service.date >= from);
+  const shown = services.slice(0, ui.schedule.size || PAGE);
+  const where = skip && skip.date >= from ? 'after this one' : 'in ' + monthName(sel.month) + ' or later';
+  return html`<section class="month-list" aria-label="All services">
+    ${query && services.length ? html`<p class="schedule-count">${plural(services.length, 'service')} ${services.length === 1 ? 'matches' : 'match'} your search.</p>` : ''}
+    ${shown.length ? serviceList(shown, ui.departmentFilter) : noServices(emptyText(where))}
+    ${services.length > shown.length ? html`<div class="center"><button type="button" class="ghost" data-act="schedule-more">Show more services</button></div>` : ''}
+  </section>`;
 }
 
 /* ---- actions ---- */
 
 function choose(changes) {
-  Object.assign(ui.schedule, changes, { chosen: true });
+  Object.assign(ui.schedule, changes, { chosen: true, size: PAGE });
+  redraw();
+}
+
+/* Search waits for a pause in typing, then redraws with the field blurred
+   (a focused field pauses redraws) and puts the caret back. */
+let searchTimer = 0;
+/* The redraw keeps the search box focused with its caret (ui/replace.js). */
+function applySearch() {
   redraw();
 }
 
@@ -165,6 +254,7 @@ defineActions({
     run: el => {
       ui.departmentFilter = el.dataset.department || el.value || 'All';
       writeText('wds-dept', ui.departmentFilter);
+      ui.schedule.size = PAGE;
       redraw();
     }
   },
@@ -174,14 +264,14 @@ defineActions({
   },
   'schedule-today': {
     public: true,
-    run: () => { Object.assign(ui.schedule, { chosen: false, query: '' }); redraw(); }
+    run: () => { Object.assign(ui.schedule, { chosen: false, query: '', size: PAGE }); redraw(); }
   },
   'schedule-date': {
     public: true,
     run: el => {
       const onDate = shownServices({ includePast: true }).filter(service => service.date === el.dataset.date);
-      const service = nextService(onDate);
-      if (service && !isUpcoming(service)) ui.showPast = true;
+      const service = openingService(onDate);
+      if (service && !isCurrent(service)) ui.showPast = true;
       choose({ month: el.dataset.date.slice(0, 7), date: el.dataset.date, service: service ? serviceId(service) : '', mode: 'day' });
     }
   },
@@ -190,33 +280,29 @@ defineActions({
     run: el => {
       const service = data.services.find(item => serviceId(item) === el.dataset.service);
       if (!service) return;
-      if (!isUpcoming(service)) ui.showPast = true;
+      if (!isCurrent(service)) ui.showPast = true;
       choose({ month: service.date.slice(0, 7), date: service.date, service: el.dataset.service, mode: 'day' });
     }
   },
-  'schedule-mode': { public: true, run: el => { ui.schedule.mode = el.dataset.mode === 'all' ? 'all' : 'day'; redraw(); } },
+  'schedule-mode': { public: true, run: el => { ui.schedule.mode = el.dataset.mode === 'all' ? 'all' : 'day'; ui.schedule.size = PAGE; redraw(); } },
   'schedule-search': {
     public: true,
     run: el => {
-      // Redraw with the field blurred (a focused field pauses redraws), then
-      // put the caret back where it was.
       ui.schedule.query = el.value;
-      const caret = el.selectionStart;
-      el.blur();
-      redraw();
-      const input = document.getElementById('schedule-search');
-      if (input) { input.focus(); try { input.setSelectionRange(caret, caret); } catch (_error) { /* not a text field */ } }
+      ui.schedule.size = PAGE;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(applySearch, 150);
     }
   },
-  'schedule-past': { public: true, run: el => { ui.showPast = el.checked; redraw(); } },
-  'toggle-past': { public: true, run: () => { ui.showPast = !ui.showPast; redraw(); } },
+  'schedule-more': { public: true, run: () => { ui.schedule.size = (ui.schedule.size || PAGE) + PAGE; redraw(); } },
+  'toggle-past': { public: true, run: () => { ui.showPast = !ui.showPast; ui.schedule.size = PAGE; redraw(); } },
   'schedule-edit': {
     allowed: () => canManageAnyDepartment(),
     run: el => openService(el.dataset.service)
   }
 });
 
-/* "/" jumps to the search box where there is one. */
+/* "/" jumps to the search box. */
 document.addEventListener('keydown', event => {
   if (event.key !== '/' || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
   const input = document.getElementById('schedule-search');

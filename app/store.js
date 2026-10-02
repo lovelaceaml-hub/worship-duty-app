@@ -8,6 +8,7 @@
    loaded   which shared records have arrived */
 import { featureOn } from './config/features.js';
 import { canonicalName, displayName } from './lib/names.js';
+import { addDays, todayISO } from './lib/dates.js';
 
 export const data = {
   members: [],          // app/members.list, every member name
@@ -21,7 +22,7 @@ export const data = {
 };
 
 export const session = {
-  status: 'loading',    // 'loading', 'signedOut', 'forced' (must change PIN), 'verified'
+  status: 'loading',    // 'loading', 'offline' (Firebase out of reach), 'signedOut', 'forced' (must change PIN), 'verified'
   user: null,           // Firebase user
   member: null          // verified claims: memberId, memberName, roles, departments
 };
@@ -31,7 +32,7 @@ export const loaded = { schedule: false, members: false, settings: false, roster
 export const ui = {
   tab: 'schedule',      // schedule, my, songs, manage
   account: '',          // '', 'availability', 'settings' (views inside My Duties)
-  manage: 'departments',// Manage section
+  manage: '',           // Manage section ('' until picked: Requests when some wait, else the month plan)
   manageDepartment: '', // department picked in Manage ('All' for administrators)
   departmentView: null, // { department, uid } while a member's profile is open
   me: '',               // signed-in member name
@@ -39,18 +40,46 @@ export const ui = {
   expanded: {},         // open cards and lists, by key
   showPast: false,
   departmentFilter: 'All',
-  schedule: { month: '', date: '', service: '', mode: 'day', query: '', chosen: false },
-  // Manage, Services: the month shown, the service whose details are open,
-  // and Fill's proposals ('serviceId|duty' -> { memberUid, memberName }).
-  plan: { month: '', open: '', proposals: {}, unfilled: 0, busy: false, scroll: false, adding: false, fillMode: '' },
-  requestDraft: null,   // { key, note } while a member writes a change request
-  availabilityDraft: null, // the member's availability while they edit it
+  // Schedule: the chosen month, day and service, the view, the search, and
+  // how many services the list shows before "Show more services".
+  schedule: { month: '', date: '', service: '', mode: 'day', query: '', chosen: false, size: 12 },
+  // Manage, month plan: the month shown and the service whose details are
+  // open; Fill's proposals ('serviceId|duty' -> { memberUid, memberName })
+  // with the { department, month } they belong to, the duties Fill could not
+  // fill ('serviceId|duty' -> reason, see lib/fill.js) and the ones the last
+  // save skipped (-> { reason, memberName }); single duties being saved
+  // (-> the name going on); Fill reading the lists (filling) and what to
+  // scroll to after a redraw. See services/planner.js.
+  plan: { month: '', open: '', proposals: {}, scope: null, unfilled: {}, skipped: {}, saving: {}, busy: false, filling: false, scroll: false, scrollTo: '', adding: false, fillMode: '' },
+  // Unsaved member edits. Each names its owner (the member's name), and a
+  // screen drops a draft whose owner is not the member signed in now.
+  requestDraft: null,   // { owner, key, note, busy } while a member writes a change request
+  availabilityDraft: null, // { owner, availability } while a member edits their availability
   availabilityChanged: false,
   songService: null,    // service id the Presider planner should open
   songNav: false,       // one render after an explicit move into the planner
   signIn: { member: '', busy: false, error: '' },
   sitePinError: ''
 };
+
+/* What one member left on the screen: drafts, open cards, Manage's place
+   and proposals, banners, the song planner's place. It is cleared when the
+   member signs out or a different member signs in, so nothing carries over
+   on a shared device. Modules with their own member state register a reset
+   with onMemberChange(). The department filter is the device's choice and
+   stays. */
+const DEVICE_KEYS = ['departmentFilter'];
+const fresh = structuredClone(ui);
+const resets = [];
+
+export function onMemberChange(reset) { resets.push(reset); }
+
+export function forgetMemberState() {
+  Object.keys(fresh).forEach(key => { if (!DEVICE_KEYS.includes(key)) ui[key] = structuredClone(fresh[key]); });
+  resets.forEach(reset => {
+    try { reset(); } catch (error) { console.warn('A reset failed:', error); }
+  });
+}
 
 export const feature = id => featureOn(data.settings, id);
 export const canonical = name => canonicalName(name, data.nameMap);
@@ -80,10 +109,25 @@ export function writeText(key, value) {
 }
 
 /* The last schedule this device saw, painted at start-up before Firestore
-   answers, and shown when the device is offline. */
+   answers, and shown when the device is offline. It keeps the services
+   from two months back on (the Schedule and My Duties need no older ones),
+   and is written at most every few seconds, since every live update calls
+   saveCache(), and at once with { now: true } (the page is closing). */
 const CACHE_KEY = 'wds-cache-v1';
-export function saveCache() {
-  writeJSON(CACHE_KEY, { services: data.services, members: data.members, nameMap: data.nameMap, settings: {
+const CACHE_DAYS = 62;
+let saving = null;
+export function saveCache({ now = false } = {}) {
+  if (now) {
+    if (!saving) return;
+    clearTimeout(saving);
+  } else if (saving) return;
+  else {
+    saving = setTimeout(() => saveCache({ now: true }), 2000);
+    return;
+  }
+  saving = null;
+  const from = addDays(todayISO(), -CACHE_DAYS);
+  writeJSON(CACHE_KEY, { services: data.services.filter(service => !(service.date < from)), members: data.members, nameMap: data.nameMap, settings: {
     features: data.settings.features || {}, sitePinHash: data.settings.sitePinHash || ''
   } });
 }
@@ -97,25 +141,33 @@ export function loadCache() {
   return true;
 }
 
+/* One service's names in the current spelling. Returns the service. */
+export function canonicalizeService(service) {
+  const assignments = service.assignments || {};
+  Object.keys(assignments).forEach(duty => { assignments[duty] = canonical(assignments[duty]); });
+  if (service.conflictOk) {
+    const merged = {};
+    Object.entries(service.conflictOk).forEach(([name, duties]) => {
+      const key = canonical(name);
+      merged[key] = (merged[key] || []).concat(duties || []);
+    });
+    service.conflictOk = merged;
+  }
+  return service;
+}
+
+export function canonicalizeRosters() {
+  Object.keys(data.rosters).forEach(department => {
+    data.rosters[department] = Array.from(new Set((data.rosters[department] || []).map(canonical).filter(Boolean))).sort();
+  });
+}
+
 /* Apply the current name map to every stored name so duties, rosters and
    requests all use one spelling. */
 export function canonicalizeNames() {
   data.members = Array.from(new Set(data.members.map(canonical).filter(Boolean)));
-  data.services.forEach(service => {
-    const assignments = service.assignments || {};
-    Object.keys(assignments).forEach(duty => { assignments[duty] = canonical(assignments[duty]); });
-    if (service.conflictOk) {
-      const merged = {};
-      Object.entries(service.conflictOk).forEach(([name, duties]) => {
-        const key = canonical(name);
-        merged[key] = (merged[key] || []).concat(duties || []);
-      });
-      service.conflictOk = merged;
-    }
-  });
-  Object.keys(data.rosters).forEach(department => {
-    data.rosters[department] = Array.from(new Set((data.rosters[department] || []).map(canonical).filter(Boolean))).sort();
-  });
+  data.services.forEach(canonicalizeService);
+  canonicalizeRosters();
   data.requests.forEach(request => { request.name = canonical(request.name); });
   if (data.settings.schedulerName) data.settings.schedulerName = canonical(data.settings.schedulerName);
 }

@@ -11,15 +11,16 @@
 const crypto = require('node:crypto');
 const authz = require('./department-auth.js');
 const { memberListNames } = require('./department-handlers.js');
+const { refusal, DEFAULT_REASONS } = require('./refusals.js');
+const permissions = require('./permissions.js');
 
 const PAGE_SIZE = 10;
 const INVITATION_DAYS = 7;
 const TOKEN_BYTES = 32;
 
-function errorWithCode(code, message) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
+/* An error for the app, with details.reason (by default the one for its code). */
+function errorWithCode(code, message, reason) {
+  return refusal(code, reason || DEFAULT_REASONS[code] || 'server-error', message);
 }
 
 function isPlainObject(value) {
@@ -40,12 +41,14 @@ function normalizeText(value, path, max = 160) {
 }
 
 function departmentFrom(value) {
-  try {
-    return normalizeText(value, 'departmentId', 100);
-  } catch (error) {
-    throw error;
-  }
+  const department = normalizeText(value, 'departmentId', 100);
+  if (!permissions.DEPARTMENTS.includes(department)) throw errorWithCode('invalid-argument', 'That is not one of the departments.');
+  return department;
 }
+
+// "Add all" searches once per missing name; the account list read for the
+// first search serves the ones right after it.
+const SEARCH_CACHE_MS = 60 * 1000;
 
 function requestData(request) {
   const data = request && request.data == null ? {} : request && request.data;
@@ -65,16 +68,16 @@ function verifiedActor(request) {
   }
   const account = auth.currentAccount;
   if (!isPlainObject(account)) {
-    throw errorWithCode('permission-denied', 'The signed-in member account is missing.');
+    throw errorWithCode('permission-denied', 'The signed-in member account is missing.', 'session-ended');
   }
   if (auth.token && auth.token.mustChangePin === true) {
-    throw errorWithCode('failed-precondition', 'Change your PIN before using department membership.');
+    throw errorWithCode('failed-precondition', 'Change your PIN before using department membership.', 'pin-change-required');
   }
   if (!authz.isCurrentRoleVersion(auth, account)) {
-    throw errorWithCode('permission-denied', 'The member role has changed. Sign in again.');
+    throw errorWithCode('permission-denied', 'The member role has changed. Sign in again.', 'session-ended');
   }
   if (account.active === false) {
-    throw errorWithCode('permission-denied', 'The member account is inactive.');
+    throw errorWithCode('permission-denied', 'The member account is inactive.', 'account-inactive');
   }
   const actor = {
     ...auth,
@@ -82,7 +85,7 @@ function verifiedActor(request) {
     token: auth.token || auth.claims || {}
   };
   if (!authz.isAuthenticated(actor)) {
-    throw errorWithCode('permission-denied', 'The signed-in member account is not active.');
+    throw errorWithCode('failed-precondition', 'Change your PIN before using department membership.', 'pin-change-required');
   }
   return actor;
 }
@@ -92,7 +95,7 @@ function accountDocumentId(actor) {
   const token = actor.token || {};
   const value = account.id || account.memberId || token.memberId;
   if (value == null || String(value).trim() === '') {
-    throw errorWithCode('permission-denied', 'The signed-in member account is missing.');
+    throw errorWithCode('permission-denied', 'The signed-in member account is missing.', 'session-ended');
   }
   return String(value).trim();
 }
@@ -116,20 +119,20 @@ function accountName(data, documentId) {
 
 function accountIsCurrent(actor, snapshot) {
   if (!snapshot || !snapshot.exists) {
-    throw errorWithCode('permission-denied', 'The signed-in member account is missing.');
+    throw errorWithCode('permission-denied', 'The signed-in member account is missing.', 'session-ended');
   }
   const data = snapshot.data() || {};
   if (accountUid(data, snapshot.id) !== actor.uid) {
-    throw errorWithCode('permission-denied', 'The signed-in member account is invalid.');
+    throw errorWithCode('permission-denied', 'The signed-in member account is invalid.', 'session-ended');
   }
   if (data.active === false) {
-    throw errorWithCode('permission-denied', 'The member account is inactive.');
+    throw errorWithCode('permission-denied', 'The member account is inactive.', 'account-inactive');
   }
   if (data.mustChangePin === true) {
-    throw errorWithCode('failed-precondition', 'Change your PIN before using department membership.');
+    throw errorWithCode('failed-precondition', 'Change your PIN before using department membership.', 'pin-change-required');
   }
   if (!authz.isCurrentRoleVersion(actor, data)) {
-    throw errorWithCode('permission-denied', 'The member role has changed. Sign in again.');
+    throw errorWithCode('permission-denied', 'The member role has changed. Sign in again.', 'session-ended');
   }
   return data;
 }
@@ -140,14 +143,14 @@ function accountRef(db, actor) {
 
 function assertManagement(actor, departmentId) {
   if (!authz.managesDepartment(actor, departmentId)) {
-    throw errorWithCode('permission-denied', 'You cannot manage this department.');
+    throw errorWithCode('permission-denied', 'You cannot manage this department.', 'cross-department');
   }
 }
 
 function invitationToken(value) {
   const token = normalizeText(value, 'token', 200);
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
-    throw errorWithCode('invalid-argument', 'token is invalid.');
+    throw errorWithCode('invalid-argument', 'token is invalid.', 'invite-invalid');
   }
   return token;
 }
@@ -159,16 +162,16 @@ function digestToken(token) {
 function tokenText(value) {
   if (Buffer.isBuffer(value)) return value.toString('base64url');
   if (value instanceof Uint8Array) return Buffer.from(value).toString('base64url');
-  throw errorWithCode('failed-precondition', 'Invitation token generation is unavailable.');
+  throw errorWithCode('internal', 'Invitation token generation is unavailable.');
 }
 
 function newToken(randomBytes) {
   const bytes = randomBytes(TOKEN_BYTES);
   if (bytes && typeof bytes.then === 'function') {
-    throw errorWithCode('failed-precondition', 'Invitation token generation must be synchronous.');
+    throw errorWithCode('internal', 'Invitation token generation must be synchronous.');
   }
   if (!bytes || typeof bytes.length !== 'number' || bytes.length !== TOKEN_BYTES) {
-    throw errorWithCode('failed-precondition', 'Invitation token generation returned an invalid value.');
+    throw errorWithCode('internal', 'Invitation token generation returned an invalid value.');
   }
   return tokenText(bytes);
 }
@@ -202,6 +205,7 @@ function profileForAccount(departmentId, memberUid, name, actor, at) {
     updatedAt: at,
     updatedByUid: actor.uid,
     updatedBy: actor.token.memberName || actor.token.member || actor.uid,
+    revision: 1,
     attribution: {
       createdBy: actor.uid,
       createdAt: at,
@@ -210,7 +214,7 @@ function profileForAccount(departmentId, memberUid, name, actor, at) {
     }
   };
   if (!authz.profileForScheduling(profile)) {
-    throw errorWithCode('failed-precondition', 'The department member profile is invalid.');
+    throw errorWithCode('internal', 'The department member profile is invalid.');
   }
   return profile;
 }
@@ -219,7 +223,7 @@ function accountSearchRows(snapshot) {
   const rows = [];
   (snapshot && Array.isArray(snapshot.docs) ? snapshot.docs : []).forEach(document => {
     const data = document.data() || {};
-    if (data.active === false) return;
+    if (data.active === false || data.renamedTo) return;
     const name = accountName(data, document.id);
     const memberUid = accountUid(data, document.id);
     if (!name || !memberUid) return;
@@ -245,7 +249,7 @@ function assertPage(value) {
 
 function assertTransactionDb(db) {
   if (!db || typeof db.runTransaction !== 'function') {
-    throw errorWithCode('failed-precondition', 'Atomic membership storage is unavailable.');
+    throw errorWithCode('internal', 'Atomic membership storage is unavailable.');
   }
 }
 
@@ -257,6 +261,20 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
     throw new TypeError('now and randomBytes must be functions.');
   }
 
+  let cachedRows = null;
+  let cachedAt = 0;
+  async function accountRows() {
+    const at = Number(now());
+    if (cachedRows && at - cachedAt < SEARCH_CACHE_MS && at >= cachedAt) return cachedRows;
+    const accounts = db.collection('accounts');
+    const selected = typeof accounts.select === 'function'
+      ? accounts.select('authUid', 'uid', 'memberUid', 'memberId', 'id', 'memberName', 'name', 'member', 'displayName', 'active', 'renamedTo')
+      : accounts;
+    cachedRows = accountSearchRows(await selected.get());
+    cachedAt = at;
+    return cachedRows;
+  }
+
   async function searchDepartmentCandidates(request) {
     const actor = verifiedActor(request);
     const data = requestData(request);
@@ -266,13 +284,8 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
     if (query.length < 2) throw errorWithCode('invalid-argument', 'query must contain at least two characters.');
     const page = assertPage(data.page);
     assertManagement(actor, departmentId);
-    const accounts = db.collection('accounts');
-    const selected = typeof accounts.select === 'function'
-      ? accounts.select('authUid', 'uid', 'memberUid', 'memberId', 'id', 'memberName', 'name', 'member', 'displayName', 'active')
-      : accounts;
-    const snapshot = await selected.get();
     const normalizedQuery = query.toLocaleLowerCase();
-    const rows = accountSearchRows(snapshot);
+    const rows = (await accountRows()).slice();
     // Members who have never signed in have no account yet; they get the
     // uid their first sign-in will give them.
     const known = new Set(rows.flatMap(row => [row.memberUid, row.memberName]));
@@ -301,7 +314,7 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
     const token = newToken(randomBytes);
     const reference = invitationRef(db, token);
     const createdAt = Number(now());
-    if (!Number.isFinite(createdAt)) throw errorWithCode('failed-precondition', 'The server clock is unavailable.');
+    if (!Number.isFinite(createdAt)) throw errorWithCode('internal', 'The server clock is unavailable.');
     const expiresAt = createdAt + INVITATION_DAYS * 24 * 60 * 60 * 1000;
     await db.runTransaction(async transaction => {
       const accountSnapshot = await transaction.get(accountRef(db, actor));
@@ -327,7 +340,7 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
     let revoked = false;
     await db.runTransaction(async transaction => {
       const invitationSnapshot = await transaction.get(reference);
-      if (!invitationSnapshot.exists) throw errorWithCode('not-found', 'The invitation was not found.');
+      if (!invitationSnapshot.exists) throw errorWithCode('not-found', 'The invitation was not found.', 'invite-invalid');
       const invitation = invitationSnapshot.data() || {};
       const departmentId = departmentFrom(invitation.departmentId);
       const accountSnapshot = await transaction.get(accountRef(db, actor));
@@ -339,7 +352,7 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
       }
       if (invitation.status === 'accepted') return;
       if (invitation.status !== 'active') {
-        throw errorWithCode('failed-precondition', 'The invitation cannot be revoked.');
+        throw errorWithCode('failed-precondition', 'The invitation cannot be revoked.', 'invite-invalid');
       }
       transaction.set(reference, {
         status: 'revoked',
@@ -361,42 +374,47 @@ function createMembershipHandlers({ db, now = () => Date.now(), randomBytes = cr
     let result;
     await db.runTransaction(async transaction => {
       const invitationSnapshot = await transaction.get(reference);
-      if (!invitationSnapshot.exists) throw errorWithCode('failed-precondition', 'The invitation is invalid or expired.');
+      if (!invitationSnapshot.exists) throw errorWithCode('failed-precondition', 'The invitation is invalid or expired.', 'invite-invalid');
       const invitation = invitationSnapshot.data() || {};
       const departmentId = departmentFrom(invitation.departmentId);
       const accountSnapshot = await transaction.get(accountRef(db, actor));
       const account = accountIsCurrent(actor, accountSnapshot);
       const memberUid = accountUid(account, accountSnapshot.id);
       if (memberUid !== actor.uid) {
-        throw errorWithCode('permission-denied', 'The signed-in member account is invalid.');
+        throw errorWithCode('permission-denied', 'The signed-in member account is invalid.', 'session-ended');
       }
       const profileReference = profileRef(db, departmentId, memberUid);
       const profileSnapshot = await transaction.get(profileReference);
       const at = Number(now());
-      if (!Number.isFinite(at)) throw errorWithCode('failed-precondition', 'The server clock is unavailable.');
+      if (!Number.isFinite(at)) throw errorWithCode('internal', 'The server clock is unavailable.');
+      // Someone already in the department does not use up the link, which
+      // stays for the person it was meant for. An inactive member is told so
+      // (inactive: true), since only a leader can make them active.
+      if (profileSnapshot.exists) {
+        const status = String((profileSnapshot.data() || {}).status || 'active');
+        result = { ok: true, departmentId, memberUid, alreadyMember: true, inactive: status === 'inactive' };
+        return;
+      }
       if (invitation.status === 'accepted') {
-        throw errorWithCode('already-exists', 'The invitation has already been accepted.');
+        throw errorWithCode('already-exists', 'The invitation has already been accepted.', 'invite-used');
       }
       if (invitation.status !== 'active' || Number(invitation.expiresAt) <= at) {
-        throw errorWithCode('failed-precondition', 'The invitation is invalid or expired.');
+        throw errorWithCode('failed-precondition', 'The invitation is invalid or expired.', 'invite-invalid');
       }
-      const alreadyMember = profileSnapshot.exists;
-      if (!alreadyMember) {
-        transaction.set(profileReference, profileForAccount(
-          departmentId,
-          memberUid,
-          accountName(account, accountSnapshot.id),
-          actor,
-          at
-        ), { merge: false });
-      }
+      transaction.set(profileReference, profileForAccount(
+        departmentId,
+        memberUid,
+        accountName(account, accountSnapshot.id),
+        actor,
+        at
+      ), { merge: false });
       transaction.set(reference, {
         status: 'accepted',
         acceptedAt: at,
         acceptedByUid: actor.uid,
         acceptedMemberUid: memberUid
       }, { merge: true });
-      result = { ok: true, departmentId, memberUid, alreadyMember };
+      result = { ok: true, departmentId, memberUid, alreadyMember: false };
     });
     return result;
   }

@@ -26,6 +26,12 @@ jobs:
         run: npm run check
       - name: Unit and rules tests
         run: npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Firestore rules on the emulator
+        run: npm run test:rules
       - name: Cloud Functions tests
         run: npm run test:functions
       - name: Browser flows

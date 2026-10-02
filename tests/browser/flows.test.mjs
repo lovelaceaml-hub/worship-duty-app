@@ -32,7 +32,13 @@ async function openAccount(page, view) {
 }
 
 const requestCard = (page, name) => page.locator('.request', { has: page.locator('.card-subtitle', { hasText: name }) });
-const banner = (page, text) => page.locator('#banners .banner', { hasText: text }).waitFor();
+/* A message: a confirmation toast, or a banner (problems, reminders). */
+const banner = (page, text) => page.locator('#banners .banner, #toasts .toast', { hasText: text }).first().waitFor();
+/* Appearance and feedback open from the account menu. */
+async function fromMenu(page, action) {
+  await page.locator('[data-slot="member"]').click();
+  await page.locator(`[data-slot="menu"] [data-act="${action}"]`).click();
+}
 const fakeDoc = (page, docPath) => page.evaluate(docPath => window.__fake.get(docPath), docPath);
 const fakeDocs = (page, prefix) => page.evaluate(prefix => window.__fake.paths(prefix).map(docPath => window.__fake.get(docPath)), prefix);
 /* Manage, Services: open a service's details in the month planner. */
@@ -93,9 +99,10 @@ test('the passcode and the PIN keep the app closed; a reset PIN is changed first
   await context.close();
 });
 
-test('the Schedule opens on the next service and moves on at its start minute', async () => {
+test('the Schedule opens on the next service, keeps it as Now for 20 minutes, then moves on', async () => {
   // Tuesday 2026-07-07 has an 8:00 PM service; the next one is Saturday morning.
-  for (const [time, expected] of [['19:59', '2026-07-07_evening'], ['20:00', '2026-07-11_morning'], ['20:01', '2026-07-11_morning']]) {
+  // A service stays on as "Now" for 20 minutes after it starts.
+  for (const [time, expected] of [['19:59', '2026-07-07_evening'], ['20:00', '2026-07-07_evening'], ['20:19', '2026-07-07_evening'], ['20:20', '2026-07-11_morning']]) {
     const { context, page, errors } = await as('B. Adam', { now: '2026-07-07T' + time + ':00-07:00' });
     assert.equal(await page.locator('.next-service .service-card').getAttribute('data-service'), expected, 'at ' + time);
     assert.deepEqual(errors, []);
@@ -110,7 +117,7 @@ test('a member asks for a change; their leader declines it and the member stays 
   await page.locator('#request-note').fill('Out of town.');
   await page.locator('form[data-act="request-send"] button[type="submit"]').click();
   await banner(page, 'Your request was sent to your leader.');
-  await page.locator('.tag', { hasText: 'Change asked' }).first().waitFor();
+  await page.locator('.duty-state', { hasText: 'Asked. You stay on this duty until your leader answers.' }).first().waitFor();
   const request = (await fakeDocs(page, 'requests/')).find(item => item.name === 'S. Naomi');
   assert.deepEqual([request.department, request.note, request.status], ['Usher Sisters', 'Out of town.', 'pending']);
 
@@ -134,12 +141,14 @@ test('a leader approves a request and gives the duty to someone else in one step
   await tab(page, 'manage');
   await section(page, 'manage-section', 'requests');
   const card = requestCard(page, 'S. Leah');
-  const choice = card.locator('select[name="uid"] option:nth-child(2)');
+  const choice = card.locator('select[name="uid"] optgroup[label="Suggested"] option').first();
   await choice.waitFor({ state: 'attached' });
   const uid = await choice.getAttribute('value');
+  const name = await choice.textContent();
+  assert.equal(await card.locator('button[type="submit"]').isDisabled(), true, 'nothing chosen yet');
   await card.locator('select[name="uid"]').selectOption(uid);
-  await card.locator('button[type="submit"]').click();
-  await banner(page, 'Approved. The duty has a new person.');
+  await card.locator('button[type="submit"]', { hasText: 'Approve, give it to ' + name }).click();
+  await banner(page, 'Approved. ' + name + ' has ');
 
   const request = (await fakeDocs(page, 'requests/')).find(item => item.name === 'S. Leah');
   assert.equal(request.status, 'approved');
@@ -204,7 +213,7 @@ test('a member marks a day off; the duty that day is flagged and their leader fi
   await form.locator('input[name="date"]').fill(duty.date);
   await form.locator('button[type="submit"]').click();
   await page.locator('[data-act="availability-save"]:not([disabled])').click();
-  await banner(page, 'Saved. 1 duty you can no longer make was flagged for your leader.');
+  await banner(page, 'Saved. Your leader was told you cannot make ');
   const [saved] = await calls(page, 'saveMemberAvailability');
   assert.deepEqual(saved.departments.map(item => [item.departmentId, item.availability.exceptions[duty.date]]), [['Usher Sisters', { '*': 'unavailable' }]]);
   assert.ok((await fakeDoc(page, 'schedule/' + duty.id)).needsReplacement[duty.duty]);
@@ -213,8 +222,9 @@ test('a member marks a day off; the duty that day is flagged and their leader fi
   await signIn(page, 'S. Grace');
   const card = await openPlanned(page, duty.id);
   const replace = card.locator('form[data-act="replace-duty"]');
-  await replace.locator('option:nth-child(2)').waitFor({ state: 'attached' });
-  const uid = await replace.locator('option:nth-child(2)').getAttribute('value');
+  const suggested = replace.locator('optgroup[label="Suggested"] option').first();
+  await suggested.waitFor({ state: 'attached' });
+  const uid = await suggested.getAttribute('value');
   await replace.locator('select').selectOption(uid);
   await replace.locator('button[type="submit"]').click();
   await banner(page, 'Replacement saved.');
@@ -251,14 +261,14 @@ test('a leader makes and cancels an invite link; a member opens one and joins', 
   await banner(page, 'You joined Media.');
   assert.deepEqual(await calls(page, 'acceptDepartmentInvitation'), [{ token }]);
   await openAccount(page, 'availability');
-  await page.locator('.availability', { hasText: 'Saved for Media.' }).waitFor();
+  await page.locator('.availability', { hasText: 'Applies to Media.' }).waitFor();
   assert.deepEqual(errors, []);
   await context.close();
 });
 
 test('a member sends feedback and an administrator reads it', async () => {
   const { context, page, errors } = await as('S. Naomi');
-  await page.locator('.feedback-button').click();
+  await fromMenu(page, 'feedback-open');
   await page.locator('.feedback-dialog input[value="suggestion"]').check();
   await page.locator('#feedback-text').fill('The schedule is easy to read.');
   await page.locator('.feedback-dialog button[type="submit"]').click();
@@ -278,7 +288,7 @@ test('a member sends feedback and an administrator reads it', async () => {
 test('the song planner shows how often songs were sung, adds a song and confirms the list', async () => {
   const { context, page, errors } = await as('B. Adam');
   await tab(page, 'my');
-  await page.locator('[data-act="open-songs"]', { hasText: 'Finish your songs' }).click();
+  await page.locator('[data-act="open-songs"]', { hasText: 'Plan your songs' }).click();
   const builder = page.locator('#song-root .builder');
   await builder.waitFor();
   await builder.locator('.total', { hasText: '2 songs' }).waitFor();
@@ -300,6 +310,8 @@ test('the song planner shows how often songs were sung, adds a song and confirms
   await page.locator('#song-root [data-act="song-add"][data-id="004"]').click();
   await page.locator('#song-root .selecting').waitFor({ state: 'detached' });
 
+  // The Thanks song is not chosen, so Confirm asks first.
+  page.once('dialog', dialog => dialog.accept());
   await builder.locator('[data-act="song-confirm"]').click();
   await builder.locator('.confirm.is-done', { hasText: 'Songs confirmed by B. Adam' }).waitFor();
   const setlist = (await fakeDocs(page, 'setlists/'))[0];
@@ -314,7 +326,8 @@ test('the song planner shows how often songs were sung, adds a song and confirms
   const card = page.locator('#song-root .svc-card', { has: page.locator('[data-act="song-toggle-songs"]') }).first();
   await card.locator('.svc-role', { hasText: 'Opening Prayer' }).waitFor();
   await card.locator('.order-head', { hasText: 'Preparation Songs' }).waitFor();
-  await card.locator('.order-head', { hasText: 'Glory & Thanks Song' }).waitFor();
+  await card.locator('.order-head', { hasText: 'Glory Song' }).waitFor();
+  assert.equal(await card.locator('.order-head', { hasText: 'Thanks Song' }).count(), 0, 'no Thanks song was chosen');
   await card.locator('[data-act="song-toggle-songs"]', { hasText: 'Hide songs' }).click();
   await card.locator('.order').waitFor({ state: 'detached' });
 
@@ -327,14 +340,14 @@ test('the song planner shows how often songs were sung, adds a song and confirms
 test('each appearance has its own look and Schedule layout, and the choice is remembered', async () => {
   const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
   for (const [id, layout] of [['prism', '.schedule-calendar'], ['navy', '.schedule-rail'], ['aurora', '.schedule-strip'], ['classic', '.next-service']]) {
-    await page.locator('header [data-act="appearance-open"]').click();
+    await fromMenu(page, 'appearance-open');
     await page.locator(`[data-appearance-choice="${id}"]`).click();
     await page.waitForFunction(id => document.documentElement.dataset.appearance === id, id);
     await page.locator('#view ' + layout).waitFor();
     const sheet = await page.evaluate(() => document.getElementById('theme-css')?.getAttribute('href') || '');
     assert.equal(sheet.includes('styles/themes/' + id + '.css'), id !== 'classic', id);
   }
-  await page.locator('header [data-act="appearance-open"]').click();
+  await fromMenu(page, 'appearance-open');
   await page.locator('[data-appearance-choice="aurora"]').click();
   // The choice is saved once its stylesheet has loaded, in the same step that switches the page.
   await page.waitForFunction(() => document.documentElement.dataset.appearance === 'aurora');
@@ -450,7 +463,7 @@ test('a build works with its stamped files; the maintenance build shows only the
           await signIn(page, 'B. Adam');
           await tab(page, 'songs');
           await page.locator('#song-root .planner-sections').waitFor({ state: 'attached' });
-          await page.locator('header [data-act="appearance-open"]').click();
+          await fromMenu(page, 'appearance-open');
           await page.locator('[data-appearance-choice="prism"]').click();
           await tab(page, 'schedule');
           await page.locator('#view .schedule-calendar').waitFor();
@@ -473,7 +486,8 @@ test('a leader plans the month in a grid; a changed duty saves at once', async (
   await section(page, 'manage-section', 'services');
   const grid = page.locator('#view .plan-grid');
   await grid.waitFor();
-  assert.deepEqual(await grid.locator('tbody th[scope="row"]').allInnerTexts(), ['Usher Door', 'Usher Front', 'Usher Back']);
+  assert.deepEqual(await grid.locator('tbody tr:not(.plan-context) th[scope="row"]').allInnerTexts(), ['Usher Door', 'Usher Front', 'Usher Back']);
+  assert.deepEqual(await grid.locator('tbody tr.plan-context th[scope="row"]').allInnerTexts(), ['Thanks Prayer', 'Closing Prayer']);
   assert.equal(await grid.locator('.plan-head.is-past').count(), 0, 'only the services still to come');
   assert.match(await grid.locator('.plan-head').first().innerText(), /^Tue 7/);
 
@@ -513,7 +527,7 @@ test('Fill proposes members for the usual empty duties; the leader saves them to
     const names = cells.filter(([service]) => service === id).map(([, , value]) => value);
     assert.equal(new Set(names).size, names.length, 'no one twice in one service');
   }
-  await page.locator('#view .plan-actions', { hasText: 'Fill picked 4 members' }).waitFor();
+  await page.locator('#view .plan-actions', { hasText: 'Fill proposed 4 duties for' }).waitFor();
 
   await page.locator('#view [data-act="plan-save"]').click();
   await banner(page, 'Saved 4 duties.');
@@ -526,6 +540,82 @@ test('Fill proposes members for the usual empty duties; the leader saves them to
   await banner(page, 'The usual duties this month are all filled.');
   assert.deepEqual(errors, []);
   await context.close();
+});
+
+test('Fill gives an usher duty to the sister praying there first, and outlines the duties no one is free for', async () => {
+  const away = { availability: { recurring: {}, exceptions: { '2026-07-25': { '*': 'unavailable' } } } };
+  const fixture = { patch: Object.assign({
+    'schedule/2026-07-18_morning': { assignments: { 'Closing Prayer': 'S. Leah' } },
+    'schedule/2026-07-25_morning': { assignments: {} }
+  }, Object.fromEntries(['S. Leah', 'S. Naomi', 'S. Esther', 'S. Grace'].map(name => ['departments/Usher Sisters/members/member:' + name, away]))) };
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'services');
+  await page.locator('#view .plan-grid').waitFor();
+  // Leah prays at that service: she is the first choice for an usher duty there, and the list says why.
+  const door = page.locator('#view select[data-service="2026-07-18_morning"][data-duty="Usher Door"]');
+  assert.match(await door.locator('option').nth(1).textContent(), /^S\. Leah \(Closing Prayer\b/);
+  await page.locator('#view [data-act="plan-fill"]').click();
+  await page.locator('#view .plan-cell.is-proposed').first().waitFor();
+  assert.equal(await door.inputValue(), 'member:S. Leah');
+  const front = await page.locator('#view select[data-service="2026-07-18_morning"][data-duty="Usher Front"]').inputValue();
+  assert.ok(front && front !== 'member:S. Leah', 'one usher duty with her prayer');
+  // Everyone is away on the 25th: those duties stay empty, outlined, with the reason.
+  const outlined = page.locator('#view .plan-cell.is-unfilled');
+  assert.equal(await outlined.count(), 2);
+  assert.equal(await outlined.first().locator('.plan-note').innerText(), 'No one free then');
+  await page.locator('#view .plan-actions', { hasText: 'Fill proposed 2 duties for' }).waitFor();
+  await page.locator('#view .plan-actions', { hasText: '1 usher also prays there. 2 duties have no one free.' }).waitFor();
+  await page.locator('#view [data-act="plan-save"]').click();
+  await banner(page, 'Saved 2 duties.');
+  const saved = await fakeDoc(page, 'schedule/2026-07-18_morning');
+  assert.equal(saved.assignments['Closing Prayer'], 'S. Leah');
+  assert.equal(saved.assignments['Usher Door'], 'S. Leah');
+  assert.equal(await page.locator('#view .plan-cell.is-unfilled').count(), 0, 'the outlines go once the fill is saved');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('Opening Prayer goes to its default: Fill proposes them, a Worship leader changes them, a new service starts with them', async () => {
+  const fixture = { patch: { 'schedule/2026-07-18_morning': { assignments: {} } } };
+  const { context, page, errors } = await as('E. Joseph', { viewport: DESKTOP, fixture });
+  await tab(page, 'manage');
+  await page.locator('#view select[data-change="manage-department"]').selectOption('Worship');
+  await section(page, 'manage-section', 'services');
+  await page.locator('#view .plan-grid').waitFor();
+  const sermon = page.locator('#view select[data-service="2026-07-18_morning"][data-duty="Sermon"]');
+  assert.ok((await sermon.locator('option').allTextContents()).some(text => /^B\. Samuel \(default\b/.test(text)), 'the default is marked in the list');
+  await page.locator('#view [data-act="plan-fill"]').click();
+  await page.locator('#view .plan-cell.is-proposed').first().waitFor();
+  assert.equal(await sermon.inputValue(), 'member:B. Samuel');
+  const given = await page.locator('#view select[data-service="2026-07-18_morning"]').evaluateAll(selects => selects.map(select => select.value));
+  assert.equal(given.filter(value => value === 'member:B. Samuel').length, 1, 'the default gets no other duty');
+  await page.locator('#view [data-act="plan-discard"]').click();
+
+  await section(page, 'manage-section', 'departments');
+  const choice = page.locator('#view select[data-change="duty-default"][data-duty="Sermon"]');
+  assert.equal(await choice.inputValue(), 'B. Samuel');
+  await choice.selectOption('B. Caleb');
+  await banner(page, 'B. Caleb is the default for Opening Prayer.');
+  assert.deepEqual(await calls(page, 'setDutyDefault'), [{ duty: 'Sermon', memberName: 'B. Caleb' }]);
+  assert.deepEqual((await fakeDoc(page, 'app/settings')).dutyDefaults, { Sermon: 'B. Caleb' });
+  assert.deepEqual(errors, []);
+  await context.close();
+
+  // An administrator adds a service: it starts with the default on Opening Prayer.
+  const admin = await as('B. Adam', { viewport: DESKTOP });
+  await tab(admin.page, 'manage');
+  await section(admin.page, 'manage-section', 'services');
+  await admin.page.locator('#view .plan-add summary').click();
+  const form = admin.page.locator('#view form[data-act="service-add"]');
+  await form.locator('input[name="date"]').fill('2026-07-16');
+  await form.locator('select[name="service"]').selectOption('Evening');
+  await form.locator('select[name="worship"]').selectOption('Pentecost');
+  await form.locator('button[type="submit"]').click();
+  await admin.page.waitForFunction(() => window.__fake.get('schedule/2026-07-16_evening'));
+  assert.deepEqual((await fakeDoc(admin.page, 'schedule/2026-07-16_evening')).assignments, { Sermon: 'B. Samuel' });
+  assert.deepEqual(admin.errors, []);
+  await admin.context.close();
 });
 
 test('on a phone the month is one list, and a service opens in place', async () => {

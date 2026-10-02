@@ -1,21 +1,66 @@
-/* Fill: when a leader asks, a member for each empty duty. Only members who
-   can take the duty then (canTake: active, schedulable, eligible, available)
-   and are not already serving in that service. Three ways to choose:
-   - 'rotation': down the department's list in name order, picking up after
-     whoever served in that department most recently, round and round;
-   - 'random': anyone who can take it;
+/* Fill: when a leader asks, a member for each empty duty. A member is a
+   choice when they can take the duty then (canTake: active, schedulable,
+   eligible, available) and may hold it alongside whatever they already do in
+   that service (conflicts.js: one duty, or one prayer with one usher duty).
+
+   A duty with a default member (Opening Prayer: see DUTY_DEFAULTS) goes to
+   the default whenever they can take it, and to no one else: when they
+   cannot, it stays empty for the leader to fill by hand. The default never
+   gets another duty.
+
+   An usher duty goes first to someone praying in that service (Thanks or
+   Closing Prayer), whatever the mode: the prayers lead and the ushers follow.
+   A service's duties are filled in department order, so its prayers are
+   settled before its ushers. When more than one person praying could take
+   it, the fairest goes (as in Auto).
+
+   Everyone else is chosen the leader's way:
    - 'auto' (the default), fairest first:
-   1. someone with no other duty that day,
-   2. whoever has the fewest duties this month (counting this fill),
-   3. whoever has served least lately (last 8 weeks plus upcoming),
-   4. whoever served longest ago,
-   5. then a different order for each service, so no name always wins a tie.
-   `duties` is a list, or a function giving each service its own. Nothing is
+     1. someone with no other duty that day,
+     2. whoever has the fewest duties that month, counting the services
+        already past and this fill,
+     3. whoever has served least lately (last 8 weeks plus upcoming),
+     4. whoever served longest ago,
+     5. then a different order for each service, so no name always wins a tie.
+   - 'rotation': everyone takes a turn before anyone serves again. Whoever has
+     gone longest without a turn goes first, and people tied go by name. A
+     department's duties share the turns, except that the Presider and Opening
+     Prayer each take turns of their own. An usher duty held by someone
+     praying in that service is not a turn.
+   - 'random': anyone who can take it.
+
+   When no one is free for a duty, Fill moves its own picks in that service
+   around to free someone, and another free member takes the duty they leave.
+   So a duty stays empty only when moving this fill's picks cannot fill it;
+   the duties already saved never move.
+
+   `duties` is a list, or a function giving each service its own. `history`
+   is every known service; it gives the month, the day and the turns their
+   context. `defaults` maps a duty to its default member's name. Nothing is
    saved here; the leader sees the proposals first. */
-import { canTake } from './availability.js';
-import { serviceId, byStart } from './services.js';
+import { canTake, takesDuty } from './availability.js';
+import { serviceId, byStart, startsAt } from './services.js';
 import { hasDuty } from './worship.js';
+import { canAdd, isPrayer, isUsher, prayerOf } from './conflicts.js';
+import { recentLoad } from './workload.js';
 import { ALL_DUTIES, departmentOf } from '../config/duties.js';
+
+/* The three ways, each with one line saying what it does. */
+export const FILL_MODES = [
+  ['auto', 'Auto (fairest first)', 'People with the fewest duties this month go first.'],
+  ['rotation', 'Rotation (take turns)', 'Whoever has waited longest since their last turn goes first.'],
+  ['random', 'Random', 'Anyone free, picked at random.']
+];
+
+/* Why a duty stayed empty, in a few words and in a sentence: its default
+   cannot take it then, no one on the list takes it, no one who takes it is
+   available then, or everyone available already serves in that service. */
+export const UNFILLED_REASONS = {
+  default: ['Default not free', 'The default for this duty cannot take it then. Choose someone by hand.'],
+  nobody: ['No one takes it', 'No one on the list takes this duty.'],
+  away: ['No one free then', 'No one who takes this duty is available then.'],
+  serving: ['Everyone free is serving', 'Everyone available already serves in this service.']
+};
 
 /* A small stable number for a name at a service, to break ties fairly. */
 function spread(name, id) {
@@ -24,66 +69,191 @@ function spread(name, id) {
   return hash >>> 0;
 }
 
-export const FILL_MODES = [['auto', 'Auto (fairest first)'], ['rotation', 'Rotation (in turn, by name)'], ['random', 'Random']];
-
-/* Where each department's rotation starts: just after whoever served in it
-   most recently before these services. */
-function rotationStart(history, before) {
-  const latest = {};
-  history.filter(service => service.date < before).slice().sort(byStart).forEach(service => {
-    Object.entries(service.assignments || {}).forEach(([duty, name]) => {
-      const department = departmentOf(duty);
-      if (name && department) latest[department.name] = name;
-    });
-  });
-  return latest;
+/* The line of turns a duty belongs to in Rotation: its department's, but
+   the Presider and Opening Prayer (Sermon) each have their own. */
+function turnOf(duty) {
+  return duty === 'Presider' || duty === 'Sermon' ? duty : (departmentOf(duty) || { name: duty }).name;
 }
 
-export function fill(services, duties, rosterFor, stats, { mode = 'auto', history = [], random = Math.random } = {}) {
-  const ordered = services.slice().sort(byStart);
-  const lastIn = mode === 'rotation' && ordered.length ? rotationStart(history, ordered[0].date) : {};
-  const turn = {}; // department -> index of the next member in its list
-  const month = {}, byDay = {};
-  const note = (name, date) => {
-    month[name] = (month[name] || 0) + 1;
-    (byDay[date] = byDay[date] || new Set()).add(name);
+/* Whether `name` holding `duty` in these assignments counts as a turn: an
+   usher duty matched to their prayer does not. */
+function isTurn(assignments, duty, name) {
+  return !(isUsher(duty) && prayerOf(assignments, name));
+}
+
+/* `list` in the order of the keys `keyOf` gives each member's name, compared
+   one after another: numbers from low to high, text in the usual order. */
+function sortBy(list, keyOf) {
+  const compare = (a, b) => {
+    for (let i = 0; i < a.length; i++) {
+      const difference = typeof a[i] === 'string' ? a[i].localeCompare(b[i]) : a[i] - b[i];
+      if (difference) return difference; // 0, or NaN for two -Infinity: look at the next key
+    }
+    return 0;
   };
-  ordered.forEach(service => Object.values(service.assignments || {}).forEach(name => { if (name) note(name, service.date); }));
-  const recent = name => { const s = stats[name] || {}; return (s.past8 || 0) + (s.upcoming || 0); };
-  const last = name => (stats[name] || {}).last || '';
+  return list.map(profile => [keyOf(profile.memberName), profile]).sort((a, b) => compare(a[0], b[0])).map(([, profile]) => profile);
+}
+
+export function fill(services, duties, rosterFor, stats, { mode = 'auto', history = [], random = Math.random, defaults = {} } = {}) {
+  const ordered = services.slice().sort(byStart);
+  if (!ordered.length) return { proposals: [], unfilled: [] };
+  const defaultNames = new Set(Object.values(defaults).filter(Boolean));
+  // Who may be given `duty`: its default alone, or anyone but a default.
+  const allowedFor = duty => (defaults[duty]
+    ? profile => profile.memberName === defaults[duty]
+    : profile => !defaultNames.has(profile.memberName));
+  const ids = new Set(ordered.map(serviceId));
+  const months = new Set(ordered.map(service => service.date.slice(0, 7)));
+  const days = new Set(ordered.map(service => service.date));
+  const end = startsAt(ordered[ordered.length - 1]);
+
+  // What everyone already does: duties per month, names per day, and each
+  // line's latest turn per name, from the services being filled and every
+  // other known service around them. Each service's picks are added once
+  // the service is settled.
+  const monthCount = {}, dayNames = {}, lastTurn = {};
+  const note = (service, duty, name, assignments) => {
+    const monthKey = service.date.slice(0, 7);
+    if (months.has(monthKey)) (monthCount[monthKey] = monthCount[monthKey] || {})[name] = (monthCount[monthKey][name] || 0) + 1;
+    if (days.has(service.date)) (dayNames[service.date] = dayNames[service.date] || new Set()).add(name);
+    const at = startsAt(service);
+    if (at <= end && isTurn(assignments, duty, name)) {
+      const line = lastTurn[turnOf(duty)] || (lastTurn[turnOf(duty)] = {});
+      if (!(line[name] >= at)) line[name] = at;
+    }
+  };
+  const noteAll = service => {
+    const assignments = service.assignments || {};
+    Object.entries(assignments).forEach(([duty, name]) => { if (name) note(service, duty, name, assignments); });
+  };
+  history.forEach(service => {
+    if (service && /^\d{4}-\d{2}-\d{2}$/.test(service.date || '') && !ids.has(serviceId(service))) noteAll(service);
+  });
+  ordered.forEach(noteAll);
+
+  // The keys the two orders sort by (see the top of this file). They hold
+  // while a service is filled, so each is worked out once per service.
+  const remember = keyOf => {
+    const known = new Map();
+    return name => (known.has(name) ? known.get(name) : known.set(name, keyOf(name)).get(name));
+  };
+  const fairKey = (service, id) => {
+    const day = dayNames[service.date] || new Set(), month = monthCount[service.date.slice(0, 7)] || {};
+    return remember(name => {
+      return [day.has(name) ? 1 : 0, month[name] || 0, recentLoad(stats, name), (stats[name] || {}).last || '', spread(name, id)];
+    });
+  };
+  const turnKey = line => {
+    const turns = lastTurn[line] || {};
+    return remember(name => [turns[name] == null ? -Infinity : turns[name], name]);
+  };
+
   const proposals = [], unfilled = [];
   ordered.forEach(service => {
     const id = serviceId(service);
-    const assignments = Object.assign({}, service.assignments);
-    (typeof duties === 'function' ? duties(service) : duties).forEach(duty => {
-      if (assignments[duty]) return;
-      const serving = new Set(Object.values(assignments).filter(Boolean));
-      const roster = rosterFor(duty);
-      const free = profile => !serving.has(profile.memberName) && canTake(profile, service, duty);
-      const choices = roster.filter(free);
-      if (!choices.length) { unfilled.push({ serviceId: id, duty }); return; }
-      let pick;
-      if (mode === 'rotation') {
-        const department = (departmentOf(duty) || { name: duty }).name;
-        const list = roster.slice().sort((a, b) => a.memberName.localeCompare(b.memberName));
-        if (turn[department] == null) turn[department] = list.findIndex(profile => profile.memberName === lastIn[department]) + 1;
-        for (let step = 0; step < list.length && !pick; step++) {
-          const index = (turn[department] + step) % list.length;
-          if (free(list[index])) { pick = list[index]; turn[department] = index + 1; }
-        }
-      } else if (mode === 'random') {
-        pick = choices[Math.floor(random() * choices.length)];
-      } else {
-        const sameDay = name => (byDay[service.date] && byDay[service.date].has(name) ? 1 : 0);
-        choices.sort((a, b) => sameDay(a.memberName) - sameDay(b.memberName) ||
-          (month[a.memberName] || 0) - (month[b.memberName] || 0) ||
-          recent(a.memberName) - recent(b.memberName) ||
-          last(a.memberName).localeCompare(last(b.memberName)) ||
-          spread(a.memberName, id) - spread(b.memberName, id));
-        pick = choices[0];
+    const state = {};         // duty -> name: the service as it will be
+    const held = new Map();   // name -> the duties they hold in it
+    const picks = {};         // duty -> profile: this fill's picks in it
+    const log = [];           // [duty, the pick it had]: to undo moves that lead nowhere
+    const holding = name => held.get(name) || [];
+    const put = (duty, name) => { state[duty] = name; held.set(name, holding(name).concat(duty)); };
+    const clear = duty => { const name = state[duty]; delete state[duty]; held.set(name, holding(name).filter(other => other !== duty)); };
+    Object.entries(service.assignments || {}).forEach(([duty, name]) => { if (name) put(duty, name); });
+    const give = (duty, profile) => { log.push([duty, picks[duty]]); if (state[duty]) clear(duty); put(duty, profile.memberName); picks[duty] = profile; };
+    const take = duty => { log.push([duty, picks[duty]]); clear(duty); delete picks[duty]; };
+    const undo = mark => {
+      while (log.length > mark) {
+        const [duty, before] = log.pop();
+        if (state[duty]) clear(duty);
+        delete picks[duty];
+        if (before) { put(duty, before.memberName); picks[duty] = before; }
       }
-      assignments[duty] = pick.memberName;
-      note(pick.memberName, service.date);
+    };
+    const praying = name => holding(name).some(isPrayer);
+    const fair = fairKey(service, id);
+    const turns = {};
+    const inTurn = duty => turns[turnOf(duty)] || (turns[turnOf(duty)] = turnKey(turnOf(duty)));
+    const wanted = typeof duties === 'function' ? duties(service) : duties;
+    const able = {};
+    const free = duty => able[duty].filter(profile => canAdd(holding(profile.memberName), duty));
+
+    /* The order to try members for `duty`: anyone praying in this service
+       first for an usher duty (fairest of them first), then the leader's way. */
+    const rank = (duty, list) => {
+      const first = isUsher(duty) ? sortBy(list.filter(profile => praying(profile.memberName)), fair) : [];
+      const firsts = new Set(first);
+      let rest = list.filter(profile => !firsts.has(profile));
+      if (mode === 'rotation') rest = sortBy(rest, inTurn(duty));
+      else if (mode !== 'random') rest = sortBy(rest, fair);
+      else if (rest.length) rest.unshift(rest.splice(Math.min(rest.length - 1, Math.floor(random() * rest.length)), 1)[0]);
+      return first.concat(rest);
+    };
+
+    /* Move someone who can take `duty` to it, off one of their picks here or
+       both of a prayer and usher pair, if `refill` fills what they leave. */
+    const moveFor = (duty, movable, refill) => {
+      for (const profile of rank(duty, able[duty])) {
+        const name = profile.memberName;
+        const mine = holding(name).filter(other => picks[other] && movable(other));
+        for (const leave of mine.map(other => [other]).concat(mine.length === 2 ? [mine] : [])) {
+          const mark = log.length;
+          leave.forEach(take);
+          if (canAdd(holding(name), duty)) {
+            give(duty, profile);
+            if (leave.every(refill)) return true;
+          }
+          undo(mark);
+        }
+      }
+      return false;
+    };
+    /* Give `duty` to the first free member in order. When no one is free,
+       move a pick here to it and place the duty that frees the same way (a
+       chain, as long as it takes). Each duty is tried once per chain, which
+       keeps it quick; with the prayer and usher pair that can pass over a
+       single move, so those are tried too. */
+    const place = (duty, tried) => {
+      tried.add(duty);
+      const direct = rank(duty, free(duty))[0];
+      if (direct) { give(duty, direct); return true; }
+      return moveFor(duty, other => !tried.has(other), other => place(other, tried));
+    };
+    const fillDuty = duty => place(duty, new Set()) || moveFor(duty, () => true, other => {
+      const next = rank(other, free(other))[0];
+      if (next) give(other, next);
+      return !!next;
+    });
+
+    // Moving picks can hand a prayer to someone after the ushers were placed:
+    // an usher duty this fill gave to someone not praying goes to them then.
+    const matchUshers = () => ALL_DUTIES.filter(duty => isUsher(duty) && picks[duty] && !praying(picks[duty].memberName))
+      .filter(duty => {
+        const options = able[duty].filter(profile => praying(profile.memberName) && canAdd(holding(profile.memberName), duty));
+        if (options.length) give(duty, sortBy(options, fair)[0]);
+        return options.length > 0;
+      }).length > 0;
+
+    let empty = ALL_DUTIES.filter(duty => wanted.includes(duty) && !state[duty]).filter(duty => {
+      able[duty] = (rosterFor(duty) || []).filter(profile => allowedFor(duty)(profile) && canTake(profile, service, duty));
+      return !fillDuty(duty);
+    });
+    // Whoever a match frees may fill a duty still empty; go on while that
+    // changes anything (each round makes a match or fills a duty).
+    for (let round = 0; round < ALL_DUTIES.length; round++) {
+      const matched = matchUshers();
+      const before = empty.length;
+      empty = empty.filter(duty => !fillDuty(duty));
+      if (!matched && empty.length === before) break;
+    }
+    empty.forEach(duty => {
+      const takers = (rosterFor(duty) || []).filter(profile => takesDuty(profile, duty));
+      const reason = defaults[duty] && !able[duty].length ? 'default'
+        : (able[duty].length ? 'serving' : (takers.length ? 'away' : 'nobody'));
+      unfilled.push({ serviceId: id, duty, reason });
+    });
+    ALL_DUTIES.filter(duty => picks[duty]).forEach(duty => {
+      const pick = picks[duty];
+      note(service, duty, pick.memberName, state);
       proposals.push({ serviceId: id, duty, memberUid: pick.memberUid, memberName: pick.memberName });
     });
   });

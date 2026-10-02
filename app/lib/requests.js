@@ -1,21 +1,35 @@
 /* Change requests: a member asks to be taken off one duty. A request stays
-   open while it is pending and the member still holds that duty. If a leader
-   changes the duty another way, the request counts as completed. */
-import { serviceId } from './services.js';
+   open while it is pending, its service has not started, and the member
+   still holds that duty. If a leader changes the duty another way, the
+   request counts as completed; once the service has started, as past. A
+   request the member withdrew, or a leader answered, is closed. A request
+   whose service was moved or deleted stays open until its date, so a leader
+   can close it. */
+import { serviceId, isUpcoming } from './services.js';
 
 export function requestService(request, services) {
   return services.find(service => serviceId(service) === request.svcId) || null;
 }
 
-export function isOpen(request, services, canonical = name => name) {
-  if (!request || request.status !== 'pending') return false;
-  const service = requestService(request, services);
-  if (!service) return true;
-  return canonical((service.assignments || {})[request.duty]) === canonical(request.name);
+/* Whether the request's service has started (by the service, or by the date
+   and time the request was made for when the service is gone). */
+export function hasStarted(request, services, now = new Date()) {
+  const service = requestService(request, services) || { date: request.date, service: request.service };
+  return !!service.date && !isUpcoming(service, now);
 }
 
-export function shownStatus(request, services, canonical) {
-  return request.status === 'pending' && !isOpen(request, services, canonical) ? 'completed' : request.status;
+/* The status to show: 'completed' once the duty changed another way,
+   'past' once the service started with the request unanswered, 'pending'
+   while it waits, else the stored one (approved, declined, withdrawn). */
+export function shownStatus(request, services, canonical = name => name, now = new Date()) {
+  if (request.status !== 'pending') return request.status;
+  const service = requestService(request, services);
+  if (service && canonical((service.assignments || {})[request.duty]) !== canonical(request.name)) return 'completed';
+  return hasStarted(request, services, now) ? 'past' : 'pending';
+}
+
+export function isOpen(request, services, canonical = name => name, now = new Date()) {
+  return !!request && shownStatus(request, services, canonical, now) === 'pending';
 }
 
 export function openRequestFor(requests, services, id, duty, name) {
