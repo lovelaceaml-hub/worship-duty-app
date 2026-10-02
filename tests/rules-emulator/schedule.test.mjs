@@ -105,6 +105,7 @@ describe('the choir song', () => {
   it('is text of a sensible length, and changes nothing else', async () => {
     await assertFails(updateDoc(service('B. Caleb'), { choirSong: 12 }));
     await assertFails(updateDoc(service('B. Caleb'), { choirSong: 'x'.repeat(301) }));
+    await assertFails(updateDoc(service('B. Caleb'), { choirSong: ['#12 Song of the Spirit'] }));
     await assertFails(updateDoc(service('B. Caleb'), { choirSong: '#12', time: '10:00' }));
     await assertFails(updateDoc(service('M. Ruth'), { choirSong: '#12', 'assignments.Presider': 'M. Ruth' }));
   });

@@ -5,7 +5,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import {
-  collection, deleteDoc, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc
+  collection, deleteDoc, doc, getDoc, getDocs, increment, limit, orderBy, query, setDoc, updateDoc, where
 } from 'firebase/firestore';
 import { SVC, changeRequest, startRules, uidOf } from './harness.mjs';
 
@@ -57,6 +57,8 @@ describe('push tokens (app/services/notifications.js)', () => {
   it('not in someone else\'s name, and with nothing else in it (FR-13)', async () => {
     await assertFails(setDoc(token('B. Levi', 'token-new'), { name: 'S. Leah', updatedAt: Date.now() }));
     await assertFails(setDoc(token('S. Leah', 'token-new'), { name: 'S. Leah', updatedAt: Date.now(), topics: ['all'] }));
+    await assertFails(setDoc(token('S. Leah', 'token-new'), { name: 'S. Leah', updatedAt: 'now' }));
+    await assertFails(setDoc(token('S. Leah', 'token-new'), { name: 'S. Leah', updatedAt: 1, lastSeenAt: 'now' }));
     await assertFails(setDoc(token('nobody', 'token-new'), { name: 'S. Leah', updatedAt: Date.now() }));
   });
 
@@ -113,6 +115,12 @@ describe('feedback (app/services/feedback.js)', () => {
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { message: '' })));
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { message: 'x'.repeat(2001) })));
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { screen: 'x'.repeat(41) })));
+    await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { appearance: 'x'.repeat(41) })));
+    await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { createdAt: 'now' })));
+    // Text, not a list that happens to be short.
+    for (const field of ['name', 'message', 'screen', 'appearance']) {
+      await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { [field]: ['S. Leah'] })));
+    }
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { status: 'done' })));
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { reply: 'Thanks' })));
   });
@@ -121,6 +129,7 @@ describe('feedback (app/services/feedback.js)', () => {
     await assertSucceeds(getDocs(query(collection(h.as('B. Adam'), 'feedback'), orderBy('createdAt', 'desc'), limit(100))));
     await assertSucceeds(updateDoc(note('B. Adam', 'fb-1'), { status: 'done' }));
     await assertFails(updateDoc(note('B. Adam', 'fb-1'), { message: 'Edited' }));
+    await assertFails(updateDoc(note('B. Adam', 'fb-1'), { status: 'archived' }));
     await assertSucceeds(deleteDoc(note('B. Adam', 'fb-1')));
     await h.reset();
     await assertFails(getDocs(query(collection(h.as('E. Joseph'), 'feedback'), orderBy('createdAt', 'desc'), limit(100))));
@@ -145,6 +154,9 @@ describe('the daily usage count (app/services/usage.js)', () => {
   it('nothing but one more, on that day\'s document (FR-13)', async () => {
     await assertFails(count('S. Leah', 'admin_opens'));
     await assertFails(setDoc(doc(h.as('S. Leah'), 'pulse', day), { date: day, opens: increment(5) }, { merge: true }));
+    for (const tab of ['tab_schedule', 'tab_my', 'tab_songs', 'tab_manage']) {
+      await assertFails(setDoc(doc(h.as('S. Leah'), 'pulse', day), { date: day, [tab]: increment(2) }, { merge: true }));
+    }
     await assertFails(setDoc(doc(h.as('S. Leah'), 'pulse', day), { date: day, opens: 0 }, { merge: true }));
     await assertFails(count('S. Leah', 'opens', '2026-10-02', { date: day }));
     await assertFails(deleteDoc(doc(h.as('S. Leah'), 'pulse', day)));
@@ -215,7 +227,8 @@ describe('sessions that are not current', () => {
 
   it('a session with a new PIN still to choose does nothing', async () => {
     await assertFails(setDoc(doc(h.as('B. Silas'), 'tokens', 'token-silas'), { name: 'B. Silas', updatedAt: 1 }));
-    await assertFails(getDocs(query(collection(h.as('B. Silas'), 'requests'))));
+    // Even their own requests, which any current member may list.
+    await assertFails(getDocs(query(collection(h.as('B. Silas'), 'requests'), where('requesterUid', '==', uidOf('B. Silas')))));
   });
 
   it('a session whose account was renamed away (active false) does nothing (FR-7)', async () => {
@@ -259,6 +272,51 @@ describe('sessions that are not current', () => {
   it('accounts are never readable from the app', async () => {
     await assertFails(getDoc(doc(h.as('S. Leah'), 'accounts', 'S. Leah')));
     await assertFails(getDoc(doc(h.as('B. Adam'), 'accounts', 'S. Leah')));
+  });
+
+  /* Each path checks the session itself, not only the account's roles: a
+     leader, song editor, presider, administrator or member whose roles
+     changed after they signed in does nothing until they sign in again. */
+  it('every path refuses a session from before a role change, and takes it after signing in again', async () => {
+    const names = ['E. Joseph', 'S. Grace', 'M. Ruth', 'B. Caleb', 'B. Adam', 'S. Leah'];
+    const bumped = {};
+    const versions = {};
+    for (const name of names) {
+      const account = await h.stored('accounts/' + name);
+      versions[name] = account.roleVersion + 1;
+      bumped['accounts/' + name] = Object.assign(account, { roleVersion: versions[name] });
+    }
+    await h.reset(bumped);
+    // Each operation as the member's browser makes it, for a session `who`.
+    const operations = {
+      'E. Joseph': who => updateDoc(doc(who, 'schedule', SVC), { conflictOk: { 'B. Caleb': ['Presider', 'Media Booth #1'] } }),
+      'S. Grace': who => getDocs(query(collection(who, 'requests'), where('department', 'in', ['Usher Sisters']))),
+      'M. Ruth': who => updateDoc(doc(who, 'schedule', SVC), { choirSong: '#12 Song of the Spirit' }),
+      'B. Caleb': who => updateDoc(doc(who, 'schedule', SVC), { choirSong: '#13 Song of Praise' }),
+      'B. Adam': who => updateDoc(doc(who, 'schedule', SVC), { time: '10:00' }),
+      'S. Leah': who => updateDoc(doc(who, 'requests', 'req-leah'), { status: 'withdrawn', updatedAt: 1 })
+    };
+    const stale = name => h.as(name);
+    for (const name of names) await assertFails(operations[name](stale(name)));
+    // The rest of what these sessions do, all refused.
+    const grace = stale('S. Grace'), adam = stale('B. Adam'), leah = stale('S. Leah');
+    await assertFails(getDoc(doc(grace, 'departments', 'Usher Sisters', 'members', uidOf('S. Leah'))));
+    await assertFails(getDoc(doc(grace, 'requests', 'req-leah')));
+    await assertFails(setDoc(doc(adam, 'schedule', '2026-10-17_morning'), { date: '2026-10-17', time: '09:00', service: 'Morning', worship: 'Sabbath Day', choirSong: '', assignments: {} }));
+    await assertFails(deleteDoc(doc(adam, 'schedule', SVC)));
+    await assertFails(setDoc(doc(adam, 'app', 'settings'), { feastNotice: null }, { merge: true }));
+    await assertFails(getDocs(query(collection(adam, 'feedback'), orderBy('createdAt', 'desc'), limit(100))));
+    await assertFails(updateDoc(doc(adam, 'feedback', 'fb-1'), { status: 'done' }));
+    await assertFails(getDoc(doc(adam, 'pulse', '2026-10-01')));
+    await assertFails(getDocs(collection(adam, 'requests')));
+    await assertFails(getDocs(query(collection(leah, 'requests'), where('requesterUid', '==', uidOf('S. Leah')))));
+    await assertFails(getDoc(doc(leah, 'departments', 'Usher Sisters', 'members', uidOf('S. Leah'))));
+    await assertFails(setDoc(doc(leah, 'requests', 'r-new'), changeRequest('S. Leah', 'Usher Door', { id: 'r-new' })));
+    await assertFails(setDoc(doc(leah, 'feedback', 'fb-new'), {
+      uid: uidOf('S. Leah'), name: 'S. Leah', kind: 'bug', message: 'Hi', screen: 'my', appearance: 'classic', createdAt: 1, status: 'new'
+    }));
+    // Signed in again: the same operations go through.
+    for (const name of names) await assertSucceeds(operations[name](h.as(name, { roleVersion: versions[name] })));
   });
 });
 

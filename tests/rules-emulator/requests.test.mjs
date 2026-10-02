@@ -34,6 +34,8 @@ describe('sending a change request (app/services/requests.js sendRequest)', () =
     await assertFails(send('B. Levi', changeRequest('B. Levi', 'Usher Door')));
     await assertFails(send('B. Levi', changeRequest('B. Levi', 'Usher #1', { requesterUid: uidOf('S. Leah') })));
     await assertFails(send('B. Levi', changeRequest('B. Levi', 'Usher #1', { memberId: 'S. Leah' })));
+    // His own duty, his own uid and member id, but S. Leah's name on it.
+    await assertFails(send('B. Levi', changeRequest('B. Levi', 'Usher #1', { name: 'S. Leah' })));
   });
 
   it('only for a duty the member holds in that service', async () => {
@@ -57,6 +59,10 @@ describe('sending a change request (app/services/requests.js sendRequest)', () =
     await assertFails(send('S. Leah', changeRequest('S. Leah', 'Usher Door', { status: 'approved' })));
     await assertFails(send('S. Leah', changeRequest('S. Leah', 'Usher Door', { note: 'x'.repeat(501) })));
     await assertFails(send('S. Leah', changeRequest('S. Leah', 'Usher Door', { note: 42 })));
+    await assertFails(send('S. Leah', changeRequest('S. Leah', 'Usher Door', { note: ['I am away.'] })));
+    await assertFails(send('S. Leah', changeRequest('S. Leah', 'Usher Door', { worship: ['Sabbath Day'] })));
+    await assertFails(send('S. Leah', changeRequest('S. Leah', 'Usher Door', { worship: 'x'.repeat(101) })));
+    await assertFails(send('S. Leah', changeRequest('S. Leah', 'Usher Door', { createdAt: 'today' })));
     await assertFails(send('S. Leah', changeRequest('S. Leah', 'Usher Door', { replacement: 'B. Levi' })));
     const request = changeRequest('S. Leah', 'Usher Door');
     await assertFails(setDoc(doc(h.as('S. Leah'), 'requests', 'another-id'), request));
