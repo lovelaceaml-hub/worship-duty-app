@@ -2,6 +2,7 @@
    the rules it must never break, checked on hundreds of made-up months. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { fill, fillDuties } from '../../app/lib/fill.js';
 import { canTake, normalizeProfile } from '../../app/lib/availability.js';
 import { canAlsoServe, doubleDuties, prayerOf } from '../../app/lib/conflicts.js';
@@ -9,6 +10,8 @@ import { serviceId } from '../../app/lib/services.js';
 import { hasDuty } from '../../app/lib/worship.js';
 import { workload } from '../../app/lib/workload.js';
 import { ALL_DUTIES, DEPARTMENTS, PRAYER_DUTIES, USHER_DUTIES, departmentOf } from '../../app/config/duties.js';
+
+const require = createRequire(import.meta.url);
 
 /* A department profile: active, schedulable and free unless `extra` says otherwise. */
 function profile(department, name, duties, extra = {}) {
@@ -396,6 +399,45 @@ test('Fill never breaks a rule, on 400 made-up months in every mode', () => {
     checkFill(scenario, result, 'seed ' + seed + ' (' + scenario.mode + ')');
     if (scenario.mode !== 'random') {
       assert.deepEqual(fill(scenario.services, scenario.dutiesFor, scenario.rosterFor, stats, options), result, 'seed ' + seed + ': the same every time');
+    }
+  }
+});
+
+/* Fill and the server agree on who can take a duty: the planner's save
+   (saveDepartmentAssignments, with the server's own checks and pair rule)
+   takes everything Fill proposes. It needs the functions' packages (npm ci
+   in functions/); without them it is skipped. */
+test('the server saves everything Fill proposes, on 400 made-up months', async t => {
+  let createDepartmentHandlers, memoryDb;
+  try {
+    ({ createDepartmentHandlers } = require('../../functions/department-handlers.js'));
+    ({ memoryDb } = require('../../functions/test/memory-db.js'));
+  } catch (error) {
+    if (error.code === 'MODULE_NOT_FOUND') { t.skip('the functions packages are not installed'); return; }
+    throw error;
+  }
+  const admin = { uid: 'uid-admin', token: { uid: 'uid-admin', admin: true, memberName: 'B. Admin' } };
+  for (let seed = 1; seed <= 400; seed++) {
+    const scenario = madeUpMonth(seed);
+    const stats = workload(scenario.history, [], '2026-10-04');
+    const result = fill(scenario.services, scenario.dutiesFor, scenario.rosterFor, stats,
+      { mode: scenario.mode, history: scenario.history, random: scenario.random, defaults: scenario.defaults });
+    const docs = {};
+    scenario.history.forEach(made => { docs['schedule/' + serviceId(made)] = structuredClone(made); });
+    Object.entries(scenario.rosters).forEach(([department, list]) => list.forEach(entry => {
+      docs['departments/' + department + '/members/' + entry.memberUid] = structuredClone(entry);
+    }));
+    const { saveDepartmentAssignments } = createDepartmentHandlers({ db: memoryDb(docs), now: () => Date.parse('2026-10-01T12:00:00Z') });
+    // As the planner saves: one call per department.
+    const byDepartment = {};
+    result.proposals.forEach(item => {
+      (byDepartment[departmentOf(item.duty).name] = byDepartment[departmentOf(item.duty).name] || [])
+        .push({ serviceId: item.serviceId, duty: item.duty, memberUid: item.memberUid, expectedMemberName: '' });
+    });
+    for (const [departmentId, changes] of Object.entries(byDepartment)) {
+      const saved = await saveDepartmentAssignments({ auth: admin, data: { departmentId, changes } });
+      assert.deepEqual(saved.skipped, [], 'seed ' + seed + ': the server refused what Fill proposed in ' + departmentId);
+      assert.equal(saved.saved.length, changes.length, 'seed ' + seed);
     }
   }
 });
