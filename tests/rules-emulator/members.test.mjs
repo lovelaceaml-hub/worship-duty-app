@@ -57,6 +57,8 @@ describe('push tokens (app/services/notifications.js)', () => {
   it('not in someone else\'s name, and with nothing else in it (FR-13)', async () => {
     await assertFails(setDoc(token('B. Levi', 'token-new'), { name: 'S. Leah', updatedAt: Date.now() }));
     await assertFails(setDoc(token('S. Leah', 'token-new'), { name: 'S. Leah', updatedAt: Date.now(), topics: ['all'] }));
+    await assertFails(setDoc(token('S. Leah', 'token-new'), { name: 'S. Leah', updatedAt: 'now' }));
+    await assertFails(setDoc(token('S. Leah', 'token-new'), { name: 'S. Leah', updatedAt: 1, lastSeenAt: 'now' }));
     await assertFails(setDoc(token('nobody', 'token-new'), { name: 'S. Leah', updatedAt: Date.now() }));
   });
 
@@ -113,6 +115,12 @@ describe('feedback (app/services/feedback.js)', () => {
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { message: '' })));
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { message: 'x'.repeat(2001) })));
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { screen: 'x'.repeat(41) })));
+    await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { appearance: 'x'.repeat(41) })));
+    await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { createdAt: 'now' })));
+    // Text, not a list that happens to be short.
+    for (const field of ['name', 'message', 'screen', 'appearance']) {
+      await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { [field]: ['S. Leah'] })));
+    }
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { status: 'done' })));
     await assertFails(setDoc(note('S. Leah', 'fb-new'), entry('S. Leah', { reply: 'Thanks' })));
   });
@@ -121,6 +129,7 @@ describe('feedback (app/services/feedback.js)', () => {
     await assertSucceeds(getDocs(query(collection(h.as('B. Adam'), 'feedback'), orderBy('createdAt', 'desc'), limit(100))));
     await assertSucceeds(updateDoc(note('B. Adam', 'fb-1'), { status: 'done' }));
     await assertFails(updateDoc(note('B. Adam', 'fb-1'), { message: 'Edited' }));
+    await assertFails(updateDoc(note('B. Adam', 'fb-1'), { status: 'archived' }));
     await assertSucceeds(deleteDoc(note('B. Adam', 'fb-1')));
     await h.reset();
     await assertFails(getDocs(query(collection(h.as('E. Joseph'), 'feedback'), orderBy('createdAt', 'desc'), limit(100))));
@@ -145,6 +154,9 @@ describe('the daily usage count (app/services/usage.js)', () => {
   it('nothing but one more, on that day\'s document (FR-13)', async () => {
     await assertFails(count('S. Leah', 'admin_opens'));
     await assertFails(setDoc(doc(h.as('S. Leah'), 'pulse', day), { date: day, opens: increment(5) }, { merge: true }));
+    for (const tab of ['tab_schedule', 'tab_my', 'tab_songs', 'tab_manage']) {
+      await assertFails(setDoc(doc(h.as('S. Leah'), 'pulse', day), { date: day, [tab]: increment(2) }, { merge: true }));
+    }
     await assertFails(setDoc(doc(h.as('S. Leah'), 'pulse', day), { date: day, opens: 0 }, { merge: true }));
     await assertFails(count('S. Leah', 'opens', '2026-10-02', { date: day }));
     await assertFails(deleteDoc(doc(h.as('S. Leah'), 'pulse', day)));
