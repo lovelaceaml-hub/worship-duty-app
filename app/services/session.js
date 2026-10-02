@@ -184,9 +184,10 @@ export function rememberedMember() { return readText('wds-me'); }
 /* The server ends a member's session after a PIN reset, a role change or a
    name fix: its callables then refuse with reason 'session-ended'. Any call
    refused that way signs the member out, and the sign-in screen asks them to
-   sign in again; no other message is shown for it. */
+   sign in again; no other message is shown for it. A name fix is also seen
+   in the name map (notifications.js). */
 let ending = false;
-async function endSession() {
+export async function endSession() {
   if (ending || !session.member) return;
   ending = true;
   try {

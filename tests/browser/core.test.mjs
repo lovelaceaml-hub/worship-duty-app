@@ -289,6 +289,37 @@ test('a session the server ended (PIN reset, role change, name fix) signs the me
   await context.close();
 });
 
+test('a member whose name is fixed while the app is open is signed out, and told nothing false about their duties', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  // What Manage, Data, Fix a member's name writes (functions/rename-member.js):
+  // the name map, every service the member serves in, then the member list.
+  // The server ends the old name's session at the same time.
+  await page.evaluate(() => {
+    const fix = name => (name === 'S. Naomi' ? 'S. Naomi Reyes' : name);
+    window.__fakeAccounts['S. Naomi Reyes'] = { pin: '1234', claims: Object.assign({}, window.__fakeAccounts['S. Naomi'].claims, { memberId: 'S. Naomi Reyes', memberName: 'S. Naomi Reyes' }) };
+    window.__fake.set('app/nameMap', { map: { 'S. Naomi': 'S. Naomi Reyes' } });
+    window.__fake.paths('schedule/').forEach(path => {
+      const service = window.__fake.get(path);
+      if (!Object.values(service.assignments || {}).includes('S. Naomi')) return;
+      const assignments = Object.fromEntries(Object.entries(service.assignments).map(([duty, name]) => [duty, fix(name)]));
+      window.__fake.set(path, Object.assign({}, service, { assignments, planBatch: 'rename-1' }));
+    });
+    const members = window.__fake.get('app/members');
+    window.__fake.set('app/members', Object.assign({}, members, { list: members.list.map(fix).sort() }));
+  });
+  await page.locator('.gate .form-error', { hasText: 'Please sign in again.' }).waitFor();
+  assert.equal(await page.locator('#banners .banner', { hasText: 'no longer on' }).count(), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem('wds-alerts-S. Naomi')), null);
+
+  // Signed in again under the new name, the duties are there and are not news.
+  await signIn(page, 'S. Naomi Reyes');
+  await tab(page, 'my');
+  await page.locator('#view .duty-card').first().waitFor();
+  assert.equal(await page.locator('#banners .banner', { hasText: /new dut|no longer on/i }).count(), 0);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a member whose PIN is locked after too many tries is told to wait', async () => {
   const { context, page } = await openPage(browser, server.url);
   await unlock(page);
