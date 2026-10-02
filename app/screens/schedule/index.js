@@ -147,12 +147,24 @@ function dayButton(date, services, selected) {
   </button>`;
 }
 
-/* The month's service days as one scrolling row of buttons. */
+/* The month's service days as one scrolling row of buttons. Its month is in
+   its address, so a redraw keeps its sideways scroll only within a month. */
 export function dayScroller({ inMonth, date }, className) {
   const days = Array.from(new Set(inMonth.map(service => service.date))).sort();
   if (!days.length) return noServices(emptyText('this month'));
-  return html`<div class="${className} scroll-x" role="group" aria-label="Service days">${days.map(day =>
+  return html`<div class="${className} scroll-x" role="group" aria-label="Service days" data-month="${days[0].slice(0, 7)}">${days.map(day =>
     dayButton(day, inMonth.filter(item => item.date === day), date))}</div>`;
+}
+
+/* After a redraw, the chosen day's button is in view in its row. */
+export function mounted(view) {
+  view.querySelectorAll('[role="group"][aria-label="Service days"]').forEach(row => {
+    const chosen = row.querySelector('.day-button.is-selected');
+    if (!chosen) return;
+    const start = chosen.offsetLeft, end = start + chosen.offsetWidth;
+    if (start < row.scrollLeft) row.scrollLeft = Math.max(0, start - 12);
+    else if (end > row.scrollLeft + row.clientWidth) row.scrollLeft = end - row.clientWidth + 12;
+  });
 }
 
 export function timeButtons(services, selected) {

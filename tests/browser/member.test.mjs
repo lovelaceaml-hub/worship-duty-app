@@ -467,3 +467,33 @@ test('double duties are marked in words, and a prayer with an usher duty is not 
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+/* Navy & Cream's day rail and Aurora's day strip scroll sideways on a phone.
+   A redraw keeps that scroll within a month, but the chosen day is always in
+   view, and a new month starts at its first day. */
+test('the chosen day stays in view in the day rail, and a new month starts at its beginning', async () => {
+  for (const appearance of ['navy', 'aurora']) {
+    const { context, page, errors } = await as('B. Caleb', { appearance, viewport: { width: 375, height: 667 } });
+    const row = page.locator('#view [aria-label="Service days"]');
+    const inView = () => row.evaluate(el => {
+      const chosen = el.querySelector('.day-button.is-selected');
+      if (!chosen) return null;
+      const box = el.getBoundingClientRect(), button = chosen.getBoundingClientRect();
+      return button.left >= box.left - 1 && button.right <= box.right + 1;
+    });
+    // Choose a day late in the month, then go back to the next service.
+    await row.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+    await row.locator('.day-button').last().click();
+    await page.locator('#view [data-act="schedule-today"]').click();
+    assert.equal(await inView(), true, appearance + ': the next service\'s day is in view');
+
+    // A month away and back: the new month opens at its start.
+    await page.locator('#view [data-act="schedule-month"][data-step="1"]').click();
+    await row.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+    await page.locator('#view [data-act="schedule-month"][data-step="-1"]').click();
+    await page.locator('#view [data-act="schedule-month"][data-step="1"]').click();
+    assert.equal(await row.evaluate(el => el.scrollLeft), 0, appearance + ': the month starts at its first day');
+    assert.deepEqual(errors, [], appearance);
+    await context.close();
+  }
+});
