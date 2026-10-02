@@ -11,6 +11,7 @@ import { checkReminders } from './services/notifications.js';
 import { rememberInvite } from './services/departments.js';
 import { applySavedAppearance } from './appearance/picker.js';
 import { banner } from './ui/banners.js';
+import { newerRelease } from './release.js';
 import { watchSwipe, watchKeyboard } from './ui/tabs.js';
 import { syncSubnav } from './ui/subnav.js';
 import { openTab } from './navigation.js';
@@ -26,14 +27,16 @@ function goOffline() {
 }
 
 /* The service worker keeps the app's files for offline use. When a new
-   release takes over an open page, the page offers to reload, and it looks
-   for a new release whenever it comes back into view. */
+   release takes over an open page of an older one, the page offers to
+   reload, and it looks for a new release whenever it comes back into view.
+   The first open after a release already loads the new page from the
+   network before the new worker takes over; that page needs no reload. */
 function watchReleases() {
   if (!('serviceWorker' in navigator)) return;
   const hadWorker = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js').catch(() => {});
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (hadWorker) banner('The app was updated. Reload to use the new version.', { id: 'release', action: { label: 'Reload', act: 'reload' } });
+  navigator.serviceWorker.addEventListener('controllerchange', async () => {
+    if (hadWorker && await newerRelease()) banner('The app was updated. Reload to use the new version.', { id: 'release', action: { label: 'Reload', act: 'reload' } });
   });
   let checked = Date.now();
   document.addEventListener('visibilitychange', () => {

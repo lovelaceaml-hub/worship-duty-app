@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
-import { repo, startServer, launch, openPage, unlock, signIn, tab, section, PHONE, DESKTOP, TODAY } from './harness.mjs';
+import { repo, startServer, launch, openPage, unlock, signIn, tab, section, PHONE, DESKTOP, TODAY, NOW } from './harness.mjs';
 
 let server, browser;
 before(async () => { server = await startServer(); browser = await launch(); });
@@ -599,6 +599,61 @@ test('the first visit, and the first visit after a release, leave a working offl
     await page.reload();
     await page.locator('#site-passcode').waitFor();
     assert.match(await page.evaluate(() => document.querySelector('script[type="module"]').src), /v=r2/);
+  } finally {
+    await context.close();
+    if (stop) await stop();
+    await fs.rm(out, { recursive: true, force: true });
+  }
+});
+
+test('"The app was updated" shows on a page left open across a release, not on the first open of the new one', async () => {
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), 'wds-banner-'));
+  const port = await freePort();
+  const context = await browser.newContext({ viewport: PHONE, serviceWorkers: 'allow', reducedMotion: 'reduce', timezoneId: 'America/Los_Angeles' });
+  let stop = null;
+  // That release's worker has stored it, taken over the page, and removed the last copy.
+  const settled = async (page, release) => {
+    for (let tries = 0; tries < 150; tries++) {
+      const done = await page.evaluate(async release => {
+        const names = await caches.keys();
+        const registration = await navigator.serviceWorker.getRegistration();
+        return names.length === 1 && names[0] === 'wds-' + release && !!navigator.serviceWorker.controller &&
+          !!registration && registration.active === navigator.serviceWorker.controller && !registration.installing;
+      }, release).catch(() => false);
+      if (done) return;
+      await page.waitForTimeout(200);
+    }
+    throw new Error('The ' + release + ' worker did not take over.');
+  };
+  const updated = page => page.locator('#banners .banner', { hasText: 'The app was updated.' });
+  try {
+    for (const release of ['r1', 'r2', 'r3']) await build(path.join(out, release), release);
+    const site = path.join(out, 'site');
+    await publish(path.join(out, 'r1'), site);
+    stop = await serveAt(site, port);
+    const page = await context.newPage();
+    await page.clock.setSystemTime(new Date(NOW));
+    await page.goto('http://localhost:' + port + '/?today=' + TODAY);
+    await unlock(page);
+    await signIn(page, 'S. Naomi');
+    await settled(page, 'r1');
+    // The app opens again, now under the r1 worker.
+    await page.reload();
+    await page.locator('nav.tabs:not([hidden])').waitFor();
+
+    // A release goes live while the page is open: its worker takes over a page of the last release.
+    await publish(path.join(out, 'r2'), site);
+    await page.evaluate(() => navigator.serviceWorker.getRegistration().then(registration => registration.update()));
+    await updated(page).waitFor();
+
+    // The first open after a release loads the new page, then the new worker takes over.
+    await publish(path.join(out, 'r3'), site);
+    await page.reload();
+    await page.locator('nav.tabs:not([hidden])').waitFor();
+    assert.match(await page.evaluate(() => document.querySelector('script[type="module"]').src), /v=r3/);
+    await settled(page, 'r3');
+    await page.waitForTimeout(500);
+    assert.equal(await updated(page).count(), 0, 'the page already runs the new release');
   } finally {
     await context.close();
     if (stop) await stop();
