@@ -99,7 +99,7 @@ p { margin: 0; }
 .account-menu button:hover, .account-menu button:focus-visible { background: var(--accent-soft); color: var(--accent); }
 .account-menu .account-sign-out { margin-top: 4px; border-top: 1px solid var(--hairline); border-radius: 0 0 9px 9px; color: var(--danger); }
 .account-who { display: none; padding: 8px 12px 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
-/* On computers the round button sends feedback; on phones this menu item does. */
+/* On computers the round button sends feedback; on phones the menu item is shown as well. */
 .account-menu .account-feedback { display: none; }
 
 /* ---- main tabs (top on wide screens, floating bar on phones) ---- */
@@ -638,8 +638,12 @@ dialog h2 { margin-bottom: 4px; font-size: 19px; }
   .toasts { bottom: calc(var(--above-tabs) + 10px); }
   body:has(#view .sticky-actions) .toasts { bottom: calc(var(--above-tabs) + 78px); }
   html[data-keyboard="open"] .toasts { bottom: 12px; }
-  /* The round feedback button covered row buttons at the right edge; the account menu has it. */
-  .feedback-button { display: none; }
+  /* The round feedback button sits smaller, above the floating tabs (and above a save bar), so it
+     clears the tabs; the account menu keeps "Feedback about the app" too. */
+  .feedback-button, html[data-appearance] .feedback-button { right: max(14px, env(safe-area-inset-right)); bottom: calc(var(--above-tabs) + 8px); width: 40px; height: 40px; }
+  .feedback-button svg { width: 19px; height: 19px; }
+  body:has(#view .sticky-actions) .feedback-button { bottom: calc(var(--above-tabs) + 76px); }
+  html[data-keyboard="open"] .feedback-button { display: none; }
   .account-menu .account-feedback { display: flex; }
   dialog { margin: 12px auto auto; padding: 16px; }
   .card { padding: 17px 16px; }

@@ -1,7 +1,7 @@
 /* The round feedback button and the form it opens. Both sit outside #view,
    so live updates never touch a message while it is being typed. On phones
-   the button is hidden (it covered row buttons at the right edge) and the
-   account menu's "Feedback about the app" opens the same form. */
+   the button is smaller and sits above the floating tabs; the account
+   menu's "Feedback about the app" opens the same form too. */
 import { html, raw } from '../html.js';
 import { defineActions } from '../actions.js';
 import { KINDS, sendFeedback } from '../services/feedback.js';

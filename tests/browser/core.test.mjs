@@ -413,9 +413,11 @@ test('a deleted service leaves the Schedule at the next update', async () => {
 
 /* ---- the shell's design ---- */
 
-test('on a phone, feedback and Appearance are in the account menu, and My Duties stays marked in Availability', async () => {
+test('on a phone, the round feedback button sits above the tabs, the account menu has feedback and Appearance, and My Duties stays marked in Availability', async () => {
   const { context, page, errors } = await as('S. Naomi');
-  assert.equal(await page.locator('.feedback-button').isVisible(), false);
+  const button = await page.locator('.feedback-button').boundingBox();
+  const tabs = await page.locator('nav.tabs').boundingBox();
+  assert.ok(button && button.y + button.height <= tabs.y, 'the feedback button shows and clears the tabs');
   await page.locator('[data-slot="member"]').click();
   await page.locator('[data-slot="menu"] [data-act="feedback-open"]', { hasText: 'Feedback about the app' }).waitFor();
   await page.locator('[data-slot="menu"] [data-act="appearance-open"]').waitFor();
