@@ -239,9 +239,9 @@ test('My Duties leads with the next duty, shows the month on each date, and ends
 });
 
 test('a service under way shows as Now on the Schedule and My Duties, with no Ask for a change', async () => {
-  // Tuesday 8:30 PM: the 8:00 PM service, where S. Leah ushers, is under way.
+  // Tuesday 8:10 PM: the 8:00 PM service, where S. Leah ushers, has just started.
   for (const appearance of ['classic', 'prism', 'navy', 'aurora']) {
-    const { context, page, errors } = await as('S. Leah', { appearance, now: '2026-07-07T20:30:00-07:00', viewport: DESKTOP });
+    const { context, page, errors } = await as('S. Leah', { appearance, now: '2026-07-07T20:10:00-07:00', viewport: DESKTOP });
     const card = page.locator('#view .service-card[data-service="2026-07-07_evening"]');
     await card.locator('.service-now', { hasText: 'Now' }).waitFor();
     if (appearance === 'classic') assert.equal(await page.locator('#view .next-service .section-heading').innerText(), 'Now');

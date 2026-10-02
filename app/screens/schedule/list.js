@@ -4,7 +4,7 @@
 import { html } from '../../html.js';
 import { ui } from '../../store.js';
 import { departmentChips } from '../../ui/components.js';
-import { isInProgress } from '../../lib/services.js';
+import { isNow } from '../../lib/services.js';
 import { selection, nowOrNext, monthNav, searchBox, pastControl, servicePanel, allServicesList } from './index.js';
 
 export function render() {
@@ -15,7 +15,7 @@ export function render() {
     <div class="schedule-filters">${searchBox()}${pastControl()}</div>
     ${departmentChips()}
     ${next ? html`<section class="next-service">
-      <h2 class="section-heading">${isInProgress(next) ? 'Now' : 'Next service'}</h2>
+      <h2 class="section-heading">${isNow(next) ? 'Now' : 'Next service'}</h2>
       ${servicePanel(next, { withDate: true })}
     </section>` : ''}
     <section class="schedule-all">

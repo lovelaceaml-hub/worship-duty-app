@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { hasChoir, hasThanks, isFeast, hasDuty } from '../../app/lib/worship.js';
-import { nextService, upcoming, past, isUpcoming, isInProgress, dutiesOf, serviceId, startTime, serviceClock, byStart, nextChange } from '../../app/lib/services.js';
+import { nextService, upcoming, past, isUpcoming, isInProgress, isNow, dutiesOf, serviceId, startTime, serviceClock, byStart, nextChange } from '../../app/lib/services.js';
 import { pacificNow } from '../../app/lib/dates.js';
 
 // 2026-09-14 is in Pacific daylight time (UTC minus 7).
@@ -107,13 +107,22 @@ test('rows without a valid date sort last and never upset the order of the other
   assert.deepEqual(dutiesOf('B. Adam', withDuty).slice(0, 3).map(item => item.service.date), ['2026-09-14', '2026-09-14', '2026-09-15']);
 });
 
-test('the next moment the screens change: a start, the end of three hours in progress, or midnight', () => {
+test('the next moment the screens change: a start, the end of Now or of three hours in progress, or midnight', () => {
   const wall = (date, time) => Date.parse(date + 'T' + time + ':00Z');
   assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '04:00')), wall('2026-09-14', '05:00'));
-  assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '05:00')), wall('2026-09-14', '08:00'), 'the early service stops being in progress');
+  assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '05:00')), wall('2026-09-14', '05:20'), 'the early service stops being Now');
+  assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '05:20')), wall('2026-09-14', '08:00'), 'the early service stops being in progress');
   assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '08:00')), wall('2026-09-14', '19:30'));
   assert.equal(nextChange(earlyAndEvening, pacific('2026-09-14', '22:30')), wall('2026-09-15', '00:00'), 'midnight');
   assert.equal(nextChange([], pacific('2026-09-14', '12:00')), wall('2026-09-15', '00:00'));
+});
+
+test('the Schedule and My Duties show a service as Now for its first 20 minutes', () => {
+  const evening = earlyAndEvening[1];
+  assert.equal(isNow(evening, pacific('2026-09-14', '19:29')), false);
+  assert.equal(isNow(evening, pacific('2026-09-14', '19:30')), true);
+  assert.equal(isNow(evening, pacific('2026-09-14', '19:49')), true);
+  assert.equal(isNow(evening, pacific('2026-09-14', '19:50')), false);
 });
 
 test('the Presider planner keeps a service in progress for three hours after it starts', () => {

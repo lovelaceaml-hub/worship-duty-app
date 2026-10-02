@@ -15,7 +15,7 @@ import { defineActions } from '../../actions.js';
 import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { DEPARTMENTS, dutyName } from '../../config/duties.js';
-import { serviceId, byStart, startsAt, isUpcoming, isInProgress, departmentHasAssignments, assignedCount, serviceClock } from '../../lib/services.js';
+import { serviceId, byStart, startsAt, isUpcoming, isNow, departmentHasAssignments, assignedCount, serviceClock } from '../../lib/services.js';
 import { addMonths, monthName, longDate, shortDate, dayOfMonth, monthShort, weekdayShort, todayISO } from '../../lib/dates.js';
 import { canManageAnyDepartment } from '../../services/access.js';
 import { openService } from '../manage/services.js';
@@ -67,7 +67,7 @@ export function shownServices({ includePast = pastShown() } = {}) {
 /* Of services in start order: the one under way (the later one if two
    overlap), else the next to start, else none. */
 export function nowOrNext(services) {
-  return services.filter(service => isInProgress(service)).pop() || services.find(service => isUpcoming(service)) || null;
+  return services.filter(service => isNow(service)).pop() || services.find(service => isUpcoming(service)) || null;
 }
 
 /* The service a day or month opens on: under way or next, else the last. */
@@ -170,7 +170,7 @@ export function dayHero(service) {
     <div class="day-hero-date"><span class="day-hero-day">${dayOfMonth(service.date)}</span><span class="day-hero-month">${monthShort(service.date)}</span></div>
     <div class="day-hero-text">
       <h2>${longDate(service.date)}</h2>
-      <p>${isInProgress(service) ? 'Now · ' : ''}${serviceClock(service)} · ${service.service} · Pacific time</p>
+      <p>${isNow(service) ? 'Now · ' : ''}${serviceClock(service)} · ${service.service} · Pacific time</p>
     </div>
     <p class="day-hero-count">${assignedCount(service)} duties filled · ${plural(people, 'person', 'people')}</p>
   </section>`;

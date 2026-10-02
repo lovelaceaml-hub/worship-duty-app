@@ -1,13 +1,15 @@
 /* Services: one worship service on one date, with its duty assignments.
    A service is "upcoming" until its Pacific start minute; from then on it is
-   past. The Presider planner also treats a service as "in progress" for three
-   hours after it starts, so the runsheet and Mark as sung stay reachable.
+   past. The Schedule and My Duties still show it as "Now" for 20 minutes. The
+   Presider planner treats a service as "in progress" for three hours after it
+   starts, so the runsheet and Mark as sung stay reachable.
    Functions that take `now` accept a Date or a Pacific wall time already
    read (pacificNow().wall), so a list is checked against one clock reading. */
 import { DEPARTMENTS, DEFAULT_TIMES, SERVICE_LABELS } from '../config/duties.js';
 import { clockTime, pacificNow, wallTime, addDays } from './dates.js';
 
 const IN_PROGRESS_MS = 3 * 60 * 60 * 1000;
+const NOW_MS = 20 * 60 * 1000;
 
 /* "2026-07-01_morning". Also the setlist id (song-lib.js serviceIdFor). */
 export function serviceId(service) {
@@ -68,6 +70,14 @@ export function isInProgress(service, now = new Date()) {
   return start <= wall && wall < start + IN_PROGRESS_MS;
 }
 
+/* The Schedule and My Duties show a service as "Now" for its first 20
+   minutes; after that it is past there. */
+export function isNow(service, now = new Date()) {
+  const start = startsAt(service);
+  const wall = wallAt(now);
+  return start <= wall && wall < start + NOW_MS;
+}
+
 export function upcoming(services, now = new Date()) {
   const wall = wallAt(now);
   return services.filter(service => startsAt(service) > wall).sort(byStart);
@@ -88,8 +98,9 @@ export function nextService(services, now = new Date()) {
 }
 
 /* The next moment the screens change by themselves, as a Pacific wall time:
-   a service starting, a service's three hours in progress ending, or
-   midnight (Today and Tomorrow move on). */
+   a service starting, its 20 minutes as "Now" ending, its three hours in
+   progress ending (the song planner), or midnight (Today and Tomorrow move
+   on). */
 export function nextChange(services, now = new Date()) {
   const wall = wallAt(now);
   const today = new Date(wall).toISOString().slice(0, 10);
@@ -97,6 +108,7 @@ export function nextChange(services, now = new Date()) {
   services.forEach(service => {
     const start = startsAt(service);
     if (start > wall) next = Math.min(next, start);
+    else if (start + NOW_MS > wall) next = Math.min(next, start + NOW_MS);
     else if (start + IN_PROGRESS_MS > wall) next = Math.min(next, start + IN_PROGRESS_MS);
   });
   return next;

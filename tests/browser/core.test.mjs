@@ -312,7 +312,7 @@ test('an open Schedule marks the service Now at its start minute, and moves on a
   await page.clock.runFor(90 * 1000);
   await card.locator('.service-now').waitFor();
   assert.equal(await card.getAttribute('data-service'), '2026-07-07_evening', 'the service under way stays on');
-  await page.clock.runFor(3 * 60 * 60 * 1000);
+  await page.clock.runFor(20 * 60 * 1000);
   await page.waitForFunction(() => document.querySelector('.next-service .service-card')?.dataset.service === '2026-07-11_morning');
   assert.deepEqual(errors, []);
   await context.close();

@@ -10,7 +10,7 @@ import { data, session, ui, feature, canonical, loaded } from '../store.js';
 import { render as redraw, goTo } from '../render.js';
 import { banner } from '../ui/banners.js';
 import { dutyGroups, statusChip, empty, isCurrent, nowTag } from '../ui/components.js';
-import { dutiesOf, serviceId, serviceClock, isUpcoming, isInProgress } from '../lib/services.js';
+import { dutiesOf, serviceId, serviceClock, isUpcoming, isNow } from '../lib/services.js';
 import { longDate, dayBadge, dayOfMonth, monthShort, weekdayShort, shortDate, addDays, todayISO } from '../lib/dates.js';
 import { openRequestFor, shownStatus, isOpen } from '../lib/requests.js';
 import { sendRequest, withdrawRequest } from '../services/requests.js';
@@ -207,7 +207,7 @@ function dayCard({ date, services }, duties, next = false) {
     <div class="duty-body">
       <h3 class="sr-only">${longDate(date)}${badge ? ', ' + badge : ''}</h3>
       ${services.map((service, index) => html`${index ? html`<hr class="duty-divider">` : ''}
-        <div class="duty-when"><span class="duty-time">${serviceClock(service)}</span><span class="duty-worship">${service.worship || service.service}</span>${isInProgress(service)
+        <div class="duty-when"><span class="duty-time">${serviceClock(service)}</span><span class="duty-worship">${service.worship || service.service}</span>${isNow(service)
           ? nowTag(service) : index === 0 && badge ? html`<span class="tag">${badge}</span>` : ''}</div>
         ${duties.filter(item => item.service === service).map(item => dutyLine(item, open))}
         ${open && feature('whoElse') ? html`<div class="duty-team">${dutyGroups(service)}</div>` : ''}`)}

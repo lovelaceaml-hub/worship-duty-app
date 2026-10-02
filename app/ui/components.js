@@ -4,18 +4,18 @@ import { DEPARTMENTS, dutyName } from '../config/duties.js';
 import { ui, feature, nameOf } from '../store.js';
 import { longDate, dayBadge } from '../lib/dates.js';
 import { doubleDuties, isMarkedOk } from '../lib/conflicts.js';
-import { serviceId, serviceClock, isUpcoming, isInProgress } from '../lib/services.js';
+import { serviceId, serviceClock, isUpcoming, isNow } from '../lib/services.js';
 import { hasDuty } from '../lib/worship.js';
 
-/* Whether a service is still to come or under way: the Schedule and My
-   Duties keep a service until three hours after it starts (isInProgress),
-   and call it "Now" meanwhile. */
+/* Whether a service is still to come or just started: the Schedule and My
+   Duties keep a service for 20 minutes after it starts (isNow), and call it
+   "Now" meanwhile. */
 export function isCurrent(service) {
-  return isUpcoming(service) || isInProgress(service);
+  return isUpcoming(service) || isNow(service);
 }
 
 export function nowTag(service) {
-  return isInProgress(service) ? html`<span class="service-now">Now</span>` : '';
+  return isNow(service) ? html`<span class="service-now">Now</span>` : '';
 }
 
 function person(name) {
@@ -61,7 +61,7 @@ function choirLine(service, only = 'All') {
    without a date heading above it. */
 function serviceHead(service, withDate) {
   const title = html`<h3 class="service-title">${service.worship || 'Service'} <span class="service-label">${service.service}</span>${nowTag(service)}</h3>`;
-  const badge = withDate && !isInProgress(service) ? dayBadge(service.date) : '';
+  const badge = withDate && !isNow(service) ? dayBadge(service.date) : '';
   return html`<div class="service-head">
     ${withDate ? html`<div class="service-name">${title}
       <p class="service-date">${longDate(service.date)}${badge ? html` <span class="day-badge">${badge}</span>` : ''}</p></div>` : title}

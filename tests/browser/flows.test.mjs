@@ -99,10 +99,10 @@ test('the passcode and the PIN keep the app closed; a reset PIN is changed first
   await context.close();
 });
 
-test('the Schedule opens on the next service, keeps it as Now while it runs, then moves on', async () => {
+test('the Schedule opens on the next service, keeps it as Now for 20 minutes, then moves on', async () => {
   // Tuesday 2026-07-07 has an 8:00 PM service; the next one is Saturday morning.
-  // A service stays on as "Now" for three hours after it starts.
-  for (const [time, expected] of [['19:59', '2026-07-07_evening'], ['20:00', '2026-07-07_evening'], ['22:59', '2026-07-07_evening'], ['23:00', '2026-07-11_morning']]) {
+  // A service stays on as "Now" for 20 minutes after it starts.
+  for (const [time, expected] of [['19:59', '2026-07-07_evening'], ['20:00', '2026-07-07_evening'], ['20:19', '2026-07-07_evening'], ['20:20', '2026-07-11_morning']]) {
     const { context, page, errors } = await as('B. Adam', { now: '2026-07-07T' + time + ':00-07:00' });
     assert.equal(await page.locator('.next-service .service-card').getAttribute('data-service'), expected, 'at ' + time);
     assert.deepEqual(errors, []);
