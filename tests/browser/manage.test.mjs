@@ -328,6 +328,26 @@ test('Requests: a past request leaves the count, and one for a deleted service c
   await context.close();
 });
 
+test('a leader of two departments is told where the requests counted wait', async () => {
+  const fixture = { patch: { 'requests/media-1': { id: 'media-1', svcId: '2026-07-11_morning', name: 'B. Titus', memberId: 'B. Titus', requesterUid: 'member:B. Titus',
+    date: '2026-07-11', service: 'Morning', worship: 'Sabbath Day', duty: 'Media Booth #1', department: 'Media', status: 'pending', createdAt: 1 },
+  'schedule/2026-07-11_morning': { assignments: { 'Media Booth #1': 'B. Titus' } } } };
+  const { context, page, errors } = await as('E. Joseph', { viewport: DESKTOP, fixture });
+  await tab(page, 'manage');
+  assert.equal(await activeSection(page), 'requests');
+  assert.equal(await page.locator('#view select[data-change="manage-department"]').inputValue(), 'Worship');
+  await page.locator('#view .sections [data-section="requests"] .count', { hasText: '1' }).waitFor();
+  await page.locator('#view .empty', { hasText: 'No requests waiting in Worship.' }).waitFor();
+  const note = page.locator('#view .card-note', { hasText: '1 request waits in Media.' });
+  await note.waitFor();
+  await note.locator('button', { hasText: 'Show Media' }).click();
+  await page.locator('#view .request', { hasText: 'Media Booth #1' }).waitFor();
+  assert.equal(await page.locator('#view select[data-change="manage-department"]').inputValue(), 'Media');
+  assert.equal(await page.locator('#view .card-note', { hasText: 'waits in' }).count(), 0);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('when Approve can no longer work, the request card offers to close it', async () => {
   const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
   await tab(page, 'manage');
