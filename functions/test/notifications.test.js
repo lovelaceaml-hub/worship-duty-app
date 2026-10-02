@@ -178,3 +178,124 @@ test('the assignment records follow the service as it is now, and one failing jo
   await broken.functions.onScheduleWrite.run(scheduleWrite(service({}), service({ 'Usher Door': 'S. Leah' })));
   assert.equal(broken.sent.length, 1, 'alerts are sent even when the projection fails');
 });
+
+/* ---- one failure costs no one else's alert ---- */
+
+const { createNotifier } = require('../notify.js');
+const { memoryDb } = require('./memory-db.js');
+
+/* The notifier on its own, on the in-memory Firestore. `throws(message)`
+   may give an error for a whole send, as FCM does when a request fails
+   (a 503, say); nothing of that send is delivered. */
+function notifierFor(docs, { throws = () => null, db = memoryDb(docs, { live: true }) } = {}) {
+  const sent = [];
+  const errors = [];
+  const messaging = {
+    async sendEachForMulticast(message) {
+      const error = throws(message);
+      if (error) throw error;
+      sent.push(message);
+      return { responses: message.tokens.map(() => ({ success: true })) };
+    }
+  };
+  const logger = { error: (text, details) => errors.push(text), warn() {}, info() {} };
+  return { notifier: createNotifier({ db, messaging, logger }), sent, errors };
+}
+
+const unavailable = () => Object.assign(new Error('14 UNAVAILABLE: The service is currently unavailable.'), { code: 14 });
+
+/* The in-memory Firestore with transient errors: creating the marker ids in
+   `markers` fails once each, and reading the tokens fails `tokenReads`
+   times. */
+function flaky(docs, { markers = [], tokenReads = 0 } = {}) {
+  const db = memoryDb(docs, { live: true });
+  const failing = new Set(markers);
+  let tokenFailures = tokenReads;
+  const collection = db.collection;
+  return Object.assign({}, db, {
+    collection: name => {
+      const real = collection(name);
+      if (name === 'sent') {
+        return Object.assign({}, real, {
+          doc: id => {
+            const ref = real.doc(id);
+            return Object.assign({}, ref, {
+              create: async value => {
+                if (failing.delete(id)) throw unavailable();
+                return ref.create(value);
+              }
+            });
+          }
+        });
+      }
+      if (name === 'tokens') {
+        return Object.assign({}, real, {
+          get: async () => {
+            if (tokenFailures > 0) { tokenFailures -= 1; throw unavailable(); }
+            return real.get();
+          }
+        });
+      }
+      return real;
+    }
+  });
+}
+
+test('a duty whose reminder could not be marked, or a run that could not read the devices, is reminded by the next run', async () => {
+  const docs = () => Object.assign({ 'schedule/soon': serviceSoon({ 'Usher Door': 'S. Leah', 'Usher Front': 'S. Grace' }) }, tokens);
+  // Marking S. Grace's duty fails once: S. Leah is still reminded now, S. Grace by the next run.
+  let store = docs();
+  let { notifier, sent } = notifierFor(store, { db: flaky(store, { markers: ['soon_Usher-Front_S-Grace'] }) });
+  await notifier.sendReminders().catch(() => {});
+  await notifier.sendReminders().catch(() => {});
+  assert.deepEqual(recipients(sent), ['leader-phone', 'member-phone']);
+
+  // Reading the devices fails once: nothing is sent, and the next run reminds both.
+  store = docs();
+  ({ notifier, sent } = notifierFor(store, { db: flaky(store, { tokenReads: 1 }) }));
+  await notifier.sendReminders().catch(() => {});
+  await notifier.sendReminders().catch(() => {});
+  assert.deepEqual(recipients(sent), ['leader-phone', 'member-phone']);
+
+  // S. Leah's whole send fails once: S. Grace is reminded now, S. Leah by the next run, each once.
+  let failures = 1;
+  const leahFailsOnce = message => (message.tokens.includes('member-phone') && failures-- > 0 ? Object.assign(new Error('FCM 503'), { code: 'app/network-error' }) : null);
+  ({ notifier, sent } = notifierFor(docs(), { throws: leahFailsOnce }));
+  await notifier.sendReminders();
+  assert.deepEqual(recipients(sent), ['leader-phone']);
+  await notifier.sendReminders();
+  await notifier.sendReminders();
+  assert.deepEqual(recipients(sent), ['leader-phone', 'member-phone']);
+});
+
+test('a reminder already sent is not sent again after the stored name changes to its current spelling', async () => {
+  const docs = Object.assign({
+    'app/nameMap': { map: { Bridgette: 'S. Bridgette' } },
+    'schedule/soon': serviceSoon({ 'Usher Door': 'Bridgette', 'Usher Front': 'S. Monica S.' }),
+    'tokens/bridgette-phone': { name: 'S. Bridgette' },
+    'tokens/monica-phone': { name: 'S. Monica S' }
+  }, tokens);
+  const { notifier, sent } = notifierFor(docs);
+  await notifier.sendReminders();
+  assert.deepEqual(recipients(sent), ['bridgette-phone', 'monica-phone']);
+  // A name fix and a Sheet import write the current spellings.
+  docs['schedule/soon'] = Object.assign({}, docs['schedule/soon'], { assignments: { 'Usher Door': 'S. Bridgette', 'Usher Front': 'S. Monica S' } });
+  await notifier.sendReminders();
+  assert.equal(sent.length, 2, 'no second reminder');
+});
+
+test('a send that fails for one member does not stop the next member\'s new-duty alert', async () => {
+  const leahFails = message => (message.tokens.includes('member-phone') ? Object.assign(new Error('FCM 503'), { code: 'messaging/server-unavailable' }) : null);
+  // A service write that gives S. Leah and S. Grace a duty each.
+  let { notifier, sent, errors } = notifierFor(Object.assign({}, tokens), { throws: leahFails });
+  await notifier.alertScheduleWrite(service({}), service({ 'Usher Door': 'S. Leah', 'Usher Front': 'S. Grace' }), true).catch(() => {});
+  assert.deepEqual(recipients(sent), ['leader-phone']);
+  assert.equal(errors.length, 1, 'the failed send is logged');
+
+  // The month planner's save, one alert per member.
+  ({ notifier, sent, errors } = notifierFor(Object.assign({}, tokens), { throws: leahFails }));
+  const saved = name => ({ memberName: name, duty: 'Usher Door', date: '2030-10-05', service: 'Morning' });
+  await notifier.alertPlanned([saved('S. Leah'), saved('S. Grace')]).catch(() => {});
+  assert.deepEqual(recipients(sent), ['leader-phone']);
+  assert.equal(errors.length, 1, 'the failed send is logged');
+});
