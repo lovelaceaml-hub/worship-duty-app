@@ -538,6 +538,57 @@ test('the first visit, and the first visit after a release, leave a working offl
   }
 });
 
+test('a release that cannot be stored whole leaves the last offline copy in charge', async () => {
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), 'wds-partial-'));
+  const port = await freePort();
+  const context = await browser.newContext({ viewport: PHONE, serviceWorkers: 'allow', reducedMotion: 'reduce' });
+  let stop = null;
+  const caches = page => page.evaluate(async () => (await caches.keys()).sort());
+  try {
+    await build(path.join(out, 'r1'), 'r1');
+    await build(path.join(out, 'r2'), 'r2');
+    const site = path.join(out, 'site');
+    await publish(path.join(out, 'r1'), site);
+    stop = await serveAt(site, port);
+    const page = await context.newPage();
+    await page.goto('http://localhost:' + port + '/?today=' + TODAY);
+    await page.locator('#site-passcode').waitFor();
+    for (let tries = 0; ; tries++) {
+      const ready = await page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.getRegistration();
+        return (await caches.keys()).join() === 'wds-r1' && !!registration && !!registration.active && !registration.installing &&
+          navigator.serviceWorker.controller === registration.active;
+      });
+      if (ready) break;
+      assert.ok(tries < 150, 'the r1 offline copy did not settle');
+      await page.waitForTimeout(200);
+    }
+
+    // r2 goes live, but one of its files does not load on this phone.
+    await stop(); stop = null;
+    await publish(path.join(out, 'r2'), site);
+    await fs.rm(path.join(site, 'app', 'lib', 'reasons.js'));
+    stop = await serveAt(site, port);
+    const failed = await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      try { await registration.update(); } catch (_error) { /* the install fails */ }
+      for (let tries = 0; tries < 100 && registration.installing; tries++) await new Promise(resolve => setTimeout(resolve, 100));
+      return !registration.waiting && registration.active.scriptURL.endsWith('sw.js');
+    });
+    assert.ok(failed, 'the r2 worker did not take over');
+    assert.deepEqual(await caches(page), ['wds-r1'], 'the r1 copy stays, and no half copy is kept');
+
+    // Offline, the r1 copy still opens.
+    await stop(); stop = null;
+    await page.reload();
+    await page.locator('#site-passcode').waitFor();
+  } finally {
+    await context.close();
+    if (stop) await stop();
+    await fs.rm(out, { recursive: true, force: true });
+  }
+});
+
 /* ---- the dev server ---- */
 
 test('the dev server serves only the app, inside its folder, and survives a bad address', async () => {

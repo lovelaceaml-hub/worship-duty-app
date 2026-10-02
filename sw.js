@@ -32,13 +32,14 @@ async function storeRelease() {
   while (queue.length) {
     const url = queue.shift();
     const response = await fetch(url, { cache: 'no-cache' }).catch(() => null);
-    if (!response || !response.ok) {
-      if (url === SHELL) throw new Error('The app page did not load.');
-      continue;
-    }
+    // All of the release or nothing: a partial copy must never take over.
+    if (!response || !response.ok) throw new Error('A file of the release did not load: ' + url);
     if (/\.(js|css)\?|\/$|\.html$/.test(url)) {
       const text = await response.clone().text();
-      stampedIn(text, url).forEach(next => { if (!seen.has(next)) { seen.add(next); queue.push(next); } });
+      const named = stampedIn(text, url);
+      // A deploy between this worker and its page serves the next release's page.
+      if (url === SHELL && !named.size) throw new Error('The app page belongs to another release.');
+      named.forEach(next => { if (!seen.has(next)) { seen.add(next); queue.push(next); } });
     }
     await cache.put(url, response);
   }
@@ -46,8 +47,12 @@ async function storeRelease() {
 
 self.addEventListener('install', event => {
   if (RELEASE === 'DEV') { self.skipWaiting(); return; }
-  // A failed copy leaves the last release in charge, with its own copy.
-  event.waitUntil(storeRelease().then(() => self.skipWaiting()));
+  // A failed copy leaves the last release in charge, with its own copy; the
+  // half-stored one is dropped, and the next visit tries again.
+  event.waitUntil(storeRelease().then(() => self.skipWaiting(), async error => {
+    await caches.delete(CACHE);
+    throw error;
+  }));
 });
 
 self.addEventListener('activate', event => event.waitUntil((async () => {
