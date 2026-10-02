@@ -62,6 +62,22 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
     return Object.keys(Object.assign({}, was, next)).some(duty => String(was[duty] || '') !== String(next[duty] || ''));
   }
 
+  /* What the Sheet says after the app wrote into it, kept as the service's
+     sheetSeen (see sheet-lib planMerge), so the next import does not take the
+     app's own write for a change made in the Sheet. With `before`, only the
+     duties that changed were written; without it, the whole row was. */
+  async function rememberWritten(serviceId, before, after) {
+    const was = (before && before.assignments) || {};
+    const now = after.assignments || {};
+    const duties = before
+      ? Object.keys(Object.assign({}, was, now)).filter(duty => String(was[duty] || '') !== String(now[duty] || ''))
+      : Object.keys(Object.assign({}, after.sheetSeen || {}, now));
+    if (!duties.length) return;
+    const sheetSeen = {};
+    duties.forEach(duty => { sheetSeen[duty] = String(now[duty] || ''); });
+    await db.collection('schedule').doc(serviceId).set({ sheetSeen }, { merge: true });
+  }
+
   /* A change made in the app goes into the Sheet's grid. Writes that came
      from the Sheet itself (the import, a generated year) carry a new
      sheetSyncedAt and are not written back. */
@@ -79,6 +95,9 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
         ? await sheetSync.writeState(sheets, after, { today: today() })
         : await sheetSync.writeService(sheets, existed ? before : null, after, { today: today() });
       if (waiting) await queueRef.delete();
+      if (after && /written|added/.test(String(done))) {
+        await rememberWritten(serviceId, existed && !waiting && done !== 'row added' ? before : null, after);
+      }
       logger.info('Sheet write', { service: serviceId, done });
       await noteSheetStatus(settings, null);
     } catch (error) {
@@ -97,7 +116,10 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
       const item = document.data() || {};
       try {
         const service = await db.collection('schedule').doc(document.id).get();
-        if (service.exists) await sheetSync.writeState(sheets, service.data() || {}, { today: today() });
+        if (service.exists) {
+          await sheetSync.writeState(sheets, service.data() || {}, { today: today() });
+          await rememberWritten(document.id, null, service.data() || {});
+        }
         else if (item.date && item.service) await sheetSync.writeService(sheets, { date: item.date, service: item.service }, null, { today: today() });
         await document.ref.delete();
       } catch (error) {

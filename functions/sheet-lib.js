@@ -336,6 +336,10 @@ function planMerge(sheetServices, existingById, { patchTime = true, canonical = 
       if (before === sheetName) return; // changed in the app since the Sheet said so
       changedAssignments[duty] = sheetName;
     });
+    // A blank grid cell clears nothing, but it is what the Sheet says now.
+    (Array.isArray(sheetSvc._blank) ? sheetSvc._blank : []).forEach(duty => {
+      if (Object.prototype.hasOwnProperty.call(seen, duty) && seen[duty] !== '') seenNow[duty] = '';
+    });
     if (Object.keys(changedAssignments).length) patch.assignments = changedAssignments;
     if (Object.keys(seenNow).length) patch.sheetSeen = seenNow;
     if (Object.keys(patch).length) updates.push({ id: id, patch: patch });

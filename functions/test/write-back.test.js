@@ -149,6 +149,51 @@ test('the grid import keeps a time set in the app; an old service never adds a t
   });
 });
 
+test('with Sheet writing on, a change typed into the Sheet after the app wrote there still wins', async () => {
+  await onOctober1(async () => {
+    const id = '2026-10-03_morning';
+    const door = HEADER.indexOf('Usher Door');
+    // The app makes a change and writes it into the Sheet, then someone edits that cell in the Sheet.
+    const run = async (appValue, sheetValue) => {
+      const sheets = sheet();
+      const docs = Object.assign({ ['schedule/' + id]: morning({ Presider: 'B. Adam', 'Usher Door': 'S. Leah' }) }, writing);
+      const { functions } = loadIndex(docs, { sheets });
+      await functions.scheduledSheetSync.run({});
+      assert.deepEqual(docs['schedule/' + id].sheetSeen, { Presider: 'B. Adam', 'Usher Door': 'S. Leah' });
+      const before = docs['schedule/' + id];
+      const after = Object.assign({}, before, { assignments: Object.assign({}, before.assignments, { 'Usher Door': appValue }) });
+      docs['schedule/' + id] = after;
+      await functions.onScheduleWrite.run(write(before, after));
+      assert.equal(sheets.tab('2026 Entry')[3][door] || '', appValue, 'the app wrote its change');
+      assert.equal(docs['schedule/' + id].sheetSeen['Usher Door'], appValue, 'and remembers what the Sheet now says');
+      sheets.tab('2026 Entry')[3][door] = sheetValue;
+      await functions.scheduledSheetSync.run({});
+      return docs['schedule/' + id].assignments['Usher Door'];
+    };
+    assert.equal(await run('', 'S. Leah'), 'S. Leah', 'cleared in the app, then typed back into the Sheet');
+    assert.equal(await run('S. Grace', 'S. Leah'), 'S. Leah', 'changed in the app, then changed back in the Sheet');
+  });
+});
+
+test('a grid cell cleared in the Sheet clears nothing, but a name typed there later wins', async () => {
+  await onOctober1(async () => {
+    const id = '2026-10-03_morning';
+    const door = HEADER.indexOf('Usher Door');
+    const sheets = sheet();
+    const docs = Object.assign({ ['schedule/' + id]: morning({ Presider: 'B. Adam', 'Usher Door': 'S. Leah' }) }, writing);
+    const { functions } = loadIndex(docs, { sheets });
+    await functions.scheduledSheetSync.run({});
+    docs['schedule/' + id].assignments['Usher Door'] = 'S. Grace'; // changed in the app before Sheet writing was on
+    sheets.tab('2026 Entry')[3][door] = '';
+    await functions.scheduledSheetSync.run({});
+    assert.equal(docs['schedule/' + id].assignments['Usher Door'], 'S. Grace', 'a blank cell clears nothing');
+    assert.equal(docs['schedule/' + id].sheetSeen['Usher Door'], '');
+    sheets.tab('2026 Entry')[3][door] = 'S. Leah';
+    await functions.scheduledSheetSync.run({});
+    assert.equal(docs['schedule/' + id].assignments['Usher Door'], 'S. Leah', 'a name typed into the Sheet later wins');
+  });
+});
+
 const RAW = ['Month', 'Date', 'Service', 'Worship', 'Time', 'Category', 'Duty', 'Member'];
 const rawRow = (date, duty, member, label = 'Morning') => ['', date, label, 'Sabbath Day', '10:00 AM', '', duty, member].join(',');
 const csv = rows => [RAW.join(',')].concat(rows).join('\n');
