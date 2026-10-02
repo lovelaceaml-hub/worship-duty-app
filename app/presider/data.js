@@ -64,9 +64,10 @@ export function ensureSetlist(service, source = 'manual', { noService = false } 
     id, date: service.date, worshipType: service.worship || 'Sabbath Day', serviceLabel: service.service,
     // Only the service's own Presider: a song editor who makes the list is not one.
     presider: (service.assignments || {}).Presider || '', notes: '', songs: [], status: 'planned', sungAt: null, source
-  // A list for a date with no scheduled service is counted at its own date
+  // A list made with "Plan another date" says whether its date has a
+  // scheduled service; one without is counted at its own date
   // (functions/workflows.js recordSongHistory).
-  }, noService ? { noService: true } : {}));
+  }, source === 'manual' ? { noService } : {}));
   planner.setlists[id] = setlist;
   pending[id] = setlist;
   const ref = fb.doc(fb.db, 'setlists', id);

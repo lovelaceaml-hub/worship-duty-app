@@ -1,8 +1,8 @@
 /* The song recorder counts a confirmed list as sung three hours after its
    service starts: a list for a scheduled service, a list planned for a date
-   with no scheduled service ("Plan another date"), and a list changed after
-   it was confirmed. A list whose service was deleted or moved is not
-   counted, nor is one never confirmed. */
+   with no scheduled service ("Plan another date", also one made before
+   lists said so), and a list changed after it was confirmed. A list whose
+   service was deleted or moved is not counted, nor is one never confirmed. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRequire } from 'node:module';
@@ -42,4 +42,26 @@ test('confirmed lists are counted after their service, also without a scheduled 
   assert.equal(db.store.get('songStats/003').timesSung, 1);
   assert.equal(db.store.get('songStats/001').timesSung, 1);
   assert.equal(db.store.get('songStats/006'), undefined);
+});
+
+test('a list made with "Plan another date" before lists said so is counted too, unless its service was deleted or moved', async () => {
+  const db = memoryDb({
+    // Made by the earlier release: source 'manual', no noService.
+    'setlists/2026-10-03_morning': list('2026-10-03_morning', { source: 'manual', songs: ['011'] }),
+    // The same, but its service was deleted after this release.
+    'setlists/2026-10-03_early-morning': list('2026-10-03_early-morning', { serviceLabel: 'Early Morning', source: 'manual', songs: ['012'] }),
+    'deletedServices/2026-10-03_early-morning': { deletedAt: 1, date: '2026-10-03', service: 'Early Morning' },
+    // Opened from a service that was then deleted or moved.
+    'setlists/2026-10-02_evening': list('2026-10-02_evening', { serviceLabel: 'Evening', source: 'schedule', songs: ['013'] }),
+    // Made with "Plan another date" for a scheduled service, which was then deleted.
+    'setlists/2026-10-02_afternoon': list('2026-10-02_afternoon', { serviceLabel: 'Afternoon', source: 'manual', noService: false, songs: ['014'] })
+  });
+  const { recordSongHistory } = createWorkflowHandlers({ db, now: () => NOW, logger: { info() {}, warn() {}, error() {} } });
+  await recordSongHistory();
+  const status = id => db.store.get('setlists/' + id).status;
+  assert.equal(status('2026-10-03_morning'), 'sung');
+  assert.equal(db.store.get('songStats/011').timesSung, 1);
+  assert.equal(status('2026-10-03_early-morning'), 'planned', 'its service was deleted');
+  assert.equal(status('2026-10-02_evening'), 'planned');
+  assert.equal(status('2026-10-02_afternoon'), 'planned');
 });

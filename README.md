@@ -375,7 +375,10 @@ Sheet's own script copies them into "Raw Data".
   `setlists` and `songStats` (songs), and `feedback`.
 - Server jobs on a timer: duty reminders every hour, the Sheet import every
   2 hours, every 30 minutes the songs of each confirmed list are counted as
-  sung once 3 hours have passed since its service started, every night the
+  sung once 3 hours have passed since its service started (a list planned
+  with "Plan another date" for a date with no service counts at its own
+  date and time, also one made before this release; a list whose service
+  was deleted or moved does not count), every night the
   department members from the schedule, and every November 1 the next
   planning year's regular services.
 - Notifications: new duties (one alert names all of a member's new duties,

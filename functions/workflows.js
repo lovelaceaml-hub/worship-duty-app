@@ -480,6 +480,18 @@ function createWorkflowHandlers(options = {}) {
      (a song swapped during the service): its songs then are what was sung. */
   const confirmedOnce = data => Number(data.confirmedAt || 0) > 0;
 
+  /* A list planned for a date with no scheduled service ("Plan another
+     date"), counted at its own date and label. Lists say so (noService)
+     since this release. One made that way before says only source
+     'manual', and counts the same, unless its service has been deleted or
+     moved since (a deletedServices record). */
+  async function plannedWithoutService(candidate) {
+    const data = candidate.data;
+    if (data.noService === true) return true;
+    if (data.noService != null || data.source !== 'manual') return false;
+    return !(await db.collection('deletedServices').doc(candidate.id).get()).exists;
+  }
+
   async function recordSongHistory() {
     const nowMs = now();
     const snapshot = await db.collection('setlists').where('status', '==', 'planned').get();
@@ -499,9 +511,7 @@ function createWorkflowHandlers(options = {}) {
       if (scheduleSnapshot.exists) {
         scheduleData = scheduleSnapshot.data() || {};
         if (scheduleData.status === 'canceled' || scheduleData.status === 'cancelled') { skipped += 1; continue; }
-      } else if (candidate.data.noService === true) {
-        // Planned for a date with no scheduled service ("Plan another date"):
-        // it counts at its own date and label.
+      } else if (await plannedWithoutService(candidate)) {
         scheduleData = { date: candidate.data.date, service: candidate.data.serviceLabel || '' };
       } else {
         // Its service was deleted or moved, so it was not sung there.
