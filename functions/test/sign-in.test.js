@@ -93,18 +93,23 @@ test('guesses made at the same moment are counted: five are checked, the rest re
   await rejectsWith(signIn(functions, 'S. Leah', '2468'), 'resource-exhausted', 'locked');
 });
 
-test('a reset lifts the lockout, ends the member\'s sessions and is recorded', async () => {
+test('a reset lifts the lockout, ends the member\'s sessions, stops alerts to their phones and is recorded', async () => {
   const docs = await church({
     'accounts/S. Leah': {
       memberName: 'S. Leah', active: true, roleVersion: 3, roles: [], departments: [], mustChangePin: false,
       pinHash: await pinHash('2468'), failedLoginAttempts: 7, loginLockedUntil: Date.now() + 600000
-    }
+    },
+    'app/nameMap': { map: { 'S.  Leah': 'S. Leah' } },
+    'tokens/leah-phone': { name: 'S. Leah', updatedAt: 1, lastSeenAt: 1 },
+    'tokens/leah-old-phone': { name: 'S.  Leah', updatedAt: 1, lastSeenAt: 1 },
+    'tokens/chloe-phone': { name: 'M. Chloe', updatedAt: 1, lastSeenAt: 1 }
   });
   const { functions, auth } = loadIndex(docs);
   await functions.resetMemberPin.run({ auth: as('B. Anthony'), data: { memberId: 'S. Leah' } });
   const account = docs['accounts/S. Leah'];
   assert.deepEqual([account.failedLoginAttempts, account.loginLockedUntil, account.mustChangePin, account.roleVersion], [0, 0, true, 4]);
   assert.deepEqual(auth.revoked, ['member:S. Leah']);
+  assert.deepEqual(Object.keys(docs).filter(path => path.startsWith('tokens/')), ['tokens/chloe-phone'], 'her phones, under any spelling, get no alerts');
   const audit = Object.entries(docs).filter(([path]) => path.startsWith('audit/')).map(([, entry]) => entry);
   assert.deepEqual(audit.map(entry => [entry.action, entry.actor, entry.target]), [['member-pin-reset', 'B. Anthony', 'S. Leah']]);
   assert.ok(audit[0].timestamp > 0);

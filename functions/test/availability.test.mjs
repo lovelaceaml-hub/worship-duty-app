@@ -47,6 +47,20 @@ test('a stale copy is still refused, with the reason the app can show', async ()
   await assert.rejects(save(eveningsOff, { expectedRevision: 'x' }), error => error.code === 'invalid-argument');
 });
 
+test('saving times a department already has is not refused', async () => {
+  // For example a change made and undone before saving.
+  const { db, save } = setup({ 'departments/Usher Sisters/members/uid-leah': profile({ availability: eveningsOff, revision: 2, updatedAt: 9 }) });
+  const result = await save({ recurring: { evening: 'unavailable' }, exceptions: {} }, { expectedRevision: 2, expectedUpdatedAt: 9 });
+  assert.deepEqual([result.ok, result.revision, result.departments[0].revision], [true, 2, 2]);
+  assert.equal(db.store.get('departments/Usher Sisters/members/uid-leah').updatedAt, 9, 'nothing to write');
+  // Someone else still cannot save them, nor read the profile that way.
+  const ruth = { uid: 'uid-ruth', token: { uid: 'uid-ruth', memberUid: 'uid-ruth', memberName: 'S. Ruth', roles: ['member'], roleVersion: 1 } };
+  const workflows = createWorkflowHandlers({ db, now: () => NOW, logger: { info() {}, warn() {}, error() {} } });
+  await assert.rejects(workflows.saveMemberAvailability({ auth: ruth, data: { memberUid: 'uid-leah', departments: [
+    { departmentId: 'Usher Sisters', availability: eveningsOff }
+  ] } }), error => error.code === 'permission-denied');
+});
+
 const LATER = 'schedule/2026-10-10_morning';
 const lobby = (extra = {}) => Object.assign(profile({ departmentId: 'Lobby', department: 'Lobby', eligibleDuties: ['Lobby Desk #1', 'Lobby Desk #2'] }), extra);
 const morningsOff = { recurring: { morning: 'unavailable' }, exceptions: {} };
@@ -108,4 +122,43 @@ test('a leader marking a member unavailable flags their duties too', async () =>
   assert.equal(db.store.get(LATER).needsReplacement['Usher Door'].markedByUid, 'uid-grace');
   const status = await handlers.updateDepartmentProfile({ auth: grace, data: { departmentId: 'Usher Sisters', memberUid: 'uid-leah', patch: { status: 'inactive' } } });
   assert.deepEqual(status.replacements, { marked: [], cleared: [] }, 'other changes flag nothing');
+});
+
+test('a member kept on a flagged duty is available for that service in every department, and saving again flags nothing', async () => {
+  const dayOff = { recurring: {}, exceptions: { '2026-10-10': { '*': 'unavailable' } } };
+  const flag = (departmentId, duty) => ({ [duty]: { memberName: 'S. Leah', memberUid: 'uid-leah', departmentId, reason: 'unavailable', since: 1 } });
+  const { db } = setup({
+    'departments/Usher Sisters/members/uid-leah': profile({ availability: dayOff, revision: 4 }),
+    'departments/Lobby/members/uid-leah': lobby({ availability: dayOff }),
+    [LATER]: { date: '2026-10-10', service: 'Morning', time: '10:00', assignments: { 'Usher Door': 'S. Leah', 'Lobby Desk #1': 'S. Leah' },
+      needsReplacement: Object.assign(flag('Usher Sisters', 'Usher Door'), flag('Lobby', 'Lobby Desk #1')) },
+    'schedule/2026-10-10_evening': { date: '2026-10-10', service: 'Evening', time: '19:30', assignments: { 'Usher Back': 'S. Leah' },
+      needsReplacement: flag('Usher Sisters', 'Usher Back') }
+  });
+  const workflows = createWorkflowHandlers({ db, now: () => NOW, logger: { info() {}, warn() {}, error() {} } });
+  const grace = { uid: 'uid-grace', token: { uid: 'uid-grace', roles: ['departmentLeader'], departments: ['Usher Sisters'], memberName: 'S. Grace' } };
+  const kept = await workflows.resolveDutyAttention({ auth: grace, data: { departmentId: 'Usher Sisters', serviceId: '2026-10-10_morning', duty: 'Usher Door', decision: 'keep' } });
+  assert.deepEqual([kept.kept, kept.markedAvailable], [true, true]);
+
+  const sisters = db.store.get('departments/Usher Sisters/members/uid-leah');
+  const lobbyProfile = db.store.get('departments/Lobby/members/uid-leah');
+  assert.deepEqual(sisters.availability.exceptions['2026-10-10'], { '*': 'unavailable', morning: 'available' }, 'the evening that day stays off');
+  assert.deepEqual(lobbyProfile.availability, sisters.availability, 'one record for all departments');
+  assert.deepEqual([sisters.revision, sisters.updatedByUid, lobbyProfile.revision], [5, 'uid-grace', 1]);
+  assert.deepEqual(Object.keys(db.store.get(LATER).needsReplacement), ['Lobby Desk #1'], 'the Lobby leader still answers their own flag');
+  assert.deepEqual(Object.keys(db.store.get('schedule/2026-10-10_evening').needsReplacement), ['Usher Back']);
+
+  // The member saves the record the app now shows: nothing is flagged again,
+  // and the Lobby flag goes, as for any save saying they can come.
+  const again = await workflows.saveMemberAvailability({ auth: leah, data: { memberUid: 'uid-leah', departments: [
+    { departmentId: 'Usher Sisters', availability: sisters.availability }, { departmentId: 'Lobby', availability: lobbyProfile.availability }
+  ] } });
+  assert.deepEqual([again.replacements.marked, again.replacements.cleared.map(item => item.duty)], [[], ['Lobby Desk #1']]);
+  assert.deepEqual(db.store.get(LATER).needsReplacement, {});
+
+  // A second keep finds the record already saying so and changes nothing.
+  db.store.set(LATER, Object.assign(db.store.get(LATER), { needsReplacement: flag('Usher Sisters', 'Usher Door') }));
+  const twice = await workflows.resolveDutyAttention({ auth: grace, data: { departmentId: 'Usher Sisters', serviceId: '2026-10-10_morning', duty: 'Usher Door', decision: 'keep' } });
+  assert.equal(twice.markedAvailable, false);
+  assert.equal(db.store.get('departments/Usher Sisters/members/uid-leah').revision, 5, 'neither the save nor this keep wrote it');
 });

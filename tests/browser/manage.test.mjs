@@ -228,23 +228,34 @@ test('while a duty saves, its cell shows the new name', async () => {
   await context.close();
 });
 
-test('a member who can no longer make a duty can be kept on it', async () => {
+test('a member who can no longer make a duty can be kept on it, and is then available for that service', async () => {
   const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
   const id = '2026-07-11_morning';
   const service = await fakeDoc(page, 'schedule/' + id);
   const holder = service.assignments['Usher Door'];
-  await setDoc(page, 'schedule/' + id, Object.assign({}, service, { needsReplacement: { 'Usher Door': { memberName: holder, reason: 'unavailable' } } }));
+  // The member marked the whole day off, which flagged the duty.
+  const path = 'departments/Usher Sisters/members/member:' + holder;
+  await setDoc(page, path, Object.assign({}, await fakeDoc(page, path), { availability: { recurring: {}, exceptions: { '2026-07-11': { '*': 'unavailable' } } } }));
+  await setDoc(page, 'schedule/' + id, Object.assign({}, service, {
+    needsReplacement: { 'Usher Door': { memberName: holder, memberUid: 'member:' + holder, departmentId: 'Usher Sisters', reason: 'unavailable' } }
+  }));
   await monthPlan(page);
+  const flagged = page.locator(`#view td.plan-cell.is-flagged:has(select[data-service="${id}"][data-duty="Usher Door"])`);
+  await flagged.waitFor();
   await page.locator(`#view [data-act="plan-open"][data-service="${id}"]`).click();
   const form = page.locator('#view form[data-act="replace-duty"]');
   assert.equal(await form.locator('button[type="submit"]').isDisabled(), true, 'nothing chosen yet');
   await form.locator('select').selectOption('__keep');
+  await form.locator('.hint', { hasText: holder + ' is then marked available for this service.' }).waitFor();
   await form.locator('button[type="submit"]', { hasText: 'Keep ' + holder }).click();
-  await banner(page, holder + ' stays on Usher Door.');
+  await banner(page, holder + ' stays on Usher Door and is marked available for this service.');
   const [payload] = await calls(page, 'resolveDutyAttention');
   assert.deepEqual([payload.decision, payload.duty, payload.requestId], ['keep', 'Usher Door', undefined]);
   const after = await fakeDoc(page, 'schedule/' + id);
   assert.deepEqual([after.assignments['Usher Door'], after.needsReplacement['Usher Door']], [holder, undefined]);
+  // Available for the morning service only; the rest of the day stays off.
+  assert.deepEqual((await fakeDoc(page, path)).availability.exceptions['2026-07-11'], { '*': 'unavailable', morning: 'available' });
+  await flagged.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -513,9 +524,12 @@ test('a leader of two departments has no "All departments" link, resets only a m
   assert.equal(await page.locator('#view [data-act="department-reset-pin"]').count(), 0, 'an administrator\'s PIN is reset by an administrator');
   await page.locator('#view [data-act="department-member-back"]').click();
   await page.locator('#view [data-act="department-member"]', { hasText: 'B. Caleb' }).click();
-  accept(page);
+  await setDoc(page, 'tokens/caleb-phone', { name: 'B. Caleb', updatedAt: 1, lastSeenAt: 1 });
+  const asked = new Promise(resolve => page.once('dialog', dialog => { resolve(dialog.message()); dialog.accept(); }));
   await page.locator('#view [data-act="department-reset-pin"]').click();
+  assert.match(await asked, /Their phones get no alerts until they sign in again\.$/);
   await banner(page, 'B. Caleb’s PIN was reset. Tell them to sign in with 0000 and choose a new PIN.');
+  assert.equal(await fakeDoc(page, 'tokens/caleb-phone'), undefined, 'their phones get no alerts');
   assert.deepEqual(errors, []);
   await context.close();
 });

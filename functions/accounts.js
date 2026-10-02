@@ -239,10 +239,21 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
 
   /* A leader or an administrator resets someone's PIN to 0000 (request.auth
      is their verified, current account). Every reset is recorded in audit
-     (who, whom, when), as overrides and role changes are. */
+     (who, whom, when), as overrides and role changes are. The member's
+     phones get no alerts until they sign in again (each sign-in registers
+     its phone again), so a lost phone stops getting them at once. */
   async function resetMemberPin(request) {
     const actor = request.auth;
     const result = await memberAuth.resetMemberPin({ data: request.data, auth: actor });
+    try {
+      const nameMap = await loadNameMap();
+      const name = canonicalName(result.memberId, nameMap);
+      const devices = await db.collection('tokens').get();
+      await Promise.all(devices.docs.filter(document => canonicalName((document.data() || {}).name, nameMap) === name)
+        .map(document => document.ref.delete()));
+    } catch (error) {
+      logger.error('Reset device cleanup failed', { error: String(error && error.message || error) });
+    }
     try {
       await db.collection('audit').add({
         action: 'member-pin-reset', actor: actor.memberName || actor.uid, actorUid: actor.uid,

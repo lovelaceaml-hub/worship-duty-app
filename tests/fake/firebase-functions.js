@@ -7,7 +7,7 @@
    a refusal { code, reason, message }, or a function of the payload giving
    either) to make a call fail, and
    window.__fakeDelay = { callableName: ms } to slow one down. */
-import { doc, getDoc, getDocs, collection, setDoc, updateDoc } from './firebase-firestore.js';
+import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc } from './firebase-firestore.js';
 
 const accounts = window.__fakeAccounts = window.__fakeAccounts || structuredClone((window.__fixture || {}).accounts || {});
 const invites = {};
@@ -156,6 +156,10 @@ const handlers = {
     if (!isAdmin() && privileged) fail('permission-denied', 'Only an administrator can reset that PIN.', 'privileged-target');
     Object.assign(accounts[data.memberId], { pin: '0000' });
     accounts[data.memberId].claims.mustChangePin = true;
+    // As the server: their phones get no alerts until they sign in again.
+    for (const item of (await getDocs(collection(null, 'tokens'))).docs) {
+      if ((item.data() || {}).name === data.memberId) await deleteDoc(doc(null, 'tokens', item.id));
+    }
     return { ok: true };
   },
   async listDepartmentRoster(data) {
@@ -268,7 +272,10 @@ const handlers = {
       befores.push(before);
     }
     for (const [index, entry] of data.departments.entries()) {
-      const next = await saveProfile(entry.departmentId, data.memberUid, Object.assign({}, befores[index], { availability: clone(entry.availability) }));
+      // As the server: a department that already has these times is not written.
+      const same = JSON.stringify(befores[index].availability) === JSON.stringify(entry.availability);
+      const next = same ? befores[index]
+        : await saveProfile(entry.departmentId, data.memberUid, Object.assign({}, befores[index], { availability: clone(entry.availability) }));
       out.push({ departmentId: entry.departmentId, profile: next });
       const flags = await flagDuties(next, entry.departmentId, data.memberUid);
       marked.push(...flags.marked);
@@ -318,9 +325,23 @@ const handlers = {
       const marker = needsReplacement[data.duty];
       const expected = marker ? marker.memberName : data.expectedMemberName;
       if (expected != null && differs(holder, expected)) fail('failed-precondition', 'That member is no longer on that duty.', 'not-holder', { memberName: holder });
+      // As the server: the member is marked available for this one service
+      // in every department they are in.
+      let markedAvailable = false;
+      for (const department of (marker && marker.memberUid ? permissions().DEPARTMENTS : [])) {
+        const snapshot = await getDoc(profileRef(department, marker.memberUid));
+        const person = snapshot.exists() ? clone(snapshot.data()) : null;
+        if (!person || differs(person.memberName, holder)) continue;
+        const availability = Object.assign({ recurring: {}, exceptions: {} }, person.availability);
+        const day = (availability.exceptions || {})[service.date] || {};
+        if (day[slug(service.service)] === 'available') continue;
+        availability.exceptions = Object.assign({}, availability.exceptions, { [service.date]: Object.assign({}, day, { [slug(service.service)]: 'available' }) });
+        await saveProfile(department, marker.memberUid, Object.assign(person, { availability }));
+        markedAvailable = true;
+      }
       delete needsReplacement[data.duty];
       await setDoc(ref, Object.assign({}, service, { needsReplacement }));
-      return { ok: true, kept: true };
+      return { ok: true, kept: true, markedAvailable };
     }
     if (data.expectedMemberName != null && differs(holder, data.expectedMemberName)) {
       fail('aborted', 'This record changed since you loaded it. Reload to see the newer version.', 'changed', { memberName: holder });

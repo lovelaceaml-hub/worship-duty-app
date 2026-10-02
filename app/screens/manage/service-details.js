@@ -103,6 +103,7 @@ function replacementPanel(service) {
         </select>
         <button type="submit" class="ghost small"${choice && !busy ? '' : ' disabled'}>${busy ? 'Saving…' : replaceLabel(choice, holder, people)}</button>
       </div>
+      ${choice === KEEP ? html`<p class="hint small">${nameOf(holder)} is then marked available for this service.</p>` : ''}
       ${ranked.length ? '' : html`<p class="hint small">No one else on the ${departmentOf(duty).name} list can take it then.</p>`}
     </form>`;
   })}</div>`;
@@ -214,8 +215,8 @@ defineActions({
       renderSoon();
       try {
         if (choice === KEEP) {
-          await keepOnDuty(service, duty);
-          notice(nameOf(holder) + ' stays on ' + dutyName(duty) + '.');
+          const kept = await keepOnDuty(service, duty);
+          notice(nameOf(holder) + ' stays on ' + dutyName(duty) + (kept.markedAvailable ? ' and is marked available for this service.' : '.'));
         } else {
           await replaceDuty(service, duty, choice === OPEN ? '' : choice);
           notice(choice === OPEN ? dutyName(duty) + ' is open now. Fill it in the month plan.' : 'Replacement saved.');

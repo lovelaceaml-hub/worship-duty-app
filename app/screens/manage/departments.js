@@ -355,7 +355,7 @@ defineActions({
   'department-reset-pin': {
     allowed: el => canResetPin(el.dataset.name, managedDepartment()),
     run: el => {
-      if (confirm('Reset the PIN for ' + nameOf(el.dataset.name) + '? They sign in with ' + TEMPORARY_PIN + ', then choose a new PIN.')) resetPin(el.dataset.name);
+      if (confirm('Reset the PIN for ' + nameOf(el.dataset.name) + '? They sign in with ' + TEMPORARY_PIN + ', then choose a new PIN. Their phones get no alerts until they sign in again.')) resetPin(el.dataset.name);
     }
   },
   'invite-create': { allowed: el => canManageDepartment(el.dataset.department), run: el => createInvite(el.dataset.department) },

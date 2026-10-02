@@ -71,6 +71,20 @@ function canonicalAssignments(assignments, canonical) {
   return out;
 }
 
+/* The availability with an 'available' day for one service (date and
+   time key), or null when it already says so or cannot be read. */
+function keptAvailable(value, date, key) {
+  let availability;
+  try {
+    availability = authz.normalizeProfilePatch({ availability: value || {} }).availability;
+  } catch (_error) {
+    return null;
+  }
+  if ((availability.exceptions[date] || {})[key] === 'available') return null;
+  availability.exceptions[date] = Object.assign({}, availability.exceptions[date], { [key]: 'available' });
+  return availability;
+}
+
 function text(value, max) {
   const out = String(value == null ? '' : value).trim();
   return max ? out.slice(0, max) : out;
@@ -156,7 +170,13 @@ function createWorkflowHandlers(options = {}) {
         });
         const next = profileWithPatch(before, entry.patch, actor, at);
         next.revision = nextRevision(before);
-        rejectDecision(authz.authorizeProfileUpdate(actor, before, authorizationCandidate(before, next)));
+        /* A department that already has these times is not written, since a
+           write that changes nothing is refused; the caller must still be
+           allowed to set them, as for a change. */
+        const unchanged = JSON.stringify(before.availability) === JSON.stringify(entry.patch.availability);
+        const asChange = unchanged ? Object.assign({}, before, { availability: null }) : before;
+        rejectDecision(authz.authorizeProfileUpdate(actor, asChange, authorizationCandidate(before, next)));
+        if (unchanged) return { departmentId: entry.departmentId, reference: profileRefs[index], before, next: before, unchanged: true };
         return { departmentId: entry.departmentId, reference: profileRefs[index], before, next };
       });
 
@@ -170,9 +190,10 @@ function createWorkflowHandlers(options = {}) {
 
       /* ---- writes: profiles, then one write per service for its flags ---- */
       candidates.forEach(candidate => {
-        transaction.set(candidate.reference, candidate.next, { merge: false });
-        if (candidate.next.revision > highestRevision) highestRevision = candidate.next.revision;
-        departmentsOut.push({ departmentId: candidate.departmentId, revision: candidate.next.revision, profile: candidate.next });
+        if (!candidate.unchanged) transaction.set(candidate.reference, candidate.next, { merge: false });
+        const revision = currentRevision(candidate.next);
+        if (revision > highestRevision) highestRevision = revision;
+        departmentsOut.push({ departmentId: candidate.departmentId, revision, profile: candidate.next });
       });
       flagged = replacements.writeFlags(transaction, db, candidates.flatMap(candidate => replacements.flagChanges({
         profile: candidate.next, departmentId: candidate.departmentId, memberUid, byId, canonical, at, markedByUid: actor.uid
@@ -254,6 +275,7 @@ function createWorkflowHandlers(options = {}) {
     let memberName = '';
     let requestStatus = null;
     let kept = false;
+    let markedAvailable = false;
 
     await db.runTransaction(async transaction => {
       const scheduleSnapshot = await transaction.get(scheduleReference);
@@ -314,6 +336,27 @@ function createWorkflowHandlers(options = {}) {
         if (expected != null && canonical(expected) !== holder) {
           throw errorWithCode('failed-precondition', 'That member is no longer on that duty.', { reason: 'not-holder', memberName: currentMemberName });
         }
+        /* The member comes after all: their record now says available for
+           this one service, so a later save of their availability does not
+           flag the duty again. It is one record for all their departments
+           (their own save writes them all), so every profile gets the same
+           day; their other services that day stay as they set them. A flag
+           in another department stays for its leader to answer. */
+        const memberUid = flag && typeof flag.memberUid === 'string' ? flag.memberUid.trim() : '';
+        const profileRefs = memberUid ? permissions.DEPARTMENTS.map(department => profileRef(db, department, memberUid)) : [];
+        const profileSnapshots = profileRefs.length ? await transaction.getAll(...profileRefs) : [];
+        const at = now();
+        profileSnapshots.forEach((snapshot, index) => {
+          if (!snapshot.exists) return;
+          const before = snapshot.data() || {};
+          if (canonical(before.memberName || before.member) !== holder) return;
+          const availability = keptAvailable(before.availability, slotServiceDate, slotServiceTime);
+          if (!availability) return;
+          const next = profileWithPatch(before, { availability }, actor, at);
+          next.revision = nextRevision(before);
+          transaction.set(profileRefs[index], next, { merge: false });
+          markedAvailable = true;
+        });
         if (flag) transaction.set(scheduleReference, { needsReplacement: { [duty]: deleteField() } }, { merge: true });
         revisionValue = currentRevision({ revision: assignmentRevisions[duty] });
         kept = true;
@@ -428,7 +471,7 @@ function createWorkflowHandlers(options = {}) {
       assignment: record,
       requestId: requestId || null,
       requestStatus
-    }, kept ? { kept: true } : {});
+    }, kept ? { kept: true, markedAvailable } : {});
   }
 
   /* ============================ 4.3 automatic recorder ============================ */

@@ -190,11 +190,14 @@ export function overrideDuty(service, duty, profile, reason) {
 }
 
 /* Keep the member on a duty they said they can no longer make (they will
-   come after all): the flag goes, and they stay on it. The server refuses
+   come after all): the flag goes, they stay on it, and their availability
+   says available for that service (markedAvailable). The server refuses
    (not-holder) once someone else has the duty, even when the flag went with
    that change. */
-export function keepOnDuty(service, duty) {
+export async function keepOnDuty(service, duty) {
   const marker = (service.needsReplacement || {})[duty] || {};
-  return call('resolveDutyAttention', { departmentId: departmentOf(duty).name, serviceId: serviceId(service), duty, decision: 'keep',
+  const result = await call('resolveDutyAttention', { departmentId: departmentOf(duty).name, serviceId: serviceId(service), duty, decision: 'keep',
     expectedMemberName: marker.memberName || (service.assignments || {})[duty] || '' });
+  if (result && result.markedAvailable) loadRoster(departmentOf(duty).name, true);
+  return result || {};
 }

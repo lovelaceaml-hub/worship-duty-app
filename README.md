@@ -266,7 +266,11 @@ on every pair and three of duties.
   request can only be closed; a request for a moved or deleted service can
   be closed too. Requests for services that have started show as Past.
 - A duty flagged because the member marked the day off ("can no longer make
-  it") can go to someone else, be left open, or stay with the member.
+  it") can go to someone else, be left open, or stay with the member. Keeping
+  them marks them available for that one service, in all their departments,
+  so saving their availability later does not flag it again; their other
+  services that day stay as they set them. A flag in another department
+  stays for its own leader.
 
 ## Department members
 
@@ -297,8 +301,10 @@ on every pair and three of duties.
   starting PIN until the member chooses their own (Settings, Change your
   PIN); the shared starting PINs cannot be chosen.
 - Five wrong PINs lock the account for 15 minutes. A reset unlocks it and
-  signs the member out on every device. Only administrators reset a leader's,
-  a song editor's or an administrator's PIN, and every reset is recorded.
+  signs the member out on every device, and their phones get no alerts until
+  they sign in again (so a lost phone stops getting them). Only
+  administrators reset a leader's, a song editor's or an administrator's PIN,
+  and every reset is recorded.
 - Removing someone as a leader or song editor holds; it also ends their open
   sessions, as a reset and a name fix do. They sign in again.
 - Signing out clears what the member left on the device: unsaved changes,
