@@ -31,7 +31,7 @@ test('a member\'s feed lists their duties under any spelling, at the service\'s 
   await functions.ics({ path: '/ics/M.%20Chloe', method: 'GET', headers: {} }, res);
   assert.equal(res.statusCode, 200);
   assert.match(res.body, /DTSTART;TZID=America\/Los_Angeles:20301005T100000/, 'the stored D. Chloe is M. Chloe; Morning starts at 10:00');
-  assert.match(res.body, /DTSTART;TZID=America\/Los_Angeles:20301008T093000/);
+  assert.match(res.body, /DTSTART;TZID=America\/Los_Angeles:20301008T193000/, 'a time that cannot be read ("9:30") is the Evening\'s usual time, as in the app');
   assert.match(res.body, /X-WR-CALNAME:LV Zion Duties for M\. Chloe/);
   assert.ok(res.body.split('\r\n').every(line => Buffer.byteLength(line, 'utf8') <= 75));
 });

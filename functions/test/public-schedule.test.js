@@ -25,7 +25,9 @@ test('keeps only schedule-tab fields in the public Worship projection', () => {
   });
 });
 
-test('rejects malformed schedule service times and dates', () => {
+test('rejects malformed dates; a time that cannot be read is the label\'s usual time, as in the app', () => {
   assert.equal(publicScheduleService({ date: 'not-a-date', time: '09:00' }), null);
-  assert.equal(publicScheduleService({ date: '2026-08-08', time: '9 AM' }), null);
+  assert.equal(publicScheduleService({ date: '2026-08-08', service: 'Evening', time: '9 AM' }).time, '19:30');
+  assert.equal(publicScheduleService({ date: '2026-08-08', service: 'Morning', time: '' }).time, '10:00');
+  assert.equal(publicScheduleService({ date: '2026-08-08', service: 'Morning', time: '25:00' }).time, '10:00');
 });

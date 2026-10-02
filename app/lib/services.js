@@ -17,7 +17,7 @@ export function serviceId(service) {
 }
 
 export function startTime(service) {
-  if (/^\d{2}:\d{2}$/.test(service.time || '')) return service.time;
+  if (/^([01]\d|2[0-3]):[0-5]\d$/.test(service.time || '')) return service.time;
   return DEFAULT_TIMES[service.service] || '12:00';
 }
 

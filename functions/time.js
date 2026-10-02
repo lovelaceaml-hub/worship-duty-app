@@ -37,12 +37,21 @@ function pacificTime(dateIso, time) {
   return wallClock - pacificOffset(guess);
 }
 
+/* A service's start time as "HH:MM": its own when it is a real clock time,
+   else its label's usual time. Reminders, alerts, the calendar feed and the
+   public schedule all read it this way, as the app does (app/lib/services.js
+   startTime), so "9:30" or "25:00" never means one time here and another
+   there. */
+function startClock(service) {
+  const own = String((service && service.time) || '');
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(own) ? own : (DEFAULT_TIMES[service && service.service] || '12:00');
+}
+
 /* A service's start, using its label's usual time when it has none. NaN
    without a valid date. */
 function serviceStart(service) {
   if (!service || !/^\d{4}-\d{2}-\d{2}$/.test(service.date || '')) return NaN;
-  const time = /^\d{2}:\d{2}$/.test(service.time || '') ? service.time : (DEFAULT_TIMES[service.service] || '12:00');
-  return pacificTime(service.date, time);
+  return pacificTime(service.date, startClock(service));
 }
 
 /* Whether a service has started by `now` (epoch milliseconds). A service
@@ -65,4 +74,4 @@ function clockTime(time) {
   return (hour % 12 || 12) + ':' + minutes + ' ' + (hour >= 12 ? 'PM' : 'AM');
 }
 
-module.exports = { TIME_ZONE, DEFAULT_TIMES, pacificDate, pacificTime, serviceStart, hasStarted, longDate, clockTime };
+module.exports = { TIME_ZONE, DEFAULT_TIMES, pacificDate, pacificTime, startClock, serviceStart, hasStarted, longDate, clockTime };

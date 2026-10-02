@@ -7,7 +7,7 @@
  */
 
 const { dutyName, canonicalName } = require('./names');
-const { DEFAULT_TIMES } = require('./time');
+const { startClock } = require('./time');
 
 function icsEscape(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n')
@@ -67,9 +67,7 @@ function fold(line) {
 
 /* A service's start time as HHMM: its own, or its label's usual time. */
 function startTime(svc) {
-  const own = String(svc.time || '').trim();
-  const time = /^\d{1,2}:\d{2}$/.test(own) ? own.padStart(5, '0') : (DEFAULT_TIMES[svc.service] || '12:00');
-  return time.replace(':', '');
+  return startClock(svc).replace(':', '');
 }
 
 /* All (duty, svc) pairs assigned to `member` (both sides in their current

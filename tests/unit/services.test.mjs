@@ -59,6 +59,8 @@ test('the Pacific clock decides, not the device or UTC clock', () => {
 test('a service without a time uses its label\'s usual time; bad rows are ignored', () => {
   const list = [{ date: 'not-a-date', time: '05:00', service: 'Early Morning' }, { date: '2026-09-14', service: 'Evening' }];
   assert.equal(startTime(list[1]), '19:30');
+  assert.equal(startTime({ date: '2026-09-14', service: 'Evening', time: '25:00' }), '19:30', 'not a real clock time');
+  assert.equal(startTime({ date: '2026-09-14', service: 'Evening', time: '9:30' }), '19:30', 'read the same way as on the server');
   assert.equal(serviceClock(list[1]), '7:30 PM', 'shown with its usual time too');
   assert.equal(serviceClock({ date: '2026-09-14', service: 'Morning', time: '09:00' }), '9:00 AM');
   assert.equal(nextService(list, pacific('2026-09-14', '19:29')).service, 'Evening');

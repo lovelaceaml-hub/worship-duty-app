@@ -5,7 +5,7 @@
    hour off). */
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { pacificTime, serviceStart, hasStarted } = require('../time.js');
+const { pacificTime, startClock, serviceStart, hasStarted } = require('../time.js');
 
 test('a Pacific time is the right instant, also on the Sundays the clocks change', () => {
   const at = (date, time) => new Date(pacificTime(date, time)).toISOString();
@@ -14,6 +14,14 @@ test('a Pacific time is the right instant, also on the Sundays the clocks change
   assert.equal(at('2026-10-06', '19:30'), '2026-10-07T02:30:00.000Z');
   assert.equal(at('2026-01-03', '10:00'), '2026-01-03T18:00:00.000Z');
   assert.equal(serviceStart({ date: '2026-11-01', service: 'Early Morning' }), Date.parse('2026-11-01T13:00:00Z'));
+});
+
+test('a stored time that is not a real clock time is the label\'s usual time, as in the app', () => {
+  assert.equal(startClock({ service: 'Evening', time: '20:00' }), '20:00');
+  assert.equal(startClock({ service: 'Evening', time: '9:30' }), '19:30');
+  assert.equal(startClock({ service: 'Evening', time: '25:00' }), '19:30');
+  assert.equal(startClock({ service: 'Morning', time: '10:75' }), '10:00');
+  assert.equal(startClock({ service: 'Feast', time: '' }), '12:00');
 });
 
 test('a service has started from its start minute on', () => {
