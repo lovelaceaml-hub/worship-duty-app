@@ -23,7 +23,7 @@ import { updateService, deleteService, markDoubleDuty } from '../../services/sch
 import { replaceDuty } from '../../services/requests.js';
 import { overrideDuty, keepOnDuty } from '../../services/planner.js';
 import { problem } from '../../firebase.js';
-import { departmentsShown, serviceById, mayShow } from './scope.js';
+import { departmentsShown, serviceById, mayShow, mayMove } from './scope.js';
 import { field, planned, atService, showsPrayers, prayers } from './plan-cell.js';
 
 const KEEP = '__keep', OPEN = '__open', OTHER = '__other';
@@ -156,7 +156,7 @@ defineActions({
       if (!isUpcoming(service)) { notice(reasonText('service-started'), true); redraw(); return; }
       if (el.dataset.field === 'date') {
         // The planner follows the service to its new month.
-        if (!mayShow({ month: value.slice(0, 7) })) { redraw(); return; }
+        if (!mayShow({ month: value.slice(0, 7) }) || !mayMove(service)) { redraw(); return; }
         const moved = Object.assign({}, service, { date: value });
         Object.assign(ui.plan, { open: serviceId(moved), month: value.slice(0, 7) });
       }
@@ -167,6 +167,7 @@ defineActions({
     allowed: () => isAdmin(),
     run: el => {
       const service = serviceById(el.dataset.service);
+      if (service && !mayMove(service)) return;
       const people = service ? Object.values(service.assignments || {}).filter(Boolean).length : 0;
       if (service && confirm('Delete the ' + service.service + ' service on ' + longDate(service.date) + '? ' +
         (people ? 'Its ' + plural(people, 'duty', 'duties') + ' are deleted with it.' : 'It has no duties filled.'))) {

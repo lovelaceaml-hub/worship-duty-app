@@ -284,6 +284,29 @@ test('a flagged duty another leader gave away meanwhile is not kept or emptied',
   await context.close();
 });
 
+test('a service with Fill\'s proposals waiting is not moved or deleted until they are saved or discarded', async () => {
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, fixture: { patch: emptyMornings } });
+  await monthPlan(page);
+  await page.locator('#view select[data-change="manage-department"]').selectOption('Usher Sisters');
+  await page.locator('#view [data-act="plan-fill"]').click();
+  await page.locator('#view .plan-cell.is-proposed').first().waitFor();
+  const proposed = await page.locator('#view .plan-cell.is-proposed').count();
+  const id = '2026-07-18_morning';
+  await page.locator(`#view [data-act="plan-open"][data-service="${id}"]`).click();
+  // Another day in the same month: the proposals for this service would be left behind.
+  await page.locator('#view .plan-detail input[data-field="date"]').fill('2026-07-19');
+  await banner(page, 'waiting in Usher Sisters, July 2026 first.');
+  page.on('dialog', dialog => dialog.accept());
+  await page.locator('#view [data-act="service-delete"]').click();
+  await page.waitForTimeout(300);
+  assert.ok(await fakeDoc(page, 'schedule/' + id), 'the service stays where it was');
+  assert.equal(await page.locator('#view .plan-cell.is-proposed').count(), proposed, 'its proposals still show');
+  await page.locator('#view [data-act="plan-save"]').click();
+  await banner(page, 'Saved ' + proposed + ' duties.');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Requests: a past request leaves the count, and one for a deleted service can be closed', async () => {
   const base = { name: 'S. Naomi', memberId: 'S. Naomi', requesterUid: 'member:S. Naomi', worship: 'Sabbath Day', department: 'Usher Sisters', duty: 'Usher Door', status: 'pending', createdAt: 1 };
   const fixture = { patch: {
