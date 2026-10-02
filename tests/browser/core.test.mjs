@@ -273,6 +273,27 @@ test('start-up shows the saved schedule while the app connects', async () => {
   await context.close();
 });
 
+test('signing out before the app has connected is refused, so the saved sign-in cannot come back', async () => {
+  const { context, page, errors } = await as('S. Naomi');
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await context.route('**/tests/fake/firebase-auth.js', async route => { await held; await route.continue(); });
+  await page.reload();
+  await page.locator('[data-slot="sync"]', { hasText: 'Connecting' }).waitFor();
+  await page.locator('[data-slot="member"]').click();
+  await page.locator('[data-slot="menu"] [data-act="sign-out"]').click();
+  await page.locator('#banners .banner', { hasText: 'The app is still opening. Try again in a moment.' }).waitFor();
+  assert.equal(await page.locator('nav.tabs').isHidden(), false, 'the app stays as it was');
+  release();
+  await page.locator('[data-slot="sync"]', { hasText: 'Live' }).waitFor();
+  await signOut(page);
+  await page.reload();
+  await page.locator('#sign-in-member').waitFor();
+  assert.equal(await page.locator('nav.tabs').isHidden(), true, 'signed out once connected, it stays signed out');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a session the server ended (PIN reset, role change, name fix) signs the member out cleanly', async () => {
   const { context, page, errors } = await as('S. Naomi');
   await fromMenu(page, 'account', 'availability');

@@ -9,6 +9,7 @@ import { resetDepartments, acceptPendingInvite } from './departments.js';
 import { watchRequests } from './requests.js';
 import { afterSignIn, unregisterPush, forgetDutyAlerts } from './notifications.js';
 import { countOnce } from './usage.js';
+import { notice } from '../ui/banners.js';
 
 /* The site passcode is a light curtain for the device, not a lock: the
    schedule is readable without it, and the hash of a 4-digit code is easy to
@@ -167,6 +168,13 @@ export async function changePin(first, second) {
    still do it), their name is no longer remembered for offline viewing, and
    their duty alerts and everything they left on the screen are cleared. */
 export async function signOut() {
+  // Until the app has connected, the sign-in saved on this device cannot be
+  // ended: it would come back as soon as the app connects.
+  if (!fb.auth) {
+    notice(session.status === 'offline' ? 'You are offline. Connect to do that.' : 'The app is still opening. Try again in a moment.', true);
+    renderSoon();
+    return;
+  }
   const name = (session.member && session.member.memberName) || ui.me;
   await unregisterPush().catch(() => {});
   try { if (fb.auth) await fb.signOut(fb.auth); }
