@@ -9,6 +9,7 @@ import { resetDepartments, acceptPendingInvite } from './departments.js';
 import { watchRequests } from './requests.js';
 import { afterSignIn, unregisterPush, forgetDutyAlerts } from './notifications.js';
 import { countOnce } from './usage.js';
+import { endViewAs, realMember } from './view-as.js';
 import { notice } from '../ui/banners.js';
 
 /* The site passcode is a light curtain for the device, not a lock: the
@@ -71,11 +72,13 @@ function memberFromClaims(claims, user) {
 const sameMember = (a, b) => !!a && !!b && a.uid === b.uid && a.memberId === b.memberId;
 
 function setMember(member, user) {
-  const before = session.member;
-  if (!sameMember(before, member)) resetDepartments();
+  // Any change to the sign-in ends View as; the member signed in is shown.
+  const before = realMember();
+  const changed = endViewAs() || !sameMember(before, member);
+  if (changed) resetDepartments();
   // Signing out, or another member signing in, leaves nothing of the last
   // member on the screen: drafts, proposals, banners, open cards.
-  if (before && !sameMember(before, member)) { forgetMemberState(); setLeaveGuard(null); }
+  if (before && changed) { forgetMemberState(); setLeaveGuard(null); }
   session.member = member;
   session.user = user || null;
   if (!member) {
@@ -113,7 +116,7 @@ export async function onAuthChange(user) {
   }
   // A fresh sign-in reaches here twice (the auth observer, and signInWith),
   // a PIN change once; the work after a sign-in runs once per member.
-  const before = session.status === 'verified' ? session.member : null;
+  const before = session.status === 'verified' ? realMember() : null;
   setMember(member, user);
   if (session.status === 'verified' && !sameMember(before, session.member)) {
     countOnce('opens');
