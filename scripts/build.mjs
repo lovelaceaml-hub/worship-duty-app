@@ -45,7 +45,10 @@ for (const file of files) {
   let text = (await fs.readFile(path.join(repo, file), 'utf8')).replaceAll('?v=DEV', '?v=' + stamp);
   if (file.startsWith('app' + path.sep)) text = stampImports(text);
   if (file === 'sw.js') text = text.replace("const RELEASE = 'DEV';", "const RELEASE = '" + stamp + "';");
-  if (file === 'index.html' && maintenance) text = text.replace('<html lang="en">', '<html lang="en" data-maintenance="on">');
+  if (file === 'index.html' && maintenance) {
+    if (!text.includes('<html lang="en"')) throw new Error('index.html has no <html lang="en" to mark for maintenance.');
+    text = text.replace('<html lang="en"', '<html lang="en" data-maintenance="on"');
+  }
   if (text.includes('?v=DEV') || text.includes("RELEASE = 'DEV'")) throw new Error(file + ' still has an unstamped reference.');
   if (file.startsWith('app' + path.sep) && /(\bfrom\s*|\bimport\s*\(?\s*)['"]\.{1,2}\/[^'"?]+\.js['"]/.test(text)) throw new Error(file + ' has an unstamped import.');
   await fs.writeFile(target, text);
