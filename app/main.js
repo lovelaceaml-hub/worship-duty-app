@@ -9,7 +9,6 @@ import { render, renderSoon } from './render.js';
 import { onAuthChange, rememberedMember, watchSessionEnd } from './services/session.js';
 import { checkReminders } from './services/notifications.js';
 import { rememberInvite } from './services/departments.js';
-import { applySavedAppearance } from './appearance/picker.js';
 import { banner } from './ui/banners.js';
 import { newerRelease } from './release.js';
 import { watchSwipe, watchKeyboard } from './ui/tabs.js';
@@ -49,7 +48,6 @@ function watchReleases() {
 async function start() {
   watchReleases();
   rememberInvite();
-  applySavedAppearance();
   // The saved schedule and member show at once, read-only, while the app connects.
   if (loadCache()) ui.me = rememberedMember();
   window.addEventListener('pagehide', () => saveCache({ now: true }));

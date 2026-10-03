@@ -1,11 +1,5 @@
-/* The Schedule tab. Each appearance arranges the same pieces its own way
-   (see appearance/registry.js):
-     list      Original: the service under way or the next one, then every
-               service from the chosen month on
-     calendar  Prism: a month calendar beside the chosen day
-     strip     Aurora: a strip of service days above the chosen day
-     rail      Navy & Cream: a date rail and a day card
-   The tools are the same in every layout and are built here: search, the
+/* The Schedule tab: a month calendar beside the chosen day (calendar.js).
+   The tools are built here: search, the
    department filter, month navigation, past services, "You serve here",
    "Edit assignments" for leaders, and the list of all services, a page at a
    time. Until a member picks a day, the Schedule follows the service under
@@ -15,18 +9,13 @@ import { defineActions } from '../../actions.js';
 import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { DEPARTMENTS, dutyName } from '../../config/duties.js';
-import { serviceId, byStart, startsAt, isUpcoming, isNow, departmentHasAssignments, assignedCount, serviceClock } from '../../lib/services.js';
-import { addMonths, monthName, longDate, shortDate, dayOfMonth, monthShort, weekdayShort, todayISO } from '../../lib/dates.js';
+import { serviceId, byStart, startsAt, isUpcoming, isNow, departmentHasAssignments, serviceClock } from '../../lib/services.js';
+import { addMonths, monthName, longDate, shortDate, todayISO } from '../../lib/dates.js';
 import { canManageAnyDepartment } from '../../services/access.js';
 import { openService } from '../manage/services.js';
-import { layoutFor, currentAppearance } from '../../appearance/picker.js';
 import { serviceCard, serviceList, isCurrent } from '../../ui/components.js';
-import * as list from './list.js';
 import * as calendar from './calendar.js';
-import * as strip from './strip.js';
-import * as rail from './rail.js';
 
-const LAYOUTS = { list, calendar, strip, rail };
 const PAGE = 12; // services in the list before "Show more services"
 
 ui.departmentFilter = (function saved() {
@@ -35,8 +24,7 @@ ui.departmentFilter = (function saved() {
 })();
 
 export function render() {
-  const layout = LAYOUTS[layoutFor(currentAppearance())] || list;
-  return layout.render();
+  return calendar.render();
 }
 
 /* ---- what is on the schedule ---- */
@@ -137,55 +125,12 @@ export function pastControl() {
   return html`<button type="button" class="link schedule-past" data-act="toggle-past">${ui.showPast ? 'Hide past services' : 'Show past services'}</button>`;
 }
 
-function dayButton(date, services, selected) {
-  const mine = services.some(serves);
-  return html`<button type="button" class="day-button${date === selected ? ' is-selected' : ''}" data-act="schedule-date"
-    data-date="${date}" aria-pressed="${date === selected}" aria-label="${longDate(date)}, ${plural(services.length, 'service')}${mine ? ', you serve' : ''}">
-    <span class="day-weekday">${weekdayShort(date)}</span>
-    <span class="day-number">${dayOfMonth(date)}</span>
-    <span class="day-dots" aria-hidden="true">${services.map(service => html`<i${serves(service) ? html` class="is-mine"` : ''}></i>`)}</span>
-  </button>`;
-}
-
-/* The month's service days as one scrolling row of buttons. Its month is in
-   its address, so a redraw keeps its sideways scroll only within a month. */
-export function dayScroller({ inMonth, date }, className) {
-  const days = Array.from(new Set(inMonth.map(service => service.date))).sort();
-  if (!days.length) return noServices(emptyText('this month'));
-  return html`<div class="${className} scroll-x" role="group" aria-label="Service days" data-month="${days[0].slice(0, 7)}">${days.map(day =>
-    dayButton(day, inMonth.filter(item => item.date === day), date))}</div>`;
-}
-
-/* After a redraw, the chosen day's button is in view in its row. */
-export function mounted(view) {
-  view.querySelectorAll('[role="group"][aria-label="Service days"]').forEach(row => {
-    const chosen = row.querySelector('.day-button.is-selected');
-    if (!chosen) return;
-    const start = chosen.offsetLeft, end = start + chosen.offsetWidth;
-    if (start < row.scrollLeft) row.scrollLeft = Math.max(0, start - 12);
-    else if (end > row.scrollLeft + row.clientWidth) row.scrollLeft = end - row.clientWidth + 12;
-  });
-}
-
 export function timeButtons(services, selected) {
   if (services.length < 2) return '';
   return html`<div class="time-buttons" role="group" aria-label="Service time">
     ${services.map(service => html`<button type="button" data-act="schedule-service" data-service="${serviceId(service)}"
       aria-pressed="${!!selected && serviceId(selected) === serviceId(service)}">${serviceClock(service)} <span>${service.service}</span></button>`)}
   </div>`;
-}
-
-export function dayHero(service) {
-  const people = new Set(Object.values(service.assignments || {}).filter(Boolean)).size;
-  return html`<section class="day-hero">
-    <p class="day-hero-worship">${service.worship || 'Service'}</p>
-    <div class="day-hero-date"><span class="day-hero-day">${dayOfMonth(service.date)}</span><span class="day-hero-month">${monthShort(service.date)}</span></div>
-    <div class="day-hero-text">
-      <h2>${longDate(service.date)}</h2>
-      <p>${isNow(service) ? 'Now · ' : ''}${serviceClock(service)} · ${service.service} · Pacific time</p>
-    </div>
-    <p class="day-hero-count">${assignedCount(service)} duties filled · ${plural(people, 'person', 'people')}</p>
-  </section>`;
 }
 
 /* "You serve here: Presider, Opening Prayer" when the member has duties at it. */
@@ -199,7 +144,7 @@ function editLink(service) {
   return html`<button type="button" class="link edit-link" data-act="schedule-edit" data-service="${serviceId(service)}">Edit assignments</button>`;
 }
 
-/* One service as every layout shows it: "You serve here", its team, and
+/* One service as the Schedule shows it: "You serve here", its team, and
    "Edit assignments" for leaders. */
 export function servicePanel(service, { withDate = false } = {}) {
   return html`${myDutiesAt(service)}${serviceCard(service, { only: ui.departmentFilter, withDate })}${editLink(service)}`;

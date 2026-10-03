@@ -3,7 +3,7 @@
    saved to every department the member belongs to. Nothing is stored until
    Save: a bar says so meanwhile, and leaving the view asks first. Duties the
    member can no longer make are flagged for their leader to fill.
-   Settings: notifications, the calendar link, the appearance, and the PIN. */
+   Settings: notifications, the calendar link, and the PIN. */
 import { html } from '../html.js';
 import { defineActions } from '../actions.js';
 import { ui } from '../store.js';
@@ -137,9 +137,6 @@ function settings() {
   return html`
     <section class="card"><h3 class="card-subtitle">Notifications and calendar</h3>
       ${controls || html`<p class="hint">Notifications and the calendar link are turned off for everyone right now.</p>`}</section>
-    <section class="card"><h3 class="card-subtitle">Appearance</h3>
-      <p class="hint">Choose how the app looks on this device. The schedule stays the same.</p>
-      <button type="button" class="ghost" data-act="appearance-open">Change appearance</button></section>
     ${pinCard()}`;
 }
 

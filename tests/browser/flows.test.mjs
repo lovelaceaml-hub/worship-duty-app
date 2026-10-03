@@ -34,7 +34,7 @@ async function openAccount(page, view) {
 const requestCard = (page, name) => page.locator('.request', { has: page.locator('.card-subtitle', { hasText: name }) });
 /* A message: a confirmation toast, or a banner (problems, reminders). */
 const banner = (page, text) => page.locator('#banners .banner, #toasts .toast', { hasText: text }).first().waitFor();
-/* Appearance and feedback open from the account menu. */
+/* Feedback opens from the account menu. */
 async function fromMenu(page, action) {
   await page.locator('[data-slot="member"]').click();
   await page.locator(`[data-slot="menu"] [data-act="${action}"]`).click();
@@ -104,7 +104,7 @@ test('the Schedule opens on the next service, keeps it as Now for 20 minutes, th
   // A service stays on as "Now" for 20 minutes after it starts.
   for (const [time, expected] of [['19:59', '2026-07-07_evening'], ['20:00', '2026-07-07_evening'], ['20:19', '2026-07-07_evening'], ['20:20', '2026-07-11_morning']]) {
     const { context, page, errors } = await as('B. Adam', { now: '2026-07-07T' + time + ':00-07:00' });
-    assert.equal(await page.locator('.next-service .service-card').getAttribute('data-service'), expected, 'at ' + time);
+    assert.equal(await page.locator('.day-panel .service-card').getAttribute('data-service'), expected, 'at ' + time);
     assert.deepEqual(errors, []);
     await context.close();
   }
@@ -337,54 +337,39 @@ test('the song planner shows how often songs were sung, adds a song and confirms
   await context.close();
 });
 
-test('each appearance has its own look and Schedule layout, and the choice is remembered', async () => {
-  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
-  for (const [id, layout] of [['prism', '.schedule-calendar'], ['navy', '.schedule-rail'], ['aurora', '.schedule-strip'], ['classic', '.next-service']]) {
-    await fromMenu(page, 'appearance-open');
-    await page.locator(`[data-appearance-choice="${id}"]`).click();
-    await page.waitForFunction(id => document.documentElement.dataset.appearance === id, id);
-    await page.locator('#view ' + layout).waitFor();
-    const sheet = await page.evaluate(() => document.getElementById('theme-css')?.getAttribute('href') || '');
-    assert.equal(sheet.includes('styles/themes/' + id + '.css'), id !== 'classic', id);
-  }
-  await fromMenu(page, 'appearance-open');
-  await page.locator('[data-appearance-choice="aurora"]').click();
-  // The choice is saved once its stylesheet has loaded, in the same step that switches the page.
-  await page.waitForFunction(() => document.documentElement.dataset.appearance === 'aurora');
-  await page.reload();
-  await page.waitForFunction(() => document.documentElement.dataset.appearance === 'aurora');
-  await page.locator('#view .schedule-strip').waitFor();
-  assert.deepEqual(errors, []);
-  await context.close();
-});
-
-test('each appearance\'s own Schedule controls work', async () => {
-  for (const appearance of ['prism', 'navy', 'aurora']) {
-    const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, appearance });
-    const view = page.locator('#view');
-    await view.locator('[data-act="schedule-date"][data-date="2026-07-18"]').click();
-    await view.locator('[data-act="schedule-date"][data-date="2026-07-18"][aria-pressed="true"]').waitFor();
-    await view.locator('[data-act="schedule-service"][data-service="2026-07-18_evening"]').click();
-    await view.locator('[data-act="schedule-service"][data-service="2026-07-18_evening"][aria-pressed="true"]').waitFor();
-    await view.locator('[data-act="schedule-month"][data-step="1"]').click();
-    await page.locator('#view', { hasText: 'August 2026' }).waitFor();
-    await view.locator('[data-act="schedule-month"][data-step="-1"]').click();
-    await page.locator('#view', { hasText: 'July 2026' }).waitFor();
-    await view.locator('[data-act="schedule-mode"][data-mode="all"]').click();
-    await view.locator('[data-act="schedule-mode"][data-mode="all"][aria-pressed="true"]').waitFor();
-    const search = view.locator('[data-input="schedule-search"]');
-    if (await search.count()) {
-      await search.fill('Silas');
-      await page.locator('#view', { hasText: 'B. Silas' }).waitFor();
-    }
-    assert.deepEqual(errors, [], appearance);
+test('Prism is the only look: its calendar Schedule, with no appearance choice', async () => {
+  for (const query of ['', 'design=classic']) {
+    const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, query });
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.appearance), 'prism', query);
+    assert.equal(await page.locator('link[rel="stylesheet"][href^="styles/prism.css"]').count(), 1, query);
+    await page.locator('#view .schedule-calendar').waitFor();
+    assert.equal(await page.locator('[data-act="appearance-open"], .appearance-dialog').count(), 0, query);
+    assert.deepEqual(errors, [], query);
     await context.close();
   }
+});
+
+test('the Schedule\'s own controls work', async () => {
   const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
-  await page.locator('#view [data-act="department-filter"][data-department="Media"]').click();
-  await page.locator('#view [data-act="toggle-past"]').click();
+  const view = page.locator('#view');
+  await view.locator('[data-act="schedule-date"][data-date="2026-07-18"]').click();
+  await view.locator('[data-act="schedule-date"][data-date="2026-07-18"][aria-pressed="true"]').waitFor();
+  await view.locator('[data-act="schedule-service"][data-service="2026-07-18_evening"]').click();
+  await view.locator('[data-act="schedule-service"][data-service="2026-07-18_evening"][aria-pressed="true"]').waitFor();
+  await view.locator('[data-act="schedule-month"][data-step="1"]').click();
+  await page.locator('#view', { hasText: 'August 2026' }).waitFor();
+  await view.locator('[data-act="schedule-month"][data-step="-1"]').click();
+  await page.locator('#view', { hasText: 'July 2026' }).waitFor();
+  await view.locator('select[data-change="department-filter"]').selectOption('Media');
+  await page.locator('#view select[data-change="department-filter"]').evaluate(el => el.value === 'Media');
+  await view.locator('[data-act="toggle-past"]').click();
   await page.locator('#view', { hasText: 'Hide past services' }).waitFor();
-  assert.deepEqual(errors, [], 'classic');
+  await view.locator('[data-act="schedule-mode"][data-mode="all"]').click();
+  await view.locator('[data-act="schedule-mode"][data-mode="all"][aria-pressed="true"]').waitFor();
+  await view.locator('select[data-change="department-filter"]').selectOption('All');
+  await view.locator('[data-input="schedule-search"]').fill('Silas');
+  await page.locator('#view', { hasText: 'B. Silas' }).waitFor();
+  assert.deepEqual(errors, []);
   await context.close();
 });
 
@@ -429,7 +414,7 @@ test('offline, the app shows the schedule this device saw last', async () => {
   await context.route('**/tests/fake/firebase-app.js', route => route.abort());
   await page.reload();
   await page.locator('[data-slot="sync"]', { hasText: 'Offline' }).waitFor();
-  await page.locator('#view .next-service .service-card').waitFor();
+  await page.locator('#view .day-panel .service-card').waitFor();
   await tab(page, 'my');
   assert.deepEqual(await page.locator('#view .duty-title').allInnerTexts(), duties);
   await context.close();
@@ -463,8 +448,6 @@ test('a build works with its stamped files; the maintenance build shows only the
           await signIn(page, 'B. Adam');
           await tab(page, 'songs');
           await page.locator('#song-root .planner-sections').waitFor({ state: 'attached' });
-          await fromMenu(page, 'appearance-open');
-          await page.locator('[data-appearance-choice="prism"]').click();
           await tab(page, 'schedule');
           await page.locator('#view .schedule-calendar').waitFor();
         }
@@ -667,7 +650,7 @@ test('an administrator links the Sheet, checks it, and adds a year of services',
 });
 
 test('Edit assignments on the Schedule opens that service in the planner', async () => {
-  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, appearance: 'prism' });
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
   await page.locator('#view [data-act="schedule-date"][data-date="2026-07-18"]').click();
   await page.locator('#view [data-act="schedule-edit"]').click();
   await page.locator('#view .plan-detail[data-service^="2026-07-18"]').waitFor();

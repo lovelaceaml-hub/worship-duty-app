@@ -7,7 +7,6 @@ import { render as redraw } from '../../render.js';
 import { statusChip, empty } from '../../ui/components.js';
 import { KINDS, feedback, loadFeedback, markDone, deleteFeedback } from '../../services/feedback.js';
 import { SCREEN_NAMES } from '../../ui/header.js';
-import { APPEARANCES } from '../../appearance/registry.js';
 import { isAdmin } from '../../services/access.js';
 import { shortStamp } from '../../lib/dates.js';
 
@@ -15,8 +14,7 @@ function entry(item) {
   const kind = (KINDS.find(([value]) => value === item.kind) || KINDS[0])[1];
   const details = [
     item.createdAt ? shortStamp(item.createdAt, { time: true }) : '',
-    SCREEN_NAMES[item.screen] ? 'on ' + SCREEN_NAMES[item.screen] : '',
-    APPEARANCES[item.appearance] ? APPEARANCES[item.appearance].name : ''
+    SCREEN_NAMES[item.screen] ? 'on ' + SCREEN_NAMES[item.screen] : ''
   ].filter(Boolean).join(' · ');
   return html`<article class="card">
     <div class="card-title-row"><h3 class="card-subtitle">${nameOf(item.name) || 'A member'} · ${kind}</h3>${statusChip(item.status === 'done' ? 'done' : 'new')}</div>

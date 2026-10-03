@@ -31,12 +31,11 @@ Functions (Node 22), sign-in (member name and PIN), and push notifications.
 | `app/config/` | Departments and duties (with the names shown for older stored ones: "Sermon" shows as Opening Prayer, "Prayer of Thanks" as Thanks Prayer; the Sheet and database keep the old names), and the feature switches in Manage, Features. |
 | `app/lib/` | The rules, with no side effects: dates, services, availability, double duties, workload, Fill, requests, names. Unit tested. |
 | `app/services/` | Reads, writes and server calls: sign-in, requests, departments, notifications, feedback. |
-| `app/screens/` | One file per screen or Manage section. The Schedule has one layout per appearance. |
+| `app/screens/` | One file per screen or Manage section. The Schedule is a month calendar beside the chosen day. |
 | `app/ui/` | Pieces used on many screens: header, tabs, banners and toasts, cards. `replace.js` redraws a screen while keeping the member's place: focus, the caret, unsaved field values and scroll. |
-| `app/appearance/` | The four appearances and the picker. |
 | `app/presider/` | The song planner: each service's prayers, Preparation Songs, Glory (and Thanks) and Choir song, and Copy for Signal. |
-| `styles/base.css` | The Original appearance, and the layout every appearance shares. |
-| `styles/themes/` | Prism, Navy & Cream and Aurora, each drawn over `base.css`. |
+| `styles/base.css` | The layout and structure of every screen. |
+| `styles/prism.css` | Prism, the app's look, drawn over `base.css`. It follows the device's dark mode. |
 | `permissions.js` | Who may do what. The server has an identical copy in `functions/`; a test keeps the two the same. |
 | `song-lib.js`, `song-seed.js` | Song counts and the song list. The Signal song ingest on Anthony's Mac loads these two files from this folder, so keep them here and keep their behavior. |
 | `functions/` | Cloud Functions. `index.js` only wires each one, through one `callable()` wrapper; the work is in modules by area (`accounts.js` sign-in and PINs, `notify.js` alerts, `schedule-projection.js`, `sheet-io.js`, `public-endpoints.js`, `replacements.js`, ...). Every refusal carries a reason code (`refusals.js`), which `app/lib/reasons.js` turns into plain words. |
@@ -118,10 +117,9 @@ npm run test:browser
 - `test:functions`: the Cloud Functions. Run `npm ci` in `functions/` once first.
 - `test:browser`: the main flows in a real browser on the fake data: sign-in,
   change requests, assignments, the month plan and Fill, availability, invite
-  links, feedback, the song planner, appearances, offline, keyboard focus,
+  links, feedback, the song planner, offline, keyboard focus,
   and the built files (`tests/browser/*.test.mjs`).
-- `npm run screenshots -- --appearance prism --out /tmp/shots` saves every
-  screen in one appearance.
+- `npm run screenshots -- --out /tmp/shots` saves every screen.
 
 GitHub runs all five on every pull request.
 

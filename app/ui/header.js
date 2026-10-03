@@ -1,7 +1,6 @@
-/* The header every appearance shares: the LV badge (goes home), the name of
-   the current screen, the sync status, and the member chip with the account
-   menu (Availability, Settings, Appearance, Feedback about the app, Sign
-   out). Text is only written when it changes, so a screen reader does not
+/* The header: the LV badge (goes home), the name of the current screen, the
+   sync status, and the member chip with the account menu (Availability,
+   Settings, Feedback about the app, Sign out). Text is only written when it changes, so a screen reader does not
    hear it again on every redraw. */
 import { ui, nameOf } from '../store.js';
 import { initials } from '../lib/names.js';

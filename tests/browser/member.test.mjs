@@ -81,7 +81,7 @@ test('availability says which services each row covers, and unsaved changes are 
   assert.equal(leaving, true, 'a reload asks too');
   page.once('dialog', dialog => dialog.accept());
   await page.locator('nav.tabs [data-tab="schedule"]').click();
-  await page.locator('#view .schedule-list').waitFor();
+  await page.locator('#view .schedule-calendar').waitFor();
   await openAccount(page, 'availability');
   assert.equal(await weekly(page, 'evening').inputValue(), 'available', 'leaving dropped the change');
   assert.equal(await page.locator('.availability-unsaved').count(), 0);
@@ -258,21 +258,16 @@ test('My Duties leads with the next duty, shows the month on each date, and ends
 
 test('a service under way shows as Now on the Schedule and My Duties, with no Ask for a change', async () => {
   // Tuesday 8:10 PM: the 8:00 PM service, where S. Leah ushers, has just started.
-  for (const appearance of ['classic', 'prism', 'navy', 'aurora']) {
-    const { context, page, errors } = await as('S. Leah', { appearance, now: '2026-07-07T20:10:00-07:00', viewport: DESKTOP });
-    const card = page.locator('#view .service-card[data-service="2026-07-07_evening"]');
-    await card.locator('.service-now', { hasText: 'Now' }).waitFor();
-    if (appearance === 'classic') assert.equal(await page.locator('#view .next-service .section-heading').innerText(), 'Now');
-    if (appearance === 'classic') {
-      await tab(page, 'my');
-      const today = page.locator('#view .duty-card.is-next');
-      await today.locator('.service-now', { hasText: 'Now' }).waitFor();
-      assert.equal(await today.locator('.duty-title').first().innerText(), 'Usher Door');
-      assert.equal(await today.locator('[data-act="request-open"]').count(), 0);
-    }
-    assert.deepEqual(errors, [], appearance);
-    await context.close();
-  }
+  const { context, page, errors } = await as('S. Leah', { now: '2026-07-07T20:10:00-07:00', viewport: DESKTOP });
+  const card = page.locator('#view .day-panel .service-card[data-service="2026-07-07_evening"]');
+  await card.locator('.service-now', { hasText: 'Now' }).waitFor();
+  await tab(page, 'my');
+  const today = page.locator('#view .duty-card.is-next');
+  await today.locator('.service-now', { hasText: 'Now' }).waitFor();
+  assert.equal(await today.locator('.duty-title').first().innerText(), 'Usher Door');
+  assert.equal(await today.locator('[data-act="request-open"]').count(), 0);
+  assert.deepEqual(errors, []);
+  await context.close();
 });
 
 test('asking for a change, withdrawing it, and a duty flagged after a day off each say what happens', async () => {
@@ -369,56 +364,51 @@ test('a leader\'s own request in a department they do not lead stays on their sc
   await context.close();
 });
 
-test('Original shows the next service with its date once, with the tools of every layout', async () => {
+test('the Schedule opens on the next service; All services lists the rest a page at a time', async () => {
   const { context, page, errors } = await as('S. Leah');
-  const next = page.locator('#view .next-service');
-  assert.equal(await next.locator('.section-heading').innerText(), 'Next service');
-  assert.equal(await next.locator('.service-date').innerText(), 'Tuesday, July 7 TODAY');
-  assert.equal(await next.locator('.my-duties-note').innerText(), 'You serve here: Usher Door');
-  assert.equal(await page.locator('#view .month-list .service-card[data-service="2026-07-07_evening"]').count(), 0, 'not repeated below');
-  assert.equal(await page.locator('#view .month-list .service-card').count(), 12, 'one page of services');
-  await page.locator('#view [data-act="schedule-more"]').click();
-  assert.ok(await page.locator('#view .month-list .service-card').count() > 12);
-  await page.locator('#view [data-act="schedule-month"][data-step="1"]').click();
-  assert.equal(await page.locator('#view .month-list .service-card').first().getAttribute('data-service'), '2026-08-01_morning');
+  const panel = page.locator('#view .day-panel');
+  assert.equal(await panel.locator('.service-card').getAttribute('data-service'), '2026-07-07_evening');
+  assert.equal(await panel.locator('.my-duties-note').innerText(), 'You serve here: Usher Door');
   assert.equal(await page.locator('#view [data-act="schedule-edit"]').count(), 0, 'members do not edit');
+  await page.locator('#view [data-act="schedule-mode"][data-mode="all"]').click();
+  const cards = page.locator('#view .month-list .service-card');
+  await cards.first().waitFor();
+  const first = await cards.count();
+  assert.ok(first > 0 && first <= 12, 'one page of services');
+  if (await page.locator('#view [data-act="schedule-more"]').count()) {
+    await page.locator('#view [data-act="schedule-more"]').click();
+    assert.ok(await cards.count() > first);
+  }
   await context.close();
   assert.deepEqual(errors, []);
 
   const leader = await as('S. Grace');
-  await leader.page.locator('#view .next-service [data-act="schedule-edit"]', { hasText: 'Edit assignments' }).waitFor();
+  await leader.page.locator('#view .day-panel [data-act="schedule-edit"]', { hasText: 'Edit assignments' }).waitFor();
   assert.deepEqual(leader.errors, []);
   await leader.context.close();
 });
 
-test('every layout has the same tools: search, departments, months, past services and All services', async () => {
-  for (const appearance of ['classic', 'prism', 'navy', 'aurora']) {
-    const { context, page, errors } = await as('S. Leah', { appearance });
-    const view = page.locator('#view');
-    await view.locator('#schedule-search').waitFor();
-    assert.equal(await view.locator('[data-act="department-filter"], [data-change="department-filter"]').count() > 0, true, appearance);
-    assert.equal(await view.locator('[data-act="schedule-month"]').count(), 2, appearance);
-    assert.equal(await view.locator('[data-act="toggle-past"]').innerText(), 'Show past services', appearance);
-    if (appearance !== 'classic') {
-      assert.equal(await view.locator('[data-act="schedule-mode"][data-mode="all"]').innerText(), 'All services', appearance);
-      assert.equal(await view.locator('[data-act="schedule-today"]').innerText(), 'Next service', appearance);
-      assert.equal(await view.locator('.my-duties-note').innerText(), 'You serve here: Usher Door', appearance);
-    }
-    // Search uses the names on screen, across every month.
-    await view.locator('#schedule-search').fill('Opening Prayer Hannah');
-    await view.locator('.schedule-count', { hasText: /services? match/ }).waitFor();
-    await view.locator('#schedule-search').fill('August 8');
-    await view.locator('.month-list .service-card[data-service="2026-08-08_morning"]').waitFor();
-    assert.deepEqual(errors, [], appearance);
-    await context.close();
-  }
-
-  // Navy: the departments stay in reach when the chosen day has none of one.
-  const { context, page, errors } = await as('S. Leah', { appearance: 'navy' });
+test('the Schedule has its tools: search, departments, months, past services and All services', async () => {
+  const { context, page, errors } = await as('S. Leah');
   const view = page.locator('#view');
+  await view.locator('#schedule-search').waitFor();
+  assert.equal(await view.locator('[data-change="department-filter"]').count(), 1);
+  assert.equal(await view.locator('[data-act="schedule-month"]').count(), 2);
+  assert.equal(await view.locator('[data-act="toggle-past"]').innerText(), 'Show past services');
+  assert.equal(await view.locator('[data-act="schedule-mode"][data-mode="all"]').innerText(), 'All services');
+  assert.equal(await view.locator('[data-act="schedule-today"]').innerText(), 'Next service');
+  assert.equal(await view.locator('.my-duties-note').innerText(), 'You serve here: Usher Door');
+  // Search uses the names on screen, across every month.
+  await view.locator('#schedule-search').fill('Opening Prayer Hannah');
+  await view.locator('.schedule-count', { hasText: /services? match/ }).waitFor();
+  await view.locator('#schedule-search').fill('August 8');
+  await view.locator('.month-list .service-card[data-service="2026-08-08_morning"]').waitFor();
+  await view.locator('#schedule-search').fill('');
+
+  // The departments stay in reach when the chosen day has none of one.
   await view.locator('[data-act="schedule-date"][data-date="2026-07-14"]').click();
   assert.match(await view.locator('[data-act="schedule-date"][data-date="2026-07-11"]').getAttribute('aria-label'), /, you serve$/);
-  await view.locator('[data-act="department-filter"][data-department="Parking Lot"]').click();
+  await view.locator('select[data-change="department-filter"]').selectOption('Parking Lot');
   await view.locator('.schedule-empty', { hasText: 'No services for Parking Lot on this day.' }).waitFor();
   await view.locator('.schedule-empty [data-act="department-filter"][data-department="All"]').click();
   await view.locator('.service-card[data-service="2026-07-14_evening"]').waitFor();
@@ -428,18 +418,15 @@ test('every layout has the same tools: search, departments, months, past service
 
 test('a service without a stored time shows its usual time everywhere', async () => {
   const patch = { 'schedule/2026-07-11_afternoon': { time: '' } };
-  for (const appearance of ['classic', 'prism']) {
-    const { context, page, errors } = await as('B. Adam', { appearance, fixture: { patch }, viewport: DESKTOP });
-    if (appearance === 'prism') {
-      await page.locator('#view .calendar-day[data-date="2026-07-11"] .calendar-service', { hasText: '2:30 PM' }).waitFor();
-    } else {
-      assert.equal(await page.locator('#view .service-card[data-service="2026-07-11_afternoon"] .service-time').innerText(), '2:30 PM');
-      await tab(page, 'my');
-      await page.locator('#view .duty-time', { hasText: '2:30 PM' }).waitFor();
-    }
-    assert.deepEqual(errors, [], appearance);
-    await context.close();
-  }
+  const { context, page, errors } = await as('B. Adam', { fixture: { patch }, viewport: DESKTOP });
+  await page.locator('#view .calendar-day[data-date="2026-07-11"] .calendar-service', { hasText: '2:30 PM' }).waitFor();
+  await page.locator('#view [data-act="schedule-date"][data-date="2026-07-11"]').click();
+  await page.locator('#view [data-act="schedule-service"][data-service="2026-07-11_afternoon"]').click();
+  assert.equal(await page.locator('#view .service-card[data-service="2026-07-11_afternoon"] .service-time').innerText(), '2:30 PM');
+  await tab(page, 'my');
+  await page.locator('#view .duty-time', { hasText: '2:30 PM' }).waitFor();
+  assert.deepEqual(errors, []);
+  await context.close();
 });
 
 test('double duties are marked in words, and a prayer with an usher duty is not marked', async () => {
@@ -452,23 +439,15 @@ test('double duties are marked in words, and a prayer with an usher duty is not 
     'Translation #1': 'S. Priscilla', 'Translation #2': 'B. Silas', 'Media Booth #1': 'E. Joseph', 'Media Booth #2': 'B. Titus'
   };
   const fixture = { patch: { ['schedule/' + id]: { assignments } } };
-  let last = null;
-  for (const appearance of ['classic', 'prism', 'navy', 'aurora']) {
-    const opened = await as('S. Hannah', { appearance, fixture, viewport: DESKTOP });
-    const { page, errors } = opened;
-    if (appearance !== 'classic') await page.locator('#view [data-act="schedule-date"][data-date="2026-07-14"]').click();
-    const card = page.locator(`#view .service-card[data-service="${id}"]`);
-    await card.waitFor();
-    const flagged = await card.locator('.duty-row').evaluateAll(rows => rows.filter(row => row.querySelector('.flag'))
-      .map(row => row.querySelector('.duty-name').textContent));
-    assert.deepEqual(flagged, ['Opening Prayer', 'Usher Front', 'Usher #1', 'Lobby Security'], appearance);
-    assert.equal(await card.locator('.flag .sr-only').first().textContent(), 'Two duties in this service, needs a look');
-    assert.equal(await card.locator('.flag [aria-hidden="true"]').first().textContent(), '!');
-    assert.deepEqual(errors, [], appearance);
-    if (last) await last.context.close();
-    last = opened;
-  }
-  const { context, page, errors } = last;
+  const { context, page, errors } = await as('S. Hannah', { fixture, viewport: DESKTOP });
+  await page.locator('#view [data-act="schedule-date"][data-date="2026-07-14"]').click();
+  const card = page.locator(`#view .service-card[data-service="${id}"]`);
+  await card.waitFor();
+  const flagged = await card.locator('.duty-row').evaluateAll(rows => rows.filter(row => row.querySelector('.flag'))
+    .map(row => row.querySelector('.duty-name').textContent));
+  assert.deepEqual(flagged, ['Opening Prayer', 'Usher Front', 'Usher #1', 'Lobby Security']);
+  assert.equal(await card.locator('.flag .sr-only').first().textContent(), 'Two duties in this service, needs a look');
+  assert.equal(await card.locator('.flag [aria-hidden="true"]').first().textContent(), '!');
   // A leader's OK mark gets a check, not the same mark in another color.
   await editService(page, id, { fields: { conflictOk: { 'S. Naomi': ['Sermon', 'Usher Front'] } } });
   await page.locator(`#view .service-card[data-service="${id}"] .flag.is-ok .sr-only`, { hasText: 'marked OK' }).first().waitFor();
@@ -484,34 +463,4 @@ test('double duties are marked in words, and a prayer with an usher duty is not 
   assert.equal(await mine.locator('.flag').count(), 0);
   assert.deepEqual(errors, []);
   await context.close();
-});
-
-/* Navy & Cream's day rail and Aurora's day strip scroll sideways on a phone.
-   A redraw keeps that scroll within a month, but the chosen day is always in
-   view, and a new month starts at its first day. */
-test('the chosen day stays in view in the day rail, and a new month starts at its beginning', async () => {
-  for (const appearance of ['navy', 'aurora']) {
-    const { context, page, errors } = await as('B. Caleb', { appearance, viewport: { width: 375, height: 667 } });
-    const row = page.locator('#view [aria-label="Service days"]');
-    const inView = () => row.evaluate(el => {
-      const chosen = el.querySelector('.day-button.is-selected');
-      if (!chosen) return null;
-      const box = el.getBoundingClientRect(), button = chosen.getBoundingClientRect();
-      return button.left >= box.left - 1 && button.right <= box.right + 1;
-    });
-    // Choose a day late in the month, then go back to the next service.
-    await row.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-    await row.locator('.day-button').last().click();
-    await page.locator('#view [data-act="schedule-today"]').click();
-    assert.equal(await inView(), true, appearance + ': the next service\'s day is in view');
-
-    // A month away and back: the new month opens at its start.
-    await page.locator('#view [data-act="schedule-month"][data-step="1"]').click();
-    await row.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-    await page.locator('#view [data-act="schedule-month"][data-step="-1"]').click();
-    await page.locator('#view [data-act="schedule-month"][data-step="1"]').click();
-    assert.equal(await row.evaluate(el => el.scrollLeft), 0, appearance + ': the month starts at its first day');
-    assert.deepEqual(errors, [], appearance);
-    await context.close();
-  }
 });

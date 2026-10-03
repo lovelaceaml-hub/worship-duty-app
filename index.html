@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-appearance="prism">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#2383c6">
+<meta name="theme-color" content="#3348e3">
 <title>LV Zion · Worship Service</title>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
@@ -12,19 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
 <link rel="stylesheet" href="styles/base.css?v=DEV">
-<script>
-  /* Apply the member's saved appearance before the page first paints. The
-     stylesheets are named in full so the service worker keeps them all. */
-  (function () {
-    var themes = { prism: 'styles/themes/prism.css?v=DEV', navy: 'styles/themes/navy.css?v=DEV', aurora: 'styles/themes/aurora.css?v=DEV' };
-    try {
-      var mode = JSON.parse(localStorage.getItem('wds-design-gallery-v1') || '{}').mode;
-      if (!themes.hasOwnProperty(mode) || /[?&]design=classic\b/.test(location.search)) return;
-      document.documentElement.dataset.appearance = mode;
-      document.write('<link rel="stylesheet" id="theme-css" href="' + themes[mode] + '">');
-    } catch (error) { /* storage blocked: Original */ }
-  })();
-</script>
+<link rel="stylesheet" href="styles/prism.css?v=DEV">
 </head>
 <body>
 <div class="app">
@@ -46,7 +34,6 @@
           <p class="account-who" data-slot="person" aria-hidden="true"></p>
           <button type="button" role="menuitem" data-act="account" data-view="availability">Availability</button>
           <button type="button" role="menuitem" data-act="account" data-view="settings">Settings</button>
-          <button type="button" role="menuitem" data-act="appearance-open">Appearance</button>
           <button type="button" role="menuitem" class="account-feedback" data-act="feedback-open">Feedback about the app</button>
           <button type="button" role="menuitem" class="account-sign-out" data-act="sign-out">Sign out</button>
         </div>
