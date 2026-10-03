@@ -133,6 +133,3 @@ export function departmentHasAssignments(service, departmentName) {
   return !!department && department.duties.some(duty => !!assignments[duty]);
 }
 
-export function assignedCount(service) {
-  return Object.values(service.assignments || {}).filter(Boolean).length;
-}

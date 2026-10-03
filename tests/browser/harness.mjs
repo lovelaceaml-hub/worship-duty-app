@@ -37,16 +37,14 @@ export async function launch() {
   return chromium.launch();
 }
 
-/* A page at `url` with the fake data, a fixed clock and an appearance.
-   `fixture` adds to the fake data (see tests/fake/fixture.js); `hash` is
-   added to the address, as an invite link does. The appearance is set only
-   when the device has none yet, so a reload keeps a choice made in the test. */
-export async function openPage(browser, url, { viewport = PHONE, appearance = 'classic', dark = false, query = '', now = NOW, hash = '', fixture = null } = {}) {
+/* A page at `url` with the fake data and a fixed clock. `fixture` adds to
+   the fake data (see tests/fake/fixture.js); `hash` is added to the address,
+   as an invite link does. */
+export async function openPage(browser, url, { viewport = PHONE, dark = false, query = '', now = NOW, hash = '', fixture = null } = {}) {
   const context = await browser.newContext({ viewport, timezoneId: 'America/Los_Angeles', reducedMotion: 'reduce', serviceWorkers: 'block', colorScheme: dark ? 'dark' : 'light' });
-  await context.addInitScript(({ mode, overrides }) => {
-    if (!localStorage.getItem('wds-design-gallery-v1')) localStorage.setItem('wds-design-gallery-v1', JSON.stringify({ mode, seen: true, version: 2 }));
+  await context.addInitScript(({ overrides }) => {
     if (overrides) window.__fixtureOverrides = overrides;
-  }, { mode: appearance, overrides: fixture });
+  }, { overrides: fixture });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));

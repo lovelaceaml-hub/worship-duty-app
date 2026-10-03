@@ -1,4 +1,4 @@
-/* Markup pieces shared by every screen and appearance. */
+/* Markup pieces shared by every screen. */
 import { html } from '../html.js';
 import { DEPARTMENTS, dutyName } from '../config/duties.js';
 import { ui, feature, nameOf } from '../store.js';
@@ -91,15 +91,6 @@ export function serviceList(services, only = 'All') {
     lastDate = service.date;
     return html`${heading}${serviceCard(service, { only })}`;
   });
-}
-
-export function departmentChips() {
-  const items = [{ name: 'All', color: '' }].concat(DEPARTMENTS);
-  return html`<div class="chips scroll-x" role="group" aria-label="Show a department">
-    ${items.map(item => html`<button type="button" class="chip${ui.departmentFilter === item.name ? ' is-active' : ''}"
-      data-act="department-filter" data-department="${item.name}" aria-pressed="${ui.departmentFilter === item.name}">
-      ${item.color ? html`<span class="dot" style="background: ${item.color}"></span>` : ''}${item.name}</button>`)}
-  </div>`;
 }
 
 export function departmentSelect(id = 'department-filter') {

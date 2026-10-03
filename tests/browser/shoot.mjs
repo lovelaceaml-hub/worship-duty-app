@@ -1,6 +1,6 @@
-/* Screenshots of every screen in one appearance, on a phone and a desktop,
-   with the fake data. For checking how an appearance looks.
-     node tests/browser/shoot.mjs --appearance prism --out /tmp/shots [--dark] [--only schedule]
+/* Screenshots of every screen, on a phone and a desktop, with the fake
+   data. For checking how the app looks.
+     node tests/browser/shoot.mjs --out /tmp/shots [--dark] [--only schedule]
    Files are named <viewport>-<screen>.png. */
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -8,8 +8,7 @@ import { startServer, launch, openPage, unlock, signIn, tab, section, PHONE, DES
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => { const at = args.indexOf(name); return at === -1 ? fallback : args[at + 1]; };
-const appearance = option('--appearance', 'classic');
-const out = path.resolve(option('--out', 'screenshots/' + appearance));
+const out = path.resolve(option('--out', 'screenshots'));
 const only = option('--only', '');
 const dark = args.includes('--dark');
 await fs.mkdir(out, { recursive: true });
@@ -25,7 +24,7 @@ async function shoot(page, name) {
 }
 
 for (const [label, viewport] of [['phone', PHONE], ['desktop', DESKTOP]]) {
-  const { context, page, errors } = await openPage(browser, server.url, { viewport, appearance, dark });
+  const { context, page, errors } = await openPage(browser, server.url, { viewport, dark });
   await page.locator('#site-passcode').waitFor();
   await shoot(page, label + '-passcode');
   await unlock(page);
@@ -66,9 +65,6 @@ for (const [label, viewport] of [['phone', PHONE], ['desktop', DESKTOP]]) {
   await section(page, 'manage-section', 'services');
   await page.locator('#view [data-act="plan-open"]').nth(1).click();
   await shoot(page, label + '-manage-service-open');
-  await page.locator('[data-slot="member"]').click();
-  await page.locator('[data-slot="menu"] [data-act="appearance-open"]').click();
-  await shoot(page, label + '-appearance');
   if (errors.length) problems.push(label + ': ' + errors.join(' | '));
   await context.close();
 }

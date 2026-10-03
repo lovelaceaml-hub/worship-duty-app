@@ -119,7 +119,7 @@ test('changing a planner cell with the keyboard keeps focus on that cell', async
 });
 
 test('a tab still opens while the search box has focus', async () => {
-  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, appearance: 'prism' });
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
   await page.locator('#schedule-search').fill('Usher');
   assert.equal((await active(page)).id, 'schedule-search');
   // A tap on iOS leaves focus in the field; a plain click() does the same.
@@ -265,7 +265,7 @@ test('start-up shows the saved schedule while the app connects', async () => {
   await context.route('**/tests/fake/firebase-auth.js', async route => { await held; await route.continue(); });
   await page.reload();
   await page.locator('[data-slot="sync"]', { hasText: 'Connecting' }).waitFor();
-  await page.locator('#view .next-service .service-card').waitFor();
+  await page.locator('#view .day-panel .service-card').waitFor();
   assert.equal(await page.locator('nav.tabs').isHidden(), false);
   release();
   await page.locator('[data-slot="sync"]', { hasText: 'Live' }).waitFor();
@@ -374,14 +374,14 @@ test('a member whose PIN is locked after too many tries is told to wait', async 
 
 test('an open Schedule marks the service Now at its start minute, and moves on after it, by itself', async () => {
   const { context, page, errors } = await as('B. Adam', { now: '2026-07-07T19:59:10-07:00' });
-  const card = page.locator('.next-service .service-card');
+  const card = page.locator('.day-panel .service-card');
   assert.equal(await card.getAttribute('data-service'), '2026-07-07_evening');
   assert.equal(await card.locator('.service-now').count(), 0);
   await page.clock.runFor(90 * 1000);
   await card.locator('.service-now').waitFor();
   assert.equal(await card.getAttribute('data-service'), '2026-07-07_evening', 'the service under way stays on');
   await page.clock.runFor(20 * 60 * 1000);
-  await page.waitForFunction(() => document.querySelector('.next-service .service-card')?.dataset.service === '2026-07-11_morning');
+  await page.waitForFunction(() => document.querySelector('.day-panel .service-card')?.dataset.service === '2026-07-11_morning');
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -402,10 +402,10 @@ test('a reminder for a service without a stored time uses its usual time', async
 
 test('a deleted service leaves the Schedule at the next update', async () => {
   const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
-  const card = page.locator('.next-service .service-card');
+  const card = page.locator('.day-panel .service-card');
   const id = await card.getAttribute('data-service');
   await page.evaluate(id => window.__fake.remove('schedule/' + id), id);
-  await page.waitForFunction(id => document.querySelector('.next-service .service-card')?.dataset.service !== id, id);
+  await page.waitForFunction(id => document.querySelector('.day-panel .service-card')?.dataset.service !== id, id);
   assert.equal(await page.locator(`#view [data-service="${id}"]`).count(), 0);
   assert.deepEqual(errors, []);
   await context.close();
@@ -413,14 +413,14 @@ test('a deleted service leaves the Schedule at the next update', async () => {
 
 /* ---- the shell's design ---- */
 
-test('on a phone, the round feedback button sits above the tabs, the account menu has feedback and Appearance, and My Duties stays marked in Availability', async () => {
+test('on a phone, the round feedback button sits above the tabs, the account menu has feedback and no Appearance, and My Duties stays marked in Availability', async () => {
   const { context, page, errors } = await as('S. Naomi');
   const button = await page.locator('.feedback-button').boundingBox();
   const tabs = await page.locator('nav.tabs').boundingBox();
   assert.ok(button && button.y + button.height <= tabs.y, 'the feedback button shows and clears the tabs');
   await page.locator('[data-slot="member"]').click();
   await page.locator('[data-slot="menu"] [data-act="feedback-open"]', { hasText: 'Feedback about the app' }).waitFor();
-  await page.locator('[data-slot="menu"] [data-act="appearance-open"]').waitFor();
+  assert.equal(await page.locator('[data-slot="menu"] [data-act="appearance-open"]').count(), 0);
   await page.locator('[data-slot="menu"] [data-view="availability"]').click();
   await page.waitForTimeout(300);
   assert.equal(await page.locator('nav.tabs [data-tab="my"]').evaluate(el => el.classList.contains('is-active')), true);
@@ -428,20 +428,18 @@ test('on a phone, the round feedback button sits above the tabs, the account men
   await context.close();
 });
 
-test('no appearance makes Manage scroll sideways on a computer, and every section button can be reached', async () => {
-  for (const appearance of ['classic', 'prism', 'navy', 'aurora']) {
-    const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, appearance });
-    await tab(page, 'manage');
-    await section(page, 'manage-section', 'services');
-    await page.locator('#view .plan-grid').waitFor();
-    const widths = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
-    assert.ok(widths[0] <= widths[1], appearance + ': page ' + widths[0] + 'px wide in a ' + widths[1] + 'px window');
-    const feedback = await page.locator('#view [data-act="manage-section"][data-section="feedback"]').boundingBox();
-    const row = await page.locator('#view nav.sections').boundingBox();
-    assert.ok(feedback.x + feedback.width <= row.x + row.width + 1, appearance + ': the Feedback section button is not cut off');
-    assert.deepEqual(errors, [], appearance);
-    await context.close();
-  }
+test('Manage does not scroll sideways on a computer, and every section button can be reached', async () => {
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'services');
+  await page.locator('#view .plan-grid').waitFor();
+  const widths = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+  assert.ok(widths[0] <= widths[1], 'page ' + widths[0] + 'px wide in a ' + widths[1] + 'px window');
+  const feedback = await page.locator('#view [data-act="manage-section"][data-section="feedback"]').boundingBox();
+  const row = await page.locator('#view nav.sections').boundingBox();
+  assert.ok(feedback.x + feedback.width <= row.x + row.width + 1, 'the Feedback section button is not cut off');
+  assert.deepEqual(errors, []);
+  await context.close();
 });
 
 /* ---- the song planner ---- */

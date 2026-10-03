@@ -18,7 +18,6 @@ import { attentionCounts } from './services/attention.js';
 import { countOnce } from './services/usage.js';
 import { dutiesOf, isUpcoming, isInProgress, nextChange } from './lib/services.js';
 import { pacificNow } from './lib/dates.js';
-import { afterRender as appearanceAfterRender } from './appearance/picker.js';
 import * as lock from './screens/lock.js';
 import * as schedule from './screens/schedule/index.js';
 import * as myDuties from './screens/my-duties.js';
@@ -155,7 +154,6 @@ export function render({ live = false } = {}) {
   else dismiss('offline');
   paintBanners(inApp || front === lock.offline);
   syncFeedbackButton(inApp && verified);
-  appearanceAfterRender(inApp && verified);
   armClock();
 }
 

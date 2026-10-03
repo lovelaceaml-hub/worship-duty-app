@@ -1,8 +1,8 @@
 /* Prism: an indigo accent, clean white cards on a very light canvas, the
    round LV badge, the main tabs as a pill group in the header (a floating bar
    on phones), and a month calendar beside the chosen day. It follows the
-   device's dark mode. Loaded after base.css when a member picks Prism, so
-   every rule here is scoped to html[data-appearance="prism"]. */
+   device's dark mode. Loaded after base.css; every rule here is scoped to
+   html[data-appearance="prism"], which index.html sets. */
 
 /* ---- tokens ---- */
 
