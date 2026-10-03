@@ -1,16 +1,19 @@
 /* Manage, Data: the Google Sheet (importing it, and the app writing its
-   duty changes into it), a year of regular services, and a backup file. */
+   duty changes into it), a year of regular services, and a backup file.
+   Department leaders see only Import now and Check the Sheet. */
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, feature, nameOf } from '../../store.js';
 import { render as redraw } from '../../render.js';
 import { notice } from '../../ui/banners.js';
-import { isAdmin } from '../../services/access.js';
+import { isAdmin, canManageAnyDepartment } from '../../services/access.js';
 import { downloadBackup, importSheetNow, lastSheetImport, sheet, checkSheet, addServiceYear, renameMember, saveSettings } from '../../services/data-tools.js';
 import { todayISO, shortStamp } from '../../lib/dates.js';
 import { dutyName } from '../../config/duties.js';
 
 const when = at => shortStamp(at, { time: true });
+// Import now and Check the Sheet: administrators and department leaders.
+const canUseSheet = () => isAdmin() || canManageAnyDepartment();
 
 function importCard() {
   const last = lastSheetImport();
@@ -22,7 +25,7 @@ function importCard() {
         : 'Every 2 hours the schedule brings in changes from the published Sheet. Duties the Sheet leaves out, and services added here, stay as they are.'}</p>
     ${last ? html`<p class="hint small">Last import from this device: ${when(last.at)}, ${last.added || 0} added, ${last.updated || 0} updated${last.warnings && last.warnings.length ? ', ' + plural(last.warnings.length, 'row') + ' skipped' : ''}.</p>` : ''}
     <button type="button" class="primary" data-act="sheet-import"${sheet.busy || !feature('sheetSync') ? ' disabled' : ''}>${sheet.busy ? 'Importing…' : 'Import now'}</button>
-    ${fromGrid ? '' : html`<label class="field"><span>Published sheet link (File, Share, Publish to web, CSV)</span>
+    ${fromGrid || !isAdmin() ? '' : html`<label class="field"><span>Published sheet link (File, Share, Publish to web, CSV)</span>
       <input type="url" data-change="sheet-url" value="${data.settings.sheetUrl || ''}" placeholder="Paste the published CSV link"></label>`}
   </section>`;
 }
@@ -41,6 +44,17 @@ function checkResult() {
     ${check.warnings.length ? html`<p class="hint small">${check.warnings.join(' ')}</p>` : ''}
     ${check.account ? html`<p class="hint small">The app reaches the Sheet as ${check.account}.</p>` : ''}
   </div>`;
+}
+
+/* A leader's view of the Sheet: check it against the app. */
+function leaderCheckCard() {
+  return html`<section class="card">
+    <h3 class="card-subtitle">Check the Sheet</h3>
+    <p class="hint">Reads the Sheet and compares it with the app. It changes nothing.</p>
+    <button type="button" class="ghost" data-act="sheet-check"${sheet.checking || !data.settings.sheetId ? ' disabled' : ''}>${sheet.checking ? 'Checking…' : 'Check the Sheet'}</button>
+    ${data.settings.sheetId ? '' : html`<p class="hint small">An administrator adds the Sheet's link first.</p>`}
+    ${checkResult()}
+  </section>`;
 }
 
 function writeCard() {
@@ -92,6 +106,9 @@ function renameCard() {
 }
 
 export function render() {
+  if (!isAdmin()) return html`
+    ${importCard()}
+    ${leaderCheckCard()}`;
   return html`
     ${renameCard()}
     ${importCard()}
@@ -118,7 +135,7 @@ defineActions({
       if (await renameMember(from, to)) form.reset();
     }
   },
-  'sheet-import': { allowed: () => isAdmin(), run: () => importSheetNow() },
+  'sheet-import': { allowed: () => canUseSheet(), run: () => importSheetNow() },
   'sheet-url': {
     allowed: () => isAdmin(),
     run: el => {
@@ -139,7 +156,7 @@ defineActions({
       saveSettings({ sheetId: match ? match[1] : '' }, value ? 'Sheet link saved. Check the Sheet next.' : 'Sheet link removed.', { optimistic: false });
     }
   },
-  'sheet-check': { allowed: () => isAdmin(), run: () => checkSheet() },
+  'sheet-check': { allowed: () => canUseSheet(), run: () => checkSheet() },
   'year-add': {
     allowed: () => isAdmin(),
     run: form => {

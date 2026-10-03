@@ -30,6 +30,11 @@ const clone = value => structuredClone(value);
 
 const claims = () => (accounts[me()] || {}).claims || {};
 const isAdmin = () => claims().admin === true || (claims().roles || []).includes('admin');
+/* Import now and Check the Sheet: an administrator or any department's leader. */
+function mustLeadAny() {
+  if (!isAdmin() && !(claims().departments || []).length) fail('permission-denied', 'Only a leader or an administrator can do that.', 'not-allowed');
+}
+
 function mustLead(department) {
   if (!isAdmin() && !(claims().departments || []).includes(department)) fail('permission-denied', 'You do not lead ' + department + '.', 'cross-department');
 }
@@ -359,7 +364,7 @@ const handlers = {
     await answer('approved');
     return { ok: true, requestStatus: data.requestId ? 'approved' : null };
   },
-  async syncSheetNow() { return { ok: true, added: 0, updated: 0, newMembers: 0, waiting: 0, failed: 0, warnings: [] }; },
+  async syncSheetNow() { mustLeadAny(); return { ok: true, added: 0, updated: 0, newMembers: 0, waiting: 0, failed: 0, warnings: [] }; },
   /* Manage, Worship: the default for Opening Prayer (the real one also checks
      that the member takes the duty). */
   async setDutyDefault(data) {
@@ -401,6 +406,7 @@ const handlers = {
     return { ok: true, departmentId: data.departmentId, planBatch, saved, skipped };
   },
   async checkSheet() {
+    mustLeadAny();
     const settings = (await getDoc(doc(null, 'app', 'settings'))).data() || {};
     if (!settings.sheetId) fail('failed-precondition', 'Paste the Sheet\'s link first.', 'sheet-not-set');
     return { ok: true, account: 'server@example.test', tabs: ['2026 Entry'], services: 40, notInApp: 0, notInSheet: 2,

@@ -50,7 +50,7 @@ test('Manage opens on Requests when one waits, else on the month plan; the picke
   await tab(joseph.page, 'manage');
   assert.equal(await activeSection(joseph.page), 'services');
   assert.deepEqual(await joseph.page.locator('#view .sections button').evaluateAll(buttons => buttons.map(button => button.firstChild.textContent.trim())),
-    ['Month plan', 'Requests', 'Checks', 'Departments']);
+    ['Month plan', 'Requests', 'Checks', 'Departments', 'Data']);
   assert.equal(await joseph.page.locator('#view select[data-change="manage-department"]').count(), 1);
   await joseph.context.close();
 

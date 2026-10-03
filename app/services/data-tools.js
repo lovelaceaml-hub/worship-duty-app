@@ -49,7 +49,7 @@ export async function saveSettings(fields, done, { optimistic = true } = {}) {
 
 /* The Sheet tools' state; `check` is the last "Check the Sheet" result. */
 export const sheet = { busy: false, checking: false, check: null, addingYear: false, renaming: false };
-// A Sheet check is an administrator's; it is not shown to the next member.
+// A Sheet check is the member's who ran it; it is not shown to the next member.
 onMemberChange(() => { sheet.check = null; });
 
 export function lastSheetImport() { return readJSON('wds-sheet-import', null); }

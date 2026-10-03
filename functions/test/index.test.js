@@ -65,13 +65,22 @@ test('role changes need a leader manager and are recorded', async () => {
   assert.deepEqual(docs['accounts/S. Ruth'].roles, ['songEditor']);
 });
 
-test('the sheet import needs an administrator when started by hand, and respects its switch', async () => {
-  const docs = { 'accounts/S. Leah': account('S. Leah', []), 'app/settings': { features: { sheetSync: false } } };
+test('the sheet import and check need a leader or an administrator, and the import respects its switch', async () => {
+  const docs = {
+    'accounts/S. Leah': account('S. Leah', []),
+    'accounts/S. Grace': Object.assign(account('S. Grace', ['departmentLeader']), { departments: ['Usher Sisters'] }),
+    'app/settings': { features: { sheetSync: false } }
+  };
   let fetched = 0;
   const loaded = loadIndex(docs, { fetch: async () => { fetched += 1; throw new Error('not reached'); } });
   try {
-    await assert.rejects(loaded.functions.syncSheetNow.run({ auth: signedIn('S. Leah'), data: {} }),
-      error => error.code === 'permission-denied' && error.details.reason === 'administrator-required');
+    for (const name of ['syncSheetNow', 'checkSheet']) {
+      await assert.rejects(loaded.functions[name].run({ auth: signedIn('S. Leah'), data: {} }),
+        error => error.code === 'permission-denied' && error.details.reason === 'not-allowed', name);
+    }
+    // A leader gets past the access check; checking then needs the Sheet's link.
+    await assert.rejects(loaded.functions.checkSheet.run({ auth: signedIn('S. Grace'), data: {} }),
+      error => error.details && error.details.reason === 'sheet-not-set');
     await loaded.functions.scheduledSheetSync.run({});
   } finally {
     loaded.restore();
