@@ -666,6 +666,23 @@ test('an administrator links the Sheet, checks it, and adds a year of services',
   await context.close();
 });
 
+test('a department leader imports the Sheet and checks it, and sees nothing else in Data', async () => {
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
+  await page.evaluate(() => window.__fake.set('app/settings', Object.assign({}, window.__fake.get('app/settings'), { sheetId: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123' })));
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'data');
+  for (const hidden of ['form[data-act="member-rename"]', '[data-change="sheet-edit-link"]', '[data-change="sheet-url"]', 'form[data-act="year-add"]', '[data-act="backup-download"]']) {
+    assert.equal(await page.locator('#view ' + hidden).count(), 0, hidden + ' is for administrators');
+  }
+  await page.locator('#view [data-act="sheet-import"]').click();
+  await banner(page, 'The schedule already matches the Sheet.');
+  await page.locator('#view [data-act="sheet-check"]').click();
+  await page.locator('#view .sheet-check', { hasText: 'Read 40 services from 2026 Entry.' }).waitFor();
+  assert.equal((await calls(page, 'syncSheetNow')).length, 1);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('Edit assignments on the Schedule opens that service in the planner', async () => {
   const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP, appearance: 'prism' });
   await page.locator('#view [data-act="schedule-date"][data-date="2026-07-18"]').click();

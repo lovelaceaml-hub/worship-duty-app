@@ -379,6 +379,10 @@ Sheet's own script copies them into "Raw Data".
   first. **Write changes to the Sheet** turns on only after a successful
   Check the Sheet.
 
+- Department leaders see Manage, Data with only **Import now** and **Check
+  the Sheet**. The Sheet's link, Fix a member's name, adding a year and the
+  backup stay with administrators.
+
 ## Where the data comes from
 
 - The schedule is imported from the Google Sheet every 2 hours, or right away

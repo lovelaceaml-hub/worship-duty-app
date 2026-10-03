@@ -31,6 +31,8 @@ function sections(counts = {}) {
   ];
   if (canManageLeaders()) list.push(['leaders', 'Leaders', leaders]);
   if (isAdmin()) list.push(['features', 'Features', features], ['data', 'Data', dataSection], ['feedback', 'Feedback', feedback]);
+  // Leaders see Data too, with only the Sheet import and check.
+  else list.push(['data', 'Data', dataSection]);
   return list;
 }
 

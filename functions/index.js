@@ -177,6 +177,10 @@ function callable(access, handler, { unavailable = 'The server could not finish 
       if (access === 'admin' && !permissions.isAdmin(actor, await runtimePermissionConfig())) {
         throw refusal('permission-denied', 'administrator-required', refused);
       }
+      // An administrator, or the leader of any department.
+      if (access === 'leader' && !permissions.departmentsForLeader(actor, await runtimePermissionConfig()).length) {
+        throw refusal('permission-denied', 'not-allowed', refused);
+      }
       return await handler({ ...request, auth: actor });
     } catch (error) {
       throw asHttpsError(error, unavailable);
@@ -320,13 +324,13 @@ exports.scheduledSheetSync = onSchedule(
     }
   });
 
-/* Manage, Data, Import now. Administrators only. */
-exports.syncSheetNow = callable('admin', async () => Object.assign({ ok: true }, await sheetIo.importSheet()),
-  { refused: 'Only an administrator can import the sheet.' });
+/* Manage, Data, Import now. Administrators and department leaders. */
+exports.syncSheetNow = callable('leader', async () => Object.assign({ ok: true }, await sheetIo.importSheet()),
+  { refused: 'Only a leader or an administrator can import the sheet.' });
 
 /* Manage, Data, Check the Sheet: compares the Sheet with the app, changing
-   nothing. Administrators only. */
-exports.checkSheet = callable('admin', () => sheetIo.checkSheet(), { refused: 'Only an administrator can check the Sheet.' });
+   nothing. Administrators and department leaders. */
+exports.checkSheet = callable('leader', () => sheetIo.checkSheet(), { refused: 'Only a leader or an administrator can check the Sheet.' });
 
 /* Manage, Data: a planning year of regular services. Administrators only. */
 exports.addServiceYear = callable('admin', async request => {
