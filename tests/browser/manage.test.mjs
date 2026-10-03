@@ -605,3 +605,42 @@ test('the kind of worship is chosen from a list, with Other for a feast\'s own n
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+test('an administrator views the app as a leader and as a member, with changes off, then comes back', async () => {
+  const { page, context } = await as('B. Adam', { viewport: DESKTOP });
+  const menuItem = page.locator('[data-slot="view-as"]');
+  await page.locator('[data-slot="member"]').click();
+  await menuItem.click();
+  await page.locator('#view select[name="member"]').selectOption('S. Grace');
+  await page.locator('#view form[data-act="view-as-start"] button[type="submit"]').click();
+  await banner(page, 'Viewing as S. Grace (department leader). Changes are off.');
+  await tab(page, 'manage');
+  const sections = async () => page.locator('#view .sections button').evaluateAll(buttons => buttons.map(button => button.dataset.section));
+  assert.deepEqual(await sections(), ['services', 'requests', 'planning', 'departments', 'data'], 'the leader\'s sections, no admin ones');
+  await section(page, 'manage-section', 'data');
+  assert.deepEqual(await page.locator('#view .card button').allTextContents(), ['Import now', 'Check the Sheet']);
+  await page.locator('#view [data-act="sheet-import"]').click();
+  await banner(page, 'Changes are off.');
+  assert.equal((await calls(page, 'syncSheetNow')).length, 0, 'nothing reaches the server while viewing');
+
+  await page.locator('#banners [data-act="view-as-stop"]').click();
+  await tab(page, 'manage');
+  assert.ok((await sections()).includes('features'), 'back to the administrator\'s own Manage');
+  assert.equal(await page.locator('#banners [data-banner="view-as"]').count(), 0);
+
+  await page.locator('[data-slot="member"]').click();
+  await menuItem.click();
+  await page.locator('#view select[name="member"]').selectOption('B. Amos');
+  await page.locator('#view form[data-act="view-as-start"] button[type="submit"]').click();
+  await banner(page, 'Viewing as B. Amos (member).');
+  assert.equal(await page.locator('.tabs [data-tab="manage"]').isVisible(), false, 'a member has no Manage');
+  assert.equal(await page.locator('[data-slot="person"]').first().textContent(), 'B. Amos');
+  await context.close();
+});
+
+test('View as is offered to administrators only', async () => {
+  const { page, context } = await as('S. Grace');
+  await page.locator('[data-slot="member"]').click();
+  assert.equal(await page.locator('[data-slot="view-as"]').isVisible(), false);
+  await context.close();
+});

@@ -1,13 +1,22 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-10-02.
+Updated 2026-10-02 (evening).
 
 ## Where things stand
 
-- Live at https://lv-zion-duties.web.app, released from `main` at
-  [PR #33](https://github.com/lovelaceaml-hub/worship-duty-app/pull/33)'s
-  merge (`5f5d50e`) on 2026-10-02: the round feedback button is back on
-  phones, smaller and above the tabs; the account menu keeps it too.
+- Live at https://lv-zion-duties.web.app. On 2026-10-02
+  [PR #35](https://github.com/lovelaceaml-hub/worship-duty-app/pull/35)
+  (leaders: Import now and Check the Sheet) and
+  [PR #36](https://github.com/lovelaceaml-hub/worship-duty-app/pull/36)
+  (Prism is the only look) were merged, the functions deployed, then the app
+  released.
+- [PR #37](https://github.com/lovelaceaml-hub/worship-duty-app/pull/37) adds
+  View as (account menu, administrators only): the app as a chosen member or
+  leader sees it, with changes off. Use it to check member and leader views
+  on the live site; agents never sign in with someone's PIN.
+- [PR #33](https://github.com/lovelaceaml-hub/worship-duty-app/pull/33): the
+  round feedback button is back on phones, smaller and above the tabs; the
+  account menu keeps it too.
 - [PR #30](https://github.com/lovelaceaml-hub/worship-duty-app/pull/30)
   (Fill and duty rules, whole-app review fixes) is merged. Functions, Firestore
   rules and the app were all deployed on 2026-10-02, in that order.

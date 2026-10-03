@@ -1,4 +1,5 @@
-/* The account menu's two views, shown inside My Duties.
+/* The account menu's views, shown inside My Duties: Availability,
+   Settings, and View as for an administrator (screens/view-as.js).
    Availability: one weekly pattern and one list of days that are different,
    saved to every department the member belongs to. Nothing is stored until
    Save: a bar says so meanwhile, and leaving the view asks first. Duties the
@@ -9,8 +10,10 @@ import { defineActions } from '../actions.js';
 import { ui } from '../store.js';
 import { render as redraw, setLeaveGuard } from '../render.js';
 import { empty } from '../ui/components.js';
-import { accountView } from '../ui/header.js';
+import { accountView, ACCOUNT_VIEWS } from '../ui/header.js';
 import { notifyControls } from './my-duties.js';
+import * as viewAs from './view-as.js';
+import { viewingAs, canViewAs } from '../services/view-as.js';
 import { pinForm } from './lock.js';
 import { SERVICE_LABELS } from '../config/duties.js';
 import { departments, loadOwnProfiles, saveOwnAvailability } from '../services/departments.js';
@@ -73,6 +76,8 @@ function weekRow(current, label) {
 const dayLabel = key => key === '*' ? 'All day' : timeLabel(key);
 
 function availability() {
+  // Availability belongs to the member's own sign-in, which View as does not have.
+  if (viewingAs()) return html`<section class="card"><p class="hint">A member's availability is not shown while you view as them. Open it from Manage, Departments.</p></section>`;
   if (!departments.own && !departments.ownLoading) loadOwnProfiles();
   if (!departments.own) {
     return departments.ownError
@@ -143,8 +148,8 @@ function settings() {
 export function render() {
   const view = accountView();
   return html`<div class="account-view">
-    <h2 class="screen-title" tabindex="-1">${view === 'availability' ? 'Availability' : 'Settings'}</h2>
-    ${view === 'availability' ? availability() : settings()}
+    <h2 class="screen-title" tabindex="-1">${ACCOUNT_VIEWS[view] || 'Settings'}</h2>
+    ${view === 'availability' ? availability() : view === 'view-as' && canViewAs() ? viewAs.render() : settings()}
   </div>`;
 }
 

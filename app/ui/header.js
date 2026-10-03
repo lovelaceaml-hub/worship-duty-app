@@ -1,12 +1,13 @@
 /* The header: the LV badge (goes home), the name of the current screen, the
    sync status, and the member chip with the account menu (Availability,
-   Settings, Feedback about the app, Sign out). Text is only written when it changes, so a screen reader does not
+   Settings, View as for an administrator, Feedback about the app, Sign out). Text is only written when it changes, so a screen reader does not
    hear it again on every redraw. */
 import { ui, nameOf } from '../store.js';
 import { initials } from '../lib/names.js';
+import { canViewAs, viewingAs } from '../services/view-as.js';
 
 export const SCREEN_NAMES = { schedule: 'Schedule', my: 'My Duties', songs: 'Presider', manage: 'Manage' };
-export const ACCOUNT_VIEWS = { availability: 'Availability', settings: 'Settings' };
+export const ACCOUNT_VIEWS = { availability: 'Availability', settings: 'Settings', 'view-as': 'View as' };
 
 export function accountView() {
   return ui.tab === 'my' && ACCOUNT_VIEWS[ui.account] ? ui.account : '';
@@ -41,6 +42,10 @@ export function paintHeader(inApp, link) {
   all('[data-slot="member"]').forEach(button => {
     button.hidden = !person;
     button.setAttribute('aria-label', person ? 'Account menu for ' + person : 'Account menu');
+  });
+  all('[data-slot="view-as"]').forEach(item => {
+    item.hidden = !(inApp && canViewAs());
+    setText(item, viewingAs() ? 'Back to me' : 'View as someone');
   });
   all('[data-slot="initials"]').forEach(el => setText(el, initials(person)));
   all('[data-slot="person"]').forEach(el => setText(el, person));

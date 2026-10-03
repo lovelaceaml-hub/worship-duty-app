@@ -315,6 +315,12 @@ on every pair and three of duties.
   sessions, as a reset and a name fix do. They sign in again.
 - Signing out clears what the member left on the device: unsaved changes,
   notices, Recent updates, and alerts to that device.
+- View as (account menu, administrators only) shows the app the way another
+  member sees it: their duties, tabs and Manage sections, from the leader
+  configuration. Changes are off while viewing: writes and the Cloud
+  Functions that change something are refused on the device. Their own
+  availability and requests are not shown. "Back to me" or signing out ends
+  it. Agents use it to check member and leader views on the live site.
 
 ## Fixing a name
 
