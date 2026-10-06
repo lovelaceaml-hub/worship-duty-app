@@ -1,0 +1,98 @@
+# Weekly, read-only: are the live Cloud Functions in lv-zion-duties the code on
+# main? Downloads each deployed function's source zip and compares file names
+# and hashes with functions/ on main. Writes only "same" or "different" per
+# function to the job summary. Deploys nothing and changes nothing.
+#
+# Keyless: Google hands a short-lived token to the read-only identity
+# (roles/cloudfunctions.viewer + storage.objectViewer on the Functions source
+# bucket) only for this exact workflow file on main.
+name: Functions drift check (read-only)
+
+on:
+  schedule:
+    # Mondays 14:41 UTC (7:41 AM in Las Vegas during daylight time).
+    - cron: "41 14 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: functions-drift
+  cancel-in-progress: true
+
+env:
+  WIF_PROVIDER: ${{ vars.GCP_DRIFT_WIF_PROVIDER }}
+  DRIFT_SA: ${{ vars.GCP_DRIFT_SA }}
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Skip until the read-only identity exists
+        id: ready
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::The drift check runs only on main."
+            exit 1
+          fi
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DRIFT_SA" ]; then
+            echo "::notice::GCP_DRIFT_WIF_PROVIDER / GCP_DRIFT_SA are not set yet (ops/cloud-shell/backend-deploy-wif.sh prints them). Nothing checked."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out main
+        if: steps.ready.outputs.go == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Node
+        if: steps.ready.outputs.go == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Sign in to Google without a key (read-only identity)
+        if: steps.ready.outputs.go == 'true'
+        id: auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DRIFT_SA }}
+          token_format: access_token
+          access_token_lifetime: 600s
+          create_credentials_file: false
+
+      - name: Compare the live Functions with main
+        if: steps.ready.outputs.go == 'true'
+        id: drift
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        # The LV Zion sender functions are deployed from elsewhere on purpose;
+        # they are listed as such and not compared.
+        run: node .github/scripts/functions-drift.mjs --project lv-zion-duties --not-ours onVercelScheduleWrite,worshipVercelReconcile
+
+      - name: Heartbeat to the ops monitor (no-op until configured)
+        if: always() && steps.ready.outputs.go == 'true'
+        env:
+          OPS_BEAT_URL: ${{ secrets.OPS_BEAT_URL }}
+          OPS_TOKEN_CLOUD: ${{ secrets.OPS_TOKEN_CLOUD }}
+          OUTCOME: ${{ steps.drift.outcome }}
+          DIFFERENCES: ${{ steps.drift.outputs.differences }}
+        run: |
+          if [ -z "$OPS_BEAT_URL" ] || [ -z "$OPS_TOKEN_CLOUD" ]; then
+            echo "Heartbeat skipped: OPS_BEAT_URL / OPS_TOKEN_CLOUD are not set."
+            exit 0
+          fi
+          status=ok; detail="all functions match main"
+          if [ "$OUTCOME" != "success" ]; then status=fail; detail="drift check could not run"
+          elif [ "${DIFFERENCES:-0}" != "0" ]; then status=warn; detail="$DIFFERENCES function(s) differ from main"; fi
+          body="$(node -e 'const [s,d,r]=process.argv.slice(1); const now=new Date(); console.log(JSON.stringify({v:1,job:"functions-drift-lv-zion-duties",host:"gha",status:s,ts:now.toISOString().replace("Z","+00:00"),run_id:r,detail:d}));' "$status" "$detail" "$GITHUB_RUN_ID")"
+          curl -sS -o /dev/null -w 'beat HTTP %{http_code}\n' --max-time 20 -X POST "$OPS_BEAT_URL" \
+            -H "X-Ops-Token: $OPS_TOKEN_CLOUD" -H 'Content-Type: application/json' --data "$body" || echo "Heartbeat failed (ignored)."

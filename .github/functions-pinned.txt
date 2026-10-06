@@ -1,0 +1,39 @@
+# Cloud Functions that "Firebase backend release" may deploy to lv-zion-duties,
+# by name. It must match the exports of functions/index.js exactly (the guard
+# checks). Change it only in a reviewed pull request: a name left off here
+# could never be released, and a name on here is never deleted by CI.
+# The LV Zion sender functions are never listed here (the guard refuses them).
+verifyMemberPin
+changeMemberPin
+resetMemberPin
+updateRoleConfiguration
+updateDepartmentProfile
+listDepartmentRoster
+updateMemberAvailability
+createDepartmentProfile
+assignDepartmentDuty
+unassignDepartmentDuty
+overrideDepartmentAssignment
+saveMemberAvailability
+resolveDutyAttention
+saveDepartmentAssignments
+searchDepartmentCandidates
+createDepartmentInvitation
+revokeDepartmentInvitation
+acceptDepartmentInvitation
+setDutyDefault
+onScheduleWrite
+dutyReminders
+onRequestCreated
+onRequestResolved
+onFeedbackDone
+ics
+publicSchedule
+scheduledSheetSync
+syncSheetNow
+checkSheet
+addServiceYear
+yearlyServices
+servingMembers
+renameMember
+songHistoryRecorder

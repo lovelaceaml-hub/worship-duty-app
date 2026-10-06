@@ -3,7 +3,11 @@
      node scripts/deploy-functions.mjs ics dutyReminders   only these
    The Firebase project also holds another app's functions, so a plain
    `firebase deploy --only functions` would offer to delete them. This script
-   never does that: it names every function it deploys. */
+   never does that: it names every function it deploys, and it refuses the
+   LV Zion sender functions by name. The Firebase CLI is pinned to
+   firebase-tools@15 (the same pin the GitHub workflows and their guard use).
+   GitHub's "Firebase backend release" runs this script behind
+   .github/scripts/npx-guard (DEPLOY_GUARD_MODE=functions). */
 import { spawnSync } from 'node:child_process';
 import Module from 'node:module';
 import path from 'node:path';
@@ -27,13 +31,19 @@ function exportedNames() {
   finally { Module._load = original; }
 }
 
+const FIREBASE_TOOLS = 'firebase-tools@15';
+// Deployed from elsewhere on purpose; never deployed or deleted from here.
+const NEVER = ['onVercelScheduleWrite', 'worshipVercelReconcile'];
+
 const all = exportedNames();
 const wanted = process.argv.slice(2);
 const unknown = wanted.filter(name => !all.includes(name));
 if (unknown.length) { console.error('Not functions of this app: ' + unknown.join(', ')); process.exit(1); }
 const names = wanted.length ? wanted : all;
+const refused = names.filter(name => NEVER.includes(name));
+if (refused.length) { console.error('Never deployed from this repository: ' + refused.join(', ')); process.exit(1); }
 console.log('Deploying ' + names.length + ' functions: ' + names.join(', '));
-const result = spawnSync('npx', ['-y', 'firebase-tools@latest', 'deploy', '--only', names.map(name => 'functions:' + name).join(','), '--project', 'lv-zion-duties'], {
+const result = spawnSync('npx', ['--yes', FIREBASE_TOOLS, 'deploy', '--only', names.map(name => 'functions:' + name).join(','), '--project', 'lv-zion-duties'], {
   cwd: repo,
   stdio: 'inherit',
   env: Object.assign({ npm_config_cache: '/tmp/npm-cache' }, process.env)

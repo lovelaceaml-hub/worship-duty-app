@@ -125,8 +125,8 @@ GitHub runs all five on every pull request.
 
 ## Release
 
-Only the app itself (Firebase Hosting) is released this way; functions and
-rules are below.
+The app (Firebase Hosting) and the backend (Cloud Functions by name, Firestore
+rules) each have their own button; the Mac commands below stay as a fallback.
 
 **From GitHub** (also works from a cloud session):
 
@@ -143,6 +143,22 @@ rules are below.
   rotated by 2027-09-29.
 - To undo a release: Firebase console, Hosting, site `lv-zion-duties`,
   Release history, Rollback on the release before it.
+- Cloud Functions and rules: run **Firebase backend release (Functions and
+  rules)** on `main`, only when Anthony says to release. `functions` is
+  `NONE`, `ALL`, or names separated by commas (only names in
+  `.github/functions-pinned.txt`); tick `rules` for `firestore.rules`; type
+  `RELEASE` in `confirm`. It runs `npm run check`, `npm test`,
+  `npm run test:functions` and the rules emulator tests first, then deploys
+  through `scripts/deploy-functions.mjs` behind the npx guard. There is no key:
+  Google (Workload Identity Federation) gives a short-lived token only to that
+  workflow file, started by hand, on `main`. A run with `functions=NONE` and
+  rules unticked only proves the sign-in. It never deploys or deletes
+  `onVercelScheduleWrite` or `worshipVercelReconcile` (the guard refuses them
+  by name). One-time setup: `ops/cloud-shell/backend-deploy-wif.sh` in the
+  study-room-scheduler repository (Anthony, Google Cloud Shell) prints the
+  repository variables it reads.
+- **Functions drift check** (weekly, read-only) compares the live Functions
+  with `main` and lists the result in the run summary.
 
 **From your Mac:**
 
@@ -166,7 +182,8 @@ the app needs the new server code.
 node scripts/deploy-functions.mjs
 ```
 
-This deploys this app's functions by name. Never run a bare `firebase deploy`
+This deploys this app's functions by name with `firebase-tools@15` (name some
+to deploy only those). Never run a bare `firebase deploy`
 or `firebase deploy --only functions`: the Firebase project also holds another
 app's functions (`onVercelScheduleWrite` and `worshipVercelReconcile`), and
 those commands would offer to delete them.
@@ -174,7 +191,7 @@ those commands would offer to delete them.
 Database rules, only when `firestore.rules` changed:
 
 ```bash
-npm_config_cache=/tmp/npm-cache npx -y firebase-tools@latest deploy --only firestore:rules --project lv-zion-duties
+npm_config_cache=/tmp/npm-cache npx -y firebase-tools@15 deploy --only firestore:rules --project lv-zion-duties
 ```
 
 When a change needs all three, deploy them the same day in this order: the

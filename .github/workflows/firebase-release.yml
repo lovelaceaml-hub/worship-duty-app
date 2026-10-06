@@ -2,8 +2,8 @@ name: Firebase release (Hosting only, live site)
 
 # Publishes main to the live site https://lv-zion-duties.web.app through
 # scripts/release.mjs live. Run only when Anthony says to release Worship Duty.
-# It deploys Hosting only; Functions (scripts/deploy-functions.mjs) and
-# Firestore rules stay manual (see README.md).
+# It deploys Hosting only; Functions and Firestore rules go out through
+# "Firebase backend release" (firebase-backend-release.yml, see README.md).
 
 on:
   workflow_dispatch:
