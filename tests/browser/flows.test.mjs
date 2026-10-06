@@ -659,9 +659,16 @@ test('a department leader imports the Sheet and checks it, and sees nothing else
   }
   await page.locator('#view [data-act="sheet-import"]').click();
   await banner(page, 'The schedule already matches the Sheet.');
+  await page.locator('#view .hint', { hasText: 'Last import: ' }).waitFor();
   await page.locator('#view [data-act="sheet-check"]').click();
   await page.locator('#view .sheet-check', { hasText: 'Read 40 services from 2026 Entry.' }).waitFor();
   assert.equal((await calls(page, 'syncSheetNow')).length, 1);
+  // The top of Manage has Import now too, with the last import.
+  await section(page, 'manage-section', 'services');
+  await page.locator('#view .sheet-bar', { hasText: 'Last import: ' }).waitFor();
+  await page.locator('#view .sheet-bar [data-act="sheet-import"]').click();
+  await banner(page, 'The schedule already matches the Sheet.');
+  assert.equal((await calls(page, 'syncSheetNow')).length, 2);
   assert.deepEqual(errors, []);
   await context.close();
 });

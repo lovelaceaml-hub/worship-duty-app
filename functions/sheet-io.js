@@ -1,10 +1,13 @@
 'use strict';
 
 /* The Google Sheet, both ways.
-   - The import (every 2 hours, and Manage, Data, Import now) merges the
-     Sheet into the schedule: the published Raw Data link, or the Entry grid
-     itself when the app writes to the Sheet. Only the duties the Sheet lists
-     change; anything added in the app stays. New names join the member list
+   - The import (checked every 10 minutes, and Manage, Import now) merges
+     the Sheet into the schedule: the published Raw Data link, or the Entry
+     grid itself when the app writes to the Sheet. Only this month and later
+     are merged; earlier months stay as the app has them. The timed check
+     reads the Sheet and stops there when this month onward is as it was at
+     the last import. Only the duties the Sheet lists change; anything
+     added in the app stays. New names join the member list
      and their department's name list, and members hear once about all of
      their new duties.
    - With "Write changes to the Sheet" on (Manage, Features), a change made
@@ -18,6 +21,7 @@
      import and the planning year do not make it again; making it again in
      the app forgets that.
    - Check the Sheet compares the two; a planning year adds its services. */
+const crypto = require('node:crypto');
 const sheetLib = require('./sheet-lib.js');
 const sheetSync = require('./sheet-sync.js');
 const permissions = require('./permissions.js');
@@ -33,6 +37,11 @@ const message = error => String(error && error.message || error).slice(0, 300);
 
 function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now = () => Date.now() }) {
   const settingsRef = () => db.collection('app').doc('settings');
+  /* Where the timed check keeps the last import's fingerprint (server only).
+     The app writing into the Sheet forgets it, so the next check imports in
+     full even if the Sheet is then put back as it was. */
+  const importStateRef = () => db.collection('sheetImport').doc('state');
+  const forgetImportState = () => importStateRef().delete().catch(() => {});
   const loadSettings = () => appDocs.loadSettings(db);
   const today = () => pacificDate(new Date(now()));
 
@@ -104,6 +113,7 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
         ? await sheetSync.writeState(sheets, after, { today: today(), only: fields })
         : await sheetSync.writeService(sheets, existed ? before : null, after, { today: today() });
       if (waiting) await queueRef.delete();
+      await forgetImportState();
       if (after && /written|added/.test(String(done))) await rememberWritten(serviceId, after, done === 'row added' ? null : fields);
       logger.info('Sheet write', { service: serviceId, done });
       await noteSheetStatus(settings, null);
@@ -132,6 +142,7 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
         }
         else if (item.date && item.service) await sheetSync.writeService(sheets, { date: item.date, service: item.service }, null, { today: today() });
         await document.ref.delete();
+        await forgetImportState();
       } catch (error) {
         waiting.add(document.id);
         logger.error('Sheet write retry failed', { service: document.id, error: message(error) });
@@ -151,7 +162,8 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
     }
   }
 
-  async function importSheet() {
+  /* `force` (Import now) imports even when the Sheet looks unchanged. */
+  async function importSheet({ force = false } = {}) {
     const settings = await loadSettings();
     // Old spellings are mapped to the current ones first, so the sheet cannot
     // bring back a name the app has already cleaned up.
@@ -175,10 +187,21 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
       });
     }
     if (!parsed.services.length) throw refusal('failed-precondition', 'sheet-empty');
+    // This month and later only: past services stay as the app has them.
+    const fromDate = today().slice(0, 8) + '01';
+    parsed.services = parsed.services.filter(service => String(service.date || '') >= fromDate);
+    parsed.members = Array.from(new Set(parsed.services.flatMap(service => Object.values(service.assignments || {})).filter(Boolean))).sort();
+    const fingerprint = crypto.createHash('sha256')
+      .update(JSON.stringify({ fromDate, services: parsed.services, members: parsed.members, waiting: Array.from(waiting).sort() }))
+      .digest('hex');
+    if (!force && !waiting.size) {
+      const state = await importStateRef().get();
+      if (state.exists && (state.data() || {}).fingerprint === fingerprint) return { unchanged: true };
+    }
     const warnings = parsed.warnings.slice();
 
     const [existingSnap, membersSnap, departmentsSnap, deletedSnap] = await Promise.all([
-      db.collection('schedule').get(),
+      db.collection('schedule').where('date', '>=', fromDate).get(),
       db.collection('app').doc('members').get(),
       db.collection('app').doc('departments').get(),
       db.collection('deletedServices').get()
@@ -260,6 +283,10 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
       added: plan.creates.length, updated: plan.updates.length, newMembers: newMembers.length,
       waiting: waiting.size, failed, warnings: warnings.slice(0, 20)
     };
+    // A failed write leaves the fingerprint as it was, so the next check imports again.
+    if (!failed) await importStateRef().set({ fingerprint, at });
+    // Shown in Manage: when the app last brought in the Sheet.
+    await settingsRef().set({ sheetImport: { at, added: result.added, updated: result.updated, newMembers: result.newMembers, skipped: result.warnings.length } }, { merge: true });
     logger.info('importSheet: done', result);
     return result;
   }

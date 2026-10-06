@@ -13,18 +13,39 @@ import { dutyName } from '../../config/duties.js';
 
 const when = at => shortStamp(at, { time: true });
 // Import now and Check the Sheet: administrators and department leaders.
-const canUseSheet = () => isAdmin() || canManageAnyDepartment();
+export const canUseSheet = () => isAdmin() || canManageAnyDepartment();
+
+/* When the app last brought in the Sheet, and what it changed. */
+function lastImportLine() {
+  const last = lastSheetImport();
+  if (!last || !last.at) return '';
+  const changes = [plural(last.added || 0, 'service') + ' added', (last.updated || 0) + ' updated'];
+  if (last.skipped) changes.push(plural(last.skipped, 'row') + ' skipped');
+  return 'Last import: ' + when(last.at) + ', ' + changes.join(', ') + '.';
+}
+
+const importButton = () => html`<button type="button" class="primary" data-act="sheet-import"${sheet.busy || !feature('sheetSync') ? ' disabled' : ''}>${sheet.busy ? 'Importing…' : 'Import now'}</button>`;
+
+/* The top of Manage: the last import and Import now, outside Manage, Data. */
+export function sheetBar() {
+  if (!canUseSheet() || !feature('sheetSync')) return '';
+  const line = lastImportLine();
+  return html`<section class="card sheet-bar">
+    <p class="hint small">Google Sheet: ${line || 'checked every 10 minutes.'}</p>
+    ${importButton()}
+  </section>`;
+}
 
 function importCard() {
-  const last = lastSheetImport();
+  const line = lastImportLine();
   const fromGrid = feature('sheetWrite') && data.settings.sheetId;
   return html`<section class="card">
     <h3 class="card-subtitle">Google Sheet import</h3>
     <p class="hint">${!feature('sheetSync') ? 'The Google Sheet import is turned off in Features.'
-      : fromGrid ? 'Every 2 hours the schedule brings in changes from the Sheet\'s Entry grid. A blank cell in the Sheet does not clear a duty; clear it here instead.'
-        : 'Every 2 hours the schedule brings in changes from the published Sheet. Duties the Sheet leaves out, and services added here, stay as they are.'}</p>
-    ${last ? html`<p class="hint small">Last import from this device: ${when(last.at)}, ${last.added || 0} added, ${last.updated || 0} updated${last.warnings && last.warnings.length ? ', ' + plural(last.warnings.length, 'row') + ' skipped' : ''}.</p>` : ''}
-    <button type="button" class="primary" data-act="sheet-import"${sheet.busy || !feature('sheetSync') ? ' disabled' : ''}>${sheet.busy ? 'Importing…' : 'Import now'}</button>
+      : fromGrid ? 'Every 10 minutes the app checks the Sheet\'s Entry grid and brings in any changes, this month onward. A blank cell in the Sheet does not clear a duty; clear it here instead.'
+        : 'Every 10 minutes the app checks the published Sheet and brings in any changes, this month onward. Duties the Sheet leaves out, and services added here, stay as they are.'}</p>
+    ${line ? html`<p class="hint small">${line}</p>` : ''}
+    ${importButton()}
     ${fromGrid || !isAdmin() ? '' : html`<label class="field"><span>Published sheet link (File, Share, Publish to web, CSV)</span>
       <input type="url" data-change="sheet-url" value="${data.settings.sheetUrl || ''}" placeholder="Paste the published CSV link"></label>`}
   </section>`;

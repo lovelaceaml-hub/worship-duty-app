@@ -1,9 +1,15 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-10-02 (evening).
+Updated 2026-10-06.
 
 ## Where things stand
 
+- Branch `claude/app-update-schedule-spreadsheet-oy9u7c` (open pull request,
+  not yet merged): the Sheet is checked every 10 minutes instead of every 2
+  hours, and imported only when this month or later changed; earlier months
+  are no longer touched by an import. Manage shows Import now at the top,
+  with the time the app last imported. Needs the functions deployed, then
+  the app released.
 - Live at https://lv-zion-duties.web.app. On 2026-10-02
   [PR #35](https://github.com/lovelaceaml-hub/worship-duty-app/pull/35)
   (leaders: Import now and Check the Sheet) and
@@ -34,7 +40,7 @@ Updated 2026-10-02 (evening).
 ## Still to do
 
 - Watch the functions logs for a few hours after a deploy: reminders hourly,
-  the Sheet import every 2 hours, song counting every 30 minutes. The errors
+  the Sheet check every 10 minutes, song counting every 30 minutes. The errors
   from `worshipVercelReconcile` ("time must not be empty") belong to another
   app in the same project and predate this release.
 - After-deploy checks in the app: a leader marks a double duty OK in Manage,

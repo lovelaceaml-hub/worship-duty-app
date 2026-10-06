@@ -311,10 +311,11 @@ exports.publicSchedule = onRequest({ region: REGION, maxInstances: 5 }, publicEn
 
 /* ---- the Google Sheet (sheet-io.js) ---- */
 
-/* Every 2 hours the Sheet is merged into the schedule. The Google Sheet
-   import switch in Manage, Features turns it off. */
+/* Every 10 minutes the Sheet is read, and merged into the schedule when it
+   changed (sheet-io.js). The Google Sheet import switch in Manage, Features
+   turns it off. */
 exports.scheduledSheetSync = onSchedule(
-  { schedule: 'every 2 hours', timeZone: TZ, region: REGION },
+  { schedule: 'every 10 minutes', timeZone: TZ, region: REGION },
   async () => {
     if (!switchOn(await loadSettings(), 'sheetSync')) return;
     try {
@@ -324,8 +325,9 @@ exports.scheduledSheetSync = onSchedule(
     }
   });
 
-/* Manage, Data, Import now. Administrators and department leaders. */
-exports.syncSheetNow = callable('leader', async () => Object.assign({ ok: true }, await sheetIo.importSheet()),
+/* Manage, Import now: imports even when the Sheet looks unchanged.
+   Administrators and department leaders. */
+exports.syncSheetNow = callable('leader', async () => Object.assign({ ok: true }, await sheetIo.importSheet({ force: true })),
   { refused: 'Only a leader or an administrator can import the sheet.' });
 
 /* Manage, Data, Check the Sheet: compares the Sheet with the app, changing

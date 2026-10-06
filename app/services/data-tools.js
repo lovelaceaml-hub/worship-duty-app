@@ -5,7 +5,7 @@
    and fixing a member's name. */
 import { fb, call, write, problem } from '../firebase.js';
 import { plural } from '../html.js';
-import { data, readJSON, writeJSON, onMemberChange } from '../store.js';
+import { data, onMemberChange } from '../store.js';
 import { todayISO } from '../lib/dates.js';
 import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
@@ -52,7 +52,9 @@ export const sheet = { busy: false, checking: false, check: null, addingYear: fa
 // A Sheet check is the member's who ran it; it is not shown to the next member.
 onMemberChange(() => { sheet.check = null; });
 
-export function lastSheetImport() { return readJSON('wds-sheet-import', null); }
+/* When the app last brought in the Sheet, by the timed check or Import now
+   (the server keeps it in app/settings). */
+export function lastSheetImport() { return data.settings.sheetImport || null; }
 
 /* Fix a member's name everywhere (functions renameMember). */
 export async function renameMember(from, to) {
@@ -72,14 +74,13 @@ export async function renameMember(from, to) {
   }
 }
 
-/* The server fetches the published sheet and merges it into the schedule,
-   the same way its import does every 2 hours. */
+/* The server reads the Sheet and merges it into the schedule, the same way
+   its check every 10 minutes does, even when the Sheet looks unchanged. */
 export async function importSheetNow() {
   sheet.busy = true;
   renderSoon();
   try {
     const result = await call('syncSheetNow', {});
-    writeJSON('wds-sheet-import', Object.assign({ at: Date.now() }, result));
     const changes = [];
     if (result.added) changes.push(plural(result.added, 'service') + ' added');
     if (result.updated) changes.push(plural(result.updated, 'service') + ' updated');

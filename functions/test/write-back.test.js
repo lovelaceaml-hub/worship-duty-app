@@ -226,9 +226,56 @@ test('the Raw Data import: one alert per member for new duties to come, deleted 
     assert.equal(loaded.sent[0].data.title, 'New duties for you');
     assert.match(loaded.sent[0].data.body, /^Usher Door · Saturday, October 10 Morning; Usher Front · Saturday, October 17 Morning$/);
     assert.match(docs['schedule/2026-10-10_morning'].planBatch, /^import-/, 'no alert per service');
-    assert.equal(docs['schedule/2026-09-26_morning'].assignments['Usher Door'], 'S. Leah', 'the past service is still updated');
+    assert.equal(docs['schedule/2026-09-26_morning'].assignments['Usher Door'], undefined, 'a service before this month stays as the app has it');
     assert.equal(docs['schedule/2026-10-24_morning'], undefined, 'a service deleted in the app is not made again');
     assert.deepEqual(docs['app/members'].list, ['S. Leah', 'S. Ruth']);
+  });
+});
+
+test('the timed check imports only when this month onward changed in the Sheet', async () => {
+  await onOctober1(async () => {
+    const docs = { 'app/settings': {}, 'app/members': { list: ['S. Leah', 'S. Ruth'] }, 'schedule/2026-10-10_morning': upcoming('2026-10-10') };
+    let rows = [rawRow('"Sat, Sep 26"', 'Usher Door', 'S. Leah'), rawRow('"Sat, Oct 10"', 'Usher Door', 'S. Leah')];
+    const loaded = loadIndex(docs, { fetch: async () => ({ ok: true, text: async () => csv(rows) }) });
+    const service = () => docs['schedule/2026-10-10_morning'];
+    try {
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.equal(service().assignments['Usher Door'], 'S. Leah');
+      assert.equal(docs['app/settings'].sheetImport.updated, 1, 'Manage shows the last import');
+      assert.ok(docs['sheetImport/state'].fingerprint);
+
+      service().worship = 'Changed in the app';
+      rows[0] = rawRow('"Sat, Sep 26"', 'Usher Door', 'S. Ruth');
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.equal(service().worship, 'Changed in the app', 'a change before this month only: nothing is imported');
+
+      rows[1] = rawRow('"Sat, Oct 10"', 'Usher Door', 'S. Ruth');
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.equal(service().assignments['Usher Door'], 'S. Ruth', 'a change this month onward is imported');
+
+      delete docs['sheetImport/state'];
+      service().worship = 'Changed again';
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.equal(service().worship, 'Sabbath Day', 'without a fingerprint the check imports in full');
+    } finally {
+      loaded.restore();
+    }
+  });
+});
+
+test('the app writing into the Sheet makes the next check import in full', async () => {
+  await onOctober1(async () => {
+    const id = '2026-10-03_morning';
+    const sheets = sheet();
+    const docs = Object.assign({ ['schedule/' + id]: morning({ Presider: 'B. Adam', 'Usher Door': 'S. Leah' }) }, writing);
+    const { functions } = loadIndex(docs, { sheets });
+    await functions.scheduledSheetSync.run({});
+    assert.ok(docs['sheetImport/state']);
+    const before = docs['schedule/' + id];
+    const after = Object.assign({}, before, { assignments: Object.assign({}, before.assignments, { 'Usher Door': 'S. Grace' }) });
+    docs['schedule/' + id] = after;
+    await functions.onScheduleWrite.run(write(before, after));
+    assert.equal(docs['sheetImport/state'], undefined);
   });
 });
 
