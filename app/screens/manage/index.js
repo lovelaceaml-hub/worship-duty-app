@@ -59,6 +59,7 @@ export function render() {
       <select data-change="manage-department">${allowed.map(name => html`<option value="${name}"${name === department ? ' selected' : ''}>${name === 'All' ? 'All departments' : name}</option>`)}</select>
     </label>` : current[0] === 'departments' ? '' : html`<p class="picker-single">${department}</p>`;
   return html`
+    ${current[0] === 'data' ? '' : dataSection.sheetBar()}
     ${picker}
     <nav class="sections scroll-x" aria-label="Manage sections" data-subnav>
       ${list.map(([id, label, , count]) => html`<button type="button" class="${id === current[0] ? 'is-active' : ''}" data-act="manage-section" data-section="${id}"

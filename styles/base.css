@@ -162,6 +162,8 @@ p { margin: 0; }
 .card-note { margin: 10px 0; padding: 10px 12px; border-radius: var(--radius-small); background: var(--canvas); color: var(--muted); font-size: 13px; }
 .card-note.is-warning { background: var(--warn-soft); color: var(--warn); }
 .card-note .inline-form { margin-top: 8px; }
+.sheet-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; }
+.sheet-bar .hint { margin: 0; }
 
 /* ---- buttons ---- */
 

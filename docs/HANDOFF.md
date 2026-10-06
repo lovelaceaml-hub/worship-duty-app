@@ -1,16 +1,19 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-10-02 (evening).
+Updated 2026-10-06.
 
 ## Where things stand
 
-- Branch `claude/fill-patterns-oy9u7c` (open pull request, not yet merged):
-  Fill's new Usual mode learns each department's last 2 months of habits
-  (who does which duty, which services, how often, shared in proportion) and is the default; Manual only per
-  member in each department (for M. Chad); two duties can be marked always
-  OK together for anyone (for example Offering #6 and Prayer of Thanks).
-  Needs the functions deployed (new: setOkPair, setManualOnly; changed:
-  the assignment saves and request answers), then the app released.
+- Merged on 2026-10-06, released by Anthony's go-ahead the same day
+  (functions, then the app):
+  [PR #41](https://github.com/lovelaceaml-hub/worship-duty-app/pull/41): the
+  Sheet is checked every 10 minutes and imported only when this month or
+  later changed; earlier months are no longer touched by an import. Manage
+  shows Import now at the top, with the time the app last imported.
+  [PR #42](https://github.com/lovelaceaml-hub/worship-duty-app/pull/42):
+  Fill's Usual mode (the default) learns each department's last 2 months of
+  habits, shared in proportion; Manual only per member in each department
+  (for M. Chad); two duties can be marked always OK together for anyone.
 - Live at https://lv-zion-duties.web.app. On 2026-10-02
   [PR #35](https://github.com/lovelaceaml-hub/worship-duty-app/pull/35)
   (leaders: Import now and Check the Sheet) and
@@ -41,7 +44,7 @@ Updated 2026-10-02 (evening).
 ## Still to do
 
 - Watch the functions logs for a few hours after a deploy: reminders hourly,
-  the Sheet import every 2 hours, song counting every 30 minutes. The errors
+  the Sheet check every 10 minutes, song counting every 30 minutes. The errors
   from `worshipVercelReconcile` ("time must not be empty") belong to another
   app in the same project and predate this release.
 - After-deploy checks in the app: a leader marks a double duty OK in Manage,

@@ -359,7 +359,7 @@ service cloud.firestore {
 
     // Everything else is server-only or unused: accounts (PIN hashes and
     // roles), audit (also PIN resets), departmentAssignments,
-    // departmentInvitations, sent, sheetQueue, deletedServices, the other
+    // departmentInvitations, sent, sheetQueue, sheetImport, deletedServices, the other
     // app documents, and the retired departmentSchedules, memberships,
     // conflicts, notifications and alerts.
     match /{document=**} {

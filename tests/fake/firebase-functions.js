@@ -365,7 +365,11 @@ const handlers = {
     await answer('approved');
     return { ok: true, requestStatus: data.requestId ? 'approved' : null };
   },
-  async syncSheetNow() { mustLeadAny(); return { ok: true, added: 0, updated: 0, newMembers: 0, waiting: 0, failed: 0, warnings: [] }; },
+  async syncSheetNow() {
+    mustLeadAny();
+    await setDoc(doc(null, 'app', 'settings'), { sheetImport: { at: Date.now(), added: 0, updated: 0, newMembers: 0, skipped: 0 } }, { merge: true });
+    return { ok: true, added: 0, updated: 0, newMembers: 0, waiting: 0, failed: 0, warnings: [] };
+  },
   /* Manage, Worship: the default for Opening Prayer (the real one also checks
      that the member takes the duty). */
   async setDutyDefault(data) {
