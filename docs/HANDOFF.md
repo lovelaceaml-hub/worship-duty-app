@@ -48,8 +48,13 @@ Updated 2026-10-02 (evening).
 ## Later
 
 - Availability by weekday.
-- Release safety: lock the deploy key to `main` with GitHub Environments; pin
-  firebase-tools and run the tests in the Mac release and functions scripts.
+- Release safety: GitHub Environments cannot lock a key to `main` on GitHub
+  Free private repositories (no environment secrets, no deployment branch
+  rules). Instead, Functions and rules now release keylessly from "Firebase
+  backend release" (Google only issues the token to that workflow on `main`),
+  and `scripts/deploy-functions.mjs` pins firebase-tools@15. Later: move the
+  Hosting key to the same keyless sign-in, and run the tests in the Mac
+  release script.
 - The older issues in PR #30's "Not blocking" comment.
 
 ## How to undo

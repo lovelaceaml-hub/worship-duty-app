@@ -1,0 +1,217 @@
+# Backend release: deploys main's Cloud Functions to lv-zion-duties BY NAME
+# (through scripts/deploy-functions.mjs), and Firestore rules when ticked. It
+# runs only when started from the Actions tab ("Run workflow") on main, only
+# after the repository's own tests pass, and only through the npx guard
+# (.github/scripts/npx-guard, which asks deploy-guard.sh / backend-guard.sh).
+# Run it only when Anthony says to release.
+#
+# The LV Zion sender functions (onVercelScheduleWrite, worshipVercelReconcile)
+# also live in lv-zion-duties. This workflow never deploys or deletes them: they
+# are not on the pinned list, the guard refuses them by name, and every deploy
+# names its functions.
+#
+# No key is stored in GitHub. Google itself (Workload Identity Federation)
+# hands out a short-lived token only to this exact workflow file, started by
+# workflow_dispatch, on refs/heads/main of this repository. A run from any
+# other branch, event or workflow gets no token.
+#
+# Hosting stays on "Firebase release (Hosting only, live site)". Both use the
+# concurrency group firebase-release, so they never overlap. When the app needs
+# new server code, release the Functions here first, then rules, then Hosting.
+name: Firebase backend release (Functions and rules)
+
+on:
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: "Functions to release: NONE, ALL, or names separated by commas (see .github/functions-pinned.txt)"
+        type: string
+        default: NONE
+        required: true
+      rules:
+        description: Also release firestore.rules
+        type: boolean
+        default: false
+      confirm:
+        description: Type RELEASE to confirm
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+concurrency:
+  group: firebase-release
+  cancel-in-progress: false
+
+env:
+  FUNCTIONS_INPUT: ${{ inputs.functions }}
+  RULES_INPUT: ${{ inputs.rules }}
+  CONFIRM_INPUT: ${{ inputs.confirm }}
+  WIF_PROVIDER: ${{ vars.GCP_BACKEND_WIF_PROVIDER }}
+  DEPLOY_SA: ${{ vars.GCP_BACKEND_DEPLOY_SA }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Refuse anything but main, and an unconfirmed run
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Releases run only from main. This run was started from $GITHUB_REF. Nothing deployed."
+            exit 1
+          fi
+          if [ "$CONFIRM_INPUT" != "RELEASE" ]; then
+            echo "::error::Type RELEASE in the confirm box to release. Nothing deployed."
+            exit 1
+          fi
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOY_SA" ]; then
+            echo "::error::The repository variables GCP_BACKEND_WIF_PROVIDER and GCP_BACKEND_DEPLOY_SA are not set yet (ops/cloud-shell/backend-deploy-wif.sh prints them). Nothing deployed."
+            exit 1
+          fi
+
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      - name: Set up Java (Firestore emulator for the rules tests)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Check the guard refuses forbidden targets
+        run: bash .github/scripts/deploy-guard.sh --self-test
+
+      - name: Work out what to release
+        id: scope
+        run: |
+          set -euo pipefail
+          names="$(bash .github/scripts/deploy-guard.sh functions-scope "$FUNCTIONS_INPUT")"
+          echo "names=$names" >> "$GITHUB_OUTPUT"
+          if [ -n "$names" ]; then
+            echo "only=$(bash .github/scripts/deploy-guard.sh functions-only $names)" >> "$GITHUB_OUTPUT"
+          fi
+          case "$RULES_INPUT" in true|false) ;; *) echo "::error::rules must be true or false."; exit 1 ;; esac
+          if [ -z "$names" ] && [ "$RULES_INPUT" != "true" ]; then
+            echo "::notice::functions=NONE and rules unticked: this run only proves the keyless sign-in works. Nothing will be deployed."
+          fi
+
+      - name: What is being released
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAMES: ${{ steps.scope.outputs.names }}
+        run: |
+          prev="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/firebase-backend-release.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)"
+          {
+            echo "### Worship Duty backend release"
+            echo ""
+            echo "Releasing \`main\` at \`$GITHUB_SHA\`: $(git log -1 --format=%s "$GITHUB_SHA")"
+            echo ""
+            echo "- Functions: ${NAMES:-none}"
+            echo "- Firestore rules: $([ "$RULES_INPUT" = true ] && echo yes || echo no)"
+            echo ""
+            if [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then
+              echo "Commits since the previous backend release run (\`${prev::7}\`):"
+              echo ""
+              git log --format='- `%h` %s' "$prev..$GITHUB_SHA"
+              echo ""
+              echo "Files under functions/ or firestore.* changed since then:"
+              echo ""
+              git diff --name-only "$prev" "$GITHUB_SHA" -- functions firestore.rules | sed 's/^/- /' || true
+            else
+              echo "No earlier successful run of this workflow was found, so there is no commit list to compare against."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Guard, the Functions need nothing that lives only on a Mac
+        run: bash .github/scripts/deploy-guard.sh functions-source
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix functions
+
+      - name: "Pre-release checks: modules, unit and rules tests, guard"
+        run: |
+          npm run check
+          npm test
+
+      - name: "Pre-release checks: Cloud Functions tests"
+        run: npm run test:functions
+
+      - name: "Pre-release checks: Firestore rules on the emulator (demo project)"
+        run: npm run test:rules
+
+      - name: Sign in to Google without a key (Workload Identity Federation)
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Prove the sign-in works (read-only function list)
+        run: |
+          set -euo pipefail
+          cmd=(npx --yes firebase-tools@15 functions:list --project lv-zion-duties --json --non-interactive)
+          bash .github/scripts/deploy-guard.sh command list "${cmd[@]}"
+          "${cmd[@]}" > "$RUNNER_TEMP/functions-list.json"
+          node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); const l=Array.isArray(j.result)?j.result:[]; console.log("Signed in. lv-zion-duties has " + l.length + " Cloud Functions.");' "$RUNNER_TEMP/functions-list.json"
+
+      - name: Deploy the named Functions (guarded, through deploy-functions.mjs)
+        if: steps.scope.outputs.names != ''
+        env:
+          NAMES: ${{ steps.scope.outputs.names }}
+          DEPLOY_GUARD_MODE: functions
+          # Skips only firebase-tools' advisory testIamPermissions self-test on
+          # the App Engine account, which 2nd gen Functions never run as. Grants
+          # nothing: Google still authorizes every real API call.
+          FIREBASE_SKIP_INFORMATIONAL_IAM: "true"
+        run: |
+          set -o pipefail
+          bash .github/scripts/deploy-guard.sh functions-source
+          export REAL_NPX="$(command -v npx)"
+          chmod +x .github/scripts/npx-guard/npx
+          rc=0
+          PATH="$GITHUB_WORKSPACE/.github/scripts/npx-guard:$PATH" \
+            node scripts/deploy-functions.mjs $NAMES 2>&1 | tee "$RUNNER_TEMP/deploy.log" || rc=$?
+          bash .github/scripts/deploy-guard.sh functions-result "$rc" "$RUNNER_TEMP/deploy.log" $NAMES
+
+      - name: Deploy Firestore rules (guarded)
+        if: inputs.rules
+        env:
+          DEPLOY_GUARD_MODE: rules
+        run: |
+          set -euo pipefail
+          export REAL_NPX="$(command -v npx)"
+          chmod +x .github/scripts/npx-guard/npx
+          PATH="$GITHUB_WORKSPACE/.github/scripts/npx-guard:$PATH" \
+            npx --yes firebase-tools@15 deploy --only firestore:rules --project lv-zion-duties
+          echo "### Firestore rules: released" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: How to roll back
+        if: always()
+        run: |
+          {
+            echo ""
+            echo "### Rolling back"
+            echo ""
+            echo "- Functions: there is no one-click rollback. Revert the change on main in a pull request, then run this workflow again for the same Functions."
+            echo "- Firestore rules: Firebase console, project lv-zion-duties, Firestore, Rules, history: choose the previous version."
+            echo "- Hosting is not touched by this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"

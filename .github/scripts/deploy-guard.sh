@@ -3,9 +3,10 @@
 #
 # The project also holds live Cloud Functions that belong to another app
 # (onVercelScheduleWrite, worshipVercelReconcile), plus this app's own
-# Functions and Firestore rules, which are deployed by hand (functions with
-# scripts/deploy-functions.mjs). GitHub Actions may only ever deploy Hosting,
-# and only through scripts/release.mjs.
+# Functions and Firestore rules. The Hosting workflows may only ever deploy
+# Hosting, and only through scripts/release.mjs. This app's Functions (by name,
+# through scripts/deploy-functions.mjs) and rules go out only through the
+# "Firebase backend release" workflow, checked by backend-guard.sh.
 #
 # Usage:
 #   deploy-guard.sh source
@@ -30,6 +31,14 @@
 #   deploy-guard.sh ics-live
 #       Read-only GET of the documented calendar feed on the live site after a
 #       release; fails unless it answers 200 with a calendar.
+#
+# Backend modes (Cloud Functions by name, Firestore rules) for the "Firebase
+# backend release" workflow are handled by backend-guard.sh:
+#   deploy-guard.sh functions-source | functions-scope <NONE|ALL|names> |
+#     functions-only <names> | functions-result <rc> <log> <names> | self-test
+#   deploy-guard.sh command <functions|rules|list> npx --yes firebase-tools@15 ...
+# backend-guard.sh refuses onVercelScheduleWrite and worshipVercelReconcile by
+# name in every mode.
 #
 # Exit 0 means allowed. Anything else prints BLOCKED and exits 1.
 set -euo pipefail
@@ -96,7 +105,7 @@ check_command() {
     [ "$only_count" -eq 1 ] || block "more than one --only flag."
     [ -n "$only_val" ] || block "empty --only scope."
     case ",$only_val," in
-      *,functions,*|*,functions:*) block "Functions are never deployed by GitHub Actions for Worship Duty (scope was '$only_val')." ;;
+      *,functions,*|*,functions:*) block "Functions are never deployed by the Hosting workflows; use Firebase backend release (scope was '$only_val')." ;;
     esac
     case "$only_val" in
       *firestore*|*storage*|*database*|*rules*|*indexes*|*auth*|*remoteconfig*|*extensions*|*dataconnect*|*apphosting*) block "rules, indexes and other non-Hosting targets are never deployed here (scope was '$only_val')." ;;
@@ -230,6 +239,15 @@ channel_for() {
   hash="$(printf '%s' "$branch" | git hash-object --stdin | cut -c1-6)"
   echo "$base-$hash"
 }
+
+case "${1:-}" in
+  pinned|functions-scope|functions-only|functions-source|functions-result|self-test)
+    exec bash "$(dirname "${BASH_SOURCE[0]}")/backend-guard.sh" "$@" ;;
+  command)
+    case "${2:-}" in
+      functions|rules|list) exec bash "$(dirname "${BASH_SOURCE[0]}")/backend-guard.sh" "$@" ;;
+    esac ;;
+esac
 
 case "${1:-}" in
   source) check_source ;;
