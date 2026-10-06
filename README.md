@@ -360,8 +360,8 @@ The Sheet stays the master. People type duties into its "<year> Entry"
 tabs (one row per service, one column per duty, header on row 2); the
 Sheet's own script copies them into "Raw Data".
 
-- By default the app only reads the Sheet: every 2 hours (or Import now in
-  Manage, Data) from the published Raw Data link. A duty changed in the app
+- By default the app only reads the Sheet: checked every 10 minutes (or
+  Import now in Manage) from the published Raw Data link. A duty changed in the app
   stays changed: each service remembers what the Sheet said at the last
   import (`sheetSeen`), and the Sheet's name replaces the app's only when
   that cell changed in the Sheet since then. The Sheet itself is not
@@ -400,14 +400,21 @@ Sheet's own script copies them into "Raw Data".
   first. **Write changes to the Sheet** turns on only after a successful
   Check the Sheet.
 
-- Department leaders see Manage, Data with only **Import now** and **Check
-  the Sheet**. The Sheet's link, Fix a member's name, adding a year and the
+- The timed check reads the Sheet every 10 minutes and imports only when
+  this month or later changed since the last import (a fingerprint in the
+  server-only `sheetImport/state`; the app writing into the Sheet clears
+  it). Services before this month are never changed by an import. Import
+  now always imports. Manage shows when the app last imported
+  (`app/settings.sheetImport`).
+
+- Department leaders see Import now at the top of Manage, and Manage, Data
+  with only **Import now** and **Check the Sheet**. The Sheet's link, Fix a member's name, adding a year and the
   backup stay with administrators.
 
 ## Where the data comes from
 
-- The schedule is imported from the Google Sheet every 2 hours, or right away
-  from Manage, Data (see "The Google Sheet" above). New names in the Sheet
+- The schedule is imported from the Google Sheet within 10 minutes of a
+  change, or right away from Import now in Manage (see "The Google Sheet" above). New names in the Sheet
   join the member list, and names listed in `app/nameMap` count as one
   person.
 - Everything else lives in Firestore: `schedule`, `app/*` (settings, members,

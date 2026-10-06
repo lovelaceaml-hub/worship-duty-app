@@ -260,6 +260,7 @@ html[data-appearance="prism"] .banner-close { color: var(--muted); }
 /* ---- common pieces ---- */
 
 html[data-appearance="prism"] .card { margin-bottom: 16px; padding: 22px; border-color: var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+html[data-appearance="prism"] .card.sheet-bar { padding: 10px 14px; }
 html[data-appearance="prism"] .card-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
 html[data-appearance="prism"] .card-subtitle { margin: 2px 0 10px; font-size: 16px; font-weight: 700; letter-spacing: -0.015em; }
 html[data-appearance="prism"] .card > .card-subtitle:not(:first-child) { margin-top: 22px; }
