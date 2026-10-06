@@ -164,6 +164,17 @@ jobs:
           service_account: ${{ env.DEPLOY_SA }}
           create_credentials_file: true
           export_environment_variables: true
+          cleanup_credentials: false
+
+      - name: Move the short-lived credentials file out of the checkout
+        # The auth action writes it into the workspace; nothing this workflow
+        # uploads should ever be able to include it.
+        run: |
+          umask 077
+          mv "$GOOGLE_APPLICATION_CREDENTIALS" "$RUNNER_TEMP/gcp-creds.json"
+          for v in GOOGLE_APPLICATION_CREDENTIALS CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE GOOGLE_GHA_CREDS_PATH; do
+            echo "$v=$RUNNER_TEMP/gcp-creds.json" >> "$GITHUB_ENV"
+          done
 
       - name: Prove the sign-in works (read-only function list)
         run: |
@@ -203,6 +214,10 @@ jobs:
           PATH="$GITHUB_WORKSPACE/.github/scripts/npx-guard:$PATH" \
             npx --yes firebase-tools@15 deploy --only firestore:rules --project lv-zion-duties
           echo "### Firestore rules: released" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the short-lived credentials file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/gcp-creds.json"
 
       - name: How to roll back
         if: always()
