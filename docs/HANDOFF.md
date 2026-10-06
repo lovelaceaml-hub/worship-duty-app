@@ -5,8 +5,8 @@ Updated 2026-10-02 (evening).
 ## Where things stand
 
 - Branch `claude/fill-patterns-oy9u7c` (open pull request, not yet merged):
-  Fill's new Usual mode learns each department's habits (who does which
-  duty, which services, how often) and is the default; Manual only per
+  Fill's new Usual mode learns each department's last 2 months of habits
+  (who does which duty, which services, how often, shared in proportion) and is the default; Manual only per
   member in each department (for M. Chad); two duties can be marked always
   OK together for anyone (for example Offering #6 and Prayer of Thanks).
   Needs the functions deployed (new: setOkPair, setManualOnly; changed:

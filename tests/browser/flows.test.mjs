@@ -213,7 +213,8 @@ test('a leader marks two duties always OK for anyone; Checks lists the pair with
   await card.locator('[data-act="ok-pair"][data-ok="true"]').click();
   await banner(page, 'are OK together for anyone now.');
   assert.deepEqual((await fakeDoc(page, 'app/settings')).okPairs, ['Media Booth #1 + Presider']);
-  assert.equal(await card.locator('.card-note.is-warning', { hasText: 'B. Adam' }).count(), 0, 'no longer a double duty');
+  // No longer a double duty: the warning goes once the screen redraws.
+  await card.locator('.card-note.is-warning', { hasText: 'B. Adam' }).waitFor({ state: 'detached' });
   await section(page, 'manage-section', 'planning');
   const pairs = page.locator('#view .card', { hasText: 'Always OK together' });
   await pairs.locator('[data-act="ok-pair"][data-ok="false"]').click();

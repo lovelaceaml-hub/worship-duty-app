@@ -28,14 +28,17 @@
      Prayer each take turns of their own. An usher duty held by someone
      praying in that service is not a turn.
    - 'random': anyone who can take it.
-   - 'pattern' (Usual): the department's own habits over the last 4 months
+   - 'pattern' (Usual): the department's own habits over the last 2 months
      (HABIT_DAYS before the first service being filled):
      1. someone with no other duty that day,
      2. someone still under their usual number of duties a month in this
         department (at least 1),
-     3. whoever has most often held this duty at this kind of service (same
-        worship and label), then this duty at all, then this kind of service
-        in this department,
+     3. turns shared in proportion to the habit: each person's count for
+        this duty at this kind of service (same worship and label), divided
+        by one more than the times they already have it this month. So 6
+        mornings against 4 gives turns of about 3 to 2, taken in turn, not
+        all of one person's first. Then the same for this duty at all, then
+        for this kind of service in this department,
      4. then as in Auto.
      Someone new to the department has no habits yet, so the regulars come
      first until they reach their usual number.
@@ -61,7 +64,7 @@ import { ALL_DUTIES, departmentOf } from '../config/duties.js';
 import { isManualOnly } from './manual-only.js';
 
 /* How far back Usual looks for a department's habits. */
-const HABIT_DAYS = 120;
+const HABIT_DAYS = 60;
 const DAY_MS = 864e5;
 const kindOf = service => (service.worship || '') + '|' + (service.service || '');
 const departmentName = duty => (departmentOf(duty) || { name: duty }).name;
@@ -134,13 +137,18 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
   // line's latest turn per name, from the services being filled and every
   // other known service around them. Each service's picks are added once
   // the service is settled.
-  const monthCount = {}, dayNames = {}, lastTurn = {}, departmentMonth = {};
+  const monthCount = {}, dayNames = {}, lastTurn = {}, departmentMonth = {}, habitMonth = {};
   const note = (service, duty, name, assignments) => {
     const monthKey = service.date.slice(0, 7);
     if (months.has(monthKey)) {
       (monthCount[monthKey] = monthCount[monthKey] || {})[name] = (monthCount[monthKey][name] || 0) + 1;
       const key = monthKey + '|' + departmentName(duty);
       (departmentMonth[key] = departmentMonth[key] || {})[name] = (departmentMonth[key][name] || 0) + 1;
+      // What Usual shares out: this month's turns at each habit.
+      ['duty|' + duty + '|' + kindOf(service), 'duty|' + duty, 'kind|' + departmentName(duty) + '|' + kindOf(service)].forEach(habitKey => {
+        const row = habitMonth[monthKey + '|' + habitKey] || (habitMonth[monthKey + '|' + habitKey] = {});
+        row[name] = (row[name] || 0) + 1;
+      });
     }
     if (days.has(service.date)) (dayNames[service.date] = dayNames[service.date] || new Set()).add(name);
     const at = startsAt(service);
@@ -199,12 +207,15 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
     const day = dayNames[service.date] || new Set();
     const month = departmentMonth[service.date.slice(0, 7) + '|' + department] || {};
     const kind = kindOf(service);
+    const monthKey = service.date.slice(0, 7);
+    // The habit shared out in proportion: count / (turns this month + 1).
+    const share = (key, name) => habit(key, name) / (((habitMonth[monthKey + '|' + key] || {})[name] || 0) + 1);
     return remember(name => [
       day.has(name) ? 1 : 0,
       (month[name] || 0) >= usualPerMonth(department, name) ? 1 : 0,
-      -habit('duty|' + duty + '|' + kind, name),
-      -habit('duty|' + duty, name),
-      -habit('kind|' + department + '|' + kind, name)
+      -share('duty|' + duty + '|' + kind, name),
+      -share('duty|' + duty, name),
+      -share('kind|' + department + '|' + kind, name)
     ].concat(fairOf(name)));
   };
   const turnKey = line => {

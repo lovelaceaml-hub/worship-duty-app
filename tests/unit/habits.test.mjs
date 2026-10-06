@@ -47,8 +47,8 @@ test('Usual keeps each person near their usual number of duties a month', () => 
   const roster = ['S. Ada', 'S. Bea'].map(name => profile('Offering', name, ['Offering #6']));
   // Ada served #6 once a month (her habit), Bea twice; Ada still has the most #6.
   const history = [
-    service('2026-05-02', 'Morning', { 'Offering #6': 'S. Ada' }), service('2026-06-06', 'Morning', { 'Offering #6': 'S. Ada' }),
-    service('2026-07-04', 'Morning', { 'Offering #6': 'S. Ada' }), service('2026-08-01', 'Morning', { 'Offering #6': 'S. Ada' }),
+    service('2026-07-18', 'Morning', { 'Offering #6': 'S. Ada' }), service('2026-08-01', 'Morning', { 'Offering #6': 'S. Ada' }),
+    service('2026-08-15', 'Morning', { 'Offering #6': 'S. Ada' }), service('2026-08-29', 'Morning', { 'Offering #6': 'S. Ada' }),
     service('2026-07-11', 'Morning', { 'Offering #6': 'S. Bea' }), service('2026-07-25', 'Morning', { 'Offering #6': 'S. Bea' }),
     service('2026-08-08', 'Morning', { 'Offering #6': 'S. Bea' })
   ];
@@ -56,6 +56,20 @@ test('Usual keeps each person near their usual number of duties a month', () => 
     () => roster, {}, { mode: 'pattern', history });
   // Ada first (most #6), then she has her one; Bea up to her usual (about 2), then the fairest.
   assert.deepEqual(result.proposals.map(item => item.memberName).slice(0, 2), ['S. Ada', 'S. Bea']);
+});
+
+test('Usual shares turns in proportion to the habit, mixed through the month, not one person first', () => {
+  reset();
+  const doors = ['S. Ada', 'S. Bea'].map(name => profile('Usher Sisters', name, ['Usher Door']));
+  // The last 2 months: Ada had the door on 6 mornings, Bea on 4.
+  const dates = ['2026-07-11', '2026-07-14', '2026-07-18', '2026-07-21', '2026-07-25', '2026-07-28', '2026-08-01', '2026-08-04', '2026-08-08', '2026-08-11'];
+  const history = dates.map((date, i) => service(date, 'Morning', { 'Usher Door': i < 6 ? 'S. Ada' : 'S. Bea' }));
+  assert.deepEqual([6, 4], ['S. Ada', 'S. Bea'].map(name => history.filter(item => item.assignments['Usher Door'] === name).length));
+  const september = ['2026-09-05', '2026-09-12', '2026-09-19', '2026-09-26'].map(date => service(date));
+  const result = fill(september, ['Usher Door'], () => doors, {}, { mode: 'pattern', history });
+  const order = result.proposals.map(item => item.memberName);
+  assert.deepEqual(order, ['S. Ada', 'S. Bea', 'S. Ada', 'S. Bea'], 'about 3 to 2, taken in turn');
+  reset();
 });
 
 test('Manual only: Fill never proposes them, and says so when only they were free', () => {

@@ -246,11 +246,12 @@ fill; an usher leader gets them when filling after the prayers are set.
 Everyone else is chosen the leader's way (remembered on the device; Usual
 until a leader picks another):
 
-- **Usual** (learns habits): the department's own habits over the last 4
+- **Usual** (learns habits): the department's own habits over the last 2
   months. No other duty that day first, then someone still under their usual
-  number of duties a month in this department (at least 1), then whoever has
-  most often held this duty at this kind of service, then this duty at all,
-  then this kind of service in the department, then as in Auto. Within a
+  number of duties a month in this department (at least 1), then turns shared
+  in proportion to each habit (this duty at this kind of service, then this
+  duty at all, then this kind of service in the department): 6 mornings
+  against 4 gives about 3 turns to 2, taken in turn. Then as in Auto. Within a
   department, the duty with the strongest habit in a service is filled first.
   Someone new has no habits yet, so the regulars go first until they reach
   their usual number.
