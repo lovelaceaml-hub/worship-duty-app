@@ -92,12 +92,13 @@ function refusal(person, service, duty, assignments) {
   if (!(person.eligibleDuties || []).some(item => String(item).toLowerCase() === String(duty).toLowerCase())) return 'target-ineligible';
   if (person.schedulable !== true) return 'target-not-schedulable';
   if (availableAt(person, service.date, slug(service.service)) !== 'available') return 'target-unavailable';
-  if (assignments && permissions().blockingDuties(assignments, person.memberName, duty).length) return 'already-serving';
+  if (assignments && blocking(assignments, person, duty).length) return 'already-serving';
   return '';
 }
 
 /* The duties `person` holds that cannot be paired with `duty`. */
-const blocking = (assignments, person, duty) => permissions().blockingDuties(assignments, person.memberName, duty);
+const okPairs = () => permissions().okPairsOf(window.__fake.get('app/settings') || {});
+const blocking = (assignments, person, duty) => permissions().blockingDuties(assignments, person.memberName, duty, okPairs());
 
 /* A member's flags after an availability change, as functions/replacements.js
    makes them: their upcoming duties in the department on a time now
@@ -372,6 +373,27 @@ const handlers = {
     const settings = (await getDoc(doc(null, 'app', 'settings'))).data() || {};
     await setDoc(doc(null, 'app', 'settings'), Object.assign({}, settings, { dutyDefaults: Object.assign({}, settings.dutyDefaults, { [data.duty]: data.memberName }) }));
     return { ok: true, duty: data.duty, memberName: data.memberName };
+  },
+  /* Two duties always OK together (the real one: duty-defaults.js). */
+  async setOkPair(data) {
+    const [a, b] = data.duties || [];
+    if (!permissions().canBeOkPair(a, b)) fail('invalid-argument', 'Choose two duties that are not already allowed together.', 'invalid-input');
+    if (!isAdmin() && ![a, b].some(duty => (claims().departments || []).includes(permissions().departmentForDuty(duty)))) fail('permission-denied', 'Not your department.', 'not-allowed');
+    const settings = (await getDoc(doc(null, 'app', 'settings'))).data() || {};
+    const key = permissions().okPairKey(a, b);
+    const saved = Array.isArray(settings.okPairs) ? settings.okPairs : [];
+    const okPairs = data.ok === false ? saved.filter(item => item !== key) : Array.from(new Set(saved.concat(key))).sort();
+    await setDoc(doc(null, 'app', 'settings'), { okPairs }, { merge: true });
+    return { ok: true, pair: key, okPairs };
+  },
+  /* Manual only in a department (the real one: duty-defaults.js). */
+  async setManualOnly(data) {
+    mustLead(data.department);
+    const settings = (await getDoc(doc(null, 'app', 'settings'))).data() || {};
+    const saved = ((settings.manualOnly || {})[data.department]) || [];
+    const names = data.on === false ? saved.filter(name => name !== data.memberName) : Array.from(new Set(saved.concat(data.memberName))).sort();
+    await setDoc(doc(null, 'app', 'settings'), { manualOnly: Object.assign({}, settings.manualOnly, { [data.department]: names }) }, { merge: true });
+    return { ok: true, department: data.department, memberName: data.memberName, on: data.on !== false, names };
   },
   /* The month planner's save, with the real function's checks. */
   async saveDepartmentAssignments(data) {

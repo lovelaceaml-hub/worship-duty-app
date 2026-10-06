@@ -4,6 +4,13 @@ Updated 2026-10-02 (evening).
 
 ## Where things stand
 
+- Branch `claude/fill-patterns-oy9u7c` (open pull request, not yet merged):
+  Fill's new Usual mode learns each department's habits (who does which
+  duty, which services, how often) and is the default; Manual only per
+  member in each department (for M. Chad); two duties can be marked always
+  OK together for anyone (for example Offering #6 and Prayer of Thanks).
+  Needs the functions deployed (new: setOkPair, setManualOnly; changed:
+  the assignment saves and request answers), then the app released.
 - Live at https://lv-zion-duties.web.app. On 2026-10-02
   [PR #35](https://github.com/lovelaceaml-hub/worship-duty-app/pull/35)
   (leaders: Import now and Check the Sheet) and

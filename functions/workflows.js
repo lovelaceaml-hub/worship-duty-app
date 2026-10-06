@@ -405,7 +405,8 @@ function createWorkflowHandlers(options = {}) {
         rejectDecision(result);
 
         const targetName = String(profile.memberName || profile.member || '');
-        const conflictDuties = permissions.blockingDuties(canonicalAssignments(assignments, canonical), canonical(targetName), duty);
+        const okPairs = permissions.okPairsOf((await db.collection('app').doc('settings').get()).data() || {});
+        const conflictDuties = permissions.blockingDuties(canonicalAssignments(assignments, canonical), canonical(targetName), duty, okPairs);
         if (conflictDuties.length && !acknowledgeConflict) {
           throw errorWithCode('failed-precondition', 'The member already serves in this service.', {
             reason: 'already-serving', duties: conflictDuties

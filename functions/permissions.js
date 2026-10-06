@@ -40,13 +40,35 @@ const DUTY_TO_DEPARTMENT = Object.freeze(Object.keys(DEPARTMENT_DUTIES).reduce((
 const PRAYER_DUTIES = Object.freeze(['Prayer of Thanks', 'Closing Prayer']);
 const USHER_DUTIES = Object.freeze(['Usher Door', 'Usher Front', 'Usher Back', 'Usher #1', 'Usher #2']);
 
-function dutiesAllowedTogether(duties) {
+/* Two duties a leader marked always OK together (app/settings okPairs),
+   for anyone: "Offering #6 + Prayer of Thanks". The key is the two duties in
+   name order, so either order finds it. Opening Prayer is never paired. */
+function okPairKey(a, b) {
+  return [String(a || ''), String(b || '')].sort().join(' + ');
+}
+
+function canBeOkPair(a, b) {
+  return !!DUTY_TO_DEPARTMENT[a] && !!DUTY_TO_DEPARTMENT[b] && a !== b && a !== 'Sermon' && b !== 'Sermon'
+    && !dutiesAllowedTogether([a, b]);
+}
+
+/* The always-OK pairs saved in app/settings, as a Set of keys. */
+function okPairsOf(settings) {
+  const list = settings && Array.isArray(settings.okPairs) ? settings.okPairs : [];
+  return new Set(list.filter(key => typeof key === 'string' && key.indexOf(' + ') > 0));
+}
+
+/* `okPairs` (a Set or list of okPairKey keys) adds the pairs leaders marked
+   always OK to the built-in one. */
+function dutiesAllowedTogether(duties, okPairs) {
   const list = Array.isArray(duties) ? duties : [];
   if (list.length < 2) return true;
   if (list.length > 2) return false;
   const prayer = duty => PRAYER_DUTIES.indexOf(duty) !== -1;
   const usher = duty => USHER_DUTIES.indexOf(duty) !== -1;
-  return (prayer(list[0]) && usher(list[1])) || (usher(list[0]) && prayer(list[1]));
+  if ((prayer(list[0]) && usher(list[1])) || (usher(list[0]) && prayer(list[1]))) return true;
+  const pairs = okPairs instanceof Set ? okPairs : new Set(Array.isArray(okPairs) ? okPairs : []);
+  return pairs.has(okPairKey(list[0], list[1]));
 }
 
 /* Duties with a default member: Fill always gives the duty to its default
@@ -66,12 +88,12 @@ function dutyDefault(settings, duty) {
 
 /* The duties `memberName` already holds in a service's `assignments` that
    rule out also taking `duty` there; empty when they may take it. */
-function blockingDuties(assignments, memberName, duty) {
+function blockingDuties(assignments, memberName, duty, okPairs) {
   const map = assignments && typeof assignments === 'object' ? assignments : {};
   const name = String(memberName || '');
   if (!name) return [];
   const others = Object.keys(map).filter(other => other !== duty && String(map[other] || '') === name);
-  return dutiesAllowedTogether(others.concat([duty])) ? [] : others;
+  return dutiesAllowedTogether(others.concat([duty]), okPairs) ? [] : others;
 }
 
 const ROLE_ALIASES = Object.freeze({
@@ -935,6 +957,9 @@ const API = {
   USHER_DUTIES,
   dutiesAllowedTogether,
   blockingDuties,
+  okPairKey,
+  okPairsOf,
+  canBeOkPair,
   DUTY_DEFAULTS,
   dutyDefault,
   DEFAULT_PERMISSION_CONFIG,

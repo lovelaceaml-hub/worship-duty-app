@@ -22,6 +22,8 @@ createDepartmentInvitation
 revokeDepartmentInvitation
 acceptDepartmentInvitation
 setDutyDefault
+setOkPair
+setManualOnly
 onScheduleWrite
 dutyReminders
 onRequestCreated

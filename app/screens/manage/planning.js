@@ -16,6 +16,7 @@ import { roster, profileOf, loadRoster, refreshRosters, legacyRoster } from '../
 import { saveDuty } from '../../services/planner.js';
 import { openConflicts } from '../../services/attention.js';
 import { canEditDuty } from '../../services/access.js';
+import { canSetOkPair } from '../../services/schedule.js';
 import { managedDepartment, shownFor, departmentsShown, serviceById } from './scope.js';
 import { planContext, needsLook } from './plan-cell.js';
 
@@ -107,9 +108,26 @@ export function render() {
   // Every coming service: one where the department has no one yet needs it most.
   return html`<h3 class="section-heading">Double duties</h3>
     ${conflicts(stats)}
+    ${okPairs()}
     ${namesToCheck(upcoming(data.services))}
     ${openDuties(upcoming(data.services))}
     ${workloadTable(stats)}`;
+}
+
+/* The two duties marked always OK together, for anyone, with a way back
+   for the leaders of either duty's department. */
+function okPairs() {
+  const saved = Array.isArray(data.settings.okPairs) ? data.settings.okPairs : [];
+  if (!saved.length) return '';
+  return html`<section class="card">
+    <h3 class="card-subtitle">Always OK together</h3>
+    <p class="hint">Anyone may hold these two duties in one service. Fill may propose them together.</p>
+    ${saved.map(key => {
+      const duties = key.split(' + ');
+      return html`<p class="card-note">${duties.map(dutyName).join(' and ')}
+        ${canSetOkPair(duties) ? html` · <button type="button" class="link" data-act="ok-pair" data-duties="${duties.join('|')}" data-ok="false">Remove</button>` : ''}</p>`;
+    })}
+  </section>`;
 }
 
 /* Opening Checks reads the department lists again. */

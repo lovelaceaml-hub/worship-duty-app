@@ -205,6 +205,24 @@ test('a leader marks a double duty OK; only that person\'s mark is written', asy
   await context.close();
 });
 
+test('a leader marks two duties always OK for anyone; Checks lists the pair with a way back', async () => {
+  const id = '2026-07-11_morning';
+  const { context, page, errors } = await as('E. Joseph', { viewport: DESKTOP });
+  const card = await openPlanned(page, id);
+  page.once('dialog', dialog => dialog.accept());
+  await card.locator('[data-act="ok-pair"][data-ok="true"]').click();
+  await banner(page, 'are OK together for anyone now.');
+  assert.deepEqual((await fakeDoc(page, 'app/settings')).okPairs, ['Media Booth #1 + Presider']);
+  assert.equal(await card.locator('.card-note.is-warning', { hasText: 'B. Adam' }).count(), 0, 'no longer a double duty');
+  await section(page, 'manage-section', 'planning');
+  const pairs = page.locator('#view .card', { hasText: 'Always OK together' });
+  await pairs.locator('[data-act="ok-pair"][data-ok="false"]').click();
+  await banner(page, 'are a double duty again.');
+  assert.deepEqual((await fakeDoc(page, 'app/settings')).okPairs, []);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a member marks a day off; the duty that day is flagged and their leader fills it', async () => {
   const { context, page, errors } = await as('S. Naomi');
   const duty = await firstDuty(page, 'S. Naomi');

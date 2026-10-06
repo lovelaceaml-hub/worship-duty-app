@@ -615,6 +615,7 @@ function createDepartmentHandlers(options = {}) {
     }
     const nameMap = await loadNameMap(db);
     const canonical = name => canonicalName(name, nameMap);
+    const okPairs = permissions.okPairsOf((await db.collection('app').doc('settings').get()).data() || {});
     const profileReference = profileRef(db, assignment.departmentId, assignment.memberUid);
     const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
     let record;
@@ -643,7 +644,7 @@ function createDepartmentHandlers(options = {}) {
       const result = authz.authorizeAssignment(actor, verifiedAssignment, profile);
       rejectDecision(result);
       const targetName = String(profile.memberName || profile.member || '');
-      const held = permissions.blockingDuties(canonicalAssignments(assignments, nameMap), canonical(targetName), result.assignment.duty);
+      const held = permissions.blockingDuties(canonicalAssignments(assignments, nameMap), canonical(targetName), result.assignment.duty, okPairs);
       if (held.length) {
         throw errorWithCode('failed-precondition', 'The member is already serving in this service.', { reason: 'already-serving', duties: held });
       }
@@ -863,6 +864,7 @@ function createDepartmentHandlers(options = {}) {
     const planBatch = `plan-${now()}-${Math.random().toString(36).slice(2, 8)}`;
     const nameMap = await loadNameMap(db);
     const canonical = name => canonicalName(name, nameMap);
+    const okPairs = permissions.okPairsOf((await db.collection('app').doc('settings').get()).data() || {});
     let saved = [];
     let skipped = [];
     await db.runTransaction(async transaction => {
@@ -919,7 +921,7 @@ function createDepartmentHandlers(options = {}) {
           const decision = authz.authorizeAssignment(actor, assignment, profile);
           if (!decision.allowed) { skipped.push({ ...where, reason: decision.reason }); continue; }
           name = String(profile.memberName || profile.member || '');
-          const held = permissions.blockingDuties(canonicalAssignments(service.assignments, nameMap), canonical(name), change.duty);
+          const held = permissions.blockingDuties(canonicalAssignments(service.assignments, nameMap), canonical(name), change.duty, okPairs);
           if (held.length) {
             skipped.push({ ...where, reason: 'already-serving', duties: held });
             continue;

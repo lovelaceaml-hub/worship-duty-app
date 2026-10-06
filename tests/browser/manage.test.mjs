@@ -446,6 +446,23 @@ test('Checks lists the usual duties not filled in the next 4 weeks, unplanned se
   await context.close();
 });
 
+test('a leader sets a member to Manual only in their department, and back', async () => {
+  const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'departments');
+  await page.locator('#view [data-act="department-member"]', { hasText: 'S. Naomi' }).click();
+  const toggle = page.locator('#view [data-change="profile-manual-only"]');
+  await toggle.check();
+  await banner(page, 'is Manual only in Usher Sisters');
+  assert.deepEqual((await page.evaluate(() => window.__fake.get('app/settings'))).manualOnly, { 'Usher Sisters': ['S. Naomi'] });
+  assert.ok(await toggle.isChecked());
+  await toggle.uncheck();
+  await banner(page, 'can be picked by Fill in Usher Sisters again.');
+  assert.deepEqual((await page.evaluate(() => window.__fake.get('app/settings'))).manualOnly, { 'Usher Sisters': [] });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a leader is not offered Reset PIN for someone inactive in the department', async () => {
   const fixture = { patch: { 'departments/Usher Sisters/members/member:S. Leah': { status: 'inactive' } } };
   const { context, page, errors } = await as('S. Grace', { viewport: DESKTOP, fixture });

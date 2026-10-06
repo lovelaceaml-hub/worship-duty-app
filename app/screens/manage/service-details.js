@@ -13,13 +13,13 @@ import { WORSHIP_TYPES, departmentOf, dutyName } from '../../config/duties.js';
 import { serviceId, isUpcoming, serviceClock } from '../../lib/services.js';
 import { hasChoir } from '../../lib/worship.js';
 import { longDate, todayISO } from '../../lib/dates.js';
-import { doubleDuties, isMarkedOk } from '../../lib/conflicts.js';
+import { doubleDuties, isMarkedOk, canBeOkPair } from '../../lib/conflicts.js';
 import { candidates } from '../../lib/availability.js';
 import { workload, suggestReplacements } from '../../lib/workload.js';
 import { reasonText } from '../../lib/reasons.js';
 import { isAdmin, canEditDuty, canEditSongsFor, canAcknowledgeConflict } from '../../services/access.js';
 import { roster, profileOf, departments as departmentState } from '../../services/departments.js';
-import { updateService, deleteService, markDoubleDuty } from '../../services/schedule.js';
+import { updateService, deleteService, markDoubleDuty, canSetOkPair, setOkPair } from '../../services/schedule.js';
 import { replaceDuty } from '../../services/requests.js';
 import { overrideDuty, keepOnDuty } from '../../services/planner.js';
 import { problem } from '../../firebase.js';
@@ -115,7 +115,8 @@ function doubleDutyNotes(service) {
     ? html`<p class="card-note">${nameOf(conflict.name)} has ${conflict.duties.map(dutyName).join(' and ')} (marked OK).
         <button type="button" class="link" data-act="double-duty" data-service="${serviceId(service)}" data-name="${conflict.name}" data-ok="false">Show the warning again</button></p>`
     : html`<p class="card-note is-warning">${nameOf(conflict.name)} has ${conflict.duties.map(dutyName).join(' and ')} in this service.
-        <button type="button" class="link" data-act="double-duty" data-service="${serviceId(service)}" data-name="${conflict.name}" data-ok="true">Mark OK</button></p>`);
+        <button type="button" class="link" data-act="double-duty" data-service="${serviceId(service)}" data-name="${conflict.name}" data-ok="true">Mark OK</button>
+        ${canBeOkPair(...conflict.duties) && canSetOkPair(conflict.duties) ? html` · <button type="button" class="link" data-act="ok-pair" data-duties="${conflict.duties.join('|')}" data-ok="true">Always OK for anyone with these two</button>` : ''}</p>`);
 }
 
 export function details(service, context) {
@@ -199,6 +200,15 @@ defineActions({
     run: el => {
       const service = serviceById(el.dataset.service);
       if (service) markDoubleDuty(service, el.dataset.name, el.dataset.ok === 'true');
+    }
+  },
+  'ok-pair': {
+    allowed: el => canSetOkPair(String(el.dataset.duties || '').split('|')),
+    run: el => {
+      const duties = String(el.dataset.duties || '').split('|');
+      const words = duties.map(dutyName).join(' and ');
+      if (el.dataset.ok === 'true' && !confirm('Allow ' + words + ' together for anyone, from now on? Fill may then propose them together too.')) return;
+      setOkPair(duties, el.dataset.ok === 'true');
     }
   },
   'replace-choice': el => { departmentState.choices[el.dataset.key] = el.value; redraw(); },

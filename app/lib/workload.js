@@ -2,6 +2,7 @@
 import { addDays } from './dates.js';
 import { candidates } from './availability.js';
 import { isUsher, prayerOf } from './conflicts.js';
+import { isManualOnly } from './manual-only.js';
 
 /* { name: { past4, past8, upcoming, total, last, next } } across all services. */
 export function workload(services, members, today) {
@@ -37,14 +38,18 @@ export function recentLoad(stats, name) {
 /* Up to `limit` profiles from `roster` who can take `duty` at `service` and
    may hold it with what they already do there (availability.js whyNot), the
    best first: for an usher duty someone praying in that service, as in Fill;
-   then the lightest recent load; then whoever served longest ago. */
+   then the lightest recent load; then whoever served longest ago. Someone
+   set to Manual only comes last in a full list, and is left out of a short
+   list of suggestions. */
 export function suggestReplacements(service, duty, roster, stats, { exclude = '', limit = 3 } = {}) {
   const assignments = service.assignments || {};
+  const manual = name => (isManualOnly(duty, name) ? 1 : 0);
+  const people = Number.isFinite(limit) ? roster.filter(profile => !manual(profile.memberName)) : roster;
   const praying = name => (isUsher(duty) && prayerOf(assignments, name) ? 0 : 1);
   const last = name => (stats[name] || {}).last || '';
   const longestAgo = (a, b) => (last(a) === last(b) ? 0 : (last(a) < last(b) ? -1 : 1));
-  return candidates(service, duty, roster.filter(profile => profile.memberName !== exclude), assignments)
-    .sort((a, b) => praying(a.memberName) - praying(b.memberName) ||
+  return candidates(service, duty, people.filter(profile => profile.memberName !== exclude), assignments)
+    .sort((a, b) => manual(a.memberName) - manual(b.memberName) || praying(a.memberName) - praying(b.memberName) ||
       recentLoad(stats, a.memberName) - recentLoad(stats, b.memberName) || longestAgo(a.memberName, b.memberName))
     .slice(0, limit);
 }

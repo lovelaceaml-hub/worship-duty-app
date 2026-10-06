@@ -30,7 +30,7 @@ const { createMembershipHandlers } = require('./membership');
 const { createSheets, accountEmail } = require('./sheets');
 const { canonicalName } = require('./names');
 const { addServingMembers } = require('./serving-members');
-const { setDutyDefault } = require('./duty-defaults');
+const { setDutyDefault, setOkPair, setManualOnly } = require('./duty-defaults');
 const { renameMember: renameMemberEverywhere } = require('./rename-member');
 const appDocs = require('./app-docs');
 const { MESSAGES, refusal, detailsFor } = require('./refusals');
@@ -238,6 +238,22 @@ exports.acceptDepartmentInvitation = callable('member', membershipHandlers.accep
 exports.setDutyDefault = callable('member', async request => {
   const result = await setDutyDefault({ db, actor: request.auth, config: await runtimePermissionConfig(), data: request.data || {} });
   logger.info('setDutyDefault', { duty: result.duty, set: !!result.memberName });
+  return result;
+});
+
+/* A double duty marked always OK: two duties together, for anyone. Leaders
+   of either duty's department and administrators (duty-defaults.js). */
+exports.setOkPair = callable('member', async request => {
+  const result = await setOkPair({ db, actor: request.auth, config: await runtimePermissionConfig(), data: request.data || {} });
+  logger.info('setOkPair', { pair: result.pair, count: result.okPairs.length });
+  return result;
+});
+
+/* Manage, Departments, a member: Manual only. That department's leaders and
+   administrators (duty-defaults.js). */
+exports.setManualOnly = callable('member', async request => {
+  const result = await setManualOnly({ db, actor: request.auth, config: await runtimePermissionConfig(), data: request.data || {} });
+  logger.info('setManualOnly', { department: result.department, on: result.on });
   return result;
 });
 
