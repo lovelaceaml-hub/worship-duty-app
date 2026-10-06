@@ -125,3 +125,22 @@ test('a change request is approved with a replacement, approved open, or decline
   db.store.set('requests/r4', request('r4', 'Usher #2', 'E. Joseph'));
   await assert.rejects(answer('r4', 'Usher #1', 'approved'), error => error.code === 'failed-precondition' && error.details.reason === 'request-mismatch');
 });
+
+test('two duties marked always OK (app/settings okPairs) are saved on every path, and only that pair', async () => {
+  const pair = { okPairs: ['Closing Prayer + Lobby Security'] };
+  const { db, handlers, assignments } = setup();
+  db.store.set('app/settings', pair);
+  const result = await handlers.saveDepartmentAssignments({ auth: leader, data: { departmentId: 'Usher Brothers', changes: [
+    { serviceId: '2026-10-03_morning', duty: 'Lobby Security', memberUid: 'uid-B. Adam' }, // the marked pair: yes
+    { serviceId: '2026-10-03_morning', duty: 'Usher #2', memberUid: 'uid-E. Joseph' }      // the Presider: still no
+  ] } });
+  assert.deepEqual(result.skipped.map(item => [item.duty, item.reason]), [['Usher #2', 'already-serving']]);
+  assert.equal(assignments()['Lobby Security'], 'B. Adam');
+
+  const single = setup();
+  single.db.store.set('app/settings', pair);
+  await single.handlers.assignDepartmentDuty({ auth: leader, data: {
+    departmentId: 'Usher Brothers', memberUid: 'uid-B. Adam', duty: 'Lobby Security', serviceId: '2026-10-03_morning', serviceDate: '2026-10-03', serviceTime: 'morning'
+  } });
+  assert.equal(single.assignments()['Lobby Security'], 'B. Adam');
+});

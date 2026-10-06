@@ -9,6 +9,8 @@
 import { featureOn } from './config/features.js';
 import { canonicalName, displayName } from './lib/names.js';
 import { addDays, todayISO } from './lib/dates.js';
+import { useOkPairs } from './lib/conflicts.js';
+import { useManualOnly } from './lib/manual-only.js';
 
 export const data = {
   members: [],          // app/members.list, every member name
@@ -20,6 +22,10 @@ export const data = {
   requests: [],         // requests/* this member may see
   setlists: {}          // setlists/* from today on, for the song status on My Duties
 };
+
+// The double-duty rule reads the always-OK pairs from the live settings.
+useOkPairs(() => (data.settings || {}).okPairs || []);
+useManualOnly(() => (data.settings || {}).manualOnly || {});
 
 export const session = {
   status: 'loading',    // 'loading', 'offline' (Firebase out of reach), 'signedOut', 'forced' (must change PIN), 'verified'

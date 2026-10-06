@@ -28,6 +28,23 @@
      Prayer each take turns of their own. An usher duty held by someone
      praying in that service is not a turn.
    - 'random': anyone who can take it.
+   - 'pattern' (Usual): the department's own habits over the last 2 months
+     (HABIT_DAYS before the first service being filled):
+     1. someone with no other duty that day,
+     2. someone still under their usual number of duties a month in this
+        department (at least 1),
+     3. turns shared in proportion to the habit: each person's count for
+        this duty at this kind of service (same worship and label), divided
+        by one more than the times they already have it this month. So 6
+        mornings against 4 gives turns of about 3 to 2, taken in turn, not
+        all of one person's first. Then the same for this duty at all, then
+        for this kind of service in this department,
+     4. then as in Auto.
+     Someone new to the department has no habits yet, so the regulars come
+     first until they reach their usual number.
+
+   Nobody set to Manual only in a duty's department (manual-only.js) is
+   proposed, except as that duty's default.
 
    When no one is free for a duty, Fill moves its own picks in that service
    around to free someone, and another free member takes the duty they leave.
@@ -44,9 +61,17 @@ import { hasDuty } from './worship.js';
 import { canAdd, isPrayer, isUsher, prayerOf } from './conflicts.js';
 import { recentLoad } from './workload.js';
 import { ALL_DUTIES, departmentOf } from '../config/duties.js';
+import { isManualOnly } from './manual-only.js';
+
+/* How far back Usual looks for a department's habits. */
+const HABIT_DAYS = 60;
+const DAY_MS = 864e5;
+const kindOf = service => (service.worship || '') + '|' + (service.service || '');
+const departmentName = duty => (departmentOf(duty) || { name: duty }).name;
 
 /* The three ways, each with one line saying what it does. */
 export const FILL_MODES = [
+  ['pattern', 'Usual (learns habits)', 'Who usually does each duty at each service goes first, about as often as they usually serve.'],
   ['auto', 'Auto (fairest first)', 'People with the fewest duties this month go first.'],
   ['rotation', 'Rotation (take turns)', 'Whoever has waited longest since their last turn goes first.'],
   ['random', 'Random', 'Anyone free, picked at random.']
@@ -59,6 +84,7 @@ export const UNFILLED_REASONS = {
   default: ['Default not free', 'The default for this duty cannot take it then. Choose someone by hand.'],
   nobody: ['No one takes it', 'No one on the list takes this duty.'],
   away: ['No one free then', 'No one who takes this duty is available then.'],
+  manual: ['Only manual picks', 'Everyone free for it is set to Manual only. Choose someone by hand.'],
   serving: ['Everyone free is serving', 'Everyone available already serves in this service.']
 };
 
@@ -111,10 +137,19 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
   // line's latest turn per name, from the services being filled and every
   // other known service around them. Each service's picks are added once
   // the service is settled.
-  const monthCount = {}, dayNames = {}, lastTurn = {};
+  const monthCount = {}, dayNames = {}, lastTurn = {}, departmentMonth = {}, habitMonth = {};
   const note = (service, duty, name, assignments) => {
     const monthKey = service.date.slice(0, 7);
-    if (months.has(monthKey)) (monthCount[monthKey] = monthCount[monthKey] || {})[name] = (monthCount[monthKey][name] || 0) + 1;
+    if (months.has(monthKey)) {
+      (monthCount[monthKey] = monthCount[monthKey] || {})[name] = (monthCount[monthKey][name] || 0) + 1;
+      const key = monthKey + '|' + departmentName(duty);
+      (departmentMonth[key] = departmentMonth[key] || {})[name] = (departmentMonth[key][name] || 0) + 1;
+      // What Usual shares out: this month's turns at each habit.
+      ['duty|' + duty + '|' + kindOf(service), 'duty|' + duty, 'kind|' + departmentName(duty) + '|' + kindOf(service)].forEach(habitKey => {
+        const row = habitMonth[monthKey + '|' + habitKey] || (habitMonth[monthKey + '|' + habitKey] = {});
+        row[name] = (row[name] || 0) + 1;
+      });
+    }
     if (days.has(service.date)) (dayNames[service.date] = dayNames[service.date] || new Set()).add(name);
     const at = startsAt(service);
     if (at <= end && isTurn(assignments, duty, name)) {
@@ -131,6 +166,29 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
   });
   ordered.forEach(noteAll);
 
+  // Usual's habits: what each person held in the HABIT_DAYS before the first
+  // service being filled. Counts per duty at a kind of service, per duty,
+  // per kind of service in a department, and per department.
+  const habitTo = ordered[0].date;
+  const habitFrom = new Date(Date.parse(habitTo + 'T12:00:00Z') - HABIT_DAYS * DAY_MS).toISOString().slice(0, 10);
+  const habits = {};
+  const count = (key, name) => { const row = habits[key] || (habits[key] = {}); row[name] = (row[name] || 0) + 1; };
+  if (mode === 'pattern') {
+    history.forEach(service => {
+      if (!service || !(service.date >= habitFrom && service.date < habitTo) || ids.has(serviceId(service))) return;
+      Object.entries(service.assignments || {}).forEach(([duty, name]) => {
+        if (!name || !departmentOf(duty)) return;
+        const department = departmentName(duty);
+        count('duty|' + duty + '|' + kindOf(service), name);
+        count('duty|' + duty, name);
+        count('kind|' + department + '|' + kindOf(service), name);
+        count('department|' + department, name);
+      });
+    });
+  }
+  const habit = (key, name) => (habits[key] || {})[name] || 0;
+  const usualPerMonth = (department, name) => Math.max(1, Math.round(habit('department|' + department, name) * 30.4 / HABIT_DAYS));
+
   // The keys the two orders sort by (see the top of this file). They hold
   // while a service is filled, so each is worked out once per service.
   const remember = keyOf => {
@@ -142,6 +200,23 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
     return remember(name => {
       return [day.has(name) ? 1 : 0, month[name] || 0, recentLoad(stats, name), (stats[name] || {}).last || '', spread(name, id)];
     });
+  };
+  const patternKey = (service, id, duty) => {
+    const fairOf = fairKey(service, id);
+    const department = departmentName(duty);
+    const day = dayNames[service.date] || new Set();
+    const month = departmentMonth[service.date.slice(0, 7) + '|' + department] || {};
+    const kind = kindOf(service);
+    const monthKey = service.date.slice(0, 7);
+    // The habit shared out in proportion: count / (turns this month + 1).
+    const share = (key, name) => habit(key, name) / (((habitMonth[monthKey + '|' + key] || {})[name] || 0) + 1);
+    return remember(name => [
+      day.has(name) ? 1 : 0,
+      (month[name] || 0) >= usualPerMonth(department, name) ? 1 : 0,
+      -share('duty|' + duty + '|' + kind, name),
+      -share('duty|' + duty, name),
+      -share('kind|' + department + '|' + kind, name)
+    ].concat(fairOf(name)));
   };
   const turnKey = line => {
     const turns = lastTurn[line] || {};
@@ -171,10 +246,13 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
     };
     const praying = name => holding(name).some(isPrayer);
     const fair = fairKey(service, id);
+    const usual = {};
+    const inPattern = duty => usual[duty] || (usual[duty] = patternKey(service, id, duty));
     const turns = {};
     const inTurn = duty => turns[turnOf(duty)] || (turns[turnOf(duty)] = turnKey(turnOf(duty)));
     const wanted = typeof duties === 'function' ? duties(service) : duties;
     const able = {};
+    const manualOnly = new Set(); // duties only Manual only members are free for
     const free = duty => able[duty].filter(profile => canAdd(holding(profile.memberName), duty));
 
     /* The order to try members for `duty`: anyone praying in this service
@@ -184,6 +262,7 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
       const firsts = new Set(first);
       let rest = list.filter(profile => !firsts.has(profile));
       if (mode === 'rotation') rest = sortBy(rest, inTurn(duty));
+      else if (mode === 'pattern') rest = sortBy(rest, inPattern(duty));
       else if (mode !== 'random') rest = sortBy(rest, fair);
       else if (rest.length) rest.unshift(rest.splice(Math.min(rest.length - 1, Math.floor(random() * rest.length)), 1)[0]);
       return first.concat(rest);
@@ -233,10 +312,21 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
         return options.length > 0;
       }).length > 0;
 
-    let empty = ALL_DUTIES.filter(duty => wanted.includes(duty) && !state[duty]).filter(duty => {
-      able[duty] = (rosterFor(duty) || []).filter(profile => allowedFor(duty)(profile) && canTake(profile, service, duty));
-      return !fillDuty(duty);
+    let empty = ALL_DUTIES.filter(duty => wanted.includes(duty) && !state[duty]);
+    empty.forEach(duty => {
+      const open = (rosterFor(duty) || []).filter(profile => allowedFor(duty)(profile) && canTake(profile, service, duty));
+      able[duty] = defaults[duty] ? open : open.filter(profile => !isManualOnly(duty, profile.memberName));
+      if (open.length && !able[duty].length) manualOnly.add(duty);
     });
+    // Usual: within a department, the duty someone holds most by habit here
+    // is filled first, so the habit is not taken by a duty filled before it.
+    if (mode === 'pattern') {
+      const start = duty => ALL_DUTIES.findIndex(other => departmentName(other) === departmentName(duty));
+      const strongest = duty => Math.max(0, ...able[duty].map(profile => habit('duty|' + duty + '|' + kindOf(service), profile.memberName)));
+      empty = empty.map((duty, index) => [duty, start(duty), -strongest(duty), index])
+        .sort((a, b) => a[1] - b[1] || a[2] - b[2] || a[3] - b[3]).map(([duty]) => duty);
+    }
+    empty = empty.filter(duty => !fillDuty(duty));
     // Whoever a match frees may fill a duty still empty; go on while that
     // changes anything (each round makes a match or fills a duty).
     for (let round = 0; round < ALL_DUTIES.length; round++) {
@@ -248,7 +338,8 @@ export function fill(services, duties, rosterFor, stats, { mode = 'auto', histor
     empty.forEach(duty => {
       const takers = (rosterFor(duty) || []).filter(profile => takesDuty(profile, duty));
       const reason = defaults[duty] && !able[duty].length ? 'default'
-        : (able[duty].length ? 'serving' : (takers.length ? 'away' : 'nobody'));
+        : manualOnly.has(duty) ? 'manual'
+          : (able[duty].length ? 'serving' : (takers.length ? 'away' : 'nobody'));
       unfilled.push({ serviceId: id, duty, reason });
     });
     ALL_DUTIES.filter(duty => picks[duty]).forEach(duty => {

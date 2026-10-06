@@ -4,12 +4,16 @@ Updated 2026-10-06.
 
 ## Where things stand
 
-- Branch `claude/app-update-schedule-spreadsheet-oy9u7c` (open pull request,
-  not yet merged): the Sheet is checked every 10 minutes instead of every 2
-  hours, and imported only when this month or later changed; earlier months
-  are no longer touched by an import. Manage shows Import now at the top,
-  with the time the app last imported. Needs the functions deployed, then
-  the app released.
+- Merged on 2026-10-06, released by Anthony's go-ahead the same day
+  (functions, then the app):
+  [PR #41](https://github.com/lovelaceaml-hub/worship-duty-app/pull/41): the
+  Sheet is checked every 10 minutes and imported only when this month or
+  later changed; earlier months are no longer touched by an import. Manage
+  shows Import now at the top, with the time the app last imported.
+  [PR #42](https://github.com/lovelaceaml-hub/worship-duty-app/pull/42):
+  Fill's Usual mode (the default) learns each department's last 2 months of
+  habits, shared in proportion; Manual only per member in each department
+  (for M. Chad); two duties can be marked always OK together for anyone.
 - Live at https://lv-zion-duties.web.app. On 2026-10-02
   [PR #35](https://github.com/lovelaceaml-hub/worship-duty-app/pull/35)
   (leaders: Import now and Check the Sheet) and

@@ -526,3 +526,23 @@ export async function saveDutyDefault(duty, memberName) {
 /* The older name lists in app/departments. Manage uses them to show a
    leader the services where their people serve in other departments. */
 export function legacyRoster(department) { return data.rosters[department] || []; }
+
+/* Manual only in a department: Fill never proposes the member there and
+   suggestions list them last; a leader still gives them a duty by hand. The
+   server checks the leader's rights; app/settings then carries it to every
+   device. */
+export async function saveManualOnly(department, memberName, on) {
+  const key = 'manual::' + department + '::' + memberName;
+  if (departments.busy[key]) return;
+  departments.busy[key] = true;
+  renderSoon();
+  try {
+    const result = await call('setManualOnly', { department, memberName, on });
+    data.settings.manualOnly = Object.assign({}, data.settings.manualOnly, { [department]: result.names });
+    notice(on ? nameOf(memberName) + ' is Manual only in ' + department + ': Fill will not pick them.' : nameOf(memberName) + ' can be picked by Fill in ' + department + ' again.');
+  } catch (error) {
+    notice('That was not saved: ' + problem(error), true);
+  }
+  delete departments.busy[key];
+  renderSoon();
+}

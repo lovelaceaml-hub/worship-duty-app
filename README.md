@@ -216,7 +216,7 @@ duties it has: Thanks Prayer only at Sabbath Day Morning and feast-day
 mornings, Closing Prayer and the choir song only at Sabbath Day and Third Day
 (`app/lib/worship.js`).
 
-**Fill** ("Fill by" Auto, Rotation or Random) reads the department lists
+**Fill** ("Fill by" Usual, Auto, Rotation or Random) reads the department lists
 again, then proposes someone for every empty duty that kind of service (same
 worship and time) has had filled in the past year, or every duty it has when
 there is no history. Proposals belong to their department and month: until
@@ -224,7 +224,11 @@ they are saved or discarded, the month and the department stay put. A save
 that fails keeps the proposals, and a duty the server refuses says why. The grid dims the duties Fill leaves
 alone. It only picks members who are active in the department, can take that
 duty, are available, and may hold it alongside what they already do in that
-service (see "One duty each" below).
+service (see "One duty each" below). A member a department leader set to
+**Manual only** (Manage, Departments, the member; app/settings `manualOnly`
+per department) is never proposed in that department, is left out of short
+suggestion lists and comes last in full ones; a leader still gives them a duty
+by hand.
 
 Opening Prayer is given by whoever delivers the sermon. Fill always gives it
 to its default, the church overseer (E. Simon) unless a Worship leader or an
@@ -239,8 +243,18 @@ that service, whichever way the leader fills: the prayers lead and the ushers
 follow. A service's prayers are settled before its ushers, so when an
 administrator fills every department at once the matches happen in the same
 fill; an usher leader gets them when filling after the prayers are set.
-Everyone else is chosen the leader's way (remembered on the device):
+Everyone else is chosen the leader's way (remembered on the device; Usual
+until a leader picks another):
 
+- **Usual** (learns habits): the department's own habits over the last 2
+  months. No other duty that day first, then someone still under their usual
+  number of duties a month in this department (at least 1), then turns shared
+  in proportion to each habit (this duty at this kind of service, then this
+  duty at all, then this kind of service in the department): 6 mornings
+  against 4 gives about 3 turns to 2, taken in turn. Then as in Auto. Within a
+  department, the duty with the strongest habit in a service is filled first.
+  Someone new has no habits yet, so the regulars go first until they reach
+  their usual number.
 - **Auto**: no other duty that day first, then the fewest duties that month
   (the services already past count too), then least served lately, then
   longest since.
@@ -273,7 +287,10 @@ above. The
 server refuses any other second duty, whichever way it is saved. A double
 duty that arrives another way (the Sheet, an administrator's override) is
 flagged on the schedule until a leader marks it OK; the mark holds while the
-person's duties stay the same. `app/lib/conflicts.js` has the rule and
+person's duties stay the same. A leader of either duty's department can also
+mark two duties **always OK** together, for anyone (app/settings `okPairs`,
+saved by `setOkPair`): the pair is then offered, proposed by Fill, accepted
+by the server and not flagged. Manage, Checks lists the pairs, with Remove. `app/lib/conflicts.js` has the rule and
 `permissions.js` the same rule for the server; a test checks that they agree
 on every pair and three of duties.
 

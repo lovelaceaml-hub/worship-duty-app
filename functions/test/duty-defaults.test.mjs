@@ -51,3 +51,32 @@ test('the default is the overseer until a leader changes it', () => {
   assert.equal(permissions.dutyDefault({ dutyDefaults: {} }, 'Sermon'), 'E. Simon');
   assert.equal(permissions.dutyDefault({}, 'Presider'), '');
 });
+
+test('always-OK pairs: a leader of either duty or an administrator, only pairs not already allowed', async () => {
+  const { setOkPair } = require('../duty-defaults.js');
+  const db = setup();
+  const set = (who, duties, ok) => setOkPair({ db, actor: actor(who), config, data: { duties, ok } });
+  const result = await set('E. Lead', ['Prayer of Thanks', 'Offering #6']);
+  assert.deepEqual(result.okPairs, ['Offering #6 + Prayer of Thanks']);
+  await set('B. Admin', ['Offering #6', 'Prayer of Thanks']);
+  assert.deepEqual(db.store.get('app/settings').okPairs, ['Offering #6 + Prayer of Thanks'], 'once');
+  await assert.rejects(set('D. Media', ['Prayer of Thanks', 'Offering #5']), { code: 'permission-denied' });
+  await assert.rejects(set('E. Lead', ['Prayer of Thanks', 'Usher Door']), { code: 'invalid-argument' }, 'already allowed');
+  await assert.rejects(set('E. Lead', ['Sermon', 'Offering #6']), { code: 'invalid-argument' }, 'Opening Prayer is never paired');
+  await set('E. Lead', ['Offering #6', 'Prayer of Thanks'], false);
+  assert.deepEqual(db.store.get('app/settings').okPairs, []);
+  assert.deepEqual(db.store.get('app/settings').features, {}, 'other settings stay');
+});
+
+test('Manual only: that department\'s leader or an administrator, per department', async () => {
+  const { setManualOnly } = require('../duty-defaults.js');
+  const db = setup();
+  const set = (who, department, memberName, on) => setManualOnly({ db, actor: actor(who), config, data: { department, memberName, on } });
+  assert.deepEqual((await set('D. Media', 'Media', 'M. Chad')).names, ['M. Chad']);
+  await set('B. Admin', 'Worship', 'M. Chad');
+  assert.deepEqual(db.store.get('app/settings').manualOnly, { Media: ['M. Chad'], Worship: ['M. Chad'] });
+  await assert.rejects(set('D. Media', 'Worship', 'M. Chad', false), { code: 'permission-denied' });
+  await assert.rejects(set('D. Media', 'Nowhere', 'M. Chad'), { code: 'invalid-argument' });
+  await set('D. Media', 'Media', 'M. Chad', false);
+  assert.deepEqual(db.store.get('app/settings').manualOnly, { Media: [], Worship: ['M. Chad'] });
+});

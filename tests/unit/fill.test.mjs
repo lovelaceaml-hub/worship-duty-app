@@ -1,4 +1,4 @@
-/* Fill: who it proposes for each empty duty, in each of its three ways, and
+/* Fill: who it proposes for each empty duty, in each of its four ways, and
    the rules it must never break, checked on hundreds of made-up months. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -97,7 +97,7 @@ test('in every mode, an usher duty goes first to the member praying in that serv
   // Cal and Dan have waited longer and served less; Adam prays at this service.
   const stats = { 'B. Adam': { past8: 6, upcoming: 2, last: '2026-09-26' } };
   const history = [service('2026-09-26', 'Morning', { 'Usher #1': 'B. Adam' })];
-  for (const mode of ['auto', 'rotation', 'random']) {
+  for (const mode of ['pattern', 'auto', 'rotation', 'random']) {
     const result = fill([service('2026-10-03', 'Morning', { 'Closing Prayer': 'B. Adam' })], ['Usher #1', 'Usher #2', 'Lobby Security'],
       rostersFor(rosters), stats, { mode, history, random: () => 0.99 });
     const given = Object.fromEntries(result.proposals.map(item => [item.duty, item.memberName]));
@@ -158,7 +158,7 @@ test('Opening Prayer goes to its default in every mode, and the default gets no 
   const stats = { 'E. Simon': { past8: 2, upcoming: 0, last: '2026-09-29' }, 'E. Joseph': { past8: 9, upcoming: 9 }, 'B. Cal': { past8: 9, upcoming: 9 } };
   const history = [service('2026-09-29', 'Evening', { Sermon: 'E. Simon' }, 'Third Day')];
   const services = [service('2026-10-03'), service('2026-10-03', 'Evening'), service('2026-10-06', 'Evening', {}, 'Third Day')];
-  for (const mode of ['auto', 'rotation', 'random']) {
+  for (const mode of ['pattern', 'auto', 'rotation', 'random']) {
     const result = fill(services, ['Presider', 'Sermon', 'Closing Prayer', 'Usher #1'], rostersFor(rosters), stats,
       { mode, history, random: () => 0, defaults: { Sermon: 'E. Simon' } });
     const given = picks(result).map(([id, duty, name]) => id.slice(5) + ' ' + duty + ': ' + name);
@@ -309,7 +309,7 @@ function madeUpMonth(seed) {
     services: toFill, history: Array.from(known.values()), rosters, defaults,
     dutiesFor: made => wanted.get(serviceId(made)) || [],
     rosterFor: rostersFor(rosters),
-    mode: pick(['auto', 'rotation', 'random']), random: seeded(seed * 7 + 1)
+    mode: pick(['pattern', 'auto', 'rotation', 'random']), random: seeded(seed * 7 + 1)
   };
 }
 

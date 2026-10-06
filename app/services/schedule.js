@@ -1,12 +1,14 @@
 /* Direct edits to schedule/{service}: adding and deleting services, changing
    a service's date, time, worship name or choir song, and marking a double
    duty as OK. Duty assignments go through services/departments.js. */
-import { fb, write, problem } from '../firebase.js';
+import { fb, write, problem, call } from '../firebase.js';
 import { data } from '../store.js';
 import { renderSoon } from '../render.js';
 import { notice } from '../ui/banners.js';
 import { serviceId } from '../lib/services.js';
-import { doubleDuties } from '../lib/conflicts.js';
+import { doubleDuties, okPairKey } from '../lib/conflicts.js';
+import { dutyName, departmentOf } from '../config/duties.js';
+import { canManageDepartment } from './access.js';
 import { DUTY_DEFAULTS, dutyDefault } from '../config/duties.js';
 
 /* A whole service record, as a new document. The server's bookkeeping from
@@ -106,4 +108,27 @@ export async function markDoubleDuty(service, name, ok) {
     notice('That was not saved: ' + problem(error), true);
     renderSoon();
   }
+}
+
+/* Two duties always OK together, for anyone, or no longer (ok false). The
+   server saves it in app/settings okPairs, which every device then reads. */
+export const canSetOkPair = duties => duties.length === 2 && duties.some(duty => canManageDepartment((departmentOf(duty) || {}).name));
+
+export async function setOkPair(duties, ok) {
+  const [a, b] = duties;
+  const key = okPairKey(a, b);
+  const before = data.settings.okPairs;
+  const saved = Array.isArray(before) ? before : [];
+  data.settings.okPairs = ok ? Array.from(new Set(saved.concat(key))).sort() : saved.filter(item => item !== key);
+  renderSoon();
+  try {
+    const result = await call('setOkPair', { duties: [a, b], ok });
+    data.settings.okPairs = result.okPairs;
+    notice(ok ? dutyName(a) + ' and ' + dutyName(b) + ' are OK together for anyone now.'
+      : dutyName(a) + ' and ' + dutyName(b) + ' together are a double duty again.');
+  } catch (error) {
+    data.settings.okPairs = before;
+    notice('That was not saved: ' + problem(error), true);
+  }
+  renderSoon();
 }

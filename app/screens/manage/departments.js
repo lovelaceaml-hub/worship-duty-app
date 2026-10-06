@@ -14,8 +14,10 @@ import { longDate, todayISO, shortDate, shortStamp } from '../../lib/dates.js';
 import { managedDepartments, canManageDepartment, canResetPin, leadersOf, isAdmin, isPrivileged } from '../../services/access.js';
 import {
   departments as state, roster, rosterLoaded, loadRoster, draftOf, hasDraft, editDraft, editAvailability, dropDraft, saveProfile, profileSaving, setStatus,
-  searchMembers, addMember, addByName, missingMembers, servedDuties, resetPin, TEMPORARY_PIN, createInvite, cancelInvite, activeInvites, inviteLink, saveDutyDefault
+  searchMembers, addMember, addByName, missingMembers, servedDuties, resetPin, TEMPORARY_PIN, createInvite, cancelInvite, activeInvites, inviteLink, saveDutyDefault,
+  saveManualOnly
 } from '../../services/departments.js';
+import { manualOnlyIn } from '../../lib/manual-only.js';
 import { managedDepartment, setManagedDepartment } from './scope.js';
 
 const dutiesOf = department => (departmentNamed(department) || { duties: [] }).duties;
@@ -237,6 +239,8 @@ function memberProfile(department, uid) {
         ${profile.eligibleDuties.some(item => item.toLowerCase() === duty.toLowerCase()) ? ' checked' : ''}${disabled}> ${dutyName(duty)}</label>`)}</div>
       <label class="switch-row"><span><strong>Can be scheduled</strong><small>Show them as a choice when filling duties.</small></span>
         <input type="checkbox" role="switch" data-change="profile-schedulable"${profile.schedulable ? ' checked' : ''}${disabled}></label>
+      <label class="switch-row"><span><strong>Manual only</strong><small>Fill never picks them and suggestions list them last. You can still give them a duty by hand.</small></span>
+        <input type="checkbox" role="switch" data-change="profile-manual-only"${manualOnlyIn(department).includes(profile.memberName) ? ' checked' : ''}${canEdit && !state.busy['manual::' + department + '::' + profile.memberName] ? '' : ' disabled'}></label>
     </section>
     <section class="card">
       <h3 class="card-subtitle">Every week</h3>
@@ -377,6 +381,14 @@ defineActions({
     }
   },
   'profile-schedulable': { allowed: editing, run: el => { const { department, uid } = current(); editDraft(department, uid, { schedulable: el.checked }); } },
+  'profile-manual-only': {
+    allowed: editing,
+    run: el => {
+      const { department, uid } = current();
+      const profile = draftOf(department, uid);
+      if (profile) saveManualOnly(department, profile.memberName, el.checked);
+    }
+  },
   'profile-week': {
     allowed: editing,
     run: el => { const { department, uid } = current(); editAvailability(department, uid, { week: el.dataset.key, value: el.value === 'available' ? 'available' : 'unavailable' }); }

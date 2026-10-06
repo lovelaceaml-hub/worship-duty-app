@@ -6,19 +6,37 @@
    never makes one, the planner does not offer one and the server refuses one.
    One that arrives another way (the Sheet, an administrator's override) is
    flagged. A leader can mark a double duty as OK; that holds only while the
-   person's duties stay the same (service.conflictOk). permissions.js has the
-   same rule for the server; a test keeps the two in step. */
+   person's duties stay the same (service.conflictOk). A leader can also mark
+   two duties always OK together, for anyone (app/settings okPairs, saved by
+   the server's setOkPair); such a pair is then allowed like the prayer and
+   usher one. permissions.js has the same rule for the server; a test keeps
+   the two in step. */
 import { ALL_DUTIES, PRAYER_DUTIES, USHER_DUTIES } from '../config/duties.js';
 
 export const isPrayer = duty => PRAYER_DUTIES.includes(duty);
 export const isUsher = duty => USHER_DUTIES.includes(duty);
+
+/* The always-OK pairs: the store hands over a way to read app/settings. */
+let okPairsNow = () => [];
+export function useOkPairs(source) { okPairsNow = source; }
+
+/* The pair's key, as permissions.js okPairKey: the two names in order. */
+export const okPairKey = (a, b) => [String(a || ''), String(b || '')].sort().join(' + ');
 
 /* Whether one person may hold all of `duties` in one service. */
 function allowedTogether(duties) {
   if (duties.length < 2) return true;
   if (duties.length > 2) return false;
   const [a, b] = duties;
-  return (isPrayer(a) && isUsher(b)) || (isUsher(a) && isPrayer(b));
+  if ((isPrayer(a) && isUsher(b)) || (isUsher(a) && isPrayer(b))) return true;
+  const saved = okPairsNow();
+  return Array.isArray(saved) && saved.includes(okPairKey(a, b));
+}
+
+/* Whether two duties may be marked always OK together: real duties, not
+   already allowed, and not Opening Prayer (as permissions.js canBeOkPair). */
+export function canBeOkPair(a, b) {
+  return ALL_DUTIES.includes(a) && ALL_DUTIES.includes(b) && a !== b && a !== 'Sermon' && b !== 'Sermon' && !allowedTogether([a, b]);
 }
 
 /* The duties `name` holds in a service's `assignments`, apart from `duty`. */

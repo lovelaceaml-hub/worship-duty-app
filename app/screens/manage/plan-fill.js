@@ -21,8 +21,8 @@ import { propose, proposals, proposalCount, waitingScope, saveProposals, discard
 import { departmentsShown, planMonth, currentScope, scopeName, serviceById, setManagedDepartment } from './scope.js';
 import { dutyDefaults, planned } from './plan-cell.js';
 
-/* How Fill chooses (Auto, Rotation or Random), remembered on this device. */
-const fillMode = () => ui.plan.fillMode || readText('wds-fill-mode', 'auto');
+/* How Fill chooses (Usual, Auto, Rotation or Random), remembered on this device. */
+const fillMode = () => ui.plan.fillMode || readText('wds-fill-mode', 'pattern');
 const mode = () => FILL_MODES.find(([value]) => value === fillMode()) || FILL_MODES[0];
 
 export function fillControls() {
