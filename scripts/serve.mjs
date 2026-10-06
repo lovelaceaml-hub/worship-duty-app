@@ -35,7 +35,7 @@ async function page(file) {
   if (!fake) return text;
   const imports = Object.fromEntries(FAKES.map(name => [SDK + 'firebase-' + name + '.js', '/tests/fake/firebase-' + name + '.js']));
   text = text.replace(/<link rel="modulepreload"[^>]*>\n?/g, '');
-  text = text.replace('<head>', '<head>\n<script type="importmap">' + JSON.stringify({ imports }) + '</script>');
+  text = text.replace('<head>', '<head>\n<script>window.WD_FAKE = true;</script>\n<script type="importmap">' + JSON.stringify({ imports }) + '</script>');
   return text.replace(/(<script src="permissions\.js[^"]*"><\/script>)/, '$1\n<script src="/tests/fake/fixture.js"></script>');
 }
 

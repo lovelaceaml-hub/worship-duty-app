@@ -133,6 +133,8 @@ function looksRight(songs) {
 
 /* Returns true when the published list replaced the one in song-seed.js. */
 export async function loadPublished() {
+  // The fake server uses the checked-in song seed, with no live Sheet data.
+  if (window.WD_FAKE === true) return false;
   try {
     const response = await fetch(CATALOG_URL, { cache: 'no-store' });
     if (!response.ok) return false;

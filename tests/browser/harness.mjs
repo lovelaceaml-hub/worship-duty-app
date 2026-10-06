@@ -45,6 +45,17 @@ export async function openPage(browser, url, { viewport = PHONE, dark = false, q
   await context.addInitScript(({ overrides }) => {
     if (overrides) window.__fixtureOverrides = overrides;
   }, { overrides: fixture });
+  // Fail every fake-browser test on a live Sheet request, even if caught by the app.
+  const liveSheetRequests = [];
+  await context.route('https://docs.google.com/**', route => {
+    liveSheetRequests.push(route.request().url());
+    return route.abort('blockedbyclient');
+  });
+  const close = context.close.bind(context);
+  context.close = async (...args) => {
+    await close(...args);
+    if (liveSheetRequests.length) throw new Error('Fake test requested live Sheet data: ' + liveSheetRequests.join(', '));
+  };
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
