@@ -304,6 +304,34 @@ test('a member sends feedback and an administrator reads it', async () => {
   await context.close();
 });
 
+test('fake song catalog keeps the deterministic local seed without requesting a live Sheet', async () => {
+  const { context, page, errors } = await as('B. Adam');
+  await tab(page, 'my');
+  await page.locator('[data-act="open-songs"]', { hasText: 'Plan your songs' }).click();
+  await page.locator('#song-root .builder').waitFor();
+  const result = await page.evaluate(async () => {
+    const { loadSeed, loadPublished } = await import('/app/presider/catalog.js');
+    const { planner } = await import('/app/presider/state.js');
+    let fetches = 0;
+    const original = window.fetch;
+    window.fetch = () => { fetches++; throw new Error('Unexpected remote catalog fetch'); };
+    try {
+      loadSeed();
+      const before = JSON.stringify(planner.songs);
+      const replaced = await loadPublished();
+      return { fake: window.WD_FAKE, replaced, fetches, unchanged: before === JSON.stringify(planner.songs), count: planner.songs.length, first: planner.songs[0].title };
+    } finally { window.fetch = original; }
+  });
+  assert.equal(result.fake, true);
+  assert.equal(result.replaced, false);
+  assert.equal(result.fetches, 0);
+  assert.equal(result.unchanged, true);
+  assert.ok(result.count >= 400);
+  assert.equal(result.first, 'Holy and Honorable Day');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('the song planner shows how often songs were sung, adds a song and confirms the list', async () => {
   const { context, page, errors } = await as('B. Adam');
   await tab(page, 'my');
