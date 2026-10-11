@@ -1,10 +1,11 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-10-10.
+Updated 2026-10-11.
 
-## Pending performance improvement
+## Released performance improvement
 
-- Branch `lovelaceaml-hub-performance-improvements` defers Firebase Messaging
+- [PR #43](https://github.com/lovelaceaml-hub/worship-duty-app/pull/43),
+  merged and released on 2026-10-11 with Anthony's approval, defers Firebase Messaging
   until push registration or saved-token cleanup needs it. Ordinary startup
   no longer waits for the optional push SDK. Enabled push on reopen, local
   alerts, unsupported browsers, retry and sign-out cleanup are covered.
@@ -13,7 +14,14 @@ Updated 2026-10-10.
 - Module checks, 106 unit/source-rules tests, all 110 browser tests and the
   release build passed. One existing server property test skipped because
   Functions dependencies were not installed.
-- This change is not released to production. No Functions or rules changed.
+- Production release: `r1791754381268`, commit `41e1cdc`, maintenance off.
+  The [Hosting-only release workflow](https://github.com/lovelaceaml-hub/worship-duty-app/actions/runs/38176442125)
+  passed its pre-release checks, deployment and live calendar check.
+- Read-only verification confirmed the live site and documented calendar
+  feed return HTTP 200, release metadata identifies the deployed commit,
+  and the live app serves the deferred-Messaging code. No real member
+  sign-in or production record changes were used for verification.
+- No Functions or Firestore rules were changed or deployed.
 
 ## Where things stand
 
