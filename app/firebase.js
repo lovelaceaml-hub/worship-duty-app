@@ -4,6 +4,7 @@ import { session } from './store.js';
 import { reasonText } from './lib/reasons.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+let firebaseApp = null, messagingReady = null;
 
 export const fb = {
   db: null, auth: null, messaging: null,
@@ -24,6 +25,7 @@ export async function connect(config) {
     import(SDK + 'firebase-functions.js')
   ]);
   const app = appSdk.initializeApp(config);
+  firebaseApp = app;
   const cloud = functions.getFunctions(app, 'us-central1');
   Object.assign(fb, {
     db: firestore.getFirestore(app),
@@ -38,17 +40,25 @@ export async function connect(config) {
     onAuthStateChanged: auth.onAuthStateChanged,
     callable: name => functions.httpsCallable(cloud, name)
   });
-  // Push delivery is optional; browsers without it simply get no push.
-  try {
+}
+
+/* Push is optional and never holds up sign-in or the shared schedule.
+   Concurrent callers share initialization; a failed load can be retried. */
+export function ensureMessaging() {
+  if (!firebaseApp) return Promise.resolve(false);
+  if (messagingReady) return messagingReady;
+  messagingReady = (async () => {
     const messaging = await import(SDK + 'firebase-messaging.js');
-    if (await messaging.isSupported()) {
-      fb.messaging = messaging.getMessaging(app);
-      fb.getToken = messaging.getToken;
-      fb.deleteToken = messaging.deleteToken;
-    }
-  } catch (error) {
-    console.warn('Push messaging is not available:', error);
-  }
+    if (!await messaging.isSupported()) return false;
+    fb.messaging = messaging.getMessaging(firebaseApp);
+    fb.getToken = messaging.getToken;
+    fb.deleteToken = messaging.deleteToken;
+    return true;
+  })().catch(error => {
+    messagingReady = null;
+    throw error;
+  });
+  return messagingReady;
 }
 
 export function connected() { return !!fb.db; }

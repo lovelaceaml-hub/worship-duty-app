@@ -10,6 +10,7 @@ Live at https://lv-zion-duties.web.app.
 
 - Live app: https://lv-zion-duties.web.app
 - Current status and what is next: [docs/HANDOFF.md](docs/HANDOFF.md)
+- Ten performance opportunities and the selected startup improvement: [docs/PERFORMANCE-REVIEW.md](docs/PERFORMANCE-REVIEW.md)
 - Repository: https://github.com/lovelaceaml-hub/worship-duty-app
 - Duty Sheet ("LV Zion Worship Duty Schedule"): https://docs.google.com/spreadsheets/d/17YrNykmijnJ_LQPky512X47LZUDUot3KfiWJbeWnLuQ/edit
 - Firebase console: https://console.firebase.google.com/project/lv-zion-duties/overview
