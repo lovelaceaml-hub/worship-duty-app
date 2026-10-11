@@ -6,7 +6,7 @@
    With notifications turned on, both also show as phone notifications. When
    the server can reach the phone by push, it sends them instead, so they are
    not shown twice. */
-import { fb } from '../firebase.js';
+import { fb, ensureMessaging } from '../firebase.js';
 import { data, ui, feature, canonical, readJSON, writeJSON, readText, writeText } from '../store.js';
 import { endSession } from './session.js';
 import { renderSoon } from '../render.js';
@@ -16,10 +16,12 @@ import { shortDate, pacificNow } from '../lib/dates.js';
 import { dutyName } from '../config/duties.js';
 
 let baselineNext = false;
+let pushGeneration = 0;
 
 function notificationsAllowed() { return 'Notification' in window && Notification.permission === 'granted'; }
 export function notificationsOn() { return notificationsAllowed() && readText('wds-notify') === '1'; }
-function pushActive() { return !!(fb.messaging && readText('wds-fcm-token')); }
+// An existing token receives server push even before this page loads Messaging.
+function pushActive() { return !!readText('wds-fcm-token'); }
 
 function describe(duty, service) {
   return dutyName(duty) + ' · ' + [service.worship, service.service].filter(Boolean).join(' ') + ' · ' +
@@ -166,14 +168,18 @@ export async function turnOff() {
    removed after a delivery problem comes back while the token still works. */
 async function registerPush() {
   try {
-    if (!fb.messaging || !window.FCM_VAPID_KEY || !notificationsOn() || !ui.me) return false;
+    if (!window.FCM_VAPID_KEY || !notificationsOn() || !ui.me) return false;
+    const name = ui.me, uid = fb.auth.currentUser?.uid, generation = pushGeneration;
+    const stillCurrent = () => generation === pushGeneration && notificationsOn() && ui.me === name && fb.auth.currentUser?.uid === uid;
+    if (!await ensureMessaging() || !stillCurrent()) return false;
     const registration = await navigator.serviceWorker.ready;
+    if (!stillCurrent()) return false;
     const token = await fb.getToken(fb.messaging, { vapidKey: window.FCM_VAPID_KEY, serviceWorkerRegistration: registration });
-    if (!token) return false;
+    if (!token || !stillCurrent()) return false;
     const previous = readText('wds-fcm-token');
     if (previous && previous !== token) await fb.deleteDoc(fb.doc(fb.db, 'tokens', previous)).catch(() => {});
     const now = Date.now();
-    await fb.setDoc(fb.doc(fb.db, 'tokens', token), { name: ui.me, updatedAt: now, lastSeenAt: now });
+    await fb.setDoc(fb.doc(fb.db, 'tokens', token), { name, updatedAt: now, lastSeenAt: now });
     writeText('wds-fcm-token', token);
     return true;
   } catch (error) {
@@ -186,8 +192,12 @@ async function registerPush() {
    on sign-out (while the session can still delete the token). Failures are
    ignored. */
 export async function unregisterPush() {
+  pushGeneration++;
   const token = readText('wds-fcm-token');
   try {
+    if (token && !fb.messaging) {
+      await ensureMessaging().catch(error => console.warn('Push messaging could not load for cleanup:', error));
+    }
     if (fb.messaging && fb.deleteToken) await fb.deleteToken(fb.messaging).catch(() => {});
     if (token && fb.db) await fb.deleteDoc(fb.doc(fb.db, 'tokens', token)).catch(() => {});
   } finally {

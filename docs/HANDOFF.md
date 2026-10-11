@@ -1,6 +1,19 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-10-06.
+Updated 2026-10-10.
+
+## Pending performance improvement
+
+- Branch `lovelaceaml-hub-performance-improvements` defers Firebase Messaging
+  until push registration or saved-token cleanup needs it. Ordinary startup
+  no longer waits for the optional push SDK. Enabled push on reopen, local
+  alerts, unsupported browsers, retry and sign-out cleanup are covered.
+- [Performance review](PERFORMANCE-REVIEW.md) records ten opportunities,
+  the selection rationale and the controlled startup comparison.
+- Module checks, 106 unit/source-rules tests, all 110 browser tests and the
+  release build passed. One existing server property test skipped because
+  Functions dependencies were not installed.
+- This change is not released to production. No Functions or rules changed.
 
 ## Where things stand
 
