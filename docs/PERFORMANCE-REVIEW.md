@@ -67,3 +67,13 @@ a live-site speed estimate. Network latency and device speed vary.
 - 2026-10-10: Reviewed the ten opportunities against the current source,
   selected optional Messaging loading, implemented it, and verified startup
   and notification regressions with fake data. Production was not deployed.
+- 2026-10-11: Both PR checks passed after the GitHub billing restriction
+  cleared. With Anthony's explicit approval, [PR #43](https://github.com/lovelaceaml-hub/worship-duty-app/pull/43)
+  was merged to `main` at `41e1cdc` and released as a full replacement through
+  the [Hosting-only production workflow](https://github.com/lovelaceaml-hub/worship-duty-app/actions/runs/38176442125).
+  The workflow passed its pre-release checks, deployment and live calendar
+  check. Production serves release `r1791754381268` with maintenance off.
+  Read-only checks confirmed HTTP 200 for the live site and documented
+  calendar feed, the expected release metadata and deferred-Messaging code.
+  No Functions, Firestore rules or production records were changed by this
+  release. Updated the handoff to record the completed deployment.
