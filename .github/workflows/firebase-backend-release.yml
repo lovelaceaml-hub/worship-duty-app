@@ -3,7 +3,7 @@
 # Backend release: deploys main's Cloud Functions to lv-zion-duties BY NAME
 # (through scripts/deploy-functions.mjs), and Firestore rules when ticked. It
 # runs only when started from the Actions tab ("Run workflow") on main, only
-# after the repository's own tests pass, and only through the npx guard
+# after focused checks pass (full suites need separate approval), and only through the npx guard
 # (.github/scripts/npx-guard, which asks deploy-guard.sh / backend-guard.sh).
 # Run it only when Anthony says to release.
 #
@@ -152,7 +152,7 @@ jobs:
           npm ci
           npm ci --prefix functions
 
-      - name: "Pre-release checks: modules, unit and rules tests, guard"
+      - name: "Pre-release check: modules"
         run: |
           npm run check
 

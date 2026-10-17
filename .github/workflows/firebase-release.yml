@@ -78,7 +78,7 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Pre-release checks (modules, rules including the Pacific next-service boundaries)
+      - name: Pre-release module check
         run: |
           npm run check
 
