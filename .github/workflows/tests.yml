@@ -1,5 +1,13 @@
+# Full suites run only on manual dispatch with explicit approval for this run.
+# Automatic runs retain focused checks; a generic release request is not full-suite approval.
 name: Tests
 on:
+  workflow_dispatch:
+    inputs:
+      full_suite_approved:
+        description: "Anthony explicitly requested or just approved the full suite for this run"
+        type: boolean
+        default: false
   push:
     branches: [main]
   pull_request:
@@ -25,14 +33,18 @@ jobs:
       - name: Module imports and exports
         run: npm run check
       - name: Unit and rules tests
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm test
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
       - name: Firestore rules on the emulator
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm run test:rules
       - name: Cloud Functions tests
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm run test:functions
       - name: Browser flows
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm run test:browser

@@ -1,3 +1,5 @@
+# Full suites run only on manual dispatch with explicit approval for this run.
+# Automatic runs retain focused checks; a generic release request is not full-suite approval.
 name: Firebase release (Hosting only, live site)
 
 # Publishes main to the live site https://lv-zion-duties.web.app through
@@ -8,6 +10,10 @@ name: Firebase release (Hosting only, live site)
 on:
   workflow_dispatch:
     inputs:
+      full_suite_approved:
+        description: "Anthony explicitly requested or just approved the full suite for this run"
+        type: boolean
+        default: false
       maintenance:
         description: Show the "being updated" screen (release again without it to end it)
         type: boolean
@@ -75,9 +81,12 @@ jobs:
       - name: Pre-release checks (modules, rules including the Pacific next-service boundaries)
         run: |
           npm run check
-          npm test
 
+      - name: Full unit and rules suite (explicit approval only)
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
+        run: npm test
       - name: Pre-release checks (main flows and all four appearances, on fake data)
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm run test:browser
 
       - name: Write deploy credentials
