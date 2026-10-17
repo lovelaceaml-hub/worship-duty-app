@@ -125,3 +125,17 @@ jobs:
       - name: Remove deploy credentials
         if: always()
         run: rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Report testing scope (authorization is not a pass)
+        if: always()
+        env:
+          FULL_SUITE_APPROVED: ${{ github.event_name == 'workflow_dispatch' && inputs.full_suite_approved }}
+        run: |
+          if [ "$FULL_SUITE_APPROVED" = "true" ]; then
+            echo "### Full-suite mode explicitly authorized" >> "$GITHUB_STEP_SUMMARY"
+            echo "Authorization is not a pass: inspect every suite step's outcome. Skipped or failed suites are not passes." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Focused checks only: full suites NOT RUN" >> "$GITHUB_STEP_SUMMARY"
+            echo "A successful job does not indicate a full-suite pass. Full suites require Anthony's explicit request or immediate approval for this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
