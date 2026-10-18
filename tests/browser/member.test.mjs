@@ -419,7 +419,10 @@ test('the Schedule has its tools: search, departments, months, past services and
 test('a service without a stored time shows its usual time everywhere', async () => {
   const patch = { 'schedule/2026-07-11_afternoon': { time: '' } };
   const { context, page, errors } = await as('B. Adam', { fixture: { patch }, viewport: DESKTOP });
-  await page.locator('#view .calendar-day[data-date="2026-07-11"] .calendar-service', { hasText: '2:30 PM' }).waitFor();
+  const calendarDay = page.locator('#view .calendar-day[data-date="2026-07-11"]');
+  await calendarDay.locator('.calendar-service', { hasText: '2:30 PM' }).waitFor();
+  assert.equal(await calendarDay.locator('.calendar-service').count(), 3);
+  assert.match(await calendarDay.getAttribute('aria-label'), /3 services/);
   await page.locator('#view [data-act="schedule-date"][data-date="2026-07-11"]').click();
   await page.locator('#view [data-act="schedule-service"][data-service="2026-07-11_afternoon"]').click();
   assert.equal(await page.locator('#view .service-card[data-service="2026-07-11_afternoon"] .service-time').innerText(), '2:30 PM');
