@@ -11,6 +11,12 @@ import {
 } from './index.js';
 
 function monthGrid(month, services, selected) {
+  const servicesByDate = new Map();
+  services.forEach(service => {
+    const onDay = servicesByDate.get(service.date) || [];
+    onDay.push(service);
+    servicesByDate.set(service.date, onDay);
+  });
   const first = new Date(month + '-01T12:00:00');
   const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
   const cells = Math.ceil((first.getDay() + daysInMonth) / 7) * 7;
@@ -25,7 +31,7 @@ function monthGrid(month, services, selected) {
   return html`<section class="calendar" aria-label="${monthName(month)}">
     <div class="calendar-weekdays" aria-hidden="true">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => html`<span>${day}</span>`)}</div>
     <div class="calendar-grid">${days.map(iso => {
-      const onDay = services.filter(service => service.date === iso);
+      const onDay = servicesByDate.get(iso) || [];
       const mine = onDay.some(serves);
       const outside = !iso.startsWith(month);
       const label = longDate(iso) + ', ' + plural(onDay.length, 'service') + (mine ? ', you serve' : '');
