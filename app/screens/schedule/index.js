@@ -47,14 +47,14 @@ function pastShown() { return feature('pastServices') && ui.showPast; }
 /* Services the member can see with the current department filter and
    search, oldest first: those still to come or under way, and the past ones
    too while "Show past services" is on. */
-export function shownServices({ includePast = pastShown() } = {}) {
+function shownServices({ includePast = pastShown() } = {}) {
   return data.services.filter(service => Number.isFinite(startsAt(service)) && (includePast || isCurrent(service)) &&
     fits(service) && (!ui.schedule.query || matches(service, ui.schedule.query))).sort(byStart);
 }
 
 /* Of services in start order: the one under way (the later one if two
    overlap), else the next to start, else none. */
-export function nowOrNext(services) {
+function nowOrNext(services) {
   return services.filter(service => isNow(service)).pop() || services.find(service => isUpcoming(service)) || null;
 }
 
