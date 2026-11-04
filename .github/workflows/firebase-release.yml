@@ -1,3 +1,5 @@
+# Full suites run only on manual dispatch with explicit approval for this run.
+# Automatic runs retain focused checks; a generic release request is not full-suite approval.
 name: Firebase release (Hosting only, live site)
 
 # Publishes main to the live site https://lv-zion-duties.web.app through
@@ -8,6 +10,10 @@ name: Firebase release (Hosting only, live site)
 on:
   workflow_dispatch:
     inputs:
+      full_suite_approved:
+        description: "Anthony explicitly requested or just approved the full suite for this run"
+        type: boolean
+        default: false
       maintenance:
         description: Show the "being updated" screen (release again without it to end it)
         type: boolean
@@ -72,12 +78,15 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Pre-release checks (modules, rules including the Pacific next-service boundaries)
+      - name: Pre-release module check
         run: |
           npm run check
-          npm test
 
+      - name: Full unit and rules suite (explicit approval only)
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
+        run: npm test
       - name: Pre-release checks (main flows and all four appearances, on fake data)
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm run test:browser
 
       - name: Write deploy credentials
@@ -116,3 +125,17 @@ jobs:
       - name: Remove deploy credentials
         if: always()
         run: rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Report testing scope (authorization is not a pass)
+        if: always()
+        env:
+          FULL_SUITE_APPROVED: ${{ github.event_name == 'workflow_dispatch' && inputs.full_suite_approved }}
+        run: |
+          if [ "$FULL_SUITE_APPROVED" = "true" ]; then
+            echo "### Full-suite mode explicitly authorized" >> "$GITHUB_STEP_SUMMARY"
+            echo "Authorization is not a pass: inspect every suite step's outcome. Skipped or failed suites are not passes." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Focused checks only: full suites NOT RUN" >> "$GITHUB_STEP_SUMMARY"
+            echo "A successful job does not indicate a full-suite pass. Full suites require Anthony's explicit request or immediate approval for this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
