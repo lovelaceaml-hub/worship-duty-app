@@ -135,8 +135,9 @@ rules) each have their own button; the Mac commands below stay as a fallback.
   the Actions run summary. Previews use the real data: look, do not tap.
 - To go live, run **Firebase release** on `main`
   (https://github.com/lovelaceaml-hub/worship-duty-app/actions/workflows/firebase-release.yml).
-  It runs every test first, publishes, then checks that the calendar feed
-  still answers. Tick "maintenance" to show the "being updated" screen, and
+  It runs the module, unit and browser tests first (the Functions and
+  emulator rules tests run in the backend release), publishes, then checks
+  that the calendar feed still answers. Tick "maintenance" to show the "being updated" screen, and
   release again without it to end it.
 - `.github/scripts/deploy-guard.sh` lets these workflows run only the pinned
   Hosting command for this project. The deploy key (service account
@@ -439,7 +440,7 @@ Sheet's own script copies them into "Raw Data".
   leaders), `requests`, `departments/*/members` (rosters and availability),
   `setlists` and `songStats` (songs), and `feedback`.
 - Server jobs on a timer: duty reminders every hour, the Sheet import every
-  2 hours, every 30 minutes the songs of each confirmed list are counted as
+  10 minutes, every 30 minutes the songs of each confirmed list are counted as
   sung once 3 hours have passed since its service started (a list planned
   with "Plan another date" for a date with no service counts at its own
   date and time, also one made before this release; a list whose service
