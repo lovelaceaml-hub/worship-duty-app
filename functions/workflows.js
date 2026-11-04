@@ -22,6 +22,7 @@ const { FieldValue } = require('firebase-admin/firestore');
 const authz = require('./department-auth.js');
 const permissions = require('./permissions.js');
 const songHistory = require('./song-history.js');
+const { isPlainObject: plainObject } = require('./util.js');
 const { currentRevision, nextRevision, assertFresh } = require('./revision.js');
 
 function deleteField() {
@@ -47,12 +48,6 @@ const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 // Release day. The automatic recorder only ever considers services on or after
 // this Pacific service date, so the pre-release back catalogue is never touched.
 const SONG_HISTORY_FLOOR_DATE = '2026-09-17';
-
-function plainObject(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
 
 function displayName(actor) {
   return actor.token.memberName || actor.token.member || actor.uid;

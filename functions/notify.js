@@ -9,13 +9,13 @@
    uid on the document), never from a name typed into it. Services that have
    started send no alerts. */
 const { canonicalName, dutyName } = require('./names.js');
-const { longDate, clockTime, startClock, serviceStart, hasStarted } = require('./time.js');
+const { longDate, clockTime, startClock, serviceStart, hasStarted, DAY_MS } = require('./time.js');
 const appDocs = require('./app-docs.js');
 const permissions = require('./permissions.js');
 const { readAccountForMemberUid } = require('./department-handlers.js');
+const { alreadyExists } = require('./util.js');
 
 const HOUR_S = 3600;
-const DAY_MS = 24 * HOUR_S * 1000;
 const MAX_BODY = 400; // far below the 4 KB a push may carry
 const MAX_NOTE = 200;
 // Only an answer about the token itself means the device is gone; any other
@@ -45,10 +45,6 @@ function dutyList(items) {
   const lines = items.slice().sort((a, b) => a.date.localeCompare(b.date))
     .map(item => dutyName(item.duty) + ' · ' + longDate(item.date) + ' ' + item.service);
   return lines.length > 4 ? lines.slice(0, 3).join('; ') + '; and ' + (lines.length - 3) + ' more' : lines.join('; ');
-}
-
-function alreadyExists(error) {
-  return !!error && (error.code === 6 || error.code === 'already-exists' || /ALREADY_EXISTS/.test(String(error.message)));
 }
 
 function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
@@ -84,7 +80,7 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
         if (!result.success && result.error && DEAD_TOKEN_CODES.has(result.error.code)) dead.push(tokens[index]);
       });
     }
-    await Promise.all(dead.map(token => db.collection('tokens').doc(token).delete().catch(() => {})));
+    await Promise.all(dead.map(token => db.collection('tokens').doc(token).delete().catch(error => logger.warn('could not remove a dead device token', { error: String(error && error.message || error) }))));
   }
 
   /* The verified member behind a uid, in their current spelling, or ''. */
@@ -208,7 +204,7 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
       }
     }
     const names = Object.keys(due);
-    const unmark = items => Promise.all(items.map(item => item.marker.delete().catch(() => {})));
+    const unmark = items => Promise.all(items.map(item => item.marker.delete().catch(error => logger.warn('dutyReminders: could not unmark a duty', { error: String(error && error.message || error) }))));
     let targets = [];
     try {
       targets = names.length ? await loadTargets(nameMap) : [];
@@ -231,7 +227,7 @@ function createNotifier({ db, messaging, logger, now = () => Date.now() }) {
       }
     }
     const old = await db.collection('sent').where('t', '<', at - 7 * DAY_MS).get();
-    await Promise.all(old.docs.map(document => document.ref.delete().catch(() => {})));
+    await Promise.all(old.docs.map(document => document.ref.delete().catch(error => logger.warn('dutyReminders: could not remove an old sent record', { error: String(error && error.message || error) }))));
     return { sent: names.length };
   }
 
