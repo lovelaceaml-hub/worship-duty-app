@@ -1,6 +1,28 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-10-11.
+Updated 2026-11-04.
+
+## Hosting release check (2026-11-04)
+
+- `firebase-tools` 15.34.1 (2026-10-21) added a check that the Hosting API is on.
+  A Study Rooms release stopped on 2026-11-04 because its deploy account could
+  not run that check. Worship Duty uses `firebase-tools@15` too, so it was checked.
+- No change was needed here, and Anthony chose to leave the account as it is.
+  `gh-hosting-deploy@lv-zion-duties` holds Firebase Hosting Admin, Cloud Run
+  Viewer and Cloud Functions Viewer. Cloud Functions Viewer includes
+  `serviceusage.services.get`, so do not remove it without adding
+  `roles/serviceusage.serviceUsageConsumer` instead.
+- Evidence: three previews with that account passed on 2026-11-04, for example
+  [run 41775211340](https://github.com/lovelaceaml-hub/worship-duty-app/actions/runs/41775211340).
+  By publish dates they used 15.34.2; the logs do not print the version.
+- Not yet proven: a live release. The last was 2026-10-11, before the check
+  existed. It runs the same check, so it should pass; the next real release is
+  the proof.
+- Keyless settings went on 2026-11-04 with Anthony's approval and were read back
+  from GitHub: `GCP_BACKEND_WIF_PROVIDER`, `GCP_BACKEND_DEPLOY_SA`,
+  `GCP_DRIFT_WIF_PROVIDER` and `GCP_DRIFT_SA`. "Firebase backend release" can now
+  sign in, but has not been run with them and still starts only by hand. The
+  read-only Functions drift check should first really check on Monday 2026-11-09.
 
 ## Released performance improvement
 
