@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { displayName, canonicalName, byTitle, initials, BUILT_IN_NAME_MAP } from '../../app/lib/names.js';
 import { clockTime, dayBadge, addMonths, pacificNow, daysSince, daysUntil, relativeDay, longDate, shortDate, monthName } from '../../app/lib/dates.js';
 import { html, raw, esc } from '../../app/html.js';
-import { DEPARTMENTS, DEFAULT_TIMES, DUTY_NAMES, dutyName } from '../../app/config/duties.js';
+import { DEPARTMENTS, DEFAULT_TIMES, DUTY_DEFAULTS, DUTY_NAMES, dutyName } from '../../app/config/duties.js';
 import { FEATURES, featureOn } from '../../app/config/features.js';
 
 const require = createRequire(import.meta.url);
@@ -135,6 +135,11 @@ test('html`` writes true and false out inside attribute quotes only', () => {
 test('the browser and the server list the same departments and duties', () => {
   const permissions = require('../../permissions.js');
   assert.deepEqual(Object.fromEntries(DEPARTMENTS.map(department => [department.name, department.duties])), permissions.DEPARTMENT_DUTIES);
+});
+
+test('the browser and the server have the same default members for duties', () => {
+  const permissions = require('../../permissions.js');
+  assert.deepEqual(DUTY_DEFAULTS, { ...permissions.DUTY_DEFAULTS });
 });
 
 test('the server fills in the same usual service times as the app', () => {

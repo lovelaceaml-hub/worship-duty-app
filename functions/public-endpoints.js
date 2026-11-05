@@ -10,12 +10,11 @@
    member's is refused before any schedule read. */
 const icsLib = require('./ics-lib.js');
 const { publicScheduleService } = require('./public-schedule.js');
-const { pacificDate } = require('./time.js');
+const { pacificDate, DAY_MS } = require('./time.js');
 const { canonicalName } = require('./names.js');
 const appDocs = require('./app-docs.js');
 
 const CACHE_MS = 60 * 1000;
-const DAY_MS = 24 * 3600 * 1000;
 
 function createPublicEndpoints({ db, now = () => Date.now() }) {
   const cache = new Map();

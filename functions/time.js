@@ -5,6 +5,7 @@
 const TIME_ZONE = 'America/Los_Angeles';
 // Usual start times since 2026-09-12, as in app/config/duties.js.
 const DEFAULT_TIMES = Object.freeze({ 'Early Morning': '05:00', Morning: '10:00', Afternoon: '14:30', Evening: '19:30' });
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /* Today's Pacific date (or `date`'s), as YYYY-MM-DD. */
 function pacificDate(date = new Date()) {
@@ -74,4 +75,4 @@ function clockTime(time) {
   return (hour % 12 || 12) + ':' + minutes + ' ' + (hour >= 12 ? 'PM' : 'AM');
 }
 
-module.exports = { TIME_ZONE, DEFAULT_TIMES, pacificDate, pacificTime, startClock, serviceStart, hasStarted, longDate, clockTime };
+module.exports = { TIME_ZONE, DEFAULT_TIMES, DAY_MS, pacificDate, pacificTime, startClock, serviceStart, hasStarted, longDate, clockTime };

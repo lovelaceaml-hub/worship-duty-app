@@ -1,5 +1,5 @@
 /* Departments and their duties, in display order. permissions.js holds the
-   same department-to-duty map for the server; tests/unit/config.test.mjs
+   same department-to-duty map for the server; tests/unit/basics.test.mjs
    keeps the two identical. */
 export const DEPARTMENTS = [
   { name: 'Worship', color: '#4338ca', duties: ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer'] },
@@ -26,7 +26,8 @@ export const USHER_DUTIES = ['Usher Door', 'Usher Front', 'Usher Back', 'Usher #
    can take it and who new services start with. Opening Prayer goes to the
    church overseer unless a Worship leader or an administrator chooses
    someone else, or no one, in Manage (app/settings dutyDefaults). Another
-   preacher is put on by hand. permissions.js holds the same for the server. */
+   preacher is put on by hand. permissions.js holds the same for the server;
+   tests/unit/basics.test.mjs keeps the two identical. */
 export const DUTY_DEFAULTS = { Sermon: 'E. Simon' };
 
 /* The default member for `duty` with these app settings: the saved choice

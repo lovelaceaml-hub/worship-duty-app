@@ -13,7 +13,7 @@ import { dutyName } from '../../config/duties.js';
 
 const when = at => shortStamp(at, { time: true });
 // Import now and Check the Sheet: administrators and department leaders.
-export const canUseSheet = () => isAdmin() || canManageAnyDepartment();
+const canUseSheet = () => isAdmin() || canManageAnyDepartment();
 
 /* When the app last brought in the Sheet, and what it changed. */
 function lastImportLine() {

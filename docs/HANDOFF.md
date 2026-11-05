@@ -2,6 +2,18 @@
 
 Updated 2026-11-04.
 
+## Since the last release
+
+- [PR #47](https://github.com/lovelaceaml-hub/worship-duty-app/pull/47)
+  (the calendar groups services by date once per screen, item 8 of the
+  [performance review](PERFORMANCE-REVIEW.md)) was merged on 2026-10-23 but
+  not released: the last "Firebase release" run is still the 2026-10-11 one
+  (commit `41e1cdc`). It goes live with the next release.
+- A whole-repository review on 2026-11-03 is in
+  [reviews/2026-11-03-review.md](reviews/2026-11-03-review.md).
+- Two draft pull requests from mid-October are still open: #45 (Hosting
+  previews only when asked) and #46 (full test suite only with approval).
+
 ## Hosting release check (2026-11-04)
 
 - `firebase-tools` 15.34.1 (2026-10-21) added a check that the Hosting API is on.
@@ -95,6 +107,9 @@ Updated 2026-11-04.
 - One read-only look for "phantom" 2027 services the old Raw Data import may
   have made (on a day with no regular service, with `sheetSyncedAt`). Anthony
   deletes any himself in the app.
+- Check that the November 1 job added December 2026 to December 2027
+  (Manage, Data), then add the 2027 feast services by hand. Not checked
+  from the repository on 2026-11-04.
 - When a 2027 Entry tab is added, update the Sheet's own script so Raw Data
   reads every year's Entry tab (README, "The Google Sheet", step 5).
 

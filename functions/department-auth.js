@@ -10,6 +10,7 @@
  */
 
 const permissions = require('./permissions.js');
+const { isPlainObject } = require('./util.js');
 
 const PROFILE_MUTABLE_FIELDS = Object.freeze([
   'status',
@@ -79,12 +80,6 @@ const PRIVILEGED_LEADER_ROLES = new Set([
   'departmentmanager'
 ]);
 const MEMBER_ROLES = new Set(['member', 'departmentleader', 'leader', 'departmentmanager']);
-
-function isPlainObject(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
 
 function text(value, options = {}) {
   const { required = true, max = 160, path = 'value' } = options;
