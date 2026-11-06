@@ -11,11 +11,15 @@ Updated 2026-11-06.
 - Checked: module check, focused unit, rules-source and server Sheet tests,
   and a new browser test for the limited view. The rules emulator tests
   were not run (no Java on the Mac); no full suite was run.
-- Sheet: the four columns are not added yet. The "Header" protection on the
-  Entry tabs is owned by simon.usazions; neither the app's account nor
-  Anthony's could add columns. Add after Offering #6 on "2026 Entry" and
-  "2027 Entry": row 1 "CHILDREN'S TEACHERS", row 2 Small Sanctuary #1,
+- Sheet: "2027 Entry" has the four columns (added 2026-11-06 as the app's
+  Sheet account). "2026 Entry" does not yet: its "Header" (rows 1:2) and
+  "Dates" (A:D) locks are not created by the Sheet's script and show as
+  view only for lovelace.aml, alovelace144 and the app's account. Add after
+  Offering #6: row 1 "CHILDREN'S TEACHERS", row 2 Small Sanctuary #1,
   Small Sanctuary #2, Main Sanctuary #1, Main Sanctuary #2.
+- The Sheet's script ("Worship Schedule Builder", Extensions, Apps Script)
+  lists Children's Teachers in GROUPS, so Raw Data includes it once the
+  columns exist.
 - Release needs all three, in order: functions (the Sheet reader and
   permissions), the rules, then the app. No department leader is set yet;
   an administrator picks one in Manage.
