@@ -136,7 +136,8 @@ const DEFAULT_DEPARTMENT_LEADERS = {
   Translation: ['S. Paola'],
   Media: ['D. Aaron', 'D. Armani', 'B. Brent'],
   'Parking Lot': ['D. Aaron'],
-  Offering: ['S. Elisa']
+  Offering: ['S. Elisa'],
+  "Children's Teachers": ['D. Kenya']
 };
 Object.keys(DEFAULT_DEPARTMENT_LEADERS).forEach(department => {
   Object.freeze(DEFAULT_DEPARTMENT_LEADERS[department]);

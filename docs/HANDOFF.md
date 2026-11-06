@@ -20,8 +20,10 @@ Updated 2026-11-06.
   lists Children's Teachers in GROUPS, so Raw Data includes it once the
   columns exist.
 - Release needs all three, in order: functions (the Sheet reader and
-  permissions), the rules, then the app. No department leader is set yet;
-  an administrator picks one in Manage.
+  permissions), the rules, then the app.
+- Leader: D. Kenya (Anthony, 2026-11-06). Built into permissions.js, but a
+  saved app/leaderConfig overrides the built-in list, so after release an
+  administrator adds D. Kenya to Children's Teachers in Manage, Leaders.
 
 ## Released performance improvement
 
