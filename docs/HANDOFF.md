@@ -1,6 +1,24 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-10-11.
+Updated 2026-11-06.
+
+## In progress: Children's Teachers (branch `children-teachers`)
+
+- New department with Small Sanctuary #1, #2 and Main Sanctuary #1, #2,
+  in the app, the server, the database rules and the Sheet reader. A member
+  only in Children's Teachers sees only that department (README,
+  "Children's Teachers").
+- Checked: module check, focused unit, rules-source and server Sheet tests,
+  and a new browser test for the limited view. The rules emulator tests
+  were not run (no Java on the Mac); no full suite was run.
+- Sheet: the four columns are not added yet. The "Header" protection on the
+  Entry tabs is owned by simon.usazions; neither the app's account nor
+  Anthony's could add columns. Add after Offering #6 on "2026 Entry" and
+  "2027 Entry": row 1 "CHILDREN'S TEACHERS", row 2 Small Sanctuary #1,
+  Small Sanctuary #2, Main Sanctuary #1, Main Sanctuary #2.
+- Release needs all three, in order: functions (the Sheet reader and
+  permissions), the rules, then the app. No department leader is set yet;
+  an administrator picks one in Manage.
 
 ## Released performance improvement
 

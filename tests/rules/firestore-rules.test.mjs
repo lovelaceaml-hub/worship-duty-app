@@ -72,11 +72,11 @@ test('rules deny every path they do not name, and leave only three open', () => 
 });
 
 test('each department\'s duties in the rules are the ones in permissions.js', () => {
-  const chain = Object.fromEntries(Array.from(block(rules, 'function departmentDuties(').matchAll(/department == '([^']+)' \? \[([^\]]*)\]/g),
-    match => [match[1], quoted(match[2])]));
+  const chain = Object.fromEntries(Array.from(block(rules, 'function departmentDuties(').matchAll(/department == (['"])(.+?)\1 \? \[([^\]]*)\]/g),
+    match => [match[2], quoted(match[3])]));
   assert.deepEqual(chain, DEPARTMENT_DUTIES);
-  const markable = Object.fromEntries(Array.from(block(rules, 'function markable(').matchAll(/led\.hasAny\(\['([^']+)'\]\)\s*\?\s*\[([^\]]*)\]/g),
-    match => [match[1], Array.from(match[2].matchAll(/a\.get\('([^']+)', ''\)/g), get => get[1])]));
+  const markable = Object.fromEntries(Array.from(block(rules, 'function markable(').matchAll(/led\.hasAny\(\[(['"])(.+?)\1\]\)\s*\?\s*\[([^\]]*)\]/g),
+    match => [match[2], Array.from(match[3].matchAll(/a\.get\('([^']+)', ''\)/g), get => get[1])]));
   assert.deepEqual(markable, DEPARTMENT_DUTIES);
 });
 

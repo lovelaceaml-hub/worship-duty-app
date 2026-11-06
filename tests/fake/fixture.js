@@ -27,6 +27,9 @@
     'Parking Lot': ['B. Jonah', 'B. Amos'],
     Offering: ['S. Dorcas', 'S. Martha']
   };
+  // Only when a test asks: Children's Teachers, where S. Abigail serves in
+  // no other department and S. Hannah also serves in Worship.
+  if ((window.__fixtureOverrides || {}).childrensTeachers) rosters["Children's Teachers"] = ['S. Abigail', 'S. Hannah'];
   const duties = window.WorshipDutyPermissions.DEPARTMENT_DUTIES;
   const members = Array.from(new Set(Object.values(rosters).flat().concat('S. Joanna'))).sort();
 
@@ -41,7 +44,7 @@
     slots.forEach(([label, time, worship]) => {
       const assignments = {};
       Object.entries(rosters).forEach(([department, names]) => {
-        if (['Parking Lot', 'Offering'].includes(department) && label !== 'Morning') return;
+        if (['Parking Lot', 'Offering', "Children's Teachers"].includes(department) && label !== 'Morning') return;
         duties[department].slice(0, department === 'Worship' ? 4 : 2).forEach((duty, index) => {
           // Thanks Prayer is only at Sabbath Day Morning.
           if (duty !== 'Prayer of Thanks' || (worship === 'Sabbath Day' && label === 'Morning')) assignments[duty] = names[(turn + index) % names.length];
@@ -116,5 +119,6 @@
   const overrides = Object.assign({}, window.__fixtureOverrides);
   Object.entries(overrides.patch || {}).forEach(([path, fields]) => { docs[path] = Object.assign({}, docs[path], fields); });
   delete overrides.patch;
+  delete overrides.childrensTeachers;
   window.__fixture = Object.assign({ docs, accounts, denied: ['app/songSettings', 'app/presiders'], delays: { songStats: 40 } }, overrides);
 })();

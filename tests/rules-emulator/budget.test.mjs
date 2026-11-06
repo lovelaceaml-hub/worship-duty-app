@@ -37,10 +37,10 @@ describe('with ' + PADDING + ' expressions to spare', () => {
     await assertSucceeds(updateDoc(doc(h.as('S. Leah'), 'requests', 'req-leah'), { status: 'withdrawn', updatedAt: 1 }));
   });
 
-  it('leaders list their departments\' requests, up to all eight', async () => {
+  it('leaders list their departments\' requests, up to all nine', async () => {
     await assertSucceeds(getDocs(query(requests('E. Joseph'), where('department', 'in', ['Worship', 'Media']))));
     await assertSucceeds(getDocs(query(requests('S. Lydia'), where('department', 'in',
-      ['Worship', 'Usher Sisters', 'Usher Brothers', 'Lobby', 'Translation', 'Media', 'Parking Lot', 'Offering']))));
+      ['Worship', 'Usher Sisters', 'Usher Brothers', 'Lobby', 'Translation', 'Media', 'Parking Lot', 'Offering', "Children's Teachers"]))));
     await assertSucceeds(getDocs(requests('B. Adam')));
   });
 

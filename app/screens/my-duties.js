@@ -15,7 +15,7 @@ import { longDate, dayBadge, dayOfMonth, monthShort, weekdayShort, shortDate, ad
 import { openRequestFor, shownStatus, isOpen } from '../lib/requests.js';
 import { sendRequest, withdrawRequest } from '../services/requests.js';
 import { recentUpdates, clearRecentUpdates, notificationsOn, turnOn, turnOff } from '../services/notifications.js';
-import { canEditSongsFor } from '../services/access.js';
+import { canEditSongsFor, onlyDepartment } from '../services/access.js';
 import { dutyName } from '../config/duties.js';
 
 const SWAP_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4"/><path d="M3 8h13"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8"/></svg>';
@@ -210,7 +210,7 @@ function dayCard({ date, services }, duties, next = false) {
         <div class="duty-when"><span class="duty-time">${serviceClock(service)}</span><span class="duty-worship">${service.worship || service.service}</span>${isNow(service)
           ? nowTag(service) : index === 0 && badge ? html`<span class="tag">${badge}</span>` : ''}</div>
         ${duties.filter(item => item.service === service).map(item => dutyLine(item, open))}
-        ${open && feature('whoElse') ? html`<div class="duty-team">${dutyGroups(service)}</div>` : ''}`)}
+        ${open && feature('whoElse') ? html`<div class="duty-team">${dutyGroups(service, { only: onlyDepartment() })}</div>` : ''}`)}
     </div>
   </article>`;
 }
