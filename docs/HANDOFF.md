@@ -1,6 +1,6 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-11-06.
+Updated 2026-11-06 (leader added, release verified).
 
 ## Released 2026-11-06: Children's Teachers
 
@@ -22,9 +22,15 @@ Updated 2026-11-06.
   locks on 2026 Entry let only alovelace144 through: heading or column
   changes there go through alovelace144 in Chrome. The Sheet's script lists
   Children's Teachers in GROUPS.
-- Leader: D. Kenya (Anthony, 2026-11-06). The saved app/leaderConfig
-  overrides the built-in list, so an administrator adds D. Kenya to
-  Children's Teachers in Manage, Leaders.
+- Leader: D. Kenya (Anthony, 2026-11-06). Added on 2026-11-06 with
+  Anthony's approval by running the server's own updateRoleConfiguration
+  as B. Anthony (no PIN sign-in), the same step as Manage, Leaders, Add.
+  Read back: app/leaderConfig has Children's Teachers: D. Kenya and nothing
+  else changed; her account is a departmentLeader for Children's Teachers
+  and must choose a new PIN at her next sign-in; the audit record exists.
+- Verified live on 2026-11-06: the site serves release r1794011505918
+  (commit b31a425), all 36 functions were updated at 00:23 UTC on
+  2026-11-07, and the live Firestore rules equal `firestore.rules`.
 - Backend release workflow: [PR #51](https://github.com/lovelaceaml-hub/worship-duty-app/pull/51)
   fixed its guard self-test call. It still fails at deploy: the account
   `gh-backend-deploy` gets 403 reading the Firestore database. Granting it
