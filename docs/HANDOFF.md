@@ -2,28 +2,34 @@
 
 Updated 2026-11-06.
 
-## In progress: Children's Teachers (branch `children-teachers`)
+## Released 2026-11-06: Children's Teachers
 
-- New department with Small Sanctuary #1, #2 and Main Sanctuary #1, #2,
-  in the app, the server, the database rules and the Sheet reader. A member
-  only in Children's Teachers sees only that department (README,
-  "Children's Teachers").
-- Checked: module check, focused unit, rules-source and server Sheet tests,
-  and a new browser test for the limited view. The rules emulator tests
-  were not run (no Java on the Mac); no full suite was run.
-- Sheet: both "2026 Entry" and "2027 Entry" have the four columns under a
-  merged "CHILDREN'S TEACHERS" heading (2026-11-06). The app's reader finds
-  them (columns AG to AJ). The "Header" and "Dates" locks on 2026 Entry let
-  only alovelace144 through, not lovelace.aml or the app's account: header
-  or column changes there go through alovelace144 in Chrome.
-- The Sheet's script ("Worship Schedule Builder", Extensions, Apps Script)
-  lists Children's Teachers in GROUPS, so Raw Data includes it once the
-  columns exist.
-- Release needs all three, in order: functions (the Sheet reader and
-  permissions), the rules, then the app.
-- Leader: D. Kenya (Anthony, 2026-11-06). Built into permissions.js, but a
-  saved app/leaderConfig overrides the built-in list, so after release an
-  administrator adds D. Kenya to Children's Teachers in Manage, Leaders.
+- [PR #50](https://github.com/lovelaceaml-hub/worship-duty-app/pull/50):
+  new department with Small Sanctuary #1, #2 and Main Sanctuary #1, #2. A
+  member only in Children's Teachers sees only that department (README,
+  "Children's Teachers"). This release also carried PR #47 (calendar
+  grouping), merged earlier but not released until now.
+- Released with Anthony's go-ahead: the 36 functions (Mac,
+  `scripts/deploy-functions.mjs`), then the rules (Mac, pinned command),
+  then the app (GitHub "Firebase release", run 42317978431).
+- Tests: Anthony approved one full run for PR #50 (run 42316560828): unit,
+  rules emulator and Cloud Functions tests passed; browser flows 110 of 111.
+  The one failure was the test's own wording (the empty-lists message now
+  also names Children's Teachers); fixed and that test passed locally. The
+  full suite was not rerun.
+- Sheet: both "2026 Entry" and "2027 Entry" have the four columns (AG to AJ)
+  under a merged "CHILDREN'S TEACHERS" heading. The "Header" and "Dates"
+  locks on 2026 Entry let only alovelace144 through: heading or column
+  changes there go through alovelace144 in Chrome. The Sheet's script lists
+  Children's Teachers in GROUPS.
+- Leader: D. Kenya (Anthony, 2026-11-06). The saved app/leaderConfig
+  overrides the built-in list, so an administrator adds D. Kenya to
+  Children's Teachers in Manage, Leaders.
+- Backend release workflow: [PR #51](https://github.com/lovelaceaml-hub/worship-duty-app/pull/51)
+  fixed its guard self-test call. It still fails at deploy: the account
+  `gh-backend-deploy` gets 403 reading the Firestore database. Granting it
+  read access to the database (for example Cloud Datastore Viewer) needs
+  Anthony's approval; until then deploy functions and rules from the Mac.
 
 Previously updated 2026-11-04.
 
