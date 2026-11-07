@@ -101,7 +101,7 @@ jobs:
           java-version: 21
 
       - name: Check the guard refuses forbidden targets
-        run: bash .github/scripts/deploy-guard.sh --self-test
+        run: bash .github/scripts/deploy-guard.sh self-test
 
       - name: Work out what to release
         id: scope
