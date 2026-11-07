@@ -10,6 +10,7 @@ const { DEFAULT_PIN, ORDINARY_DEFAULT_PIN, hashPin, createMemberAuthCallables } 
 const { canonicalName, usableMemberName } = require('./names.js');
 const appDocs = require('./app-docs.js');
 const { refusal } = require('./refusals.js');
+const { alreadyExists } = require('./util.js');
 
 const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
 const LOCK_AFTER_ATTEMPTS = 5;
@@ -77,10 +78,6 @@ async function decorateMember(record, context) {
     if (next.mustChangePin === undefined) next.mustChangePin = defaults.mustChangePin;
   }
   return next;
-}
-
-function alreadyExists(error) {
-  return !!error && (error.code === 6 || error.code === 'already-exists' || /ALREADY_EXISTS/.test(String(error.message)));
 }
 
 function createAccounts({ db, auth, logger, now = () => Date.now() }) {

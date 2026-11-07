@@ -1,7 +1,8 @@
 # Performance review
 
 Reviewed 2026-10-18. This review identifies ten opportunities in the current
-code. Item 1 was shipped in PR #43; item 8 is implemented in this change.
+code. Item 1 was shipped in PR #43; item 8 was merged in PR #47 on 2026-10-23
+(not yet released to the live site as of 2026-11-04).
 Impact and effort are qualitative estimates, not measurements of the live app.
 
 ## Ten opportunities
@@ -15,7 +16,7 @@ Impact and effort are qualitative estimates, not measurements of the live app.
 | 5 | Avoid schedule-wide work for snapshots with no document changes. | [`sync.js`](../app/sync.js) always rebuilds `data.services`, queues a cache save, checks alerts and requests a redraw after processing `docChanges()`. | Avoids unnecessary work on an unchanged snapshot. Frequency is unmeasured. | Low to medium. The first snapshot, including an empty schedule, must still settle loading and remove stale cached records. |
 | 6 | Cache derived filtered and sorted schedule lists. | [`shownServices()`](../app/screens/schedule/index.js) filters and sorts the schedule whenever the screen is recomputed. | Less repeated CPU work on redraws. | Medium. Invalidate for schedule, clock, feature, filter, name-map and search changes. |
 | 7 | Precompute searchable service text. | [`matches()`](../app/screens/schedule/index.js) rebuilds date labels, assignment text and normalized strings per service per search. | Faster search with a large schedule. | Medium. Rebuild when services or displayed member names change. |
-| 8 | Group calendar services by date once per render. | [`monthGrid()`](../app/screens/schedule/calendar.js) filters the month's service list separately for every day cell. | Replaces repeated scans with one grouping pass. Benefit is bounded by the relatively small monthly list. | Low. Keep day ordering, selected-day behavior and accessible labels unchanged. Selected for this PR. |
+| 8 | Group calendar services by date once per render. | [`monthGrid()`](../app/screens/schedule/calendar.js) filters the month's service list separately for every day cell. | Replaces repeated scans with one grouping pass. Benefit is bounded by the relatively small monthly list. | Low. Keep day ordering, selected-day behavior and accessible labels unchanged. Merged in PR #47. |
 | 9 | Avoid full-screen DOM replacement for unrelated live updates. | [`render.js`](../app/render.js) requests a screen render for background updates; [`replaceMarkup()`](../app/ui/replace.js) recreates markup while preserving fields, focus and scroll. | Less DOM work and fewer layout changes while the app is open. | Medium to high. Preserve live badges, unsaved fields, focus, caret and clock transitions. |
 | 10 | Download service-worker release assets with bounded concurrency. | [`storeRelease()`](../sw.js) fetches and caches discovered files sequentially. | Faster completion of an offline release install on a high-latency network. | Medium. Keep all-or-nothing activation, release stamps and rollback behavior. |
 

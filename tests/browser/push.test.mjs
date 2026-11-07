@@ -42,6 +42,9 @@ const MESSAGING = `
 
 async function open() {
   const opened = await openPage(browser, server.url);
+  // Start-up loads the fake Firebase after the page's load event; wait for it
+  // so a test never races the app's own connection.
+  await opened.page.waitForFunction(() => window.__fake);
   await opened.context.addInitScript(fakePush);
   await opened.page.evaluate(fakePush);
   let requests = 0;

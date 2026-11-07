@@ -13,6 +13,7 @@ const authz = require('./department-auth.js');
 const { memberListNames } = require('./department-handlers.js');
 const { refusal, DEFAULT_REASONS } = require('./refusals.js');
 const permissions = require('./permissions.js');
+const { isPlainObject } = require('./util.js');
 
 const PAGE_SIZE = 10;
 const INVITATION_DAYS = 7;
@@ -21,12 +22,6 @@ const TOKEN_BYTES = 32;
 /* An error for the app, with details.reason (by default the one for its code). */
 function errorWithCode(code, message, reason) {
   return refusal(code, reason || DEFAULT_REASONS[code] || 'server-error', message);
-}
-
-function isPlainObject(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
 
 function normalizeText(value, path, max = 160) {

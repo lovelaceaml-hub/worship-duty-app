@@ -1,7 +1,9 @@
+# Full suites run only on manual dispatch with explicit approval for this run.
+# Automatic runs retain focused checks; a generic release request is not full-suite approval.
 # Backend release: deploys main's Cloud Functions to lv-zion-duties BY NAME
 # (through scripts/deploy-functions.mjs), and Firestore rules when ticked. It
 # runs only when started from the Actions tab ("Run workflow") on main, only
-# after the repository's own tests pass, and only through the npx guard
+# after focused checks pass (full suites need separate approval), and only through the npx guard
 # (.github/scripts/npx-guard, which asks deploy-guard.sh / backend-guard.sh).
 # Run it only when Anthony says to release.
 #
@@ -23,6 +25,10 @@ name: Firebase backend release (Functions and rules)
 on:
   workflow_dispatch:
     inputs:
+      full_suite_approved:
+        description: "Anthony explicitly requested or just approved the full suite for this run"
+        type: boolean
+        default: false
       functions:
         description: "Functions to release: NONE, ALL, or names separated by commas (see .github/functions-pinned.txt)"
         type: string
@@ -146,15 +152,19 @@ jobs:
           npm ci
           npm ci --prefix functions
 
-      - name: "Pre-release checks: modules, unit and rules tests, guard"
+      - name: "Pre-release check: modules"
         run: |
           npm run check
-          npm test
 
+      - name: Full unit and rules suite (explicit approval only)
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
+        run: npm test
       - name: "Pre-release checks: Cloud Functions tests"
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm run test:functions
 
       - name: "Pre-release checks: Firestore rules on the emulator (demo project)"
+        if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm run test:rules
 
       - name: Sign in to Google without a key (Workload Identity Federation)
@@ -230,3 +240,17 @@ jobs:
             echo "- Firestore rules: Firebase console, project lv-zion-duties, Firestore, Rules, history: choose the previous version."
             echo "- Hosting is not touched by this workflow."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report testing scope (authorization is not a pass)
+        if: always()
+        env:
+          FULL_SUITE_APPROVED: ${{ github.event_name == 'workflow_dispatch' && inputs.full_suite_approved }}
+        run: |
+          if [ "$FULL_SUITE_APPROVED" = "true" ]; then
+            echo "### Full-suite mode explicitly authorized" >> "$GITHUB_STEP_SUMMARY"
+            echo "Authorization is not a pass: inspect every suite step's outcome. Skipped or failed suites are not passes." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Focused checks only: full suites NOT RUN" >> "$GITHUB_STEP_SUMMARY"
+            echo "A successful job does not indicate a full-suite pass. Full suites require Anthony's explicit request or immediate approval for this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+

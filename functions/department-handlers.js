@@ -18,6 +18,7 @@ const { canonicalName } = require('./names.js');
 const { loadNameMap } = require('./app-docs.js');
 const { hasStarted } = require('./time.js');
 const replacements = require('./replacements.js');
+const { isPlainObject: plainObject, alreadyExists } = require('./util.js');
 
 const PROFILE_PATCH_FIELDS = new Set(authz.PROFILE_MUTABLE_FIELDS);
 const PROFILE_DECISION_FIELDS = Object.freeze([
@@ -62,12 +63,6 @@ function assignmentCommandWithoutRevisionFields(data) {
 /* An error for the app: details.reason defaults to the one for its code. */
 function errorWithCode(code, message, details) {
   return refusal(code, (details && details.reason) || DEFAULT_REASONS[code] || 'server-error', message, details);
-}
-
-function plainObject(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
 
 function requestActor(request) {
@@ -292,10 +287,6 @@ function assignmentForSchedule(assignment, schedule) {
     throw errorWithCode('aborted', 'The service\'s date or time is not what you saw. Reload to see the newer version.', { reason: 'changed' });
   }
   return { ...assignment, serviceDate, serviceTime };
-}
-
-function alreadyExists(error) {
-  return !!error && (error.code === 6 || error.code === 'already-exists' || /ALREADY_EXISTS/.test(String(error.message)));
 }
 
 /* An assignment's duty in its stored spelling ('usher door' is Usher Door),
