@@ -9,8 +9,14 @@ export const DEPARTMENTS = [
   { name: 'Translation', color: '#047857', duties: ['Translation #1', 'Translation #2'] },
   { name: 'Media', color: '#7c2d12', duties: ['Media Booth #1', 'Media Booth #2'] },
   { name: 'Parking Lot', color: '#3f6212', duties: ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'] },
-  { name: 'Offering', color: '#a21caf', duties: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'] }
+  { name: 'Offering', color: '#a21caf', duties: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'] },
+  { name: 'Children\'s Teachers', color: '#0f766e', duties: ['Small Sanctuary #1', 'Small Sanctuary #2', 'Main Sanctuary #1', 'Main Sanctuary #2'] }
 ];
+
+/* A department whose members, when it is the only one they serve in, see
+   only its own duties anywhere in the app (no other department's names).
+   Anyone who also serves elsewhere, leads or administers sees everything. */
+export const SEPARATE_DEPARTMENTS = ["Children's Teachers"];
 
 export const ALL_DUTIES = DEPARTMENTS.flatMap(department => department.duties);
 

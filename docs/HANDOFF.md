@@ -1,6 +1,31 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-11-04.
+Updated 2026-11-06.
+
+## In progress: Children's Teachers (branch `children-teachers`)
+
+- New department with Small Sanctuary #1, #2 and Main Sanctuary #1, #2,
+  in the app, the server, the database rules and the Sheet reader. A member
+  only in Children's Teachers sees only that department (README,
+  "Children's Teachers").
+- Checked: module check, focused unit, rules-source and server Sheet tests,
+  and a new browser test for the limited view. The rules emulator tests
+  were not run (no Java on the Mac); no full suite was run.
+- Sheet: both "2026 Entry" and "2027 Entry" have the four columns under a
+  merged "CHILDREN'S TEACHERS" heading (2026-11-06). The app's reader finds
+  them (columns AG to AJ). The "Header" and "Dates" locks on 2026 Entry let
+  only alovelace144 through, not lovelace.aml or the app's account: header
+  or column changes there go through alovelace144 in Chrome.
+- The Sheet's script ("Worship Schedule Builder", Extensions, Apps Script)
+  lists Children's Teachers in GROUPS, so Raw Data includes it once the
+  columns exist.
+- Release needs all three, in order: functions (the Sheet reader and
+  permissions), the rules, then the app.
+- Leader: D. Kenya (Anthony, 2026-11-06). Built into permissions.js, but a
+  saved app/leaderConfig overrides the built-in list, so after release an
+  administrator adds D. Kenya to Children's Teachers in Manage, Leaders.
+
+Previously updated 2026-11-04.
 
 ## Since the last release
 

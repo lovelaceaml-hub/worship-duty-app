@@ -1,8 +1,8 @@
 /* Who may do what. The rules live in permissions.js, which the server also
    uses; this module applies them to the signed-in member and the leader
    configuration in app/leaderConfig. */
-import { DEPARTMENTS } from '../config/duties.js';
-import { data, session } from '../store.js';
+import { DEPARTMENTS, SEPARATE_DEPARTMENTS, departmentOf } from '../config/duties.js';
+import { data, session, ui } from '../store.js';
 
 function rules() { return window.WorshipDutyPermissions; }
 
@@ -69,4 +69,34 @@ export function isPrivileged(name) {
   } catch (_error) {
     return false;
   }
+}
+
+/* The departments `name` serves in: the lists they are on and the
+   departments of every duty they hold or held in the schedule. */
+function departmentsOf(name) {
+  const out = new Set();
+  if (!name) return out;
+  Object.entries(data.rosters || {}).forEach(([department, names]) => {
+    if (Array.isArray(names) && names.includes(name)) out.add(department);
+  });
+  (data.services || []).forEach(service => {
+    Object.entries(service.assignments || {}).forEach(([duty, holder]) => {
+      const department = holder === name ? departmentOf(duty) : null;
+      if (department) out.add(department.name);
+    });
+  });
+  return out;
+}
+
+/* The one department the signed-in member may see, or '' for every
+   department. A member whose only department is a separate one (Children's
+   Teachers) sees only that department's duties; serving anywhere else, or
+   leading, editing songs or administering, shows everything as before. */
+export function onlyDepartment() {
+  const name = ui.me;
+  if (!name || isPrivileged(name)) return '';
+  const mine = departmentsOf(name);
+  if (mine.size !== 1) return '';
+  const [department] = mine;
+  return SEPARATE_DEPARTMENTS.includes(department) ? department : '';
 }

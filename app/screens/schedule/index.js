@@ -8,10 +8,10 @@ import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
 import { data, ui, feature, nameOf, readText, writeText } from '../../store.js';
 import { render as redraw } from '../../render.js';
-import { DEPARTMENTS, dutyName } from '../../config/duties.js';
+import { DEPARTMENTS, dutyName, departmentNamed } from '../../config/duties.js';
 import { serviceId, byStart, startsAt, isUpcoming, isNow, departmentHasAssignments, serviceClock } from '../../lib/services.js';
 import { addMonths, monthName, longDate, shortDate, todayISO } from '../../lib/dates.js';
-import { canManageAnyDepartment } from '../../services/access.js';
+import { canManageAnyDepartment, onlyDepartment } from '../../services/access.js';
 import { openService } from '../manage/services.js';
 import { serviceCard, serviceList, isCurrent } from '../../ui/components.js';
 import * as calendar from './calendar.js';
@@ -29,17 +29,26 @@ export function render() {
 
 /* ---- what is on the schedule ---- */
 
+/* The department the Schedule shows: the member's only department when it
+   is a separate one (see onlyDepartment), else the filter they picked. */
+export function shownDepartment() {
+  return onlyDepartment() || ui.departmentFilter;
+}
+
 /* Search looks at what the screen shows: duty names as members know them
    ("Opening Prayer", not the stored "Sermon"), names, dates and services. */
 function matches(service, query) {
-  const text = [service.worship, service.service, service.date, longDate(service.date), shortDate(service.date), service.choirSong]
-    .concat(Object.entries(service.assignments || {}).flatMap(([duty, name]) => name ? [dutyName(duty), name, nameOf(name)] : []))
+  const only = onlyDepartment();
+  const duties = only ? departmentNamed(only).duties : null;
+  const text = [service.worship, service.service, service.date, longDate(service.date), shortDate(service.date), only ? '' : service.choirSong]
+    .concat(Object.entries(service.assignments || {}).flatMap(([duty, name]) => name && (!duties || duties.includes(duty)) ? [dutyName(duty), name, nameOf(name)] : []))
     .join(' ').toLowerCase();
   return query.toLowerCase().split(/\s+/).filter(Boolean).every(word => text.includes(word));
 }
 
 function fits(service) {
-  return ui.departmentFilter === 'All' || departmentHasAssignments(service, ui.departmentFilter);
+  const department = shownDepartment();
+  return department === 'All' || departmentHasAssignments(service, department);
 }
 
 function pastShown() { return feature('pastServices') && ui.showPast; }
@@ -147,19 +156,20 @@ function editLink(service) {
 /* One service as the Schedule shows it: "You serve here", its team, and
    "Edit assignments" for leaders. */
 export function servicePanel(service, { withDate = false } = {}) {
-  return html`${myDutiesAt(service)}${serviceCard(service, { only: ui.departmentFilter, withDate })}${editLink(service)}`;
+  return html`${myDutiesAt(service)}${serviceCard(service, { only: shownDepartment(), withDate })}${editLink(service)}`;
 }
 
 /* Why nothing shows, given the search and the department filter. `where`
    is "this month", "on this day" and so on. */
 export function emptyText(where) {
   if (ui.schedule.query) return 'No services match your search.';
-  return ui.departmentFilter === 'All' ? 'No services ' + where + '.' : 'No services for ' + ui.departmentFilter + ' ' + where + '.';
+  const department = shownDepartment();
+  return department === 'All' ? 'No services ' + where + '.' : 'No services for ' + department + ' ' + where + '.';
 }
 
 /* An empty view, with a way out when a department filter caused it. */
 export function noServices(text) {
-  return html`<div class="empty schedule-empty"><p>${text}</p>${ui.departmentFilter !== 'All'
+  return html`<div class="empty schedule-empty"><p>${text}</p>${ui.departmentFilter !== 'All' && !onlyDepartment()
     ? html`<button type="button" class="link" data-act="department-filter" data-department="All">Show all departments</button>` : ''}</div>`;
 }
 
@@ -173,7 +183,7 @@ export function allServicesList(sel, { skip = null } = {}) {
   const where = skip && skip.date >= from ? 'after this one' : 'in ' + monthName(sel.month) + ' or later';
   return html`<section class="month-list" aria-label="All services">
     ${query && services.length ? html`<p class="schedule-count">${plural(services.length, 'service')} ${services.length === 1 ? 'matches' : 'match'} your search.</p>` : ''}
-    ${shown.length ? serviceList(shown, ui.departmentFilter) : noServices(emptyText(where))}
+    ${shown.length ? serviceList(shown, shownDepartment()) : noServices(emptyText(where))}
     ${services.length > shown.length ? html`<div class="center"><button type="button" class="ghost" data-act="schedule-more">Show more services</button></div>` : ''}
   </section>`;
 }

@@ -7,8 +7,9 @@ import { serviceClock } from '../../lib/services.js';
 import { toISO, longDate, monthName } from '../../lib/dates.js';
 import {
   selection, serves, monthNav, modeToggle, todayButton, searchBox, pastControl, timeButtons, servicePanel,
-  allServicesList, noServices, emptyText
+  allServicesList, noServices, emptyText, shownDepartment
 } from './index.js';
+import { onlyDepartment } from '../../services/access.js';
 
 function monthGrid(month, services, selected) {
   const servicesByDate = new Map();
@@ -48,7 +49,7 @@ function inspector(date, service, onDate) {
   if (!service) {
     return html`<aside class="day-panel" aria-label="Chosen day">
       ${date ? html`<h2 class="day-panel-title">${longDate(date)}</h2>` : ''}
-      ${noServices(ui.departmentFilter === 'All' ? 'No services on this day. Pick a day with a service.' : emptyText('on this day'))}
+      ${noServices(shownDepartment() === 'All' ? 'No services on this day. Pick a day with a service.' : emptyText('on this day'))}
     </aside>`;
   }
   return html`<aside class="day-panel" aria-label="Chosen service">
@@ -69,7 +70,7 @@ export function render() {
       ${todayButton()}
       ${modeToggle('Month')}
     </div>
-    <div class="schedule-filters">${searchBox()}${departmentSelect()}${pastControl()}</div>
+    <div class="schedule-filters">${searchBox()}${onlyDepartment() ? '' : departmentSelect()}${pastControl()}</div>
     <div class="schedule-body">
       ${listView ? allServicesList(sel) : html`${monthGrid(month, inMonth, date)}${inspector(date, service, onDate)}`}
     </div>

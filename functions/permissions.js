@@ -18,7 +18,8 @@ const DEPARTMENT_DUTIES = {
   Translation: ['Translation #1', 'Translation #2'],
   Media: ['Media Booth #1', 'Media Booth #2'],
   'Parking Lot': ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'],
-  Offering: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6']
+  Offering: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'],
+  "Children's Teachers": ['Small Sanctuary #1', 'Small Sanctuary #2', 'Main Sanctuary #1', 'Main Sanctuary #2']
 };
 
 const DEPARTMENTS = Object.freeze(Object.keys(DEPARTMENT_DUTIES));
@@ -135,7 +136,8 @@ const DEFAULT_DEPARTMENT_LEADERS = {
   Translation: ['S. Paola'],
   Media: ['D. Aaron', 'D. Armani', 'B. Brent'],
   'Parking Lot': ['D. Aaron'],
-  Offering: ['S. Elisa']
+  Offering: ['S. Elisa'],
+  "Children's Teachers": ['D. Kenya']
 };
 Object.keys(DEFAULT_DEPARTMENT_LEADERS).forEach(department => {
   Object.freeze(DEFAULT_DEPARTMENT_LEADERS[department]);

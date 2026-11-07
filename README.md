@@ -337,6 +337,24 @@ on every pair and three of duties.
   job does. Someone who joins with an invite link shows as "Not ready" until
   a leader chooses the duties they can take.
 
+## Children's Teachers
+
+Children's Teachers has four duties: Small Sanctuary #1 and #2, and Main
+Sanctuary #1 and #2. It plans, fills and takes requests like every other
+department. A member whose only department is Children's Teachers (no other
+department list and no other duty in the schedule) sees only Children's
+Teachers duties: the Schedule has no department filter for them, a search
+finds only that department, and "Who else is serving" on My Duties lists only
+it. Anyone who also serves in another department, and every leader, song
+editor and administrator, sees everything (`onlyDepartment()` in
+`app/services/access.js`; `SEPARATE_DEPARTMENTS` in `app/config/duties.js`).
+This only changes what the app shows: the schedule itself stays readable to
+anyone with the site passcode, as before.
+
+The Sheet's Entry tabs need four columns headed exactly like the duties, under
+a "CHILDREN'S TEACHERS" heading. The app finds columns by their heading; until
+they exist, these duties stay in the app and are not written to the Sheet.
+
 ## Signing in
 
 - Members sign in with their name and PIN. A new or reset PIN is a shared

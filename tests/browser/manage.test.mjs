@@ -146,7 +146,7 @@ test('Fill on all departments fills those with people and names the others', asy
   });
   await monthPlan(page);
   await page.locator('#view .plan-status', { hasText: 'The Media list did not load' }).waitFor();
-  await page.locator('#view .plan-status', { hasText: 'No one is on the Offering list yet' }).waitFor();
+  await page.locator('#view .plan-status', { hasText: 'No one is on the Offering and Children\'s Teachers lists yet' }).waitFor();
   await page.locator('#view [data-act="plan-fill"]').click();
   await banner(page, 'Fill skipped Media, Offering');
   await page.locator('#view .plan-cell.is-proposed').first().waitFor();

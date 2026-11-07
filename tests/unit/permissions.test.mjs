@@ -27,8 +27,9 @@ const config = {
 test('exports the complete department and duty configuration', () => {
   assert.deepEqual(permissions.DEPARTMENTS, [
     'Worship', 'Usher Sisters', 'Usher Brothers', 'Lobby', 'Translation',
-    'Media', 'Parking Lot', 'Offering'
+    'Media', 'Parking Lot', 'Offering', "Children's Teachers"
   ]);
+  assert.equal(permissions.DUTY_TO_DEPARTMENT['Main Sanctuary #2'], "Children's Teachers");
   assert.equal(permissions.DEPARTMENT_DUTIES.Worship[0], 'Presider');
   assert.equal(permissions.DUTY_TO_DEPARTMENT['Parking #5'], 'Parking Lot');
   assert.equal(permissions.DUTY_TO_DEPARTMENT['Offering #6'], 'Offering');

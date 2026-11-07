@@ -467,3 +467,39 @@ test('double duties are marked in words, and a prayer with an usher duty is not 
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+test('a member only in Children\'s Teachers sees only that department; one also in Worship sees everything', async () => {
+  const fixture = { childrensTeachers: true };
+  const lower = list => list.map(text => text.toLowerCase());
+  const groupNames = async page => lower(await page.locator('#view .duty-group-name').allInnerTexts());
+
+  const only = await as('S. Abigail', { fixture });
+  let page = only.page;
+  await tab(page, 'schedule');
+  assert.equal(await page.locator('select[data-change="department-filter"]').count(), 0, 'no department filter');
+  await page.locator('[data-act="schedule-mode"][data-mode="all"]').click();
+  await page.waitForTimeout(300);
+  const seen = new Set(await groupNames(page));
+  assert.deepEqual([...seen], ["children's teachers"]);
+  assert.equal(await page.locator('#view .choir-song').count(), 0, 'no choir song');
+  await page.locator('#schedule-search').fill('S. Leah');
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('#view .service-card').count(), 0, 'a search finds no other department');
+  await tab(page, 'my');
+  await page.locator('.duty-card-toggle').first().click();
+  await page.waitForTimeout(300);
+  assert.deepEqual([...new Set(lower(await page.locator('.duty-team .duty-group-name').allInnerTexts()))], ["children's teachers"]);
+  assert.deepEqual(only.errors, []);
+  await only.context.close();
+
+  const both = await as('S. Hannah', { fixture });
+  page = both.page;
+  await tab(page, 'schedule');
+  assert.equal(await page.locator('select[data-change="department-filter"]').count(), 1);
+  await page.locator('[data-act="schedule-mode"][data-mode="all"]').click();
+  await page.waitForTimeout(300);
+  const all = new Set(await groupNames(page));
+  assert.ok(all.has("children's teachers") && all.has('worship') && all.has('lobby'), [...all].join(', '));
+  assert.deepEqual(both.errors, []);
+  await both.context.close();
+});
