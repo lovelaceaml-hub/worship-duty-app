@@ -214,11 +214,20 @@ describe('app documents', () => {
   });
 });
 
-describe('songs (stay open for the Signal song ingest, FR-1)', () => {
-  it('anyone reads and writes song lists and counts, as today', async () => {
-    await assertSucceeds(getDocs(collection(h.as('nobody'), 'setlists')));
-    await assertSucceeds(setDoc(doc(h.as('nobody'), 'setlists', SVC), { id: SVC, date: '2026-10-10', songs: [], status: 'draft' }));
-    await assertSucceeds(setDoc(doc(h.as('nobody'), 'songStats', 'song-12'), { title: 'Song of the Spirit', count: 1 }));
+describe('songs (signed-in members only; the Signal song ingest uses the songIngest function)', () => {
+  it('a signed-in member reads and writes song lists and counts', async () => {
+    await assertSucceeds(getDocs(collection(h.as('S. Leah'), 'setlists')));
+    await assertSucceeds(setDoc(doc(h.as('S. Leah'), 'setlists', SVC), { id: SVC, date: '2026-10-10', songs: [], status: 'draft' }));
+    await assertSucceeds(setDoc(doc(h.as('S. Leah'), 'songStats', 'song-12'), { title: 'Song of the Spirit', count: 1 }));
+  });
+
+  it('no one else does', async () => {
+    for (const who of ['nobody', 'stranger']) {
+      await assertFails(getDocs(collection(h.as(who), 'setlists')));
+      await assertFails(getDoc(doc(h.as(who), 'songStats', 'song-311')));
+      await assertFails(setDoc(doc(h.as(who), 'setlists', SVC), { id: SVC, date: '2026-10-10', songs: [], status: 'draft' }));
+      await assertFails(setDoc(doc(h.as(who), 'songStats', 'song-12'), { title: 'Song of the Spirit', count: 1 }));
+    }
   });
 });
 

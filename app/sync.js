@@ -57,11 +57,27 @@ export function startSync() {
     data.nameMap = snapshot.exists() ? (snapshot.data().map || {}) : {};
     canonicalizeNames();
   });
-  // Song lists from today on, for the song status on My Duties.
-  fb.onSnapshot(fb.query(fb.collection(fb.db, 'setlists'), fb.where('date', '>=', todayISO())), snapshot => {
+}
+
+/* Song lists from today on, for the song status on My Duties. Only signed-in
+   members may read them, so this starts at sign-in (`on` true) and stops at
+   sign-out; a listener that failed starts again at the next sign-in. */
+let stopSetlists = null;
+export function watchSetlists(on) {
+  if (!on || !fb.db) {
+    if (stopSetlists) stopSetlists();
+    stopSetlists = null;
+    data.setlists = {};
+    return;
+  }
+  if (stopSetlists) return;
+  stopSetlists = fb.onSnapshot(fb.query(fb.collection(fb.db, 'setlists'), fb.where('date', '>=', todayISO())), snapshot => {
     const setlists = {};
     snapshot.docs.forEach(doc => { setlists[doc.id] = doc.data(); });
     data.setlists = setlists;
     renderSoon();
-  }, error => console.warn('Setlist listener stopped:', error));
+  }, error => {
+    console.warn('Setlist listener stopped:', error);
+    stopSetlists = null;
+  });
 }

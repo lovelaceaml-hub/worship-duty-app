@@ -8,7 +8,8 @@
    - notify.js and schedule-projection.js: what follows a schedule write,
      every alert and the day-before reminders;
    - sheet-io.js: the Google Sheet, both ways, and the planning year;
-   - public-endpoints.js: the calendar feed and the public schedule.
+   - public-endpoints.js: the calendar feed and the public schedule;
+   - song-ingest-endpoint.js: the Signal song ingest's reads and writes.
    Every callable goes through callable() below, which checks who is calling
    and turns any error into one the app can show: an HttpsError whose
    details.reason is a short stable code (refusals.js). The export names are
@@ -39,6 +40,10 @@ const { createNotifier } = require('./notify');
 const { reconcileScheduleAssignmentProjection } = require('./schedule-projection');
 const { createPublicEndpoints } = require('./public-endpoints');
 const { createSheetIo } = require('./sheet-io');
+const { createSongIngestEndpoint } = require('./song-ingest-endpoint');
+const { defineSecret } = require('firebase-functions/params');
+
+const SONG_INGEST_TOKEN = defineSecret('SONG_INGEST_TOKEN');
 
 initializeApp();
 const db = getFirestore();
@@ -324,6 +329,11 @@ exports.onFeedbackDone = onDocumentUpdated(
    instances: neither needs more, and they are open to anyone. ---- */
 exports.ics = onRequest({ region: REGION, maxInstances: 5 }, publicEndpoints.ics);
 exports.publicSchedule = onRequest({ region: REGION, maxInstances: 5 }, publicEndpoints.publicSchedule);
+
+/* ---- the Signal song ingest's door to the song data
+   (song-ingest-endpoint.js). Its token is the secret SONG_INGEST_TOKEN. ---- */
+exports.songIngest = onRequest({ region: REGION, maxInstances: 2, secrets: [SONG_INGEST_TOKEN] },
+  createSongIngestEndpoint({ db, logger, token: () => SONG_INGEST_TOKEN.value() }));
 
 /* ---- the Google Sheet (sheet-io.js) ---- */
 

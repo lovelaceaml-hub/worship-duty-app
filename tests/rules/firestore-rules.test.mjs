@@ -53,13 +53,12 @@ function objectKeys(source, marker) {
   return keys;
 }
 
-test('rules deny every path they do not name, and leave only three open', () => {
+test('rules deny every path they do not name, and leave only the schedule open to read', () => {
   assert.match(rules, /^rules_version = '2';/);
   const catchAll = rules.lastIndexOf('match /{document=**}');
   assert.ok(catchAll > rules.lastIndexOf('match /setlists/'), 'the catch-all comes last');
   assert.match(block(rules, 'match /{document=**}'), /^\s*allow read, write: if false;\s*$/);
-  // Only the public schedule and the two song collections (the Signal
-  // ingest writes them without signing in) are open to everyone.
+  // Only the public schedule is open to everyone, and only to read.
   const open = [];
   let current = '';
   rules.split('\n').forEach(line => {
@@ -68,7 +67,7 @@ test('rules deny every path they do not name, and leave only three open', () => 
     const allow = line.match(/allow ([a-z, ]+): if true;/);
     if (allow) open.push(current + ' ' + allow[1]);
   });
-  assert.deepEqual(open, ['/schedule/{serviceId} read', '/songStats/{songId} read, write', '/setlists/{setlistId} read, write']);
+  assert.deepEqual(open, ['/schedule/{serviceId} read']);
 });
 
 test('each department\'s duties in the rules are the ones in permissions.js', () => {
