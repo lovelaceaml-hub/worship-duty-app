@@ -96,21 +96,27 @@ async function createYearTab(sheets, metas, year) {
   const source = metas.filter(meta => meta.title < title).pop() || metas[metas.length - 1];
   if (!source) throw new Error('The Sheet has no "<year> Entry" tab to copy.');
   const old = await readTab(sheets, source);
-  const reply = await sheets.update([{ duplicateSheet: { sourceSheetId: source.sheetId, insertSheetIndex: source.index + 1, newSheetName: title } }]);
-  const sheetId = reply.replies[0].duplicateSheet.properties.sheetId;
+  // The copy, the removal of last year's rows and the blanking of the two
+  // rows kept as the look all go in one request, which the Sheet applies
+  // whole or not at all: a failure never leaves a tab full of last year's
+  // services for the next write to reuse. The copy's id is chosen here so
+  // the later steps of the same request can name it.
+  const taken = new Set(metas.map(meta => meta.sheetId));
+  let sheetId = 100000000 + year;
+  while (taken.has(sheetId)) sheetId += 1;
   const keep = [old.banners[0] && old.banners[0].row, old.rows[0] && old.rows[0].row].filter(Boolean);
-  const requests = [];
+  const requests = [{ duplicateSheet: { sourceSheetId: source.sheetId, insertSheetIndex: source.index + 1, newSheetId: sheetId, newSheetName: title } }];
   for (let row = old.lastRow; row >= grid.FIRST_ROW; row--) {
     if (keep.includes(row)) continue;
     requests.push({ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } });
   }
-  await sheets.update(requests);
   const kept = keep.slice().sort((a, b) => a - b);
   const templates = { bannerText: old.banners[0] ? old.banners[0].text : '' };
   kept.forEach((row, offset) => {
     templates[old.banners[0] && row === old.banners[0].row ? 'banner' : 'service'] = { row: grid.FIRST_ROW + offset };
+    requests.push(cellsRequest(sheetId, grid.FIRST_ROW + offset, new Array(old.width).fill('')));
   });
-  if (kept.length) await sheets.write([{ range: grid.a1(title, grid.FIRST_ROW, 0), values: kept.map(() => new Array(old.width).fill('')) }]);
+  await sheets.update(requests);
   return { title, sheetId, index: source.index + 1, columns: old.columns, width: old.width, lastRow: grid.HEADER_ROW + kept.length, rows: [], banners: [], templates };
 }
 

@@ -58,8 +58,8 @@ function fakeSheets(tabs) {
           return {};
         }
         if (request.duplicateSheet) {
-          const { sourceSheetId, insertSheetIndex, newSheetName } = request.duplicateSheet;
-          const copy = { sheetId: 100 + sheets.length, title: newSheetName, index: insertSheetIndex, values: byId(sourceSheetId).values.map(row => row.slice()) };
+          const { sourceSheetId, insertSheetIndex, newSheetName, newSheetId } = request.duplicateSheet;
+          const copy = { sheetId: newSheetId || 100 + sheets.length, title: newSheetName, index: insertSheetIndex, values: byId(sourceSheetId).values.map(row => row.slice()) };
           sheets.push(copy);
           log.push({ duplicate: newSheetName });
           return { duplicateSheet: { properties: { sheetId: copy.sheetId, title: newSheetName, index: insertSheetIndex } } };
