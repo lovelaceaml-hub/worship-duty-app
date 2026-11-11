@@ -12,7 +12,7 @@ import { dutyName, PRAYER_DUTIES } from '../../config/duties.js';
 import { serviceId, isUpcoming, serviceClock } from '../../lib/services.js';
 import { monthName, weekdayShort, dayOfMonth } from '../../lib/dates.js';
 import { canEditDuty } from '../../services/access.js';
-import { roster, rosterLoaded, refreshRosters, departments as departmentState } from '../../services/departments.js';
+import { roster, rosterLoaded, refreshRosters, departments as departmentState } from '../../services/rosters.js';
 import { departmentsShown, planMonth } from './scope.js';
 import { cell, atService, needsLook, notFilled, showsPrayers, prayers } from './plan-cell.js';
 import { details } from './service-details.js';

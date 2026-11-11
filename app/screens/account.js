@@ -16,7 +16,8 @@ import * as viewAs from './view-as.js';
 import { viewingAs, canViewAs } from '../services/view-as.js';
 import { pinForm } from './lock.js';
 import { SERVICE_LABELS } from '../config/duties.js';
-import { departments, loadOwnProfiles, saveOwnAvailability } from '../services/departments.js';
+import { departments, loadOwnProfiles } from '../services/rosters.js';
+import { saveOwnAvailability } from '../services/departments.js';
 import { normalizeAvailability, timeKey, timeLabel } from '../lib/availability.js';
 import { longDate, todayISO } from '../lib/dates.js';
 

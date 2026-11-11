@@ -22,7 +22,7 @@ import { serviceId } from '../lib/services.js';
 import { shortDate } from '../lib/dates.js';
 import { timeKey } from '../lib/availability.js';
 import { reasonText } from '../lib/reasons.js';
-import { loadRoster } from './departments.js';
+import { loadRoster } from './rosters.js';
 
 export const keyOf = (id, duty) => id + '|' + duty;
 const splitKey = key => { const at = key.indexOf('|'); return [key.slice(0, at), key.slice(at + 1)]; };

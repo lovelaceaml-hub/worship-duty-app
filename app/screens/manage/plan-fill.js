@@ -16,7 +16,7 @@ import { workload } from '../../lib/workload.js';
 import { fill, fillDuties, FILL_MODES } from '../../lib/fill.js';
 import { reasonNote } from '../../lib/reasons.js';
 import { canEditDuty } from '../../services/access.js';
-import { roster, refreshRosters } from '../../services/departments.js';
+import { roster, refreshRosters } from '../../services/rosters.js';
 import { propose, proposals, proposalCount, waitingScope, saveProposals, discardProposals } from '../../services/planner.js';
 import { departmentsShown, planMonth, currentScope, scopeName, serviceById, setManagedDepartment } from './scope.js';
 import { dutyDefaults, planned } from './plan-cell.js';

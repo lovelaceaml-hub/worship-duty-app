@@ -16,7 +16,7 @@ import { shortDate, shortStamp, todayISO } from '../../lib/dates.js';
 import { isOpen, shownStatus, requestService } from '../../lib/requests.js';
 import { workload, suggestReplacements } from '../../lib/workload.js';
 import { problem } from '../../firebase.js';
-import { roster, rosterLoaded, loadRoster, refreshRosters, departments as state } from '../../services/departments.js';
+import { roster, rosterLoaded, loadRoster, refreshRosters, departments as state } from '../../services/rosters.js';
 import { answerRequest } from '../../services/requests.js';
 import { canResolveRequest, managedDepartments } from '../../services/access.js';
 import { managedDepartment, setManagedDepartment } from './scope.js';
