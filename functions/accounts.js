@@ -5,6 +5,7 @@
    and Manage, Leaders' role changes. The leader settings (app/leaderConfig)
    say who leads what; an account's stored roles are kept in step with them
    by updateRoleConfiguration. */
+const crypto = require('node:crypto');
 const permissions = require('./permissions.js');
 const { DEFAULT_PIN, ORDINARY_DEFAULT_PIN, hashPin, createMemberAuthCallables } = require('./member-auth.js');
 const { canonicalName, usableMemberName } = require('./names.js');
@@ -15,6 +16,13 @@ const { alreadyExists } = require('./util.js');
 const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
 const LOCK_AFTER_ATTEMPTS = 5;
 const LOCK_MS = 15 * 60 * 1000;
+const MAX_DEVICES = 8;
+
+/* A device key is stored only as its SHA-256; '' for no usable key. */
+function deviceId(key) {
+  const text = typeof key === 'string' ? key : '';
+  return /^[0-9a-f]{64}$/.test(text) ? crypto.createHash('sha256').update(text).digest('hex') : '';
+}
 
 /* What the leader settings give a member who has no roles stored yet: their
    roles, the departments they lead, and whether they must choose their own
@@ -173,13 +181,29 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
       /* One sign-in attempt, counted before the PIN is checked and in one
          transaction, so attempts made at the same moment cannot all slip past
          the limit. The fifth in a row locks the account for 15 minutes; a
-         correct PIN clears the count (clearFailedAttempts). */
-      async beginAttempt(id) {
+         correct PIN clears the count (signedIn).
+
+         A device this member has signed in on before sends the key it was
+         given then. Its attempts are counted on that device alone, and it is
+         not held by the account's lock: someone guessing at a member's name
+         from elsewhere can lock out other new devices, never the member's
+         own phone. A key is only ever given after a correct PIN. */
+      async beginAttempt(id, deviceKey) {
         const reference = accounts.doc(String(id));
+        const device = deviceId(deviceKey);
         await db.runTransaction(async transaction => {
           const snapshot = await transaction.get(reference);
           const data = snapshot.exists ? snapshot.data() || {} : {};
           const at = now();
+          const known = device && data.trustedDevices && data.trustedDevices[device];
+          if (known) {
+            if (Number(known.lockedUntil || 0) > at) throw refusal('resource-exhausted', 'locked', 'Too many attempts. Try again later.');
+            const attempts = Number(known.attempts || 0) + 1;
+            transaction.set(reference, { trustedDevices: { [device]: {
+              attempts, lockedUntil: attempts >= LOCK_AFTER_ATTEMPTS ? at + LOCK_MS : 0
+            } } }, { merge: true });
+            return;
+          }
           if (Number(data.loginLockedUntil || 0) > at) throw refusal('resource-exhausted', 'locked', 'Too many attempts. Try again later.');
           const attempts = Number(data.failedLoginAttempts || 0) + 1;
           transaction.set(reference, {
@@ -190,6 +214,34 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
       },
       async clearFailedAttempts(id) {
         await accounts.doc(String(id)).set({ failedLoginAttempts: 0, loginLockedUntil: 0 }, { merge: true });
+      },
+      /* After a correct PIN: the counts start again, and a device not known
+         yet is given a key (returned once, only its hash is stored). The
+         newest MAX_DEVICES are kept. A known device returns null. */
+      async signedIn(id, deviceKey) {
+        const reference = accounts.doc(String(id));
+        const device = deviceId(deviceKey);
+        return db.runTransaction(async transaction => {
+          const snapshot = await transaction.get(reference);
+          const data = snapshot.exists ? snapshot.data() || {} : {};
+          const devices = Object.assign({}, data.trustedDevices);
+          const at = now();
+          let issued = null;
+          if (device && devices[device]) {
+            devices[device] = { at: Number(devices[device].at || at), attempts: 0, lockedUntil: 0 };
+          } else {
+            issued = crypto.randomBytes(32).toString('hex');
+            devices[deviceId(issued)] = { at, attempts: 0, lockedUntil: 0 };
+          }
+          const kept = Object.keys(devices).sort((a, b) => Number(devices[b].at || 0) - Number(devices[a].at || 0)).slice(0, MAX_DEVICES);
+          const trustedDevices = {};
+          kept.forEach(key => { trustedDevices[key] = devices[key]; });
+          // update(), not a merge: the map is replaced, so dropped devices go.
+          const patch = { failedLoginAttempts: 0, loginLockedUntil: 0, trustedDevices };
+          if (snapshot.exists) transaction.update(reference, patch);
+          else transaction.set(reference, patch, { merge: true });
+          return issued;
+        });
       }
     };
   }

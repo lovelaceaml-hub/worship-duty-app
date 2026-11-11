@@ -141,8 +141,14 @@ function signInProblem(error, { signedIn = false } = {}) {
 }
 
 async function signInWith(memberId, memberName, pin) {
-  const result = await call('verifyMemberPin', { selectedMemberId: memberId, selectedMemberName: memberName, pin });
+  // The key this device was given the last time this member signed in here.
+  // The server counts a known device's tries by itself, so wrong PINs typed
+  // elsewhere against this name never lock the member's own device out. It
+  // stays after signing out: it says nothing about the member.
+  const known = 'wds-device-' + memberId;
+  const result = await call('verifyMemberPin', { selectedMemberId: memberId, selectedMemberName: memberName, pin, deviceKey: readText(known) || undefined });
   if (!result || !result.token) throw Object.assign(new Error('No sign-in token.'), { code: 'unavailable' });
+  if (result.deviceKey) writeText(known, result.deviceKey);
   await fb.signInWithCustomToken(fb.auth, result.token);
   // The token already carries the member's claims; do not force a refresh.
   if (fb.auth.currentUser) await onAuthChange(fb.auth.currentUser);
@@ -175,11 +181,15 @@ export async function changePin(first, second) {
   ui.signIn = { member: member.memberName, busy: true, error: '' };
   renderSoon();
   try {
-    await call('changeMemberPin', { memberId: member.memberId, newPin: first });
-    // The first PIN change signs in again, for a session that no longer has
-    // to change it. A member already in the app keeps their session, so a
-    // refused sign-in cannot make a done change look failed.
-    if (!signedIn) await signInWith(member.memberId, member.memberName, first);
+    const result = await call('changeMemberPin', { memberId: member.memberId, newPin: first });
+    // A PIN change ends every session the member had, so this device signs
+    // in again with the token the change returns: other devices are signed
+    // out and this one stays in. A first PIN change with no token signs in
+    // with the new PIN instead.
+    if (result && result.token) {
+      await fb.signInWithCustomToken(fb.auth, result.token);
+      if (fb.auth.currentUser) await onAuthChange(fb.auth.currentUser);
+    } else if (!signedIn) await signInWith(member.memberId, member.memberName, first);
     if (session.status !== 'verified') throw new Error('The PIN still needs to be changed.');
     ui.signIn = { member: member.memberName, busy: false, error: '' };
   } catch (error) {

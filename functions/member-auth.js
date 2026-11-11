@@ -586,14 +586,18 @@ function createMemberAuthService(dependencies = {}) {
     const storedHash = memberPinHash(member);
     // The attempt is counted (and a locked account refused) before the PIN
     // is checked, so a burst of guesses cannot all be tried.
-    if (typeof memberStore.beginAttempt === 'function') await memberStore.beginAttempt(member.id);
+    if (typeof memberStore.beginAttempt === 'function') await memberStore.beginAttempt(member.id, input.deviceKey);
     const valid = storedHash && await verifyPin(input.pin, storedHash);
     if (!valid) {
       audit(logger, 'verify', 'denied', null, member);
       throw authError('unauthenticated', GENERIC_LOGIN_MESSAGE);
     }
 
-    if (typeof memberStore.clearFailedAttempts === 'function') await memberStore.clearFailedAttempts(member.id);
+    // A device new to this member is given a key to send next time, so a
+    // lock on the member's name does not hold the member's own device.
+    let deviceKey = null;
+    if (typeof memberStore.signedIn === 'function') deviceKey = await memberStore.signedIn(member.id, input.deviceKey);
+    else if (typeof memberStore.clearFailedAttempts === 'function') await memberStore.clearFailedAttempts(member.id);
 
     const claims = sessionClaims(member);
     const uid = cleanText(member.authUid) || `member:${member.id}`;
@@ -605,7 +609,8 @@ function createMemberAuthService(dependencies = {}) {
       memberId: member.id,
       memberName: claims.memberName,
       mustChangePin: claims.mustChangePin,
-      claims
+      claims,
+      deviceKey
     };
   }
 
@@ -625,12 +630,31 @@ function createMemberAuthService(dependencies = {}) {
     if (SHARED_PINS.has(input.newPin)) {
       throw authError('invalid-argument', 'That PIN is too easy to guess. Choose a different one.', 'pin-too-common');
     }
+    // A changed PIN ends the member's other sessions, as a reset does: a new
+    // role version makes every older sign-in token stale and their refresh
+    // tokens are revoked. The device that made the change signs in again
+    // with the token returned here, so it stays in.
     const pinHash = await hashPin(input.newPin);
-    await updateMember(memberStore, member, { pinHash, mustChangePin: false });
-    const nextClaims = sessionClaims(Object.assign({}, member, { pinHash, mustChangePin: false }));
+    const roleVersion = Number(member.roleVersion || 1) + 1;
+    await updateMember(memberStore, member, { pinHash, mustChangePin: false, roleVersion });
+    const uid = cleanText(member.authUid) || `member:${member.id}`;
+    if (auth && typeof auth.revokeRefreshTokens === 'function') {
+      try {
+        await auth.revokeRefreshTokens(uid);
+      } catch (_error) {
+        // No Auth account yet: there are no other sessions to end.
+      }
+    }
+    const nextClaims = sessionClaims(Object.assign({}, member, { pinHash, mustChangePin: false, roleVersion }));
     if (member.authUid) await setClaimsIfSupported(auth, member, member.authUid, nextClaims);
+    let token = null;
+    try {
+      token = await issueToken(auth, uid, nextClaims);
+    } catch (_error) {
+      // The change is saved; without a token the member signs in again.
+    }
     audit(logger, 'change', 'success', actor, member);
-    return { ok: true, memberId: member.id, mustChangePin: false };
+    return { ok: true, memberId: member.id, mustChangePin: false, token };
   }
 
   async function resetMemberPin(request) {
@@ -655,7 +679,8 @@ function createMemberAuthService(dependencies = {}) {
     const pinHash = await hashPin(DEFAULT_PIN);
     const roleVersion = Number(member.roleVersion || 1) + 1;
     await updateMember(memberStore, member, {
-      pinHash, mustChangePin: true, failedLoginAttempts: 0, loginLockedUntil: 0, roleVersion
+      pinHash, mustChangePin: true, failedLoginAttempts: 0, loginLockedUntil: 0, roleVersion,
+      trustedDevices: null // a lost phone is no longer a known device
     });
     if (auth && typeof auth.revokeRefreshTokens === 'function') {
       try {
