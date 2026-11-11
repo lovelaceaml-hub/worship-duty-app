@@ -63,8 +63,8 @@ self.addEventListener('activate', event => event.waitUntil((async () => {
 
 /* Push messages from the server are data-only, so this shows each one once. */
 try {
-  importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
-  importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
+  importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js');
+  importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging-compat.js');
   firebase.initializeApp({
     apiKey: 'AIzaSyAdOJ8cETHUqcyEbBSPbV6FnVn76ASB504',
     authDomain: 'lv-zion-duties.firebaseapp.com',

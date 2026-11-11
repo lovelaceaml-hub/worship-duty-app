@@ -3,7 +3,7 @@
 import { session } from './store.js';
 import { reasonText } from './lib/reasons.js';
 
-const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+const SDK = 'https://www.gstatic.com/firebasejs/12.19.0/';
 let firebaseApp = null, messagingReady = null;
 
 export const fb = {
