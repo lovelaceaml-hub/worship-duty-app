@@ -18,25 +18,37 @@ const lib = () => window.SongLib;
 const pending = {};
 const creating = {};
 
+/* Only signed-in members may read the song data. When either listener
+   fails (the session ended), both stop, and the next time the planner is
+   shown they start again. */
+let stopListening = [];
 export function listen() {
   if (planner.listening || !fb.db) return;
   planner.listening = true;
-  fb.onSnapshot(fb.collection(fb.db, 'setlists'), snapshot => {
-    const setlists = {};
-    snapshot.docs.forEach(doc => { setlists[doc.id] = doc.data(); });
-    Object.keys(pending).forEach(id => { if (setlists[id]) delete pending[id]; else setlists[id] = pending[id]; });
-    planner.setlists = setlists;
-    planner.loaded.setlists = true;
-    createMine();
-    renderSoon();
-  }, error => console.warn('Song lists stopped updating:', error));
-  fb.onSnapshot(fb.collection(fb.db, 'songStats'), snapshot => {
-    const stats = {};
-    snapshot.docs.forEach(doc => { stats[doc.id] = doc.data(); });
-    planner.stats = stats;
-    planner.loaded.stats = true;
-    renderSoon();
-  }, error => console.warn('Song counts stopped updating:', error));
+  const stopped = message => error => {
+    console.warn(message, error);
+    stopListening.forEach(stop => stop());
+    stopListening = [];
+    planner.listening = false;
+  };
+  stopListening = [
+    fb.onSnapshot(fb.collection(fb.db, 'setlists'), snapshot => {
+      const setlists = {};
+      snapshot.docs.forEach(doc => { setlists[doc.id] = doc.data(); });
+      Object.keys(pending).forEach(id => { if (setlists[id]) delete pending[id]; else setlists[id] = pending[id]; });
+      planner.setlists = setlists;
+      planner.loaded.setlists = true;
+      createMine();
+      renderSoon();
+    }, stopped('Song lists stopped updating:')),
+    fb.onSnapshot(fb.collection(fb.db, 'songStats'), snapshot => {
+      const stats = {};
+      snapshot.docs.forEach(doc => { stats[doc.id] = doc.data(); });
+      planner.stats = stats;
+      planner.loaded.stats = true;
+      renderSoon();
+    }, stopped('Song counts stopped updating:'))
+  ];
 }
 
 function stamp(patch) {

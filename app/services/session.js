@@ -7,6 +7,7 @@ import { data, session, ui, loaded, canonical, readText, writeText, forgetMember
 import { renderSoon, setLeaveGuard } from '../render.js';
 import { resetDepartments, acceptPendingInvite } from './departments.js';
 import { watchRequests } from './requests.js';
+import { watchSetlists } from '../sync.js';
 import { afterSignIn, unregisterPush, forgetDutyAlerts } from './notifications.js';
 import { countOnce } from './usage.js';
 import { endViewAs, realMember } from './view-as.js';
@@ -90,6 +91,7 @@ function setMember(member, user) {
     writeText('wds-me', member.mustChangePin ? null : member.memberName);
   }
   watchRequests();
+  watchSetlists(session.status === 'verified');
 }
 
 /* Firebase tells us when a saved sign-in is restored or ends. A session the

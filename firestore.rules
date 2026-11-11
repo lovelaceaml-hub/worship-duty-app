@@ -350,15 +350,15 @@ service cloud.firestore {
 
     // ---- songs ----
 
-    // The Signal song ingest on Anthony's Mac writes these two collections
-    // without signing in, so they stay open until it signs in or moves to
-    // the server. Song planners read and write them from the song planner.
+    // Signed-in members only: song planners read and write these from the
+    // song planner. The Signal song ingest does not sign in; it reads and
+    // writes them through the songIngest function, with its own token.
     match /songStats/{songId} {
-      allow read, write: if true;
+      allow read, write: if member();
     }
 
     match /setlists/{setlistId} {
-      allow read, write: if true;
+      allow read, write: if member();
     }
 
     // Everything else is server-only or unused: accounts (PIN hashes and

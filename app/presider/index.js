@@ -74,9 +74,9 @@ export function mount(element) {
   if (!started) {
     started = true;
     loadSeed();
-    listen();
     loadPublished().then(replaced => { if (replaced) draw(); });
   }
+  listen(); // starts once; again after a session ended and stopped it
   wireSwipe(root);
   if (ui.songNav) {
     ui.songNav = false;

@@ -36,7 +36,7 @@ PROJECT="lv-zion-duties"
 FIREBASE_TOOLS="firebase-tools@15"
 # Secret Manager secrets the Functions may read (defineSecret). Worship's
 # Functions on main read none (the Sheet is reached by impersonation).
-ALLOWED_SECRETS=()
+ALLOWED_SECRETS=(SONG_INGEST_TOKEN)
 # The LV Zion sender functions live in this project but are deployed from
 # elsewhere on purpose. This repository must never deploy or delete them.
 REFUSED_FUNCTIONS=(onVercelScheduleWrite worshipVercelReconcile)
