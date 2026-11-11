@@ -24,7 +24,7 @@ const root = path.resolve(repo, option('--root', '.'));
 const fakes = path.join(repo, 'tests', 'fake');
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
-const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+const SDK = 'https://www.gstatic.com/firebasejs/12.19.0/';
 const FAKES = ['app', 'firestore', 'auth', 'functions', 'messaging'];
 /* The app's files in the repository, as scripts/build.mjs lists them. */
 const APP_FILES = ['index.html', 'permissions.js', 'firebase-config.js', 'song-lib.js', 'song-seed.js', 'sw.js', 'manifest.json', 'icon.svg'];
