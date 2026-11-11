@@ -21,7 +21,10 @@ function lastImportLine() {
   if (!last || !last.at) return '';
   const changes = [plural(last.added || 0, 'service') + ' added', (last.updated || 0) + ' updated'];
   if (last.skipped) changes.push(plural(last.skipped, 'row') + ' skipped');
-  return 'Last import: ' + when(last.at) + ', ' + changes.join(', ') + '.';
+  // Many filled duties blank in the Sheet at once are not cleared by the
+  // timed import; Import now clears them.
+  const held = last.held ? ' ' + plural(last.held, 'filled duty', 'filled duties') + ' are blank in the Sheet and were kept. Press Import now to clear them.' : '';
+  return 'Last import: ' + when(last.at) + ', ' + changes.join(', ') + '.' + held;
 }
 
 const importButton = () => html`<button type="button" class="primary" data-act="sheet-import"${sheet.busy || !feature('sheetSync') ? ' disabled' : ''}>${sheet.busy ? 'Importing…' : 'Import now'}</button>`;

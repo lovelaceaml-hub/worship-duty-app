@@ -678,6 +678,10 @@ function createDepartmentHandlers(options = {}) {
     if (!assignment.serviceId) {
       throw errorWithCode('invalid-argument', 'A service ID is required for an assignment override.');
     }
+    // Names are compared in today's spelling, as assignDepartmentDuty does,
+    // so a member or a holder stored under an older spelling still matches.
+    const nameMap = await loadNameMap(db);
+    const canonical = name => canonicalName(name, nameMap);
     const profileReference = profileRef(db, assignment.departmentId, assignment.memberUid);
     const scheduleReference = db.collection('schedule').doc(assignment.serviceId);
     let record;
@@ -691,16 +695,16 @@ function createDepartmentHandlers(options = {}) {
       const profileSnapshot = await transaction.get(profileReference);
       if (!profileSnapshot.exists) throw errorWithCode('not-found', 'The department member profile was not found.', { reason: 'profile-missing' });
       const profile = profileSnapshot.data() || {};
-      if (assignment.memberName && assignment.memberName !== String(profile.memberName || profile.member || '')) {
+      if (assignment.memberName && canonical(assignment.memberName) !== canonical(profile.memberName || profile.member)) {
         throw errorWithCode('invalid-argument', 'The member name does not match the verified profile.', { reason: 'name-mismatch' });
       }
       const assignmentRevisions = scheduleData.assignmentRevisions || {};
       const assignments = scheduleData.assignments || {};
       assertFresh({
         expectedRevision,
-        expectedWitness: expectedMemberName,
+        expectedWitness: expectedMemberName == null ? undefined : canonical(expectedMemberName),
         currentRevision: currentRevision({ revision: assignmentRevisions[verifiedAssignment.duty] }),
-        currentWitness: String(assignments[verifiedAssignment.duty] || ''),
+        currentWitness: canonical(assignments[verifiedAssignment.duty]),
         details: { memberName: String(assignments[verifiedAssignment.duty] || '') }
       });
       const result = authz.authorizeAssignmentOverride(actor, verifiedAssignment, profile);

@@ -32,6 +32,8 @@ const appDocs = require('./app-docs.js');
 const { refusal } = require('./refusals.js');
 
 const DAY_MS = 24 * 3600 * 1000;
+/* More filled duties than this, blank in the Sheet at once, wait for Import now. */
+const MAX_TIMED_CLEARS = 10;
 const KEEP_DELETIONS_DAYS = 400;
 const message = error => String(error && error.message || error).slice(0, 300);
 
@@ -217,6 +219,28 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
       warnings.push(notAgain.length + ' service' + (notAgain.length === 1 ? ' was' : 's were') + ' deleted in the app and not added again: ' + notAgain.slice(0, 5).join(', ') + '.');
     }
 
+    // The timed import never clears many filled duties in one run: a bad
+    // publish or a renamed column reads as blank cells, and would empty the
+    // months to come. Those clears wait (the Sheet is not marked as seen for
+    // them, and the fingerprint is not kept) until someone presses Import now.
+    const clears = [];
+    plan.updates.forEach(item => Object.entries(item.patch.assignments || {}).forEach(([duty, name]) => {
+      if (!name && String(((existing[item.id] || {}).assignments || {})[duty] || '')) clears.push({ item, duty });
+    }));
+    const held = !force && clears.length > MAX_TIMED_CLEARS ? clears.length : 0;
+    if (held) {
+      clears.forEach(({ item, duty }) => {
+        delete item.patch.assignments[duty];
+        if (item.patch.sheetSeen) delete item.patch.sheetSeen[duty];
+      });
+      plan.updates.forEach(item => ['assignments', 'sheetSeen'].forEach(field => {
+        if (item.patch[field] && !Object.keys(item.patch[field]).length) delete item.patch[field];
+      }));
+      plan.updates = plan.updates.filter(item => Object.keys(item.patch).length);
+      warnings.push(held + ' filled duties are blank in the Sheet and were left as they are. Press Import now to clear them.');
+      logger.warn('importSheet: clears held for Import now', { held });
+    }
+
     const sheetMembers = Array.from(new Set(parsed.members.map(canonical).filter(Boolean)));
     const unusable = sheetMembers.filter(name => !usableMemberName(name));
     if (unusable.length) warnings.push('Not added to the member list, because a name cannot contain "/": ' + unusable.slice(0, 5).join(', ') + '.');
@@ -246,18 +270,20 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
       Object.entries(item.patch.assignments).forEach(([duty, name]) => {
         const holder = canonical(name);
         if (holder && holder !== canonical((before.assignments || {})[duty])) {
-          alerts.push({ memberName: holder, duty, date: before.date, service: before.service, time: before.time });
+          alerts.push({ id: item.id, memberName: holder, duty, date: before.date, service: before.service, time: before.time });
         }
       });
     });
 
     let failed = 0;
+    const failedIds = new Set();
     if (plan.creates.length || plan.updates.length || newMembers.length || rostersChanged) {
       // BulkWriter splits a large import into batches under Firestore's limit.
       const writer = db.bulkWriter();
       const writes = [];
       const queue = (reference, value, options) => writes.push(writer.set(reference, value, options).catch(error => {
         failed += 1;
+        failedIds.add(reference.id);
         logger.error('importSheet: a write failed', { path: reference.path, error: message(error) });
       }));
       const sheetSyncedAt = at; // these changes came from the Sheet, so none is written back
@@ -268,9 +294,13 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
       await writer.close();
       await Promise.all(writes);
     }
-    if (alerts.length && !failed) {
+    // Alerts go out for the services that were written. One whose write
+    // failed is still a change at the next import, and is alerted then; the
+    // ones that were written would never be seen as new again.
+    const written = alerts.filter(alert => !failedIds.has(alert.id));
+    if (written.length) {
       try {
-        await notifier.alertPlanned(alerts);
+        await notifier.alertPlanned(written);
       } catch (error) {
         logger.error('importSheet: alerts failed', { error: message(error) });
       }
@@ -281,12 +311,12 @@ function createSheetIo({ db, logger, notifier, createSheets, accountEmail, now =
       .map(([id]) => db.collection('deletedServices').doc(id).delete().catch(() => {})));
     const result = {
       added: plan.creates.length, updated: plan.updates.length, newMembers: newMembers.length,
-      waiting: waiting.size, failed, warnings: warnings.slice(0, 20)
+      waiting: waiting.size, failed, held, warnings: warnings.slice(0, 20)
     };
     // A failed write leaves the fingerprint as it was, so the next check imports again.
-    if (!failed) await importStateRef().set({ fingerprint, at });
+    if (!failed && !held) await importStateRef().set({ fingerprint, at });
     // Shown in Manage: when the app last brought in the Sheet.
-    await settingsRef().set({ sheetImport: { at, added: result.added, updated: result.updated, newMembers: result.newMembers, skipped: result.warnings.length } }, { merge: true });
+    await settingsRef().set({ sheetImport: { at, added: result.added, updated: result.updated, newMembers: result.newMembers, skipped: result.warnings.length, held } }, { merge: true });
     logger.info('importSheet: done', result);
     return result;
   }
