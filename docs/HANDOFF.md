@@ -35,6 +35,12 @@ from the Mac with `scripts/deploy-functions.mjs`, the app with GitHub
   ingest endpoint and a sign-in call with an unknown name all answered as
   they should; no errors in the functions log in the first minutes.
 
+- [PR #58](https://github.com/lovelaceaml-hub/worship-duty-app/pull/58)
+  (15, browser): Firebase browser SDK 10.12.2 to 12.19.0. Anthony signed in
+  on the preview and said to release. App release run 43085656411; live is
+  r1794424687832, commit 6110592, and the page, the app and the service
+  worker all name 12.19.0.
+
 Not done, with the reason:
 
 - 2 (everyone chooses a PIN): Anthony said no.
@@ -43,12 +49,6 @@ Not done, with the reason:
   (`features.siteLock` false, no hash saved, read 2026-11-11).
 - 9 (two song list listeners): they cover different ranges; merging them
   would make every member load all song history.
-- 15, browser SDK 12: draft
-  [PR #58](https://github.com/lovelaceaml-hub/worship-duty-app/pull/58),
-  preview https://lv-zion-duties--firebase-sdk-12-475757-0r2xavwk.web.app
-  (until about 2026-11-18). Signed out it loads the member list with no
-  console errors. It needs one real sign-in on the preview before release:
-  the browser tests use a fake SDK.
 - 15, splitting `permissions.js`, `functions/department-handlers.js`,
   `app/services/departments.js` and `app/lib/fill.js`: nothing changes for
   members, and checking them safely needs a full test run (Anthony's
