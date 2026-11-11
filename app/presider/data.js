@@ -91,7 +91,13 @@ function change(id, patch, { quiet = false } = {}) {
   Object.assign(setlist, patch);
   renderSoon();
   const ref = fb.doc(fb.db, 'setlists', id);
-  const run = () => fb.updateDoc(ref, patch).catch(() => fb.setDoc(ref, Object.assign({}, setlist)));
+  // The whole list is written only when the document is missing. Any other
+  // failure is reported: writing the device's copy over a list someone else
+  // changed a moment ago would undo their change.
+  const run = () => fb.updateDoc(ref, patch).catch(error => {
+    if (String(error && error.code || '').replace(/^firestore\//, '') !== 'not-found') throw error;
+    return fb.setDoc(ref, Object.assign({}, setlist));
+  });
   (creating[id] ? creating[id].then(run) : run()).catch(failed('That change was not saved.'));
 }
 

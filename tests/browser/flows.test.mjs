@@ -487,6 +487,12 @@ test('a build works with its stamped files; the maintenance build shows only the
         await page.reload();
         if (maintenance) {
           await page.locator('.maintenance', { hasText: 'The app is being updated' }).waitFor();
+          // A device that has not entered the site passcode sees no names.
+          assert.equal(await page.locator('.maintenance-service').count(), 0);
+          assert.equal(await page.locator('#site-passcode').count(), 0);
+          // One that has (the fixture's passcode, as its saved hash) does.
+          await page.evaluate(() => localStorage.setItem('wds-site-unlock', 'a1fb4e703a9ef1fa4936801721ff285a97ac85330856674412e054892afe6972'));
+          await page.reload();
           await page.locator('.maintenance-service').first().waitFor();
           assert.equal(await page.locator('#site-passcode').count(), 0);
           assert.equal(await page.locator('nav.tabs').isHidden(), true);
