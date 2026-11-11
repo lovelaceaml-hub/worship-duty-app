@@ -85,7 +85,7 @@ jobs:
       - name: Full unit and rules suite (explicit approval only)
         if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm test
-      - name: Pre-release checks (main flows and all four appearances, on fake data)
+      - name: Pre-release checks (main flows in a real browser, on fake data)
         if: github.event_name == 'workflow_dispatch' && inputs.full_suite_approved
         run: npm run test:browser
 

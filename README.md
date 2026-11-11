@@ -122,7 +122,10 @@ npm run test:browser
   and the built files (`tests/browser/*.test.mjs`).
 - `npm run screenshots -- --out /tmp/shots` saves every screen.
 
-GitHub runs all five on every pull request.
+GitHub runs only `check` on every push to `main` and every pull request. The
+other four run when **Tests** is started by hand with `full_suite_approved`
+ticked, which needs Anthony's approval for that run; the run summary says
+which of the two happened.
 
 ## Release
 
@@ -135,8 +138,9 @@ rules) each have their own button; the Mac commands below stay as a fallback.
   the Actions run summary. Previews use the real data: look, do not tap.
 - To go live, run **Firebase release** on `main`
   (https://github.com/lovelaceaml-hub/worship-duty-app/actions/workflows/firebase-release.yml).
-  It runs the module, unit and browser tests first (the Functions and
-  emulator rules tests run in the backend release), publishes, then checks
+  It runs the module check first, and the unit and browser tests too when
+  `full_suite_approved` is ticked (the Functions and emulator rules tests
+  belong to the backend release, under the same tick), publishes, then checks
   that the calendar feed still answers. Tick "maintenance" to show the "being updated" screen, and
   release again without it to end it.
 - `.github/scripts/deploy-guard.sh` lets these workflows run only the pinned
@@ -149,8 +153,9 @@ rules) each have their own button; the Mac commands below stay as a fallback.
   rules)** on `main`, only when Anthony says to release. `functions` is
   `NONE`, `ALL`, or names separated by commas (only names in
   `.github/functions-pinned.txt`); tick `rules` for `firestore.rules`; type
-  `RELEASE` in `confirm`. It runs `npm run check`, `npm test`,
-  `npm run test:functions` and the rules emulator tests first, then deploys
+  `RELEASE` in `confirm`. It runs `npm run check` first (and `npm test`,
+  `npm run test:functions` and the rules emulator tests when
+  `full_suite_approved` is ticked), then deploys
   through `scripts/deploy-functions.mjs` behind the npx guard. There is no key:
   Google (Workload Identity Federation) gives a short-lived token only to that
   workflow file, started by hand, on `main`. A run with `functions=NONE` and
