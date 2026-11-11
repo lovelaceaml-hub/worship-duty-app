@@ -1,24 +1,86 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-11-10 (review cleanup released).
+Updated 2026-11-11 (the review's suggestions built and released).
+
+## Released 2026-11-11: the review's suggestions
+
+Anthony: "do all 15", build and release without stopping, no forced PIN
+change. What went live, in order (each merged after its checks; functions
+from the Mac with `scripts/deploy-functions.mjs`, the app with GitHub
+"Firebase release"):
+
+- [PR #54](https://github.com/lovelaceaml-hub/worship-duty-app/pull/54)
+  (1, 8): a PIN change signs the member out on their other devices; a device
+  the member has signed in on before is not locked out by wrong PINs typed
+  elsewhere.
+- [PR #55](https://github.com/lovelaceaml-hub/worship-duty-app/pull/55)
+  (5, 6, 7, 10, 11, 12, 13, 14): import alerts after a partly failed
+  import, the timed import holds more than 10 clears for Import now, leader
+  settings saved in one transaction, request listeners, song list saves,
+  the update screen, override name spelling. App release run 43078403713.
+- [PR #56](https://github.com/lovelaceaml-hub/worship-duty-app/pull/56)
+  (4): `setlists` and `songStats` are for signed-in members only. The
+  Signal song ingest uses the new `songIngest` function with a token
+  (Secret Manager `SONG_INGEST_TOKEN`; Mac Keychain item
+  `worship-duty-song-ingest`); its side is
+  [song-ingest PR #6](https://github.com/lovelaceaml-hub/song-ingest/pull/6),
+  merged, and the Mac's live folder is on it. Rules deployed last with the
+  pinned command. Read back: an open read of `songStats` is refused (403),
+  the schedule is still public, the endpoint answers with the token and
+  refuses without. App release run 43082713939.
+- [PR #57](https://github.com/lovelaceaml-hub/worship-duty-app/pull/57)
+  (15, server): firebase-admin 14, firebase-functions 7,
+  google-auth-library 11 (`npm audit`: 0), and a new year's Sheet tab made
+  in one request. After the deploy: public schedule, calendar feed, the
+  ingest endpoint and a sign-in call with an unknown name all answered as
+  they should; no errors in the functions log in the first minutes.
+
+Not done, with the reason:
+
+- 2 (everyone chooses a PIN): Anthony said no.
+- 3 (site passcode hash): the schedule is public on purpose, so hiding the
+  hash protects nothing. Also, the site passcode is switched off on live
+  (`features.siteLock` false, no hash saved, read 2026-11-11).
+- 9 (two song list listeners): they cover different ranges; merging them
+  would make every member load all song history.
+- 15, browser SDK 12: draft
+  [PR #58](https://github.com/lovelaceaml-hub/worship-duty-app/pull/58),
+  preview https://lv-zion-duties--firebase-sdk-12-475757-0r2xavwk.web.app
+  (until about 2026-11-18). Signed out it loads the member list with no
+  console errors. It needs one real sign-in on the preview before release:
+  the browser tests use a fake SDK.
+- 15, splitting `permissions.js`, `functions/department-handlers.js`,
+  `app/services/departments.js` and `app/lib/fill.js`: nothing changes for
+  members, and checking them safely needs a full test run (Anthony's
+  approval).
+
+Still to check:
+
+- A signed-in look at My Duties and Songs on live (the song rules are
+  proven on the emulator, `tests/rules-emulator/members.test.mjs`, 37
+  passed, not with a real sign-in).
+- The next Signal song post: `ingest.log` on the Mac should say
+  `song data: endpoint (us-central1-lv-zion-duties.cloudfunctions.net)`.
+- Functions log over the next day (reminders hourly, Sheet check every 10
+  minutes) on the new libraries.
+- When the Signal hub VM is set up, give it the token:
+  `sudo put-secret.sh worship_song_token` (same value as the Mac's).
+- No full suite was run for any of this. Focused test files only.
+
+For agents on this Mac: the browser tests need Playwright's Chromium 1243,
+which is not downloaded; `WDS_CHROMIUM=<path to chrome-headless-shell>`
+points them at the 1248 copy in `~/Library/Caches/ms-playwright`. The rules
+emulator runs with `JAVA_HOME=~/tools/jdk/Contents/Home`. A browser test
+file hangs if `--test-name-pattern` matches none of its tests.
+`functions/.env.lv-zion-duties` (the other app's settings, 2026-09-03,
+ignored by git) makes one backend-guard unit test fail locally.
 
 ## Released 2026-11-10: review cleanup
 
 - [PR #53](https://github.com/lovelaceaml-hub/worship-duty-app/pull/53):
-  four small fixes (sign out during View as, reminder list trimming, a
-  calendar guard, month-plan alerts using the service's own time), a `qs`
-  patch, a Firebase SDK version test and README corrections.
-- Released with Anthony's go-ahead ("Yes, release it"): all 36 functions
-  from the Mac (`scripts/deploy-functions.mjs`, every one "Successful update
-  operation"), then the app (GitHub "Firebase release", run 42979627657).
-  No rules change.
-- Verified live: release.json says r1794382146363, commit 3e4c7ea,
-  maintenance off, and the site serves the new sign-out code.
-- Checks: module check, focused unit, functions and browser tests (see the
-  review). No full suite was run.
-- 15 ranked suggestions wait for Anthony's choice:
-  [reviews/2026-11-10-review.md](reviews/2026-11-10-review.md). The first
-  three are about sign-in safety.
+  four small fixes, a `qs` patch, a Firebase SDK version test and README
+  corrections. Functions, then the app (run 42979627657).
+- Review: [reviews/2026-11-10-review.md](reviews/2026-11-10-review.md).
 
 Previously updated 2026-11-06 (leader added, release verified).
 
