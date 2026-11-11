@@ -37,7 +37,7 @@ Functions (Node 22), sign-in (member name and PIN), and push notifications.
 | `app/presider/` | The song planner: each service's prayers, Preparation Songs, Glory (and Thanks) and Choir song, and Copy for Signal. |
 | `styles/base.css` | The layout and structure of every screen. |
 | `styles/prism.css` | Prism, the app's look, drawn over `base.css`. It follows the device's dark mode. |
-| `permissions.js` | Who may do what. The server has an identical copy in `functions/`; a test keeps the two the same. |
+| `permissions.js`, `permissions-data.js` | Who may do what: the rules, and the lists they read (departments, duties, default leaders). The server has identical copies in `functions/`; a test keeps them the same. |
 | `song-lib.js`, `song-seed.js` | Song counts and the song list. The Signal song ingest (the song-ingest repository) loads these two files from this folder, so keep them here and keep their behavior. It reads and writes `setlists` and `songStats` through the `songIngest` function with its own token (secret `SONG_INGEST_TOKEN`; the Mac's copy is the Keychain item `worship-duty-song-ingest`), so only signed-in members reach those collections directly. |
 | `functions/` | Cloud Functions. `index.js` only wires each one, through one `callable()` wrapper; the work is in modules by area (`accounts.js` sign-in and PINs, `notify.js` alerts, `schedule-projection.js`, `sheet-io.js`, `public-endpoints.js`, `replacements.js`, ...). Every refusal carries a reason code (`refusals.js`), which `app/lib/reasons.js` turns into plain words. |
 | `firestore.rules` | Database rules. They decide from the member's account document, as the server does. |

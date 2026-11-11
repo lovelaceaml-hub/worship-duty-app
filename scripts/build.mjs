@@ -17,7 +17,7 @@ const stamp = process.env.RELEASE_STAMP || 'r' + Date.now();
 const maintenance = process.env.WDS_MAINTENANCE === '1';
 if (!/^[A-Za-z0-9]+$/.test(stamp)) throw new Error('The release stamp may use letters and digits only.');
 
-const FILES = ['index.html', 'permissions.js', 'firebase-config.js', 'song-lib.js', 'song-seed.js', 'sw.js', 'manifest.json', 'icon.svg'];
+const FILES = ['index.html', 'permissions-data.js', 'permissions.js', 'firebase-config.js', 'song-lib.js', 'song-seed.js', 'sw.js', 'manifest.json', 'icon.svg'];
 const FOLDERS = ['app', 'styles'];
 
 async function listFiles(folder) {
