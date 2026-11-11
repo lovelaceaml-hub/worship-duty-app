@@ -24,3 +24,6 @@ __pycache__/
 
 # Worktrees the Claude app makes inside the repository
 .claude/worktrees/
+
+# One-off local permissions for this computer
+.claude/settings.local.json

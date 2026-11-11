@@ -165,6 +165,16 @@ test('the server has the same permissions.js as the browser', () => {
     fs.readFileSync(new URL('../../permissions.js', import.meta.url), 'utf8'));
 });
 
+test('the page, the app, the service worker and the local server load one Firebase SDK version', () => {
+  const versions = ['index.html', 'app/firebase.js', 'sw.js', 'scripts/serve.mjs'].map(file => {
+    const text = fs.readFileSync(new URL('../../' + file, import.meta.url), 'utf8');
+    const found = [...new Set([...text.matchAll(/gstatic\.com\/firebasejs\/([0-9.]+)\//g)].map(match => match[1]))];
+    assert.equal(found.length, 1, file + ' names one SDK version');
+    return found[0];
+  });
+  assert.deepEqual(versions, versions.map(() => versions[0]), 'every file names the same version');
+});
+
 test('feature switches fall back to their default when nothing is saved', () => {
   assert.equal(featureOn({}, 'emptyDuties'), false);
   assert.equal(featureOn({ features: { emptyDuties: true } }, 'emptyDuties'), true);

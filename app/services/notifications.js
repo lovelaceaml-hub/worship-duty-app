@@ -114,6 +114,10 @@ export function checkReminders() {
   if (!ui.me || !feature('reminders')) return;
   const now = pacificNow().wall;
   const reminded = readJSON('wds-reminded', {});
+  // Week-old entries go first, so the list shrinks on days with no reminder too.
+  const before = Object.keys(reminded).length;
+  Object.keys(reminded).forEach(id => { if (Date.now() - reminded[id] > 7 * 24 * 3600 * 1000) delete reminded[id]; });
+  const pruned = Object.keys(reminded).length < before;
   const due = dutiesOf(ui.me, upcoming(data.services, now)).filter(item => {
     const id = ui.me + '|' + serviceId(item.service) + '|' + item.duty;
     const start = startsAt(item.service);
@@ -121,10 +125,9 @@ export function checkReminders() {
     reminded[id] = Date.now();
     return true;
   });
-  if (!due.length) return;
+  if (!due.length) { if (pruned) writeJSON('wds-reminded', reminded); return; }
   due.forEach(item => { if (!pushActive()) showNotification('Duty reminder', describe(item.duty, item.service)); });
   banner(due.length === 1 ? 'Reminder: ' + describe(due[0].duty, due[0].service) : 'Reminder: you have ' + due.length + ' duties in the next 24 hours.', { id: 'reminder' });
-  Object.keys(reminded).forEach(id => { if (Date.now() - reminded[id] > 7 * 24 * 3600 * 1000) delete reminded[id]; });
   writeJSON('wds-reminded', reminded);
 }
 

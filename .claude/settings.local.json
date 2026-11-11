@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(shasum -a 256)",
-      "Bash(python3 -c ' *)",
-      "Bash(unzip -p \"/Users/anthony/Downloads/Documents/LV Zion Worship Duty Schedule_copy2.xlsx\" xl/workbook.xml)"
-    ]
-  }
-}

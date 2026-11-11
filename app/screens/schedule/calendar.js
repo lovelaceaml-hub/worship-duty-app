@@ -39,7 +39,7 @@ function monthGrid(month, services, selected) {
       return html`<button type="button" class="calendar-day${outside ? ' is-outside' : ''}${iso === selected ? ' is-selected' : ''}${onDay.length ? ' has-services' : ''}"
         data-act="schedule-date" data-date="${iso}" aria-pressed="${iso === selected}" aria-label="${label}">
         <span class="calendar-date">${Number(iso.slice(8))}${mine ? html`<span class="calendar-you">You</span>` : ''}</span>
-        <span class="calendar-services">${onDay.map(service => html`<span class="calendar-service is-${service.service.toLowerCase().replace(/\s+/g, '-')}${serves(service) ? ' is-mine' : ''}">${serviceClock(service)}</span>`)}</span>
+        <span class="calendar-services">${onDay.map(service => html`<span class="calendar-service is-${String(service.service || '').toLowerCase().replace(/\s+/g, '-')}${serves(service) ? ' is-mine' : ''}">${serviceClock(service)}</span>`)}</span>
       </button>`;
     })}</div>
   </section>`;

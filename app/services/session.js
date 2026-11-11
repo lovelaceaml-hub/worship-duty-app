@@ -200,14 +200,17 @@ export async function signOut() {
     renderSoon();
     return;
   }
-  const name = (session.member && session.member.memberName) || ui.me;
+  // While viewing as someone, session.member is the viewed member: the
+  // alerts to forget are the administrator's own as well.
+  const real = realMember();
+  const names = [...new Set([real && real.memberName, session.member && session.member.memberName, ui.me].filter(Boolean))];
   leaving = true;
   try {
     await unregisterPush().catch(() => {});
     try { if (fb.auth) await fb.signOut(fb.auth); }
     catch (_error) { /* the local session is cleared below either way */ }
     writeText('wds-me', null);
-    forgetDutyAlerts(name);
+    names.forEach(forgetDutyAlerts);
     if (!session.member) { forgetMemberState(); setLeaveGuard(null); }
     setMember(null, null);
   } finally {
