@@ -1,18 +1,24 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-11-10 (second review, cleanup branch waiting).
+Updated 2026-11-10 (review cleanup released).
 
-## Waiting for Anthony: review cleanup (2026-11-10)
+## Released 2026-11-10: review cleanup
 
-- Branch `review-cleanup-2026-11-10`: four small fixes (sign out during View
-  as, reminder list trimming, a calendar guard, month-plan alerts using the
-  service's own time), a `qs` patch, a Firebase SDK version test and README
-  corrections. Not merged, not released. The alert fix needs a functions
-  deploy (`saveDepartmentAssignments`), the rest an app release.
-- Findings and 15 ranked suggestions:
+- [PR #53](https://github.com/lovelaceaml-hub/worship-duty-app/pull/53):
+  four small fixes (sign out during View as, reminder list trimming, a
+  calendar guard, month-plan alerts using the service's own time), a `qs`
+  patch, a Firebase SDK version test and README corrections.
+- Released with Anthony's go-ahead ("Yes, release it"): all 36 functions
+  from the Mac (`scripts/deploy-functions.mjs`, every one "Successful update
+  operation"), then the app (GitHub "Firebase release", run 42979627657).
+  No rules change.
+- Verified live: release.json says r1794382146363, commit 3e4c7ea,
+  maintenance off, and the site serves the new sign-out code.
+- Checks: module check, focused unit, functions and browser tests (see the
+  review). No full suite was run.
+- 15 ranked suggestions wait for Anthony's choice:
   [reviews/2026-11-10-review.md](reviews/2026-11-10-review.md). The first
   three are about sign-in safety.
-- Focused checks only; no full suite was run.
 
 Previously updated 2026-11-06 (leader added, release verified).
 
