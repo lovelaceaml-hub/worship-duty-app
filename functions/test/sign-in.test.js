@@ -93,6 +93,35 @@ test('guesses made at the same moment are counted: five are checked, the rest re
   await rejectsWith(signIn(functions, 'S. Leah', '2468'), 'resource-exhausted', 'locked');
 });
 
+test('a device the member signed in on before is not held by a lock made from elsewhere, and is counted by itself', async () => {
+  const docs = await church({ 'accounts/S. Leah': { memberName: 'S. Leah', active: true, roleVersion: 1, roles: [], departments: [], mustChangePin: false, pinHash: await pinHash('2468') } });
+  const { functions } = loadIndex(docs);
+  const withKey = (pin, deviceKey) => functions.verifyMemberPin.run({ data: { selectedMemberId: 'S. Leah', selectedMemberName: 'S. Leah', pin, deviceKey } });
+  const first = await signIn(functions, 'S. Leah', '2468');
+  assert.match(first.deviceKey, /^[0-9a-f]{64}$/, 'a new device is given a key after a correct PIN');
+  assert.equal(JSON.stringify(docs['accounts/S. Leah']).includes(first.deviceKey), false, 'only the hash of the key is stored');
+  // Someone else guesses five times: the name is locked for new devices.
+  for (let guess = 0; guess < 5; guess += 1) await rejectsWith(signIn(functions, 'S. Leah', String(1000 + guess)), 'unauthenticated');
+  await rejectsWith(signIn(functions, 'S. Leah', '2468'), 'resource-exhausted', 'locked');
+  await rejectsWith(withKey('2468', 'f'.repeat(64)), 'resource-exhausted', 'locked');
+  // The member's own device still signs in, and gets no second key.
+  const own = await withKey('2468', first.deviceKey);
+  assert.equal(own.deviceKey, null);
+  // A known device is limited too: five wrong PINs lock that device.
+  for (let guess = 0; guess < 5; guess += 1) await rejectsWith(withKey(String(2000 + guess), first.deviceKey), 'unauthenticated');
+  await rejectsWith(withKey('2468', first.deviceKey), 'resource-exhausted', 'locked');
+});
+
+test('a reset forgets the member\'s known devices', async () => {
+  const docs = await church({ 'accounts/S. Leah': { memberName: 'S. Leah', active: true, roleVersion: 1, roles: [], departments: [], mustChangePin: false, pinHash: await pinHash('2468') } });
+  const { functions } = loadIndex(docs);
+  const first = await signIn(functions, 'S. Leah', '2468');
+  await functions.resetMemberPin.run({ auth: as('B. Anthony'), data: { memberId: 'S. Leah' } });
+  assert.equal(docs['accounts/S. Leah'].trustedDevices, null);
+  for (let guess = 0; guess < 5; guess += 1) await rejectsWith(signIn(functions, 'S. Leah', String(1000 + guess)), 'unauthenticated');
+  await rejectsWith(functions.verifyMemberPin.run({ data: { selectedMemberId: 'S. Leah', selectedMemberName: 'S. Leah', pin: '0000', deviceKey: first.deviceKey } }), 'resource-exhausted', 'locked');
+});
+
 test('a reset lifts the lockout, ends the member\'s sessions, stops alerts to their phones and is recorded', async () => {
   const docs = await church({
     'accounts/S. Leah': {

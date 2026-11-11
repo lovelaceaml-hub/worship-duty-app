@@ -150,7 +150,8 @@ const handlers = {
     if (['0000', '2217'].includes(String(data.newPin))) fail('invalid-argument', 'Choose a PIN other than 0000 or 2217.', 'pin-too-common');
     account.pin = data.newPin;
     account.claims.mustChangePin = false;
-    return { ok: true };
+    // As the server: a fresh token, so the device that changed it stays in.
+    return { ok: true, token: 'fake-token:' + encodeURIComponent(data.memberId) };
   },
   /* The PIN becomes 0000 until the member chooses a new one. Only an
      administrator resets the PIN of someone with a role. */

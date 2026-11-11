@@ -33,8 +33,10 @@ export async function startServer(root = '.') {
   return { url: 'http://localhost:' + port, stop: () => child.kill() };
 }
 
+/* WDS_CHROMIUM names a Chromium already on this computer, for when the one
+   this Playwright version expects has not been downloaded. */
 export async function launch() {
-  return chromium.launch();
+  return chromium.launch(process.env.WDS_CHROMIUM ? { executablePath: process.env.WDS_CHROMIUM } : {});
 }
 
 /* A page at `url` with the fake data and a fixed clock. `fixture` adds to

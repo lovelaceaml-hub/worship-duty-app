@@ -365,7 +365,13 @@ they exist, these duties stay in the app and are not written to the Sheet.
 - Members sign in with their name and PIN. A new or reset PIN is a shared
   starting PIN until the member chooses their own (Settings, Change your
   PIN); the shared starting PINs cannot be chosen.
-- Five wrong PINs lock the account for 15 minutes. A reset unlocks it and
+- Changing a PIN signs the member out on every other device; the device
+  they changed it on stays signed in.
+- Five wrong PINs lock the account for 15 minutes, for devices the member
+  has not signed in on before. A device they have signed in on keeps a key
+  from that sign-in and is counted by itself (five wrong PINs lock that
+  device), so guesses made elsewhere never lock a member's own phone out.
+  A reset forgets those devices. A reset unlocks the account and
   signs the member out on every device, and their phones get no alerts until
   they sign in again (so a lost phone stops getting them). Only
   administrators reset a leader's, a song editor's or an administrator's PIN,

@@ -156,7 +156,13 @@ test('forces a protected member with initial PIN into the change flow', async ()
     auth: { uid: token.uid, token: token.claims },
     data: { newPin: '5678' }
   });
-  assert.deepEqual(changed, { ok: true, memberId: record.id, mustChangePin: false });
+  const { token: changeToken, ...changedRest } = changed;
+  assert.deepEqual(changedRest, { ok: true, memberId: record.id, mustChangePin: false });
+  // The change ends the member's other sessions: a new role version, and a
+  // fresh token for the device that made the change.
+  assert.equal(record.roleVersion, Number(token.claims.roleVersion || 1) + 1);
+  assert.equal(JSON.parse(changeToken).claims.roleVersion, record.roleVersion);
+  assert.equal(JSON.parse(changeToken).claims.mustChangePin, false);
   assert.equal(record.mustChangePin, false);
   assert.equal(await verifyPin('5678', record.pinHash), true);
   assert.equal(h.claimsCalls.at(-1).uid, 'auth-leader');
