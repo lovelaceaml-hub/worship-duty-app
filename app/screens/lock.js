@@ -2,10 +2,10 @@
    first PIN change, offline without a saved member, and maintenance. */
 import { html } from '../html.js';
 import { defineActions } from '../actions.js';
-import { data, session, ui, loaded, nameOf } from '../store.js';
+import { data, session, ui, loaded, nameOf, feature } from '../store.js';
 import { render } from '../render.js';
 import { notice } from '../ui/banners.js';
-import { unlockSite, signIn as memberSignIn, changePin as memberChangePin } from '../services/session.js';
+import { unlockSite, siteUnlocked, signIn as memberSignIn, changePin as memberChangePin } from '../services/session.js';
 import { pendingInvite } from '../services/departments.js';
 import { byTitle } from '../lib/names.js';
 import { upcoming, nextService, serviceClock } from '../lib/services.js';
@@ -108,7 +108,10 @@ export const offline = {
 export const maintenance = {
   name: 'maintenance',
   render() {
-    const first = nextService(data.services);
+    // Names show only on a device that has entered the site passcode (or
+    // when the passcode is off): the copy saved here is not a way around it.
+    const open = !feature('siteLock') || siteUnlocked();
+    const first = open ? nextService(data.services) : null;
     const services = first ? upcoming(data.services).slice(0, 8) : [];
     return html`<section class="card gate maintenance">
       <h2 class="gate-title">The app is being updated</h2>

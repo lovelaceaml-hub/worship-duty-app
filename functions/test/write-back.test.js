@@ -232,6 +232,43 @@ test('the Raw Data import: one alert per member for new duties to come, deleted 
   });
 });
 
+test('the timed import does not clear many filled duties at once; Import now does', async () => {
+  await onOctober1(async () => {
+    const duties = ['Usher Door', 'Usher Front', 'Usher Back'];
+    const dates = ['2026-10-03', '2026-10-10', '2026-10-17', '2026-10-24'];
+    const days = { '2026-10-03': 'Oct 3', '2026-10-10': 'Oct 10', '2026-10-17': 'Oct 17', '2026-10-24': 'Oct 24' };
+    const docs = {
+      'app/settings': {}, 'app/members': { list: ['S. Leah'] },
+      'accounts/B. Anthony': { memberName: 'B. Anthony', active: true, roleVersion: 1, roles: ['admin'], role: 'admin', departments: [], mustChangePin: false }
+    };
+    dates.forEach(date => { docs['schedule/' + date + '_morning'] = upcoming(date); });
+    const filled = dates.flatMap(date => duties.map(duty => rawRow('"Sat, ' + days[date] + '"', duty, 'S. Leah')));
+    let rows = filled;
+    const loaded = loadIndex(docs, { fetch: async () => ({ ok: true, text: async () => csv(rows) }) });
+    const names = () => dates.flatMap(date => duties.map(duty => docs['schedule/' + date + '_morning'].assignments[duty]));
+    try {
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.deepEqual(names(), Array(12).fill('S. Leah'));
+      // The Sheet now reads blank everywhere (a bad publish): 12 clears.
+      rows = dates.flatMap(date => duties.map(duty => rawRow('"Sat, ' + days[date] + '"', duty, '')));
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.deepEqual(names(), Array(12).fill('S. Leah'), 'the timed import keeps them');
+      assert.equal(docs['app/settings'].sheetImport.held, 12, 'Manage says how many were kept');
+      // A few blanks are an ordinary edit, and are cleared.
+      rows = filled.slice(0, 10).concat(rows.slice(10));
+      await loaded.functions.scheduledSheetSync.run({});
+      assert.deepEqual(names(), Array(10).fill('S. Leah').concat(['', '']));
+      assert.equal(docs['app/settings'].sheetImport.held, 0);
+      // Import now clears however many the Sheet says.
+      rows = dates.flatMap(date => duties.map(duty => rawRow('"Sat, ' + days[date] + '"', duty, '')));
+      await loaded.functions.syncSheetNow.run({ auth: { uid: 'member:B. Anthony', token: { memberId: 'B. Anthony', memberName: 'B. Anthony', roleVersion: 1 } }, data: {} });
+      assert.deepEqual(names(), Array(12).fill(''));
+    } finally {
+      loaded.restore();
+    }
+  });
+});
+
 test('the timed check imports only when this month onward changed in the Sheet', async () => {
   await onOctober1(async () => {
     const docs = { 'app/settings': {}, 'app/members': { list: ['S. Leah', 'S. Ruth'] }, 'schedule/2026-10-10_morning': upcoming('2026-10-10') };

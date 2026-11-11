@@ -326,51 +326,63 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
     const nameMap = await loadNameMap();
     const memberName = canonicalName(data.memberName, nameMap);
     const enabled = data.enabled === true;
-    const current = await runtimePermissionConfig();
     if (!usableMemberName(memberName) || (roleType === 'departmentLeader' && !department)) {
       throw refusal('invalid-argument', 'invalid-input', 'A valid role target is required.');
     }
-    if (!permissions.canManageLeaders(actor, current)) {
-      throw refusal('permission-denied', 'not-allowed', 'Only global leader managers can change role assignments.');
-    }
-    const next = {
-      admin: Array.from(PERMISSION_CONFIG.admin),
-      globalLeaderManager: Array.from(PERMISSION_CONFIG.globalLeaderManager),
-      departmentLeaders: Object.assign({}, current.departmentLeaders || PERMISSION_CONFIG.departmentLeaders),
-      songEditors: Array.from(current.songEditors || PERMISSION_CONFIG.songEditors)
-    };
-    const list = roleType === 'songEditor'
-      ? next.songEditors
-      : Array.from(next.departmentLeaders[department] || []);
-    const updated = enabled
-      ? Array.from(new Set(list.concat(memberName))).sort()
-      : list.filter(name => canonicalName(name, nameMap) !== memberName);
-    if (roleType === 'songEditor') next.songEditors = updated;
-    else next.departmentLeaders[department] = updated;
     const actorName = canonicalName(actor.memberName || actor.name || actor.uid, nameMap);
-    await db.collection('app').doc('leaderConfig').set(next, { merge: false });
-    const memberActor = { name: memberName };
-    const departments = permissions.departmentsForLeader(memberActor, next);
-    const roles = [];
-    if (permissions.isAdmin(memberActor, next)) roles.push('admin');
-    if (permissions.isGlobalManager(memberActor, next)) roles.push('globalLeaderManager');
-    if (departments.length) roles.push('departmentLeader');
-    if (permissions.canEditSongs(memberActor, {}, next)) roles.push('songEditor');
+    const configRef = db.collection('app').doc('leaderConfig');
     const accountRef = db.collection('accounts').doc(memberName);
-    const beforeAccount = await accountRef.get();
-    const beforeData = beforeAccount.exists ? beforeAccount.data() : {};
-    const wasPrivileged = Array.isArray(beforeData.roles) && beforeData.roles.some(name => name !== 'member');
-    const nowPrivileged = roles.length > 0;
-    const accountPatch = {
-      roles, departments,
-      role: roles[0] || 'member',
-      globalLeaderManager: roles.includes('globalLeaderManager'),
-      mustChangePin: !wasPrivileged && nowPrivileged ? true : Boolean(beforeData.mustChangePin),
-      active: true,
-      roleVersion: Number(beforeData.roleVersion || 1) + 1
-    };
-    if (!beforeData.pinHash) accountPatch.pinHash = await hashPin(nowPrivileged ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN);
-    await accountRef.set(accountPatch, { merge: true });
+    // Both starting PINs are hashed before the transaction (hashing is slow);
+    // only an account that has none yet is given one.
+    const startingPins = { leader: await hashPin(DEFAULT_PIN), member: await hashPin(ORDINARY_DEFAULT_PIN) };
+    // The leader settings and the account are read and written in one
+    // transaction, so two managers saving at the same moment both land.
+    const { next, beforeData } = await db.runTransaction(async transaction => {
+      const configSnapshot = await transaction.get(configRef);
+      const beforeAccount = await transaction.get(accountRef);
+      const current = configSnapshot.exists
+        ? Object.assign({}, configSnapshot.data(), { admin: PERMISSION_CONFIG.admin, globalLeaderManager: PERMISSION_CONFIG.globalLeaderManager })
+        : PERMISSION_CONFIG;
+      if (!permissions.canManageLeaders(actor, current)) {
+        throw refusal('permission-denied', 'not-allowed', 'Only global leader managers can change role assignments.');
+      }
+      const next = {
+        admin: Array.from(PERMISSION_CONFIG.admin),
+        globalLeaderManager: Array.from(PERMISSION_CONFIG.globalLeaderManager),
+        departmentLeaders: Object.assign({}, current.departmentLeaders || PERMISSION_CONFIG.departmentLeaders),
+        songEditors: Array.from(current.songEditors || PERMISSION_CONFIG.songEditors)
+      };
+      const list = roleType === 'songEditor'
+        ? next.songEditors
+        : Array.from(next.departmentLeaders[department] || []);
+      const updated = enabled
+        ? Array.from(new Set(list.concat(memberName))).sort()
+        : list.filter(name => canonicalName(name, nameMap) !== memberName);
+      if (roleType === 'songEditor') next.songEditors = updated;
+      else next.departmentLeaders[department] = updated;
+      const memberActor = { name: memberName };
+      const departments = permissions.departmentsForLeader(memberActor, next);
+      const roles = [];
+      if (permissions.isAdmin(memberActor, next)) roles.push('admin');
+      if (permissions.isGlobalManager(memberActor, next)) roles.push('globalLeaderManager');
+      if (departments.length) roles.push('departmentLeader');
+      if (permissions.canEditSongs(memberActor, {}, next)) roles.push('songEditor');
+      const beforeData = beforeAccount.exists ? beforeAccount.data() || {} : {};
+      const wasPrivileged = Array.isArray(beforeData.roles) && beforeData.roles.some(name => name !== 'member');
+      const nowPrivileged = roles.length > 0;
+      const accountPatch = {
+        roles, departments,
+        role: roles[0] || 'member',
+        globalLeaderManager: roles.includes('globalLeaderManager'),
+        mustChangePin: !wasPrivileged && nowPrivileged ? true : Boolean(beforeData.mustChangePin),
+        active: true,
+        roleVersion: Number(beforeData.roleVersion || 1) + 1
+      };
+      if (!beforeData.pinHash) accountPatch.pinHash = nowPrivileged ? startingPins.leader : startingPins.member;
+      transaction.set(configRef, next, { merge: false });
+      transaction.set(accountRef, accountPatch, { merge: true });
+      return { next, beforeData };
+    });
     try { await auth.revokeRefreshTokens(String(beforeData.authUid || 'member:' + memberName)); } catch (_error) { /* next token still uses the new role version */ }
     await db.collection('audit').add({
       actor: actorName, actorUid: actor.uid,

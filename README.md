@@ -455,6 +455,10 @@ Sheet's own script copies them into "Raw Data".
   now always imports. Manage shows when the app last imported
   (`app/settings.sheetImport`).
 
+- The timed import never clears more than 10 filled duties in one run (a
+  bad publish or a renamed column reads as blank cells). It keeps them,
+  Manage says how many, and Import now clears them.
+
 - Department leaders see Import now at the top of Manage, and Manage, Data
   with only **Import now** and **Check the Sheet**. The Sheet's link, Fix a member's name, adding a year and the
   backup stay with administrators.

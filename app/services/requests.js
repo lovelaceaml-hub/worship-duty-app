@@ -45,7 +45,14 @@ function merge() {
 /* Administrators see every request, leaders their departments' and their
    own in any department, and a member their own. Called at every sign-in
    and token change, so the scope follows the member's roles. */
+let watching = ''; // who the listeners are for; '' when there are none
 export function watchRequests() {
+  // A sign-in reaches here twice (the auth observer and the sign-in itself):
+  // listeners already running for this member, session and scope stay.
+  const member = session.status === 'verified' && fb.db ? session.member : null;
+  const key = member ? JSON.stringify([session.user ? session.user.uid : '', member.memberName, member.roleVersion, readScope(member)]) : '';
+  if (key && key === watching) return;
+  watching = key;
   stopWatching.forEach(stop => stop());
   stopWatching = [];
   results = [];
@@ -56,7 +63,10 @@ export function watchRequests() {
   const scope = readScope(session.member);
   const sources = [];
   if (scope.admin) sources.push({ query: requests, wide: true });
-  else if (scope.departments.length) sources.push({ query: fb.query(requests, fb.where('department', 'in', scope.departments.slice(0, 10))), wide: true });
+  // An 'in' query takes a limited number of values: ten departments each.
+  else for (let from = 0; from < scope.departments.length; from += 10) {
+    sources.push({ query: fb.query(requests, fb.where('department', 'in', scope.departments.slice(from, from + 10))), wide: true });
+  }
   sources.push({ query: fb.query(requests, fb.where('requesterUid', '==', session.user ? session.user.uid : '')), wide: false });
   sources.forEach((source, index) => {
     results[index] = [];
@@ -70,6 +80,7 @@ export function watchRequests() {
       renderSoon();
     }, error => {
       console.warn('Requests are not available:', error);
+      watching = ''; // the next sign-in or token change starts them again
       // The member's own requests come from their own listener, which goes on.
       if (source.wide) notice('Change requests for your departments could not be loaded. Open the app again to retry.', true);
     }));
