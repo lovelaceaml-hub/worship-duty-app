@@ -41,6 +41,16 @@ from the Mac with `scripts/deploy-functions.mjs`, the app with GitHub
   r1794424687832, commit 6110592, and the page, the app and the service
   worker all name 12.19.0.
 
+- [PR #59](https://github.com/lovelaceaml-hub/worship-duty-app/pull/59)
+  (15, splits): `fill()` in three steps, `app/services/rosters.js`,
+  `functions/profile-patch.js` and `permissions-data.js` (the page loads it
+  before `permissions.js`; `functions/` has identical copies). No change in
+  behavior. Anthony approved one full run ("Yes, run it", 2026-11-11):
+  Tests run 43086873714 on the branch passed the module check, unit and
+  rules, the rules emulator, Cloud Functions and browser suites. Functions
+  deployed, app release run 43088143272; live is r1794425628249, commit
+  4d90f59.
+
 Not done, with the reason:
 
 - 2 (everyone chooses a PIN): Anthony said no.
@@ -49,10 +59,6 @@ Not done, with the reason:
   (`features.siteLock` false, no hash saved, read 2026-11-11).
 - 9 (two song list listeners): they cover different ranges; merging them
   would make every member load all song history.
-- 15, splitting `permissions.js`, `functions/department-handlers.js`,
-  `app/services/departments.js` and `app/lib/fill.js`: nothing changes for
-  members, and checking them safely needs a full test run (Anthony's
-  approval).
 
 Still to check:
 
@@ -65,7 +71,8 @@ Still to check:
   minutes) on the new libraries.
 - When the Signal hub VM is set up, give it the token:
   `sudo put-secret.sh worship_song_token` (same value as the Mac's).
-- No full suite was run for any of this. Focused test files only.
+- One full suite ran, for PR #59 only (see above). Everything before it had
+  focused test files only.
 
 For agents on this Mac: the browser tests need Playwright's Chromium 1243,
 which is not downloaded; `WDS_CHROMIUM=<path to chrome-headless-shell>`
