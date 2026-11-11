@@ -17,7 +17,7 @@ import { serviceId, byStart, isUpcoming } from '../../lib/services.js';
 import { todayISO, addMonths, monthName, shortDate } from '../../lib/dates.js';
 import { fillDuties } from '../../lib/fill.js';
 import { isAdmin, canCreateService, canEditDuty } from '../../services/access.js';
-import { loadRoster, refreshRosters } from '../../services/departments.js';
+import { loadRoster, refreshRosters } from '../../services/rosters.js';
 import { addService } from '../../services/schedule.js';
 import { saveSettings } from '../../services/data-tools.js';
 import { replacementsNeeded } from '../../services/attention.js';

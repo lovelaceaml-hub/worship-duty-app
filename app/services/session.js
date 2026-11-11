@@ -5,7 +5,8 @@
 import { fb, call, problem } from '../firebase.js';
 import { data, session, ui, loaded, canonical, readText, writeText, forgetMemberState } from '../store.js';
 import { renderSoon, setLeaveGuard } from '../render.js';
-import { resetDepartments, acceptPendingInvite } from './departments.js';
+import { resetDepartments } from './rosters.js';
+import { acceptPendingInvite } from './departments.js';
 import { watchRequests } from './requests.js';
 import { watchSetlists } from '../sync.js';
 import { afterSignIn, unregisterPush, forgetDutyAlerts } from './notifications.js';

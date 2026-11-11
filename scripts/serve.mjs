@@ -27,7 +27,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/ja
 const SDK = 'https://www.gstatic.com/firebasejs/12.19.0/';
 const FAKES = ['app', 'firestore', 'auth', 'functions', 'messaging'];
 /* The app's files in the repository, as scripts/build.mjs lists them. */
-const APP_FILES = ['index.html', 'permissions.js', 'firebase-config.js', 'song-lib.js', 'song-seed.js', 'sw.js', 'manifest.json', 'icon.svg'];
+const APP_FILES = ['index.html', 'permissions-data.js', 'permissions.js', 'firebase-config.js', 'song-lib.js', 'song-seed.js', 'sw.js', 'manifest.json', 'icon.svg'];
 const APP_FOLDERS = ['app', 'styles'];
 
 async function page(file) {

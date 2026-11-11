@@ -18,7 +18,7 @@ import { candidates } from '../../lib/availability.js';
 import { workload, suggestReplacements } from '../../lib/workload.js';
 import { reasonText } from '../../lib/reasons.js';
 import { isAdmin, canEditDuty, canEditSongsFor, canAcknowledgeConflict } from '../../services/access.js';
-import { roster, profileOf, departments as departmentState } from '../../services/departments.js';
+import { roster, profileOf, departments as departmentState } from '../../services/rosters.js';
 import { updateService, deleteService, markDoubleDuty, canSetOkPair, setOkPair } from '../../services/schedule.js';
 import { replaceDuty } from '../../services/requests.js';
 import { overrideDuty, keepOnDuty } from '../../services/planner.js';

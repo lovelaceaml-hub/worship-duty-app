@@ -37,7 +37,7 @@ if (!/^firebase-tools(@(latest|\d+(\.\d+){0,2}))?$/.test(firebaseTools)) fail('W
 const git = gitArgs => spawnSync('git', gitArgs, { cwd: repo, encoding: 'utf8' }).stdout.trim();
 console.log('Releasing ' + git(['rev-parse', '--abbrev-ref', 'HEAD']) + ' at ' + git(['rev-parse', '--short', 'HEAD']) + ' to ' +
   (target === 'live' ? 'the live site' : 'preview channel ' + previewChannel) + (maintenance ? ' (maintenance screen on)' : '') + '.');
-if (git(['status', '--porcelain', '--', 'index.html', 'app', 'styles', 'sw.js', 'song-lib.js', 'song-seed.js', 'permissions.js'])) {
+if (git(['status', '--porcelain', '--', 'index.html', 'app', 'styles', 'sw.js', 'song-lib.js', 'song-seed.js', 'permissions-data.js', 'permissions.js'])) {
   console.log('Note: some app files have changes that are not committed; they are included.');
 }
 console.log('Deploying Hosting only. No functions, rules or schedule records are deployed.');

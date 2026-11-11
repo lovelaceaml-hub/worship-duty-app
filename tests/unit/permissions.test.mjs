@@ -133,9 +133,12 @@ test('unknown identities, duties, departments, and requests fail closed', () => 
 });
 
 test('browser and Node consumers receive the same API', async () => {
+  // As the page loads them: the lists first, then the rules.
   const source = await readFile(`${root}/permissions.js`, 'utf8');
   const window = {};
-  vm.runInNewContext(source, { window });
+  const context = vm.createContext({ window });
+  vm.runInContext(await readFile(`${root}/permissions-data.js`, 'utf8'), context);
+  vm.runInContext(source, context);
   assert.ok(window.WorshipDutyPermissions);
   assert.equal(window.WorshipDutyPermissions.canEditDuty('Worship lead', 'Presider', config), true);
   assert.deepEqual(

@@ -160,9 +160,11 @@ test('Sermon shows as Opening Prayer and Prayer of Thanks as Thanks Prayer, the 
   assert.deepEqual(require('../../functions/names.js').DUTY_NAMES, DUTY_NAMES);
 });
 
-test('the server has the same permissions.js as the browser', () => {
-  assert.equal(fs.readFileSync(new URL('../../functions/permissions.js', import.meta.url), 'utf8'),
-    fs.readFileSync(new URL('../../permissions.js', import.meta.url), 'utf8'));
+test('the server has the same permissions.js and permissions-data.js as the browser', () => {
+  for (const file of ['permissions.js', 'permissions-data.js']) {
+    assert.equal(fs.readFileSync(new URL('../../functions/' + file, import.meta.url), 'utf8'),
+      fs.readFileSync(new URL('../../' + file, import.meta.url), 'utf8'), file);
+  }
 });
 
 test('the page, the app, the service worker and the local server load one Firebase SDK version', () => {

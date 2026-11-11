@@ -9,7 +9,7 @@
    requests, which belong to their sign-in, not their name. */
 import { fb } from '../firebase.js';
 import { data, session, ui, forgetMemberState } from '../store.js';
-import { resetDepartments } from './departments.js';
+import { resetDepartments } from './rosters.js';
 import { watchRequests } from './requests.js';
 import { banner, dismiss } from '../ui/banners.js';
 

@@ -10,36 +10,22 @@
  * role configuration, never in permission branches.
  */
 
-const DEPARTMENT_DUTIES = {
-  Worship: ['Presider', 'Sermon', 'Prayer of Thanks', 'Closing Prayer'],
-  'Usher Sisters': ['Usher Door', 'Usher Front', 'Usher Back'],
-  'Usher Brothers': ['Usher #1', 'Usher #2', 'Lobby Security'],
-  Lobby: ['Lobby Desk #1', 'Lobby Desk #2'],
-  Translation: ['Translation #1', 'Translation #2'],
-  Media: ['Media Booth #1', 'Media Booth #2'],
-  'Parking Lot': ['Parking #1', 'Parking #2', 'Parking #3', 'Parking #4', 'Parking #5'],
-  Offering: ['Offering #1', 'Offering #2', 'Offering #3', 'Offering #4', 'Offering #5', 'Offering #6'],
-  "Children's Teachers": ['Small Sanctuary #1', 'Small Sanctuary #2', 'Main Sanctuary #1', 'Main Sanctuary #2']
-};
+/* The lists the rules below read: departments and their duties, the duties
+   that pair, the default member per duty and the default leaders. They live
+   in permissions-data.js, loaded before this file in the browser. */
+const {
+  DEPARTMENT_DUTIES, PRAYER_DUTIES, USHER_DUTIES, DUTY_DEFAULTS,
+  DEFAULT_DEPARTMENT_LEADERS, DEFAULT_SONG_EDITORS, DEFAULT_ADMINS, DEFAULT_GLOBAL_LEADER_MANAGERS
+} = typeof module !== 'undefined' && module.exports
+  ? require('./permissions-data.js')
+  : window.WorshipDutyPermissionsData;
 
 const DEPARTMENTS = Object.freeze(Object.keys(DEPARTMENT_DUTIES));
-Object.keys(DEPARTMENT_DUTIES).forEach(department => {
-  Object.freeze(DEPARTMENT_DUTIES[department]);
-});
-Object.freeze(DEPARTMENT_DUTIES);
 
 const DUTY_TO_DEPARTMENT = Object.freeze(Object.keys(DEPARTMENT_DUTIES).reduce((out, department) => {
   DEPARTMENT_DUTIES[department].forEach(duty => { out[duty] = department; });
   return out;
 }, {}));
-
-/* One person, one duty per service, with one exception: Thanks Prayer or
-   Closing Prayer together with an usher duty (Lobby Security is not an usher
-   duty here). Opening Prayer (stored as Sermon) is never paired: whoever
-   gives it delivers the sermon and holds no other duty. The app's
-   app/lib/conflicts.js has the same rule; a test keeps the two in step. */
-const PRAYER_DUTIES = Object.freeze(['Prayer of Thanks', 'Closing Prayer']);
-const USHER_DUTIES = Object.freeze(['Usher Door', 'Usher Front', 'Usher Back', 'Usher #1', 'Usher #2']);
 
 /* Two duties a leader marked always OK together (app/settings okPairs),
    for anyone: "Offering #6 + Prayer of Thanks". The key is the two duties in
@@ -59,6 +45,11 @@ function okPairsOf(settings) {
   return new Set(list.filter(key => typeof key === 'string' && key.indexOf(' + ') > 0));
 }
 
+/* One person, one duty per service, with one exception: Thanks Prayer or
+   Closing Prayer together with an usher duty (Lobby Security is not an usher
+   duty here). Opening Prayer (stored as Sermon) is never paired: whoever
+   gives it delivers the sermon and holds no other duty. The app's
+   app/lib/conflicts.js has the same rule; a test keeps the two in step. */
 /* `okPairs` (a Set or list of okPairKey keys) adds the pairs leaders marked
    always OK to the built-in one. */
 function dutiesAllowedTogether(duties, okPairs) {
@@ -71,13 +62,6 @@ function dutiesAllowedTogether(duties, okPairs) {
   const pairs = okPairs instanceof Set ? okPairs : new Set(Array.isArray(okPairs) ? okPairs : []);
   return pairs.has(okPairKey(list[0], list[1]));
 }
-
-/* Duties with a default member: Fill always gives the duty to its default
-   when they can take it, and new services start with them on it. Opening
-   Prayer goes to the church overseer unless a Worship leader or an
-   administrator chooses someone else, or no one (app/settings dutyDefaults);
-   another preacher is put on by hand. app/config/duties.js holds the same. */
-const DUTY_DEFAULTS = Object.freeze({ Sermon: 'E. Simon' });
 
 /* The default member for `duty` with these app settings: the saved choice
    ('' when a leader chose none), else the built-in one. */
@@ -128,38 +112,18 @@ const ACTION_CONFIG_KEYS = Object.freeze({
   editSongs: Object.freeze(['editSongs', 'songEditors', 'songEditorNames'])
 });
 
-const DEFAULT_DEPARTMENT_LEADERS = {
-  Worship: ['E. Simon', 'D. Armani', 'B. Brent'],
-  'Usher Sisters': ['M. Chloe'],
-  'Usher Brothers': ['D. Chris'],
-  Lobby: ['S. Anessa'],
-  Translation: ['S. Paola'],
-  Media: ['D. Aaron', 'D. Armani', 'B. Brent'],
-  'Parking Lot': ['D. Aaron'],
-  Offering: ['S. Elisa'],
-  "Children's Teachers": ['D. Kenya']
-};
-Object.keys(DEFAULT_DEPARTMENT_LEADERS).forEach(department => {
-  Object.freeze(DEFAULT_DEPARTMENT_LEADERS[department]);
-});
-Object.freeze(DEFAULT_DEPARTMENT_LEADERS);
-
-const DEFAULT_SONG_EDITORS = Object.freeze([
-  'D. Danielle', 'B. James', 'D. Aaron', 'D. Armani', 'B. Brent'
-]);
-
 /* The production role assignment is data, not a name check in a permission
    branch. Callers may pass a replacement config for tests or another tenant. */
 const DEFAULT_PERMISSION_CONFIG = Object.freeze({
-  admin: Object.freeze(['B. Anthony']),
-  globalLeaderManager: Object.freeze(['B. Anthony', 'E. Simon']),
+  admin: DEFAULT_ADMINS,
+  globalLeaderManager: DEFAULT_GLOBAL_LEADER_MANAGERS,
   departmentLeaders: DEFAULT_DEPARTMENT_LEADERS,
   songEditors: DEFAULT_SONG_EDITORS,
   roles: Object.freeze({
-    admin: Object.freeze(['B. Anthony']),
-    admins: Object.freeze(['B. Anthony']),
-    globalLeaderManager: Object.freeze(['B. Anthony', 'E. Simon']),
-    globalLeaderManagers: Object.freeze(['B. Anthony', 'E. Simon']),
+    admin: DEFAULT_ADMINS,
+    admins: DEFAULT_ADMINS,
+    globalLeaderManager: DEFAULT_GLOBAL_LEADER_MANAGERS,
+    globalLeaderManagers: DEFAULT_GLOBAL_LEADER_MANAGERS,
     departmentLeaders: DEFAULT_DEPARTMENT_LEADERS,
     departmentLeader: DEFAULT_DEPARTMENT_LEADERS,
     songEditor: DEFAULT_SONG_EDITORS,

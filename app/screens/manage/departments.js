@@ -12,11 +12,8 @@ import { DUTY_DEFAULTS, departmentNamed, departmentOf, dutyName, dutyDefault } f
 import { normalizeAvailability, takesDuty, timeLabel, dutiesFor, WEEKLY_TIMES, SPECIAL_TIMES } from '../../lib/availability.js';
 import { longDate, todayISO, shortDate, shortStamp } from '../../lib/dates.js';
 import { managedDepartments, canManageDepartment, canResetPin, leadersOf, isAdmin, isPrivileged } from '../../services/access.js';
-import {
-  departments as state, roster, rosterLoaded, loadRoster, draftOf, hasDraft, editDraft, editAvailability, dropDraft, saveProfile, profileSaving, setStatus,
-  searchMembers, addMember, addByName, missingMembers, servedDuties, resetPin, TEMPORARY_PIN, createInvite, cancelInvite, activeInvites, inviteLink, saveDutyDefault,
-  saveManualOnly
-} from '../../services/departments.js';
+import { departments as state, roster, rosterLoaded, loadRoster, draftOf, hasDraft, editDraft, editAvailability, dropDraft } from '../../services/rosters.js';
+import { saveProfile, profileSaving, setStatus, searchMembers, addMember, addByName, missingMembers, servedDuties, resetPin, TEMPORARY_PIN, createInvite, cancelInvite, activeInvites, inviteLink, saveDutyDefault, saveManualOnly } from '../../services/departments.js';
 import { manualOnlyIn } from '../../lib/manual-only.js';
 import { managedDepartment, setManagedDepartment } from './scope.js';
 

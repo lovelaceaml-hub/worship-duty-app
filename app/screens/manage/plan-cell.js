@@ -26,7 +26,7 @@ import { doubleDuties, isMarkedOk, otherDuties, isUsher, prayerOf } from '../../
 import { UNFILLED_REASONS } from '../../lib/fill.js';
 import { reasonText, reasonNote, holderNote } from '../../lib/reasons.js';
 import { canEditDuty } from '../../services/access.js';
-import { roster, rosterLoaded, profileOf } from '../../services/departments.js';
+import { roster, rosterLoaded, profileOf } from '../../services/rosters.js';
 import { keyOf, proposalsIn, changeProposal, savingName, saveDuty } from '../../services/planner.js';
 import { serviceById, currentScope, departmentsShown } from './scope.js';
 
