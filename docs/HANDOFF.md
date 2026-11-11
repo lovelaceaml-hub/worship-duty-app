@@ -1,6 +1,20 @@
 # Handoff: LV Zion Worship Duty
 
-Updated 2026-11-06 (leader added, release verified).
+Updated 2026-11-10 (second review, cleanup branch waiting).
+
+## Waiting for Anthony: review cleanup (2026-11-10)
+
+- Branch `review-cleanup-2026-11-10`: four small fixes (sign out during View
+  as, reminder list trimming, a calendar guard, month-plan alerts using the
+  service's own time), a `qs` patch, a Firebase SDK version test and README
+  corrections. Not merged, not released. The alert fix needs a functions
+  deploy (`saveDepartmentAssignments`), the rest an app release.
+- Findings and 15 ranked suggestions:
+  [reviews/2026-11-10-review.md](reviews/2026-11-10-review.md). The first
+  three are about sign-in safety.
+- Focused checks only; no full suite was run.
+
+Previously updated 2026-11-06 (leader added, release verified).
 
 ## Released 2026-11-06: Children's Teachers
 

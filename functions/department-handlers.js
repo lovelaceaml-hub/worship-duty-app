@@ -934,7 +934,7 @@ function createDepartmentHandlers(options = {}) {
         } else {
           transaction.delete(reference);
         }
-        saved.push({ ...where, memberName: name, previous: current, date: String(service.value.date || ''), service: String(service.value.service || '') });
+        saved.push({ ...where, memberName: name, previous: current, date: String(service.value.date || ''), service: String(service.value.service || ''), time: String(service.value.time || '') });
       }
       services.forEach((service, id) => {
         if (!Object.keys(service.changed).length) return;
