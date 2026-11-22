@@ -7,12 +7,13 @@
    loading, did not load or has no one on it yet. */
 import { html, plural } from '../../html.js';
 import { defineActions } from '../../actions.js';
-import { ui, nameOf } from '../../store.js';
-import { dutyName, PRAYER_DUTIES } from '../../config/duties.js';
+import { ui, session, nameOf } from '../../store.js';
+import { departmentNamed, dutyName, PRAYER_DUTIES } from '../../config/duties.js';
 import { serviceId, isUpcoming, serviceClock } from '../../lib/services.js';
 import { monthName, weekdayShort, dayOfMonth } from '../../lib/dates.js';
-import { canEditDuty } from '../../services/access.js';
+import { canEditDuty, canManageDepartment, leadersOf } from '../../services/access.js';
 import { roster, rosterLoaded, refreshRosters, departments as departmentState } from '../../services/rosters.js';
+import { addMember } from '../../services/departments.js';
 import { departmentsShown, planMonth } from './scope.js';
 import { cell, atService, needsLook, notFilled, showsPrayers, prayers } from './plan-cell.js';
 import { details } from './service-details.js';
@@ -59,6 +60,13 @@ export function legend() {
 const names = list => list.map(department => department.name);
 const joined = list => list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list.join('');
 
+function canAddSelf(department) {
+  const member = session.member;
+  return department === "Children's Teachers" && member?.uid && canManageDepartment(department) &&
+    leadersOf(department).includes(member.memberName) && rosterLoaded(department) &&
+    !roster(department).some(profile => profile.memberUid === member.uid || profile.memberName === member.memberName);
+}
+
 /* The department lists the planner needs: loading, did not load (with Try
    again), or with no one on them yet. Their duties show names only. */
 export function rosterNotes() {
@@ -71,6 +79,10 @@ export function rosterNotes() {
       <p>${failed.length === 1 ? 'The ' + failed[0].name + ' list did not load: ' + departmentState.errors[failed[0].name]
         : 'These lists did not load: ' + joined(names(failed)) + '.'} Its duties can be changed once it loads.</p>
       <button type="button" class="ghost small" data-act="plan-roster-retry" data-departments="${names(failed).join('|')}">Try again</button></div>` : ''}
+    ${editable.filter(department => canAddSelf(department.name)).map(department => html`
+      <p class="card-note plan-status">Add yourself to ${department.name} to choose your name for a duty.
+        <button type="button" class="ghost small" data-act="plan-add-self" data-department="${department.name}">Add myself to the roster</button>
+      </p>`)}
     ${empty.length ? html`<p class="card-note plan-status">No one is on the ${joined(names(empty))} ${empty.length === 1 ? 'list' : 'lists'} yet, so ${empty.length === 1 ? 'its' : 'their'} duties cannot be filled here.
       <button type="button" class="link" data-act="plan-roster-open" data-department="${empty[0].name}">Add members in Departments</button></p>` : ''}`;
 }
@@ -117,5 +129,18 @@ export function list(services, context) {
 }
 
 defineActions({
+  'plan-add-self': {
+    allowed: el => canAddSelf(el.dataset.department),
+    run: async el => {
+      const department = el.dataset.department;
+      const { uid, memberName } = session.member;
+      el.disabled = true;
+      try {
+        await addMember(department, { memberUid: uid, memberName }, { eligibleDuties: departmentNamed(department).duties });
+      } finally {
+        el.disabled = false;
+      }
+    }
+  },
   'plan-roster-retry': el => { refreshRosters(el.dataset.departments.split('|')); }
 });

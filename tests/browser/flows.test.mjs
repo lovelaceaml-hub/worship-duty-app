@@ -254,6 +254,37 @@ test('a member marks a day off; the duty that day is flagged and their leader fi
   await context.close();
 });
 
+test('an unrostered Children’s Teachers leader can add herself and take a Small Sanctuary duty', async () => {
+  const department = "Children's Teachers";
+  const memberName = 'S. Joanna';
+  const memberUid = 'member:' + memberName;
+  const { context, page, errors } = await as(memberName, {
+    viewport: DESKTOP,
+    fixture: {
+      childrensTeachers: true,
+      patch: { 'app/leaderConfig': { departmentLeaders: { [department]: [memberName] } } },
+      accounts: {
+        [memberName]: { pin: '1234', claims: { memberName, memberId: memberName, roles: ['departmentLeader'], departments: [department], roleVersion: 1 } }
+      }
+    }
+  });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'services');
+  const addSelf = page.getByRole('button', { name: 'Add myself to the roster' });
+  await addSelf.click();
+  await addSelf.waitFor({ state: 'hidden' });
+
+  const duty = 'Small Sanctuary #1';
+  const service = '2026-07-11_morning';
+  const picker = page.locator(`.plan-grid select[data-duty="${duty}"][data-service="${service}"]`);
+  await picker.selectOption(memberUid);
+  await page.waitForFunction(({ service, duty, memberName }) =>
+    window.__fake.get('schedule/' + service).assignments[duty] === memberName, { service, duty, memberName });
+  assert.equal((await calls(page, 'createDepartmentProfile')).length, 1);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a leader makes and cancels an invite link; a member opens one and joins', async () => {
   const leader = await as('E. Joseph', { viewport: DESKTOP });
   await tab(leader.page, 'manage');

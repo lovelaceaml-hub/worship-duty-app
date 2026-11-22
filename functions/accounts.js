@@ -93,11 +93,13 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
   const runtimePermissionConfig = () => appDocs.runtimePermissionConfig(db);
 
   /* A starting account for `name`: roles from the leader settings, and the
-     shared starting PIN (0000 for leaders, who must change it). */
+     shared starting PIN (0000 for privileged accounts, 2217 for other
+     members). Everyone with a new account must choose a personal PIN. */
   async function newAccount(name, config) {
     const record = memberRoleRecord(name, config || await runtimePermissionConfig());
     return Object.assign(record, {
-      pinHash: await hashPin(record.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN), active: true, roleVersion: 1
+      pinHash: await hashPin(record.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN),
+      mustChangePin: true, active: true, roleVersion: 1
     });
   }
 
