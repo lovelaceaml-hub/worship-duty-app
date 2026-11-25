@@ -9,7 +9,9 @@ import { memberOptions } from '../../ui/components.js';
 import { DEPARTMENTS } from '../../config/duties.js';
 import { byTitle } from '../../lib/names.js';
 import { call, problem } from '../../firebase.js';
-import { canManageLeaders, leadersOf } from '../../services/access.js';
+import { canManageLeaders, isAdmin, leadersOf } from '../../services/access.js';
+
+import { resetPin } from '../../services/departments.js';
 
 function songEditors() {
   const config = data.leaderConfig || window.WorshipDutyPermissions.DEFAULT_PERMISSION_CONFIG;
@@ -31,8 +33,19 @@ function roleBlock(title, names, role, department, hint) {
   </section>`;
 }
 
+function accountRecovery() {
+  if (!isAdmin()) return '';
+  return html`<section class="card">
+    <h3 class="card-subtitle">Member sign-in</h3>
+    <form class="inline-form" data-act="account-issue-pin">
+      <select name="name" aria-label="Member receiving a temporary PIN" required>${memberOptions([...data.members].sort(byTitle))}</select>
+      <button type="submit" class="ghost">Issue temporary PIN</button>
+    </form>
+  </section>`;
+}
+
 export function render() {
-  return html`${DEPARTMENTS.map(department => roleBlock(department.name + ' leaders', leadersOf(department.name), 'departmentLeader', department.name, ''))}
+  return html`${accountRecovery()}${DEPARTMENTS.map(department => roleBlock(department.name + ' leaders', leadersOf(department.name), 'departmentLeader', department.name, ''))}
     ${roleBlock('Choir song editors', songEditors(), 'songEditor', '', 'They can change choir songs and plan songs for any service. They do not get other leader rights.')}`;
 }
 
@@ -55,6 +68,10 @@ async function saveRole(role, department, name, enabled) {
 }
 
 defineActions({
+  'account-issue-pin': {
+    allowed: () => isAdmin(),
+    run: form => resetPin(canonical(new FormData(form).get('name')))
+  },
   'role-add': { allowed: () => canManageLeaders(), run: form => saveRole(form.dataset.role, form.dataset.department, new FormData(form).get('name'), true) },
   'role-remove': {
     allowed: () => canManageLeaders(),

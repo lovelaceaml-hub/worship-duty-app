@@ -1,5 +1,26 @@
 # Handoff: LV Zion Worship Duty
 
+## November 25 public-source audit follow-up
+
+Member setup and recovery use a 10-digit temporary PIN, generated separately for
+each issuance. An authorized leader opens a member's roster profile and chooses
+Issue temporary PIN. They see it once and give it privately to that member. It
+expires after 24 hours and stops working when the member chooses their own PIN or
+when a new temporary PIN is issued. Accounts do not start with a shared PIN.
+Members who use a personal PIN continue to sign in as before. Prior shared PINs
+are refused.
+
+Before production release, confirm an administrator who has a personal PIN can
+manage recovery. Identify active accounts still using retired credentials and
+coordinate individual recovery and stale-session revocation. Administrators can issue a PIN for any member under Manage, Leaders, Member
+sign-in. Run
+only focused synthetic checks unless a full suite was explicitly approved.
+Release verifyMemberPin, changeMemberPin, resetMemberPin, renameMember,
+updateRoleConfiguration and Hosting together
+under the project release procedure. Never use an earlier function build as
+a credential rollback. An old browser build is refused if it attempts a reset.
+
+
 Updated 2026-11-11 (the review's suggestions built and released).
 
 ## Released 2026-11-11: the review's suggestions

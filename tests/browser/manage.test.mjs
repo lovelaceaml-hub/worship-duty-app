@@ -559,7 +559,11 @@ test('a leader of two departments has no "All departments" link, resets only a m
   const asked = new Promise(resolve => page.once('dialog', dialog => { resolve(dialog.message()); dialog.accept(); }));
   await page.locator('#view [data-act="department-reset-pin"]').click();
   assert.match(await asked, /Their phones get no alerts until they sign in again\.$/);
-  await banner(page, 'B. Caleb’s PIN was reset. Tell them to sign in with 0000 and choose a new PIN.');
+  const temporaryPin = page.getByRole('dialog', { name: 'Temporary PIN' });
+  await temporaryPin.waitFor();
+  assert.match(await temporaryPin.getByLabel('PIN').inputValue(), /^[0-9]{10}$/);
+  await temporaryPin.getByRole('button', { name: 'Done' }).click();
+  assert.equal(await temporaryPin.count(), 0);
   assert.equal(await fakeDoc(page, 'tokens/caleb-phone'), undefined, 'their phones get no alerts');
   assert.deepEqual(errors, []);
   await context.close();
@@ -659,5 +663,21 @@ test('View as is offered to administrators only', async () => {
   const { page, context } = await as('S. Grace');
   await page.locator('[data-slot="member"]').click();
   assert.equal(await page.locator('[data-slot="view-as"]').isVisible(), false);
+  await context.close();
+});
+
+test('an administrator can issue a setup PIN without opening a roster profile', async () => {
+  const { context, page, errors } = await as('B. Adam', { viewport: DESKTOP });
+  await tab(page, 'manage');
+  await section(page, 'manage-section', 'leaders');
+  const recovery = page.locator('form[data-act="account-issue-pin"]');
+  await recovery.getByRole('combobox').selectOption('B. Silas');
+  accept(page);
+  await recovery.getByRole('button', { name: 'Issue temporary PIN' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Temporary PIN' });
+  assert.match(await dialog.getByLabel('PIN').inputValue(), /^[0-9]{10}$/);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  assert.deepEqual(await calls(page, 'resetMemberPin'), [{ memberId: 'B. Silas', temporaryPinFlow: true }]);
+  assert.deepEqual(errors, []);
   await context.close();
 });

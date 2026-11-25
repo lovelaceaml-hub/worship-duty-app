@@ -13,7 +13,7 @@ import { normalizeAvailability, takesDuty, timeLabel, dutiesFor, WEEKLY_TIMES, S
 import { longDate, todayISO, shortDate, shortStamp } from '../../lib/dates.js';
 import { managedDepartments, canManageDepartment, canResetPin, leadersOf, isAdmin, isPrivileged } from '../../services/access.js';
 import { departments as state, roster, rosterLoaded, loadRoster, draftOf, hasDraft, editDraft, editAvailability, dropDraft } from '../../services/rosters.js';
-import { saveProfile, profileSaving, setStatus, searchMembers, addMember, addByName, missingMembers, servedDuties, resetPin, TEMPORARY_PIN, createInvite, cancelInvite, activeInvites, inviteLink, saveDutyDefault, saveManualOnly } from '../../services/departments.js';
+import { saveProfile, profileSaving, setStatus, searchMembers, addMember, addByName, missingMembers, servedDuties, resetPin, createInvite, cancelInvite, activeInvites, inviteLink, saveDutyDefault, saveManualOnly } from '../../services/departments.js';
 import { manualOnlyIn } from '../../lib/manual-only.js';
 import { managedDepartment, setManagedDepartment } from './scope.js';
 
@@ -227,7 +227,7 @@ function memberProfile(department, uid) {
     ${lastChange(profile)}
     ${canEdit || reset ? html`<div class="button-row profile-actions">
       ${canEdit ? html`<button type="button" class="ghost small" data-act="department-status" data-status="${inactive ? 'active' : 'inactive'}"${saving ? ' disabled' : ''}>${inactive ? 'Make active' : 'Make inactive'}</button>` : ''}
-      ${reset ? html`<button type="button" class="ghost small" data-act="department-reset-pin" data-name="${profile.memberName}">Reset PIN</button>` : ''}
+      ${reset ? html`<button type="button" class="ghost small" data-act="department-reset-pin" data-name="${profile.memberName}">Issue temporary PIN</button>` : ''}
     </div>` : ''}
     ${waiting ? html`<p class="card-note is-warning">${nameOf(profile.memberName)} cannot be scheduled yet: ${waiting === 'No duties chosen' ? 'choose the duties they can take' : 'turn on Can be scheduled'}, then save.</p>` : ''}
     <section class="card">
@@ -355,9 +355,7 @@ defineActions({
   },
   'department-reset-pin': {
     allowed: el => canResetPin(el.dataset.name, managedDepartment()),
-    run: el => {
-      if (confirm('Reset the PIN for ' + nameOf(el.dataset.name) + '? They sign in with ' + TEMPORARY_PIN + ', then choose a new PIN. Their phones get no alerts until they sign in again.')) resetPin(el.dataset.name);
-    }
+    run: el => resetPin(el.dataset.name)
   },
   'invite-create': { allowed: el => canManageDepartment(el.dataset.department), run: el => createInvite(el.dataset.department) },
   'invite-copy': el => copy(inviteLink(el.dataset.token), 'Invite link copied.'),

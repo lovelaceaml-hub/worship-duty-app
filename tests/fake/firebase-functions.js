@@ -147,13 +147,13 @@ const handlers = {
   async changeMemberPin(data) {
     const account = accounts[data.memberId];
     if (!account) fail('permission-denied');
-    if (['0000', '2217'].includes(String(data.newPin))) fail('invalid-argument', 'Choose a PIN other than 0000 or 2217.', 'pin-too-common');
+    if (String(data.newPin) === '1234') fail('invalid-argument', 'Choose a less common PIN.', 'pin-too-common');
     account.pin = data.newPin;
     account.claims.mustChangePin = false;
     // As the server: a fresh token, so the device that changed it stays in.
     return { ok: true, token: 'fake-token:' + encodeURIComponent(data.memberId) };
   },
-  /* The PIN becomes 0000 until the member chooses a new one. Only an
+  /* The temporary PIN is used until the member chooses their own PIN. Only an
      administrator resets the PIN of someone with a role. */
   async resetMemberPin(data) {
     if (!accounts[data.memberId]) fail('not-found', 'That member has no account.');
@@ -161,13 +161,14 @@ const handlers = {
     const name = data.memberId, rules = permissions();
     const privileged = rules.isAdmin(name, config) || rules.canManageLeaders(name, config) || rules.departmentsForLeader(name, config).length || rules.canEditSongs(name, {}, config);
     if (!isAdmin() && privileged) fail('permission-denied', 'Only an administrator can reset that PIN.', 'privileged-target');
-    Object.assign(accounts[data.memberId], { pin: '0000' });
+    const temporaryPin = '9148370256';
+    accounts[data.memberId].pin = temporaryPin;
     accounts[data.memberId].claims.mustChangePin = true;
     // As the server: their phones get no alerts until they sign in again.
     for (const item of (await getDocs(collection(null, 'tokens'))).docs) {
       if ((item.data() || {}).name === data.memberId) await deleteDoc(doc(null, 'tokens', item.id));
     }
-    return { ok: true };
+    return { ok: true, temporaryPin, temporaryPinExpiresAt: Date.now() + 86400000 };
   },
   async listDepartmentRoster(data) {
     mustLead(data.departmentId);

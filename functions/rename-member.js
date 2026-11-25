@@ -124,7 +124,10 @@ async function renameMember(db, { from, to, newAccount, auth = null, now = Date.
     // PIN set under the old spelling comes along.
     targetUid = 'member:' + to;
     const fresh = await newAccount(to);
-    if (oldAccount && oldAccount.pinHash) Object.assign(fresh, { pinHash: oldAccount.pinHash, mustChangePin: !!oldAccount.mustChangePin });
+    if (oldAccount && oldAccount.pinHash) Object.assign(fresh, {
+      pinHash: oldAccount.pinHash, mustChangePin: !!oldAccount.mustChangePin,
+      temporaryPinExpiresAt: oldAccount.temporaryPinExpiresAt ?? null
+    });
     await accounts.doc(to).set(Object.assign(fresh, { renamedFrom: from, renamedAt: now }));
   } else {
     // A plain rename keeps the old uid and PIN, so nothing else has to move.
@@ -134,10 +137,9 @@ async function renameMember(db, { from, to, newAccount, auth = null, now = Date.
       id: to, memberId: to, name: to, memberName: to, authUid: keptUid, renamedFrom: from, renamedAt: now, active: true
     });
     delete account.renamedTo;
-    if (!account.pinHash) account.pinHash = fresh.pinHash;
     if (toAccount && toAccount.renamedFrom === from) {
       // An earlier run made this account: keep what changed on it since.
-      ['pinHash', 'mustChangePin', 'roleVersion', 'failedLoginAttempts', 'loginLockedUntil'].forEach(field => {
+      ['pinHash', 'mustChangePin', 'temporaryPinExpiresAt', 'roleVersion', 'failedLoginAttempts', 'loginLockedUntil', 'trustedDevices'].forEach(field => {
         if (Object.prototype.hasOwnProperty.call(toAccount, field)) account[field] = toAccount[field];
       });
     }

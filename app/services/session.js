@@ -137,7 +137,7 @@ function signInProblem(error, { signedIn = false } = {}) {
   if (reason === 'pin-too-common') return 'That PIN is too easy to guess. Choose a different one.';
   if (reason === 'locked' || code === 'resource-exhausted') return 'Too many tries. Wait 15 minutes, then try again.';
   if (signedIn) return problem(error);
-  if (code === 'invalid-argument') return 'Choose your name and enter a 4 to 6 digit PIN.';
+  if (code === 'invalid-argument') return 'Choose your name and enter your PIN or 10-digit temporary PIN.';
   if (code === 'unavailable' || code === 'internal') return 'Sign-in is not available right now. Try again.';
   if (code === 'failed-precondition') return 'Change your PIN first.';
   return 'That name and PIN do not match.';
@@ -159,8 +159,8 @@ async function signInWith(memberId, memberName, pin) {
 
 export async function signIn(name, pin) {
   const member = canonical(name);
-  if (!member || !/^\d{4,6}$/.test(pin)) {
-    ui.signIn.error = 'Choose your name and enter a 4 to 6 digit PIN.';
+  if (!member || !/^(?:\d{4,6}|\d{10})$/.test(pin)) {
+    ui.signIn.error = 'Choose your name and enter your PIN or 10-digit temporary PIN.';
     return;
   }
   ui.signIn = { member, busy: true, error: '' };
@@ -196,7 +196,7 @@ export async function changePin(first, second) {
     if (session.status !== 'verified') throw new Error('The PIN still needs to be changed.');
     ui.signIn = { member: member.memberName, busy: false, error: '' };
   } catch (error) {
-    ui.signIn = { member: member.memberName, busy: false, error: signInProblem(error, { signedIn }) };
+    ui.signIn = { member: member.memberName, busy: false, error: signInProblem(error, { signedIn: true }) };
   }
   renderSoon();
 }

@@ -6,10 +6,28 @@ const { promisify } = require('node:util');
 const scryptAsync = promisify(crypto.scrypt);
 const pbkdf2Async = promisify(crypto.pbkdf2);
 
-const DEFAULT_PIN = '0000';
-const ORDINARY_DEFAULT_PIN = '2217';
-const SHARED_PINS = new Set([DEFAULT_PIN, ORDINARY_DEFAULT_PIN]);
+const RETIRED_PIN_DIGESTS = new Set([
+  '9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0',
+  '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b',
+]);
 const PIN_PATTERN = /^[0-9]{4,6}$/;
+const TEMPORARY_PIN_PATTERN = /^[0-9]{10}$/;
+const TEMPORARY_PIN_TTL_MS = 24 * 60 * 60 * 1000;
+
+function isRetiredPin(pin) {
+  return typeof pin === 'string' &&
+    RETIRED_PIN_DIGESTS.has(crypto.createHash('sha256').update(pin).digest('hex'));
+}
+
+function isTemporaryPin(pin) {
+  return typeof pin === 'string' && TEMPORARY_PIN_PATTERN.test(pin);
+}
+
+function temporaryPinIsCurrent(member, now) {
+  return member.mustChangePin === true && Number.isSafeInteger(member.temporaryPinExpiresAt) &&
+    member.temporaryPinExpiresAt > now;
+}
+
 const HASH_PREFIX = 'pin';
 const HASH_VERSION = 1;
 
@@ -247,7 +265,7 @@ function decodeHash(encoded) {
 }
 
 async function hashPin(pin, options = {}) {
-  requireValidPin(pin);
+  if (!isTemporaryPin(pin)) requireValidPin(pin);
   const algorithm = options.algorithm == null ? 'scrypt' : options.algorithm;
   const salt = saltFromOption(options.salt);
   if (!validSalt(salt)) throw authError('invalid-argument', 'PIN hash salt is invalid.');
@@ -281,7 +299,7 @@ async function hashPin(pin, options = {}) {
 }
 
 async function verifyPin(pin, encodedHash) {
-  if (!validatePin(pin)) return false;
+  if (!validatePin(pin) && !isTemporaryPin(pin)) return false;
   const parsed = decodeHash(encodedHash);
   if (!parsed) return false;
 
@@ -373,7 +391,7 @@ function memberPinHash(member) {
 }
 
 async function updateMember(memberStore, member, patch) {
-  if (typeof memberStore.update === 'function') return memberStore.update(member.id, patch);
+  if (typeof memberStore.update === 'function') return memberStore.update(member.id, patch, member);
   if (typeof memberStore.updateMember === 'function') return memberStore.updateMember(member.id, patch);
   if (typeof memberStore.save === 'function') {
     return memberStore.save(member.id, Object.assign({}, member, patch));
@@ -568,11 +586,14 @@ function createMemberAuthService(dependencies = {}) {
   const auth = dependencies.auth;
   const permission = dependencies.permission || dependencies.permissions || dependencies.assertActorCanAct;
   const logger = dependencies.logger;
+  const now = dependencies.now || Date.now;
   if (!memberStore) throw new TypeError('memberStore is required');
 
   async function verifyMemberPin(request) {
     const input = dataFromRequest(request);
-    requireValidPin(input.pin);
+    const temporary = isTemporaryPin(input.pin);
+    if (!temporary) requireValidPin(input.pin);
+    if (isRetiredPin(input.pin)) throw authError('unauthenticated', GENERIC_LOGIN_MESSAGE);
 
     let member;
     try {
@@ -583,11 +604,14 @@ function createMemberAuthService(dependencies = {}) {
       throw authError('unauthenticated', GENERIC_LOGIN_MESSAGE);
     }
 
+    if (member.active === false) throw authError('unauthenticated', GENERIC_LOGIN_MESSAGE);
     const storedHash = memberPinHash(member);
     // The attempt is counted (and a locked account refused) before the PIN
     // is checked, so a burst of guesses cannot all be tried.
     if (typeof memberStore.beginAttempt === 'function') await memberStore.beginAttempt(member.id, input.deviceKey);
-    const valid = storedHash && await verifyPin(input.pin, storedHash);
+    const currentTemporary = temporaryPinIsCurrent(member, now());
+    const eligible = temporary ? currentTemporary : member.temporaryPinExpiresAt == null;
+    const valid = eligible && storedHash && await verifyPin(input.pin, storedHash);
     if (!valid) {
       audit(logger, 'verify', 'denied', null, member);
       throw authError('unauthenticated', GENERIC_LOGIN_MESSAGE);
@@ -596,12 +620,13 @@ function createMemberAuthService(dependencies = {}) {
     // A device new to this member is given a key to send next time, so a
     // lock on the member's name does not hold the member's own device.
     let deviceKey = null;
-    if (typeof memberStore.signedIn === 'function') deviceKey = await memberStore.signedIn(member.id, input.deviceKey);
+    if (typeof memberStore.signedIn === 'function') deviceKey = await memberStore.signedIn(member.id, input.deviceKey, member);
     else if (typeof memberStore.clearFailedAttempts === 'function') await memberStore.clearFailedAttempts(member.id);
 
     const claims = sessionClaims(member);
+    if (claims.mustChangePin) claims.pinChangeVerified = true;
     const uid = cleanText(member.authUid) || `member:${member.id}`;
-    await setClaimsIfSupported(auth, member, uid, claims);
+    if (!claims.mustChangePin) await setClaimsIfSupported(auth, member, uid, claims);
     const token = await issueToken(auth, uid, claims);
     audit(logger, 'verify', 'success', null, member);
     return {
@@ -626,8 +651,14 @@ function createMemberAuthService(dependencies = {}) {
       throw authError('permission-denied', 'A PIN may only be changed by its owner. Use reset for another account.');
     }
 
-    // The shared starting PINs are known to every member.
-    if (SHARED_PINS.has(input.newPin)) {
+    const usingTemporaryPin = member.temporaryPinExpiresAt != null;
+    if (usingTemporaryPin && !temporaryPinIsCurrent(member, now())) {
+      throw authError('permission-denied', 'Ask for a new temporary PIN before choosing a PIN.');
+    }
+    if (effectiveMustChangePin(member) && actor.token.pinChangeVerified !== true) {
+      throw authError('permission-denied', 'Sign in again before choosing a PIN.');
+    }
+    if (isRetiredPin(input.newPin)) {
       throw authError('invalid-argument', 'That PIN is too easy to guess. Choose a different one.', 'pin-too-common');
     }
     // A changed PIN ends the member's other sessions, as a reset does: a new
@@ -636,7 +667,9 @@ function createMemberAuthService(dependencies = {}) {
     // with the token returned here, so it stays in.
     const pinHash = await hashPin(input.newPin);
     const roleVersion = Number(member.roleVersion || 1) + 1;
-    await updateMember(memberStore, member, { pinHash, mustChangePin: false, roleVersion });
+    await updateMember(memberStore, member, {
+      pinHash, mustChangePin: false, roleVersion, temporaryPinExpiresAt: null
+    });
     const uid = cleanText(member.authUid) || `member:${member.id}`;
     if (auth && typeof auth.revokeRefreshTokens === 'function') {
       try {
@@ -676,10 +709,12 @@ function createMemberAuthService(dependencies = {}) {
     // they ask) and ends the member's open sessions: a new role version
     // makes every older sign-in token stale, and their refresh tokens are
     // revoked, so a lost phone stops working.
-    const pinHash = await hashPin(DEFAULT_PIN);
+    const temporaryPin = String(crypto.randomInt(10 ** 10)).padStart(10, '0');
+    const pinHash = await hashPin(temporaryPin);
+    const temporaryPinExpiresAt = now() + TEMPORARY_PIN_TTL_MS;
     const roleVersion = Number(member.roleVersion || 1) + 1;
     await updateMember(memberStore, member, {
-      pinHash, mustChangePin: true, failedLoginAttempts: 0, loginLockedUntil: 0, roleVersion,
+      pinHash, mustChangePin: true, temporaryPinExpiresAt, failedLoginAttempts: 0, loginLockedUntil: 0, roleVersion,
       trustedDevices: null // a lost phone is no longer a known device
     });
     if (auth && typeof auth.revokeRefreshTokens === 'function') {
@@ -695,7 +730,7 @@ function createMemberAuthService(dependencies = {}) {
       await setClaimsIfSupported(auth, member, member.authUid, nextClaims);
     }
     audit(logger, 'reset', 'success', actor, member);
-    return { ok: true, memberId: member.id, mustChangePin: true };
+    return { ok: true, memberId: member.id, mustChangePin: true, temporaryPin, temporaryPinExpiresAt };
   }
 
   async function assertPrivilegedSession(request, action = 'privileged') {
@@ -729,8 +764,8 @@ function createMemberAuthCallables(dependencies = {}) {
 }
 
 module.exports = {
-  DEFAULT_PIN,
-  ORDINARY_DEFAULT_PIN,
+  isRetiredPin,
+  temporaryPinIsCurrent,
   PRIVILEGED_ROLES,
   SONG_EDITOR_ROLES,
   validatePin,

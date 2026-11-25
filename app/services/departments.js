@@ -6,7 +6,7 @@
    them: leader edits, adding members, invite links and availability. */
 import { call, problem } from '../firebase.js';
 import { data, session, nameOf, writeJSON } from '../store.js';
-import { plural } from '../html.js';
+import { html, plural } from '../html.js';
 import { renderSoon } from '../render.js';
 import { notice, banner } from '../ui/banners.js';
 import { departmentNamed, dutyName } from '../config/duties.js';
@@ -191,18 +191,37 @@ export async function searchMembers(department, query, page = 1) {
   renderSoon();
 }
 
-/* The PIN a reset gives (functions/member-auth.js), which the member
-   replaces at their next sign-in. */
-export const TEMPORARY_PIN = '0000';
+let issuingPin = false;
 
 export async function resetPin(name) {
+  if (!name || issuingPin) return;
+  if (!confirm('Issue a temporary PIN for ' + nameOf(name) +
+    '? Give it to them privately. Their phones get no alerts until they sign in again.')) return;
+  issuingPin = true;
   try {
-    await call('resetMemberPin', { memberId: name });
-    notice(nameOf(name) + '’s PIN was reset. Tell them to sign in with ' + TEMPORARY_PIN + ' and choose a new PIN.');
+    const result = await call('resetMemberPin', { memberId: name, temporaryPinFlow: true });
+    if (!/^\d{10}$/.test(result && result.temporaryPin)) {
+      notice('No temporary PIN was returned. Ask an administrator before trying again.', true);
+      return;
+    }
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('aria-labelledby', 'temporary-pin-title');
+    dialog.innerHTML = String(html`
+      <form method="dialog">
+        <h2 id="temporary-pin-title">Temporary PIN</h2>
+        <p>Give this PIN privately to ${nameOf(name)}. It expires in 24 hours.</p>
+        <label>PIN <input type="text" value="${result.temporaryPin}" autocomplete="off" readonly></label>
+        <button class="primary" autofocus>Done</button>
+      </form>`);
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
   } catch (error) {
     notice('The PIN was not reset: ' + problem(error), true);
+  } finally {
+    issuingPin = false;
+    renderSoon();
   }
-  renderSoon();
 }
 
 /* ---- invite links ---- */

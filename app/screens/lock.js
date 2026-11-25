@@ -12,10 +12,6 @@ import { upcoming, nextService, serviceClock } from '../lib/services.js';
 import { longDate } from '../lib/dates.js';
 import { dutyName } from '../config/duties.js';
 
-/* A reset PIN (0000) and the PIN new members start with (2217) are known to
-   many people, so neither can be chosen as a member's own PIN. The server
-   refuses them too. */
-const COMMON_PINS = ['0000', '2217'];
 
 function box(title, body) {
   return html`<section class="card gate"><h2 class="gate-title">${title}</h2>${body}</section>`;
@@ -71,11 +67,11 @@ export const signIn = {
           <option value="">Your name</option>
           ${members.map(name => html`<option value="${name}"${name === ui.signIn.member ? ' selected' : ''}>${nameOf(name)}</option>`)}
         </select>
-        <input type="password" id="sign-in-pin" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="6" autocomplete="current-password" aria-label="PIN" placeholder="PIN" required>
+        <input type="password" id="sign-in-pin" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="10" autocomplete="current-password" aria-label="PIN" placeholder="PIN" required>
         <button class="primary" type="submit"${busy ? ' disabled' : ''}>${busy ? 'Signing in…' : 'Sign in'}</button>
       </form>
       ${error(ui.signIn.error)}
-      <p class="hint small">Forgot your PIN? Ask your department leader or an administrator to reset it. Then sign in with 0000 and choose a new PIN.</p>`);
+      <p class="hint small">Forgot your PIN? Ask your department leader or an administrator to reset it. For first sign-in or a reset, use the temporary PIN they give you.</p>`);
   },
   mounted(view) {
     const problem = ui.signIn.error;
@@ -149,11 +145,6 @@ defineActions({
     public: true,
     run: async form => {
       const first = form.querySelector('#new-pin').value;
-      if (COMMON_PINS.includes(first)) {
-        ui.signIn.error = 'That PIN is too easy to guess. Choose a different one.';
-        render();
-        return;
-      }
       const inApp = session.status === 'verified';
       await memberChangePin(first, form.querySelector('#new-pin-again').value);
       if (inApp && session.status === 'verified' && !ui.signIn.error && !ui.signIn.busy) {

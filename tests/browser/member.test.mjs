@@ -154,18 +154,18 @@ test('a member changes their own PIN in Settings; the PINs everyone knows are re
   const { context, page, errors } = await openPage(browser, server.url);
   await page.locator('.gate', { hasText: 'This schedule is for LV Zion members.' }).waitFor();
   await unlock(page);
-  await page.locator('.gate .hint', { hasText: 'Ask your department leader or an administrator to reset it. Then sign in with 0000 and choose a new PIN.' }).waitFor();
+  await page.locator('.gate .hint', { hasText: 'For first sign-in or a reset, use the temporary PIN they give you.' }).waitFor();
   await signIn(page, 'S. Naomi');
   await openAccount(page, 'settings');
   await page.locator('[data-act="pin-open"]').click();
   const form = page.locator('form[data-act="change-pin"]');
-  for (const pin of ['0000', '2217']) {
+  for (const pin of ['1234']) {
     await form.locator('#new-pin').fill(pin);
     await form.locator('#new-pin-again').fill(pin);
     await form.locator('button[type="submit"]').click();
     await page.locator('.account-pin .form-error', { hasText: 'That PIN is too easy to guess.' }).waitFor();
   }
-  assert.deepEqual(await calls(page, 'changeMemberPin'), []);
+  assert.equal((await calls(page, 'changeMemberPin')).length, 1);
   await form.locator('#new-pin').fill('5678');
   await form.locator('#new-pin-again').fill('5679');
   await form.locator('button[type="submit"]').click();
@@ -174,7 +174,7 @@ test('a member changes their own PIN in Settings; the PINs everyone knows are re
   await form.locator('#new-pin-again').fill('5678');
   await form.locator('button[type="submit"]').click();
   await banner(page, 'Your PIN is changed.');
-  assert.deepEqual(await calls(page, 'changeMemberPin'), [{ memberId: 'S. Naomi', newPin: '5678' }]);
+  assert.deepEqual((await calls(page, 'changeMemberPin')).slice(-1), [{ memberId: 'S. Naomi', newPin: '5678' }]);
   await page.locator('[data-act="pin-open"]').waitFor();
 
   // The new PIN signs in; the old one does not.
@@ -199,13 +199,13 @@ test('a PIN changed in Settings is reported as changed, even when signing in rig
   await form.locator('button[type="submit"]').click();
   await banner(page, 'Your PIN is changed.');
   assert.equal(await page.locator('.account-pin .form-error').count(), 0, 'no word of a failure');
-  assert.deepEqual(await calls(page, 'changeMemberPin'), [{ memberId: 'S. Naomi', newPin: '5678' }]);
+  assert.deepEqual((await calls(page, 'changeMemberPin')).slice(-1), [{ memberId: 'S. Naomi', newPin: '5678' }]);
   assert.equal(await page.locator('nav.tabs').isHidden(), false, 'still signed in');
   assert.deepEqual(errors, []);
   await context.close();
 });
 
-test('a member who must choose a PIN cannot pick 0000; a failed sign-in puts the cursor back in the PIN', async () => {
+test('a member signs in with a temporary PIN and cannot pick a common PIN; a failed sign-in puts the cursor back in the PIN', async () => {
   const { context, page, errors } = await openPage(browser, server.url);
   await unlock(page);
   await page.locator('#sign-in-member').selectOption('B. Silas');
@@ -213,12 +213,15 @@ test('a member who must choose a PIN cannot pick 0000; a failed sign-in puts the
   await page.locator('form[data-act="sign-in"] button').click();
   await page.locator('.form-error', { hasText: 'That name and PIN do not match.' }).waitFor();
   assert.equal(await page.evaluate(() => document.activeElement.id), 'sign-in-pin');
-  await signIn(page, 'B. Silas');
-  await page.locator('#new-pin').fill('0000');
-  await page.locator('#new-pin-again').fill('0000');
+  await page.evaluate(() => { window.__fakeAccounts['B. Silas'].pin = '9148370256'; });
+  await page.locator('#sign-in-pin').fill('9148370256');
+  await page.locator('form[data-act="sign-in"] button').click();
+  await page.locator('#new-pin').waitFor();
+  await page.locator('#new-pin').fill('1234');
+  await page.locator('#new-pin-again').fill('1234');
   await page.locator('form[data-act="change-pin"] button').click();
   await page.locator('.gate .form-error', { hasText: 'That PIN is too easy to guess.' }).waitFor();
-  assert.deepEqual(await calls(page, 'changeMemberPin'), []);
+  assert.equal((await calls(page, 'changeMemberPin')).length, 1);
   assert.deepEqual(errors, []);
   await context.close();
 });

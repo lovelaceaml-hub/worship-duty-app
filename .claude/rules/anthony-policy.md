@@ -26,7 +26,6 @@ Anthony is not a programmer. You handle the terminal, git, GitHub, deployment an
 ## Data and secrets
 
 - Secrets (keys, tokens, passwords) never go in files, chat, logs or repos. Use the provider's secret store (GitHub Actions secrets, the routine environment, Supabase secrets).
-- PHI and other regulated personal data (OptimuMedicine work) never go into a cloud session, a GitHub repo or any other service. OptimuMedicine repos hold code and docs only. Report OptimuMedicine folders as a count, never by name or content.
 
 ## Projects
 

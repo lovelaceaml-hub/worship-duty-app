@@ -3,8 +3,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  DEFAULT_PIN,
-  ORDINARY_DEFAULT_PIN,
   validatePin,
   hashPin,
   verifyPin,
@@ -15,6 +13,9 @@ const {
   createMemberAuthCallables
 } = require('../member-auth');
 
+const PERSONAL_PIN = '741983';
+const TEMP_PIN = '7419830625';
+
 function memberRecord(overrides = {}) {
   return Object.assign({
     id: 'member-1',
@@ -24,7 +25,7 @@ function memberRecord(overrides = {}) {
   }, overrides);
 }
 
-function harness(record, permissionResult = true) {
+function harness(record, permissionResult = true, now = Date.now) {
   const updates = [];
   const permissionCalls = [];
   const logs = [];
@@ -63,8 +64,8 @@ function harness(record, permissionResult = true) {
     }
   };
   return {
-    service: createMemberAuthService({ memberStore: store, auth, permission, logger }),
-    callables: createMemberAuthCallables({ memberStore: store, auth, permission, logger }),
+    service: createMemberAuthService({ memberStore: store, auth, permission, logger, now }),
+    callables: createMemberAuthCallables({ memberStore: store, auth, permission, logger, now }),
     record,
     updates,
     permissionCalls,
@@ -75,10 +76,9 @@ function harness(record, permissionResult = true) {
 }
 
 test('accepts only 4 to 6 ASCII digits as a PIN', () => {
-  assert.equal(ORDINARY_DEFAULT_PIN, '2217');
   assert.equal(validatePin('1234'), true);
   assert.equal(validatePin('123456'), true);
-  assert.equal(validatePin(ORDINARY_DEFAULT_PIN), true);
+  assert.equal(validatePin(PERSONAL_PIN), true);
   assert.equal(validatePin('123'), false);
   assert.equal(validatePin('1234567'), false);
   assert.equal(validatePin('12a4'), false);
@@ -116,10 +116,10 @@ test('distinguishes operational privilege from song-only editing privilege', () 
 });
 
 test('verifies the selected ordinary member and returns normal claims', async () => {
-  const record = memberRecord({ pinHash: await hashPin(ORDINARY_DEFAULT_PIN) });
+  const record = memberRecord({ pinHash: await hashPin(PERSONAL_PIN) });
   const h = harness(record);
   const result = await h.callables.verifyMemberPin({
-    data: { selectedMemberId: record.id, selectedMemberName: record.name, pin: ORDINARY_DEFAULT_PIN }
+    data: { selectedMemberId: record.id, selectedMemberName: record.name, pin: PERSONAL_PIN }
   });
   const token = JSON.parse(result.token);
   assert.equal(result.memberId, record.id);
@@ -133,15 +133,16 @@ test('verifies the selected ordinary member and returns normal claims', async ()
   const direct = await h.service.verifyMemberPin({
     auth: { uid: 'not-used-for-login' },
     memberId: record.id,
-    pin: ORDINARY_DEFAULT_PIN
+    pin: PERSONAL_PIN
   });
   assert.equal(direct.memberId, record.id);
 });
 
 test('forces a protected member with initial PIN into the change flow', async () => {
-  const record = memberRecord({ role: 'leader', authUid: 'auth-leader', pinHash: await hashPin(DEFAULT_PIN) });
+  const record = memberRecord({ role: 'leader', authUid: 'auth-leader', pinHash: await hashPin(TEMP_PIN),
+    mustChangePin: true, temporaryPinExpiresAt: Date.now() + 60000 });
   const h = harness(record);
-  const verified = await h.service.verifyMemberPin({ data: { memberId: record.id, pin: DEFAULT_PIN } });
+  const verified = await h.service.verifyMemberPin({ data: { memberId: record.id, pin: TEMP_PIN } });
   const token = JSON.parse(verified.token);
   assert.equal(verified.mustChangePin, true);
   assert.equal(token.claims.mustChangePin, true);
@@ -174,7 +175,7 @@ test('forces a protected member with initial PIN into the change flow', async ()
 });
 
 test('rejects invalid new PINs before writing a member record', async () => {
-  const record = memberRecord({ role: 'leader', pinHash: await hashPin(DEFAULT_PIN) });
+  const record = memberRecord({ role: 'leader', pinHash: await hashPin(PERSONAL_PIN) });
   const h = harness(record);
   await assert.rejects(
     h.service.changeMemberPin({
@@ -186,16 +187,20 @@ test('rejects invalid new PINs before writing a member record', async () => {
   assert.equal(h.updates.length, 0);
 });
 
-test('resets a member to the hashed default PIN and requires a change', async () => {
+test('issues a hashed, expiring PIN and requires a change', async () => {
   const record = memberRecord({ pinHash: await hashPin('1234') });
   const h = harness(record);
   const result = await h.service.resetMemberPin({
     auth: { uid: 'admin-1', token: { memberId: 'admin-1', privileged: true } },
     data: { memberId: record.id }
   });
-  assert.deepEqual(result, { ok: true, memberId: record.id, mustChangePin: true });
+  const { temporaryPin, temporaryPinExpiresAt, ...status } = result;
+  assert.deepEqual(status, { ok: true, memberId: record.id, mustChangePin: true });
+  assert.match(temporaryPin, /^\d{10}$/);
+  assert.equal(temporaryPinExpiresAt, record.temporaryPinExpiresAt);
+  assert.ok(temporaryPinExpiresAt > Date.now());
   assert.equal(record.mustChangePin, true);
-  assert.equal(await verifyPin(DEFAULT_PIN, record.pinHash), true);
+  assert.equal(await verifyPin(temporaryPin, record.pinHash), true);
   assert.equal(await verifyPin('1234', record.pinHash), false);
   assert.equal(h.updates.length, 1);
   assert.equal(h.permissionCalls.length, 1);
@@ -242,7 +247,7 @@ test('a protected actor cannot bypass a forced change to reset another account',
   assert.equal(h.permissionCalls.length, 0);
 });
 
-test('does not include PIN values in logs, errors, or result payloads', async () => {
+test('only discloses the temporary PIN to the authorized reset caller', async () => {
   const record = memberRecord({ pinHash: await hashPin('1234') });
   const h = harness(record);
   await assert.rejects(
@@ -260,12 +265,11 @@ test('does not include PIN values in logs, errors, or result payloads', async ()
   assert.equal(resetLog.details.actor.uid, 'admin-1');
   assert.equal(resetLog.details.actor.memberId, 'admin-1');
   assert.deepEqual(resetLog.details.target, { memberId: record.id });
-  const serialized = JSON.stringify({ logs: h.logs, result });
-  assert.equal(serialized.includes(DEFAULT_PIN), false);
-  assert.equal(serialized.includes(ORDINARY_DEFAULT_PIN), false);
+  const serialized = JSON.stringify({ logs: h.logs, updates: h.updates });
+  assert.equal(serialized.includes(result.temporaryPin), false);
   assert.equal(serialized.includes('1234'), false);
   assert.equal(serialized.includes('9999'), false);
-  assert.equal(serialized.includes(record.pinHash), false);
+  assert.equal(JSON.stringify(h.logs).includes(record.pinHash), false);
 });
 
 test('rejects account-changing requests without an authenticated actor', async () => {
@@ -280,4 +284,35 @@ test('rejects account-changing requests without an authenticated actor', async (
     error => error.code === 'unauthenticated'
   );
   assert.equal(h.updates.length, 0);
+});
+
+test('reissuing invalidates the previous temporary PIN and expiry blocks both sign-in and PIN changes', async () => {
+  let now = Date.now();
+  const record = memberRecord();
+  const h = harness(record, true, () => now);
+  const reset = () => h.service.resetMemberPin({
+    auth: { uid: 'admin-1', token: { memberId: 'admin-1', privileged: true } },
+    data: { memberId: record.id }
+  });
+  const login = pin => h.service.verifyMemberPin({ data: { memberId: record.id, pin } });
+  const first = await reset();
+  const second = await reset();
+  assert.notEqual(second.temporaryPin, first.temporaryPin);
+  await assert.rejects(login(first.temporaryPin), { code: 'unauthenticated' });
+  const verified = JSON.parse((await login(second.temporaryPin)).token);
+  const change = token => h.service.changeMemberPin({
+    auth: { uid: verified.uid, token },
+    data: { newPin: PERSONAL_PIN }
+  });
+  await assert.rejects(change({ ...verified.claims, pinChangeVerified: false }), { code: 'permission-denied' });
+  now = second.temporaryPinExpiresAt;
+  await assert.rejects(login(second.temporaryPin), { code: 'unauthenticated' });
+  await assert.rejects(change(verified.claims), { code: 'permission-denied' });
+});
+
+test('an inactive member cannot sign in even with the correct personal PIN', async () => {
+  const record = memberRecord({ active: false, pinHash: await hashPin(PERSONAL_PIN) });
+  const h = harness(record);
+  await assert.rejects(h.service.verifyMemberPin({ data: { memberId: record.id, pin: PERSONAL_PIN } }),
+    { code: 'unauthenticated' });
 });

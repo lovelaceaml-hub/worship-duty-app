@@ -362,9 +362,10 @@ they exist, these duties stay in the app and are not written to the Sheet.
 
 ## Signing in
 
-- Members sign in with their name and PIN. A new or reset PIN is a shared
-  starting PIN until the member chooses their own (Settings, Change your
-  PIN); the shared starting PINs cannot be chosen.
+- Members sign in with their name and PIN. For a first sign-in or recovery,
+  a department leader or administrator issues a temporary PIN and gives it
+  privately to the member. It expires in 24 hours. The member signs in with
+  it and chooses a personal PIN of 4 to 6 digits.
 - Changing a PIN signs the member out on every other device; the device
   they changed it on stays signed in.
 - Five wrong PINs lock the account for 15 minutes, for devices the member

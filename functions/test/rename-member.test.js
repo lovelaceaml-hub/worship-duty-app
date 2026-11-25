@@ -104,12 +104,18 @@ test('a fix that stopped part way finishes when run again, and the member list c
     : real(name));
   await assert.rejects(renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 5 }), /deadline/);
   assert.deepEqual(db.store.get('app/members').list, ['Bridgette', 'S. Leah'], 'the list is untouched until the end');
-  assert.equal(db.store.get('accounts/S. Bridgette').active, true);
+  const partiallyRenamed = db.store.get('accounts/S. Bridgette');
+  assert.equal(partiallyRenamed.active, true);
+  Object.assign(partiallyRenamed, {
+    trustedDevices: null, mustChangePin: true, temporaryPinExpiresAt: 400, pinHash: 'recovery-hash'
+  });
   await renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 6 });
   assert.deepEqual(db.store.get('app/members').list, ['S. Bridgette', 'S. Leah']);
   assert.equal(db.store.get('schedule/2026-10-03_morning').assignments['Usher Door'], 'S. Bridgette');
   const account = db.store.get('accounts/S. Bridgette');
-  assert.deepEqual([account.active, account.renamedTo, account.pinHash, account.authUid], [true, undefined, 'her-own-pin', 'member:Bridgette']);
+  assert.deepEqual([account.active, account.renamedTo, account.pinHash, account.authUid], [true, undefined, 'recovery-hash', 'member:Bridgette']);
+  assert.equal(account.trustedDevices, null);
+  assert.equal(account.temporaryPinExpiresAt, 400);
   assert.equal(db.store.get('accounts/Bridgette').roleVersion, 3, 'the old name\'s sessions end once');
 });
 
