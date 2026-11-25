@@ -7,7 +7,7 @@
    by updateRoleConfiguration. */
 const crypto = require('node:crypto');
 const permissions = require('./permissions.js');
-const { DEFAULT_PIN, ORDINARY_DEFAULT_PIN, hashPin, createMemberAuthCallables } = require('./member-auth.js');
+const { createMemberAuthCallables } = require('./member-auth.js');
 const { canonicalName, usableMemberName } = require('./names.js');
 const appDocs = require('./app-docs.js');
 const { refusal } = require('./refusals.js');
@@ -17,6 +17,14 @@ const PERMISSION_CONFIG = permissions.DEFAULT_PERMISSION_CONFIG;
 const LOCK_AFTER_ATTEMPTS = 5;
 const LOCK_MS = 15 * 60 * 1000;
 const MAX_DEVICES = 8;
+
+function currentCredential(data, expected) {
+  return data.active !== false &&
+    Number(data.roleVersion || 1) === Number(expected.roleVersion || 1) &&
+    (data.pinHash || data.pin_hash || data.passwordHash) ===
+      (expected.pinHash || expected.pin_hash || expected.passwordHash) &&
+    data.pinSetupRequired === expected.pinSetupRequired;
+}
 
 /* A device key is stored only as its SHA-256; '' for no usable key. */
 function deviceId(key) {
@@ -88,19 +96,14 @@ async function decorateMember(record, context) {
   return next;
 }
 
-function createAccounts({ db, auth, logger, now = () => Date.now() }) {
+function createAccounts({ db, auth, logger, setupPin, now = () => Date.now() }) {
   const loadNameMap = () => appDocs.loadNameMap(db);
   const runtimePermissionConfig = () => appDocs.runtimePermissionConfig(db);
 
-  /* A starting account for `name`: roles from the leader settings, and the
-     shared starting PIN (0000 for privileged accounts, 2217 for other
-     members). Everyone with a new account must choose a personal PIN. */
+  /* New accounts accept the shared setup PIN until the member sets their own. */
   async function newAccount(name, config) {
     const record = memberRoleRecord(name, config || await runtimePermissionConfig());
-    return Object.assign(record, {
-      pinHash: await hashPin(record.mustChangePin ? DEFAULT_PIN : ORDINARY_DEFAULT_PIN),
-      mustChangePin: true, active: true, roleVersion: 1
-    });
+    return Object.assign(record, { pinSetupRequired: true, mustChangePin: true, active: true, roleVersion: 1 });
   }
 
   /* The departments a member belongs to: the name lists in app/departments,
@@ -172,13 +175,26 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
 
     return {
       getById: accountById,
+      async getCurrent(id) {
+        const snapshot = await accounts.doc(id).get();
+        if (!snapshot.exists) return null;
+        const nameMap = await loadNameMap();
+        return decorateMember({ id: snapshot.id, ...snapshot.data() }, lookup(nameMap));
+      },
       findByName,
       /* Writes only what a PIN change or reset sets. Roles, departments and
          names are never written back from a sign-in. */
-      async update(id, patch) {
+      async update(id, patch, expected) {
         const memberId = String(id == null ? '' : id).trim();
         if (!memberId) throw new Error('Member id is required.');
-        await accounts.doc(memberId).set(Object.assign({}, patch), { merge: true });
+        const reference = accounts.doc(memberId);
+        await db.runTransaction(async transaction => {
+          const snapshot = await transaction.get(reference);
+          if (!snapshot.exists || !currentCredential(snapshot.data(), expected)) {
+            throw refusal('aborted', 'changed', 'The account changed. Try again.');
+          }
+          transaction.set(reference, patch, { merge: true });
+        });
       },
       /* One sign-in attempt, counted before the PIN is checked and in one
          transaction, so attempts made at the same moment cannot all slip past
@@ -220,12 +236,15 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
       /* After a correct PIN: the counts start again, and a device not known
          yet is given a key (returned once, only its hash is stored). The
          newest MAX_DEVICES are kept. A known device returns null. */
-      async signedIn(id, deviceKey) {
+      async signedIn(id, deviceKey, expected) {
         const reference = accounts.doc(String(id));
         const device = deviceId(deviceKey);
         return db.runTransaction(async transaction => {
           const snapshot = await transaction.get(reference);
           const data = snapshot.exists ? snapshot.data() || {} : {};
+          if (!snapshot.exists || !currentCredential(data, expected)) {
+            throw refusal('unauthenticated', 'not-allowed', 'The member name or PIN is not correct.');
+          }
           const devices = Object.assign({}, data.trustedDevices);
           const at = now();
           let issued = null;
@@ -240,8 +259,7 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
           kept.forEach(key => { trustedDevices[key] = devices[key]; });
           // update(), not a merge: the map is replaced, so dropped devices go.
           const patch = { failedLoginAttempts: 0, loginLockedUntil: 0, trustedDevices };
-          if (snapshot.exists) transaction.update(reference, patch);
-          else transaction.set(reference, patch, { merge: true });
+          transaction.update(reference, patch);
           return issued;
         });
       }
@@ -285,11 +303,13 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
     memberStore: createFirestoreMemberStore(),
     auth,
     permission: memberPermissionAdapter(),
-    logger
+    logger,
+    setupPin,
+    now
   });
 
-  /* A leader or an administrator resets someone's PIN to 0000 (request.auth
-     is their verified, current account). Every reset is recorded in audit
+  /* A leader or administrator returns the member to PIN setup (request.auth is
+     their verified, current account). Every reset is recorded in audit
      (who, whom, when), as overrides and role changes are. The member's
      phones get no alerts until they sign in again (each sign-in registers
      its phone again), so a lost phone stops getting them at once. */
@@ -334,9 +354,6 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
     const actorName = canonicalName(actor.memberName || actor.name || actor.uid, nameMap);
     const configRef = db.collection('app').doc('leaderConfig');
     const accountRef = db.collection('accounts').doc(memberName);
-    // Both starting PINs are hashed before the transaction (hashing is slow);
-    // only an account that has none yet is given one.
-    const startingPins = { leader: await hashPin(DEFAULT_PIN), member: await hashPin(ORDINARY_DEFAULT_PIN) };
     // The leader settings and the account are read and written in one
     // transaction, so two managers saving at the same moment both land.
     const { next, beforeData } = await db.runTransaction(async transaction => {
@@ -376,11 +393,11 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
         roles, departments,
         role: roles[0] || 'member',
         globalLeaderManager: roles.includes('globalLeaderManager'),
-        mustChangePin: !wasPrivileged && nowPrivileged ? true : Boolean(beforeData.mustChangePin),
+        mustChangePin: !beforeAccount.exists || (!wasPrivileged && nowPrivileged) || beforeData.mustChangePin === true,
         active: true,
         roleVersion: Number(beforeData.roleVersion || 1) + 1
       };
-      if (!beforeData.pinHash) accountPatch.pinHash = nowPrivileged ? startingPins.leader : startingPins.member;
+      if (!beforeAccount.exists) accountPatch.pinSetupRequired = true;
       transaction.set(configRef, next, { merge: false });
       transaction.set(accountRef, accountPatch, { merge: true });
       return { next, beforeData };

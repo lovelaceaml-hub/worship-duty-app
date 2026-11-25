@@ -24,10 +24,19 @@ function fakeDb(docs) {
         .map(key => { const ref = docRef(key); return { id: ref.id, ref, data: () => store.get(key) }; })
     })
   });
-  return { store, collection: name => collectionRef(name) };
+  return {
+    store,
+    collection: name => collectionRef(name),
+    runTransaction: async run => {
+      const writes = [];
+      const result = await run({ get: ref => ref.get(), set: (...args) => writes.push(args) });
+      for (const [ref, value, options] of writes) await ref.set(value, options);
+      return result;
+    }
+  };
 }
 
-const newAccount = async name => ({ id: name, memberName: name, role: 'member', pinHash: 'default-hash', active: true });
+const newAccount = async name => ({ id: name, memberName: name, role: 'member', pinSetupRequired: true, mustChangePin: true, active: true });
 
 test('a name is fixed everywhere and the member keeps their sign-in', async () => {
   const db = fakeDb({
@@ -58,6 +67,8 @@ test('a name is fixed everywhere and the member keeps their sign-in', async () =
   const account = db.store.get('accounts/S. Bridgette');
   assert.equal(account.authUid, 'member:Bridgette');
   assert.equal(account.pinHash, 'her-own-pin');
+  assert.equal(account.pinSetupRequired, false);
+  assert.equal(account.mustChangePin, false);
   assert.equal(db.store.get('accounts/Bridgette').active, false);
   assert.equal(db.store.get('departments/Usher Sisters/members/member:Bridgette').memberName, 'S. Bridgette');
 });
@@ -104,12 +115,18 @@ test('a fix that stopped part way finishes when run again, and the member list c
     : real(name));
   await assert.rejects(renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 5 }), /deadline/);
   assert.deepEqual(db.store.get('app/members').list, ['Bridgette', 'S. Leah'], 'the list is untouched until the end');
-  assert.equal(db.store.get('accounts/S. Bridgette').active, true);
+  const partiallyRenamed = db.store.get('accounts/S. Bridgette');
+  assert.equal(partiallyRenamed.active, true);
+  Object.assign(partiallyRenamed, {
+    trustedDevices: null, mustChangePin: true, pinSetupRequired: true, pinHash: 'recovery-hash'
+  });
   await renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 6 });
   assert.deepEqual(db.store.get('app/members').list, ['S. Bridgette', 'S. Leah']);
   assert.equal(db.store.get('schedule/2026-10-03_morning').assignments['Usher Door'], 'S. Bridgette');
   const account = db.store.get('accounts/S. Bridgette');
-  assert.deepEqual([account.active, account.renamedTo, account.pinHash, account.authUid], [true, undefined, 'her-own-pin', 'member:Bridgette']);
+  assert.deepEqual([account.active, account.renamedTo, account.pinHash, account.authUid], [true, undefined, 'recovery-hash', 'member:Bridgette']);
+  assert.equal(account.trustedDevices, null);
+  assert.equal(account.pinSetupRequired, true);
   assert.equal(db.store.get('accounts/Bridgette').roleVersion, 3, 'the old name\'s sessions end once');
 });
 
@@ -147,4 +164,24 @@ test('a merge gives the kept account its roles and the old uid\'s requests and f
   assert.deepEqual(db.store.get('schedule/2026-10-03_morning').needsReplacement['Usher Back'],
     { memberName: 'S. Bridgette', memberUid: 'sb-uid', reason: 'unavailable' });
   assert.equal(db.store.get('tokens/phone').name, 'S. Bridgette');
+});
+
+test('a reset before the account transfer is carried to the renamed account', async () => {
+  const db = fakeDb({
+    'app/members': { list: ['Bridgette'] },
+    'accounts/Bridgette': { pinHash: 'personal-hash', active: true, roleVersion: 2, mustChangePin: false }
+  });
+  const runTransaction = db.runTransaction;
+  db.runTransaction = async run => {
+    Object.assign(db.store.get('accounts/Bridgette'), {
+      pinHash: null, pinSetupRequired: true, mustChangePin: true, roleVersion: 3
+    });
+    return runTransaction(run);
+  };
+  await renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount });
+  const account = db.store.get('accounts/S. Bridgette');
+  assert.equal(account.pinHash, null);
+  assert.equal(account.pinSetupRequired, true);
+  assert.equal(account.mustChangePin, true);
+  assert.equal(db.store.get('accounts/Bridgette').active, false);
 });
