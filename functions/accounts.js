@@ -190,7 +190,7 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
           }
           if (patch.mustChangePin === false && expected.temporaryPinExpiresAt != null &&
               !temporaryPinIsCurrent(snapshot.data(), now())) {
-            throw refusal('permission-denied', 'pin-change-required', 'Ask for a new temporary PIN.');
+            throw refusal('permission-denied', 'temporary-pin-expired');
           }
           transaction.set(reference, patch, { merge: true });
         });
@@ -314,7 +314,7 @@ function createAccounts({ db, auth, logger, now = () => Date.now() }) {
      its phone again), so a lost phone stops getting them at once. */
   async function resetMemberPin(request) {
     if (!request.data || request.data.temporaryPinFlow !== true) {
-      throw refusal('failed-precondition', 'pin-change-required', 'Refresh the app before issuing a temporary PIN.');
+      throw refusal('failed-precondition', 'app-refresh-required');
     }
     const actor = request.auth;
     const result = await memberAuth.resetMemberPin({ data: request.data, auth: actor });

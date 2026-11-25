@@ -653,10 +653,10 @@ function createMemberAuthService(dependencies = {}) {
 
     const usingTemporaryPin = member.temporaryPinExpiresAt != null;
     if (usingTemporaryPin && !temporaryPinIsCurrent(member, now())) {
-      throw authError('permission-denied', 'Ask for a new temporary PIN before choosing a PIN.');
+      throw authError('permission-denied', 'Ask for a new temporary PIN.', 'temporary-pin-expired');
     }
     if (effectiveMustChangePin(member) && actor.token.pinChangeVerified !== true) {
-      throw authError('permission-denied', 'Sign in again before choosing a PIN.');
+      throw authError('permission-denied', 'Sign in again before choosing a PIN.', 'session-ended');
     }
     if (isRetiredPin(input.newPin)) {
       throw authError('invalid-argument', 'That PIN is too easy to guess. Choose a different one.', 'pin-too-common');

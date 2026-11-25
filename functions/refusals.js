@@ -10,6 +10,8 @@ const MESSAGES = Object.freeze({
   'sign-in-required': 'Sign in again, then try again.',
   'session-ended': 'Your sign-in has ended. Sign in again.',
   'account-inactive': 'This account is no longer in use. Sign in with your current name.',
+  'temporary-pin-expired': 'Ask for a new temporary PIN.',
+  'app-refresh-required': 'Refresh the app before issuing a temporary PIN.',
   'pin-change-required': 'Choose your own PIN first.',
   locked: 'Too many attempts. Try again later.',
   'pin-too-common': 'That PIN is too easy to guess. Choose a different one.',

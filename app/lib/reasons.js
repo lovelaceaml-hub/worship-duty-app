@@ -52,6 +52,8 @@ const REASONS = {
   'account-inactive': ['account not in use', 'This account is no longer in use. Sign out, then sign in with your current name.'],
   unauthenticated: ['sign in again', 'Sign in again, then try again.'],
   'sign-in-required': ['sign in again', 'Sign in again, then try again.'],
+  'temporary-pin-expired': ['temporary PIN expired', 'Ask for a new temporary PIN.'],
+  'app-refresh-required': ['refresh the app', 'Refresh the app before issuing a temporary PIN.'],
   'pin-change-required': ['choose a PIN first', 'Choose your own PIN first.'],
   'pin-too-common': ['too easy to guess', 'That PIN is too easy to guess. Choose a different one.'],
   locked: ['too many tries', 'Too many tries. Wait 15 minutes, then try again.'],
