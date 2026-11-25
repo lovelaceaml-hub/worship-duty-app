@@ -67,6 +67,7 @@ function searchPanel(department) {
   return html`<section class="card">
     <h3 class="card-subtitle">Add a member</h3>
     <p class="hint">${department === 'Worship' ? 'Then choose the Worship duties they can take.' : 'They can take any ' + department + ' duty; change that in their profile.'}</p>
+    <p class="hint">For their first sign-in, tell the member to choose their name and enter 2217. The app will ask them to choose their own PIN.</p>
     <form class="inline-form" data-act="department-search" data-department="${department}">
       <input type="search" name="query" minlength="2" maxlength="80" placeholder="Name, 2 letters or more" aria-label="Member name" value="${search ? search.query : ''}" required>
       <button type="submit" class="primary"${search && search.busy ? ' disabled' : ''}>Search</button>

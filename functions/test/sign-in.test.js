@@ -85,6 +85,12 @@ test('a first sign-in takes roles from the leader settings, not the built-in lis
   const claims = claimsOf(await signIn(functions, 'D. Chris', SETUP_PIN));
   assert.equal(claims.leader, false);
   assert.deepEqual(docs['accounts/D. Chris'].roles, []);
+  assert.equal(claims.mustChangePin, true);
+  assert.equal(docs['accounts/D. Chris'].mustChangePin, true);
+
+  await functions.changeMemberPin.run({ auth: { uid: 'member:D. Chris', token: claims }, data: { newPin: '5678' } });
+  await rejectsWith(signIn(functions, 'D. Chris', SETUP_PIN), 'unauthenticated');
+  assert.equal(claimsOf(await signIn(functions, 'D. Chris', '5678')).mustChangePin, false);
 });
 
 test('guesses made at the same moment are counted: five are checked, the rest refused', async () => {

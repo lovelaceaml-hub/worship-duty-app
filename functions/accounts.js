@@ -100,7 +100,7 @@ function createAccounts({ db, auth, logger, setupPin, now = () => Date.now() }) 
   const loadNameMap = () => appDocs.loadNameMap(db);
   const runtimePermissionConfig = () => appDocs.runtimePermissionConfig(db);
 
-  /* New accounts accept the shared PIN until the member sets their own. */
+  /* New accounts accept the shared setup PIN until the member sets their own. */
   async function newAccount(name, config) {
     const record = memberRoleRecord(name, config || await runtimePermissionConfig());
     return Object.assign(record, { pinSetupRequired: true, mustChangePin: true, active: true, roleVersion: 1 });
