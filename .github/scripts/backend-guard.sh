@@ -34,9 +34,8 @@ set -euo pipefail
 # ---- Pinned for this repository. Change only with Anthony's approval. ----
 PROJECT="lv-zion-duties"
 FIREBASE_TOOLS="firebase-tools@15"
-# Secret Manager secrets the Functions may read (defineSecret). Worship's
-# Functions on main read none (the Sheet is reached by impersonation).
-ALLOWED_SECRETS=(SONG_INGEST_TOKEN)
+# Secret Manager names used by the song ingest and member PIN functions.
+ALLOWED_SECRETS=(SONG_INGEST_TOKEN MEMBER_SETUP_PIN)
 # The LV Zion sender functions live in this project but are deployed from
 # elsewhere on purpose. This repository must never deploy or delete them.
 REFUSED_FUNCTIONS=(onVercelScheduleWrite worshipVercelReconcile)
