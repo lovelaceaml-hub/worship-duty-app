@@ -362,9 +362,12 @@ they exist, these duties stay in the app and are not written to the Sheet.
 
 ## Signing in
 
-- Members sign in with their name and PIN. A new or reset PIN is a shared
-  starting PIN until the member chooses their own (Settings, Change your
-  PIN); the shared starting PINs cannot be chosen.
+- Members use one shared setup PIN on first sign-in or after an authorized
+  reset. The app requires them to choose a personal PIN before they can
+  use their account. Once set, only their personal PIN signs them in.
+- The shared PIN lives in Firebase Secret Manager as MEMBER_SETUP_PIN.
+  The sign-in and PIN-change functions use it. Configure a fresh value
+  privately before release. The published former values are refused.
 - Changing a PIN signs the member out on every other device; the device
   they changed it on stays signed in.
 - Five wrong PINs lock the account for 15 minutes, for devices the member

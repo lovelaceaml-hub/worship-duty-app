@@ -191,14 +191,10 @@ export async function searchMembers(department, query, page = 1) {
   renderSoon();
 }
 
-/* The PIN a reset gives (functions/member-auth.js), which the member
-   replaces at their next sign-in. */
-export const TEMPORARY_PIN = '0000';
-
 export async function resetPin(name) {
   try {
     await call('resetMemberPin', { memberId: name });
-    notice(nameOf(name) + '’s PIN was reset. Tell them to sign in with ' + TEMPORARY_PIN + ' and choose a new PIN.');
+    notice(nameOf(name) + ' can now sign in with the shared setup PIN and choose a personal PIN.');
   } catch (error) {
     notice('The PIN was not reset: ' + problem(error), true);
   }
