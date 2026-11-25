@@ -315,3 +315,27 @@ test('missing setup configuration fails closed while personal PIN sign-in still 
   Object.assign(record, { pinSetupRequired: false, mustChangePin: false, pinHash: await hashPin(PERSONAL_PIN) });
   assert.equal((await login(PERSONAL_PIN)).mustChangePin, false);
 });
+
+test('claims reflect the latest account version if a credential changes during publication', async () => {
+  const record = memberRecord({
+    authUid: 'fake-member-auth-uid', pinHash: await hashPin(PERSONAL_PIN), roleVersion: 1, mustChangePin: false
+  });
+  const published = [];
+  const service = createMemberAuthService({
+    memberStore: {
+      getById: async () => ({ ...record }),
+      getCurrent: async () => ({ ...record })
+    },
+    auth: {
+      createCustomToken: async () => 'fake-token',
+      async setCustomUserClaims(uid, claims) {
+        published.push([claims.roleVersion, claims.mustChangePin]);
+        if (claims.roleVersion === 1) {
+          Object.assign(record, { roleVersion: 2, mustChangePin: true, pinSetupRequired: true, pinHash: null });
+        }
+      }
+    }
+  });
+  await service.verifyMemberPin({ data: { memberId: record.id, pin: PERSONAL_PIN } });
+  assert.deepEqual(published, [[1, false], [2, true]]);
+});

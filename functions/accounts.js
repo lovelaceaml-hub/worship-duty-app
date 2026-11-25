@@ -175,6 +175,12 @@ function createAccounts({ db, auth, logger, setupPin, now = () => Date.now() }) 
 
     return {
       getById: accountById,
+      async getCurrent(id) {
+        const snapshot = await accounts.doc(id).get();
+        if (!snapshot.exists) return null;
+        const nameMap = await loadNameMap();
+        return decorateMember({ id: snapshot.id, ...snapshot.data() }, lookup(nameMap));
+      },
       findByName,
       /* Writes only what a PIN change or reset sets. Roles, departments and
          names are never written back from a sign-in. */

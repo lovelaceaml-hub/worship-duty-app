@@ -592,6 +592,23 @@ function createMemberAuthService(dependencies = {}) {
   }
   if (!memberStore) throw new TypeError('memberStore is required');
 
+  // Firebase Auth and Firestore cannot be written in one transaction.
+  // Re-read after a claims write to repair a concurrent older publication.
+  async function persistClaims(member, claims) {
+    if (!member.authUid) return;
+    if (typeof memberStore.getCurrent !== 'function') {
+      await setClaimsIfSupported(auth, member, member.authUid, claims);
+      return;
+    }
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const current = await memberStore.getCurrent(member.id);
+      if (!current || current.active === false || current.authUid !== member.authUid) return;
+      await setClaimsIfSupported(auth, current, current.authUid, sessionClaims(current));
+      const after = await memberStore.getCurrent(member.id);
+      if (!after || after.active === false || after.roleVersion === current.roleVersion) return;
+    }
+  }
+
   async function verifyMemberPin(request) {
     const input = dataFromRequest(request);
     requireValidPin(input.pin);
@@ -627,7 +644,7 @@ function createMemberAuthService(dependencies = {}) {
     const claims = sessionClaims(member);
     if (claims.mustChangePin) claims.pinChangeVerified = true;
     const uid = cleanText(member.authUid) || `member:${member.id}`;
-    if (!claims.mustChangePin) await setClaimsIfSupported(auth, member, uid, claims);
+    if (!claims.mustChangePin) await persistClaims(member, claims);
     const token = await issueToken(auth, uid, claims);
     audit(logger, 'verify', 'success', null, member);
     return {
@@ -674,7 +691,7 @@ function createMemberAuthService(dependencies = {}) {
       }
     }
     const nextClaims = sessionClaims(Object.assign({}, member, { pinHash, pinSetupRequired: false, mustChangePin: false, roleVersion }));
-    if (member.authUid) await setClaimsIfSupported(auth, member, member.authUid, nextClaims);
+    await persistClaims(member, nextClaims);
     let token = null;
     try {
       token = await issueToken(auth, uid, nextClaims);
@@ -720,7 +737,7 @@ function createMemberAuthService(dependencies = {}) {
 
     if (member.authUid && auth && typeof auth.setCustomUserClaims === 'function') {
       const nextClaims = sessionClaims(Object.assign({}, member, { mustChangePin: true, roleVersion }));
-      await setClaimsIfSupported(auth, member, member.authUid, nextClaims);
+      await persistClaims(member, nextClaims);
     }
     audit(logger, 'reset', 'success', actor, member);
     return { ok: true, memberId: member.id, mustChangePin: true };

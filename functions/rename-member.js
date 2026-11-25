@@ -59,19 +59,6 @@ async function renameMember(db, { from, to, newAccount, auth = null, now = Date.
   const resuming = !list.includes(from) && list.includes(to) && map[from] === to;
   if (!list.includes(from) && !resuming) throw Object.assign(new Error(from + ' is not on the member list.'), { code: 'not-found' });
 
-  const accounts = db.collection('accounts');
-  const oldSnap = await accounts.doc(from).get();
-  const oldAccount = oldSnap.exists ? oldSnap.data() || {} : null;
-  const keptUid = uidOf(oldAccount, from);
-  const toSnap = await accounts.doc(to).get();
-  const toAccount = toSnap.exists ? toSnap.data() || {} : null;
-  // A merge joins two people; an account this fix made itself for the new
-  // name (an earlier run) is not a second person.
-  const merge = resuming
-    ? !!toAccount && toAccount.renamedFrom !== from
-    : list.includes(to);
-  counts.merged = merge;
-
   // Old spelling -> new, and anything that pointed at the old spelling.
   Object.keys(map).forEach(key => { if (map[key] === from) map[key] = to; });
   map[from] = to;
@@ -105,61 +92,75 @@ async function renameMember(db, { from, to, newAccount, auth = null, now = Date.
   const settingsSnap = await settingsRef.get();
   if (settingsSnap.exists && (settingsSnap.data() || {}).schedulerName === from) await settingsRef.set({ schedulerName: to }, { merge: true });
 
-  // The sign-in account.
-  let targetUid;
-  if (merge && toAccount) {
-    // Merging into someone who has signed in: their account and PIN stay.
-    // Their roles follow the leader settings, which now name them in place
-    // of the old spelling; a change ends their sessions so it applies.
-    targetUid = uidOf(toAccount, to);
-    const fresh = await newAccount(to);
-    const roles = { roles: fresh.roles, departments: fresh.departments, role: fresh.role, globalLeaderManager: fresh.globalLeaderManager };
-    const changed = ['roles', 'departments', 'role', 'globalLeaderManager']
-      .some(field => JSON.stringify(toAccount[field]) !== JSON.stringify(roles[field]));
-    if (changed) {
-      await accounts.doc(to).set(Object.assign(roles, { roleVersion: Number(toAccount.roleVersion || 1) + 1 }), { merge: true });
-      await endSessions(auth, targetUid);
-    }
-  } else if (merge) {
-    // Merging into a name that has never signed in: it keeps its own uid; the
-    // PIN set under the old spelling comes along.
-    targetUid = 'member:' + to;
-    const fresh = await newAccount(to);
-    const oldPinHash = oldAccount && (oldAccount.pinHash || oldAccount.pin_hash || oldAccount.passwordHash);
-    if (oldPinHash) Object.assign(fresh, {
-      pinHash: oldPinHash, mustChangePin: effectiveMustChangePin(oldAccount),
-      pinSetupRequired: oldAccount.pinSetupRequired === true
-    });
-    await accounts.doc(to).set(Object.assign(fresh, { renamedFrom: from, renamedAt: now }));
-  } else {
-    // A plain rename keeps the old uid and PIN, so nothing else has to move.
-    targetUid = keptUid;
-    const fresh = await newAccount(to);
-    const account = Object.assign({}, fresh, oldAccount || {}, {
-      id: to, memberId: to, name: to, memberName: to, authUid: keptUid, renamedFrom: from, renamedAt: now, active: true
-    });
-    if (oldAccount && oldAccount.pinSetupRequired === undefined &&
-        (oldAccount.pinHash || oldAccount.pin_hash || oldAccount.passwordHash)) {
-      account.pinSetupRequired = false;
-      account.mustChangePin = effectiveMustChangePin(oldAccount);
-    }
-    delete account.renamedTo;
-    if (toAccount && toAccount.renamedFrom === from) {
-      // An earlier run made this account: keep what changed on it since.
-      const fields = ['pinHash', 'pin_hash', 'passwordHash', 'mustChangePin', 'pinSetupRequired',
-        'roleVersion', 'failedLoginAttempts', 'loginLockedUntil', 'trustedDevices'];
-      fields.forEach(field => {
-        if (Object.prototype.hasOwnProperty.call(toAccount, field)) account[field] = toAccount[field];
+  // Transfer the credential and retire the source name in the same transaction.
+  // Concurrent PIN changes are read on retry instead of being overwritten.
+  const accounts = db.collection('accounts');
+  const fromRef = accounts.doc(from);
+  const toRef = accounts.doc(to);
+  const fresh = await newAccount(to);
+  const { keptUid, targetUid, merge, endTargetSessions } = await db.runTransaction(async transaction => {
+    const oldSnap = await transaction.get(fromRef);
+    const toSnap = await transaction.get(toRef);
+    const oldAccount = oldSnap.exists ? oldSnap.data() || {} : null;
+    const toAccount = toSnap.exists ? toSnap.data() || {} : null;
+    const keptUid = uidOf(oldAccount, from);
+    const merge = resuming ? !!toAccount && toAccount.renamedFrom !== from : list.includes(to);
+    let endTargetSessions = false;
+    let targetUid;
+    if (merge && toAccount) {
+      // Merging into someone who has signed in: their account and PIN stay.
+      // Their roles follow the leader settings, which now name them in place
+      // of the old spelling; a change ends their sessions so it applies.
+      targetUid = uidOf(toAccount, to);
+      const roles = { roles: fresh.roles, departments: fresh.departments, role: fresh.role, globalLeaderManager: fresh.globalLeaderManager };
+      const changed = ['roles', 'departments', 'role', 'globalLeaderManager']
+        .some(field => JSON.stringify(toAccount[field]) !== JSON.stringify(roles[field]));
+      if (changed) {
+        transaction.set(toRef, Object.assign(roles, { roleVersion: Number(toAccount.roleVersion || 1) + 1 }), { merge: true });
+        endTargetSessions = true;
+      }
+    } else if (merge) {
+      // Merging into a name that has never signed in: it keeps its own uid; the
+      // PIN set under the old spelling comes along.
+      targetUid = 'member:' + to;
+      const oldPinHash = oldAccount && (oldAccount.pinHash || oldAccount.pin_hash || oldAccount.passwordHash);
+      const credential = oldPinHash ? {
+        pinHash: oldPinHash, mustChangePin: effectiveMustChangePin(oldAccount),
+        pinSetupRequired: oldAccount.pinSetupRequired === true
+      } : {};
+      transaction.set(toRef, { ...fresh, ...credential, renamedFrom: from, renamedAt: now });
+    } else {
+      // A plain rename keeps the old uid and PIN, so nothing else has to move.
+      targetUid = keptUid;
+      const account = Object.assign({}, fresh, oldAccount || {}, {
+        id: to, memberId: to, name: to, memberName: to, authUid: keptUid, renamedFrom: from, renamedAt: now, active: true
       });
+      if (oldAccount && oldAccount.pinSetupRequired === undefined &&
+          (oldAccount.pinHash || oldAccount.pin_hash || oldAccount.passwordHash)) {
+        account.pinSetupRequired = false;
+        account.mustChangePin = effectiveMustChangePin(oldAccount);
+      }
+      delete account.renamedTo;
+      if (toAccount && toAccount.renamedFrom === from) {
+        // An earlier run made this account: keep what changed on it since.
+        const fields = ['pinHash', 'pin_hash', 'passwordHash', 'mustChangePin', 'pinSetupRequired',
+          'roleVersion', 'failedLoginAttempts', 'loginLockedUntil', 'trustedDevices'];
+        fields.forEach(field => {
+          if (Object.prototype.hasOwnProperty.call(toAccount, field)) account[field] = toAccount[field];
+        });
+      }
+      transaction.set(toRef, account);
     }
-    await accounts.doc(to).set(account);
-  }
-  if (oldAccount && oldAccount.renamedTo !== to) {
-    // A new role version ends what the old name's sign-in tokens can do.
-    await accounts.doc(from).set(Object.assign({}, oldAccount, {
-      active: false, renamedTo: to, renamedAt: now, roleVersion: Number(oldAccount.roleVersion || 1) + 1
-    }));
-  }
+    if (oldAccount && oldAccount.renamedTo !== to) {
+      // A new role version ends what the old name's sign-in tokens can do.
+      transaction.set(fromRef, Object.assign({}, oldAccount, {
+        active: false, renamedTo: to, renamedAt: now, roleVersion: Number(oldAccount.roleVersion || 1) + 1
+      }));
+    }
+    return { keptUid, targetUid, merge, endTargetSessions };
+  });
+  counts.merged = merge;
+  if (endTargetSessions) await endSessions(auth, targetUid);
   // The member's open sessions still carry the old name; their next sign-in
   // uses the new one.
   await endSessions(auth, keptUid);
