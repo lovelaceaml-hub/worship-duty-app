@@ -14,6 +14,7 @@
    end (their next sign-in uses the new name). */
 
 const permissions = require('./permissions.js');
+const { effectiveMustChangePin } = require('./member-auth.js');
 
 const MAX_NAME = 80;
 
@@ -124,7 +125,11 @@ async function renameMember(db, { from, to, newAccount, auth = null, now = Date.
     // PIN set under the old spelling comes along.
     targetUid = 'member:' + to;
     const fresh = await newAccount(to);
-    if (oldAccount && oldAccount.pinHash) Object.assign(fresh, { pinHash: oldAccount.pinHash, mustChangePin: !!oldAccount.mustChangePin });
+    const oldPinHash = oldAccount && (oldAccount.pinHash || oldAccount.pin_hash || oldAccount.passwordHash);
+    if (oldPinHash) Object.assign(fresh, {
+      pinHash: oldPinHash, mustChangePin: effectiveMustChangePin(oldAccount),
+      pinSetupRequired: oldAccount.pinSetupRequired === true
+    });
     await accounts.doc(to).set(Object.assign(fresh, { renamedFrom: from, renamedAt: now }));
   } else {
     // A plain rename keeps the old uid and PIN, so nothing else has to move.
@@ -133,11 +138,17 @@ async function renameMember(db, { from, to, newAccount, auth = null, now = Date.
     const account = Object.assign({}, fresh, oldAccount || {}, {
       id: to, memberId: to, name: to, memberName: to, authUid: keptUid, renamedFrom: from, renamedAt: now, active: true
     });
+    if (oldAccount && oldAccount.pinSetupRequired === undefined &&
+        (oldAccount.pinHash || oldAccount.pin_hash || oldAccount.passwordHash)) {
+      account.pinSetupRequired = false;
+      account.mustChangePin = effectiveMustChangePin(oldAccount);
+    }
     delete account.renamedTo;
-    if (!account.pinHash) account.pinHash = fresh.pinHash;
     if (toAccount && toAccount.renamedFrom === from) {
       // An earlier run made this account: keep what changed on it since.
-      ['pinHash', 'mustChangePin', 'roleVersion', 'failedLoginAttempts', 'loginLockedUntil'].forEach(field => {
+      const fields = ['pinHash', 'pin_hash', 'passwordHash', 'mustChangePin', 'pinSetupRequired',
+        'roleVersion', 'failedLoginAttempts', 'loginLockedUntil', 'trustedDevices'];
+      fields.forEach(field => {
         if (Object.prototype.hasOwnProperty.call(toAccount, field)) account[field] = toAccount[field];
       });
     }

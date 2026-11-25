@@ -1,5 +1,20 @@
 # Handoff: LV Zion Worship Duty
 
+## November 25 shared first-sign-in PIN
+
+Anthony chose one shared setup PIN. New accounts and accounts returned to setup
+by an authorized reset use it at sign-in, then require a personal PIN. Existing
+accounts that already use a personal PIN keep it. The app never shows the
+shared value. Configure MEMBER_SETUP_PIN in Firebase Secret Manager before
+release and make it known privately to the responsible leaders.
+
+Individually issued recovery codes were a draft and were never deployed.
+Before releasing, coordinate the existing accounts that still use a published
+shared value. Those accounts need an authorized return to setup and stale
+session revocation. Release only verifyMemberPin, changeMemberPin,
+resetMemberPin, renameMember and updateRoleConfiguration, plus Hosting.
+
+
 Updated 2026-11-11 (the review's suggestions built and released).
 
 ## Released 2026-11-11: the review's suggestions

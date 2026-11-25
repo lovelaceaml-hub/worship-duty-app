@@ -8,9 +8,11 @@
    cannot be chosen. */
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { hashPin } = require('../member-auth.js');
+const { hashPin, isRetiredPin } = require('../member-auth.js');
 const { loadIndex } = require('./load-index.js');
 
+const SETUP_PIN = '738619';
+process.env.MEMBER_SETUP_PIN = SETUP_PIN;
 const PINS = {};
 const pinHash = async pin => (PINS[pin] = PINS[pin] || await hashPin(pin));
 
@@ -41,12 +43,12 @@ const rejectsWith = (promise, code, reason) => assert.rejects(promise, error => 
 });
 
 test('a removed leader stays removed after signing in and changing their PIN, and leads nothing they only belong to', async () => {
-  const docs = await church();
+  const docs = await church({ 'accounts/M. Chloe': { memberName: 'M. Chloe', active: true, roleVersion: 1, pinHash: await pinHash('741983') } });
   const { functions } = loadIndex(docs);
   await functions.updateRoleConfiguration.run({ auth: as('B. Anthony'), data: { roleType: 'departmentLeader', department: 'Usher Sisters', memberName: 'M. Chloe', enabled: false } });
   assert.deepEqual([docs['accounts/M. Chloe'].roles, docs['accounts/M. Chloe'].departments], [[], []]);
 
-  const claims = claimsOf(await signIn(functions, 'M. Chloe', '2217'));
+  const claims = claimsOf(await signIn(functions, 'M. Chloe', '741983'));
   assert.equal(claims.leader, false);
   assert.equal(claims.privileged, false);
   assert.ok(!(claims.roles || []).includes('departmentLeader'));
@@ -65,10 +67,10 @@ test('a removed leader stays removed after signing in and changing their PIN, an
 });
 
 test('a removed song editor stays removed', async () => {
-  const docs = await church();
+  const docs = await church({ 'accounts/D. Danielle': { memberName: 'D. Danielle', active: true, roleVersion: 1, pinHash: await pinHash('741983') } });
   const { functions } = loadIndex(docs);
   await functions.updateRoleConfiguration.run({ auth: as('B. Anthony'), data: { roleType: 'songEditor', memberName: 'D. Danielle', enabled: false } });
-  const claims = claimsOf(await signIn(functions, 'D. Danielle', '2217'));
+  const claims = claimsOf(await signIn(functions, 'D. Danielle', '741983'));
   assert.equal(claims.songEditor, false);
   assert.ok(!(claims.roles || []).includes('songEditor'));
 });
@@ -78,7 +80,9 @@ test('a first sign-in takes roles from the leader settings, not the built-in lis
   // settings name someone else.
   const docs = await church({ 'app/leaderConfig': { departmentLeaders: { 'Usher Brothers': ['B. Eli'] }, songEditors: [] } });
   const { functions } = loadIndex(docs);
-  const claims = claimsOf(await signIn(functions, 'D. Chris', '2217'));
+  await rejectsWith(signIn(functions, 'D. Chris', '741983'), 'unauthenticated');
+  assert.equal(docs['accounts/D. Chris'].pinHash, undefined);
+  const claims = claimsOf(await signIn(functions, 'D. Chris', SETUP_PIN));
   assert.equal(claims.leader, false);
   assert.deepEqual(docs['accounts/D. Chris'].roles, []);
 });
@@ -119,7 +123,7 @@ test('a reset forgets the member\'s known devices', async () => {
   await functions.resetMemberPin.run({ auth: as('B. Anthony'), data: { memberId: 'S. Leah' } });
   assert.equal(docs['accounts/S. Leah'].trustedDevices, null);
   for (let guess = 0; guess < 5; guess += 1) await rejectsWith(signIn(functions, 'S. Leah', String(1000 + guess)), 'unauthenticated');
-  await rejectsWith(functions.verifyMemberPin.run({ data: { selectedMemberId: 'S. Leah', selectedMemberName: 'S. Leah', pin: '0000', deviceKey: first.deviceKey } }), 'resource-exhausted', 'locked');
+  await rejectsWith(functions.verifyMemberPin.run({ data: { selectedMemberId: 'S. Leah', selectedMemberName: 'S. Leah', pin: '741983', deviceKey: first.deviceKey } }), 'resource-exhausted', 'locked');
 });
 
 test('a reset lifts the lockout, ends the member\'s sessions, stops alerts to their phones and is recorded', async () => {
@@ -142,7 +146,7 @@ test('a reset lifts the lockout, ends the member\'s sessions, stops alerts to th
   const audit = Object.entries(docs).filter(([path]) => path.startsWith('audit/')).map(([, entry]) => entry);
   assert.deepEqual(audit.map(entry => [entry.action, entry.actor, entry.target]), [['member-pin-reset', 'B. Anthony', 'S. Leah']]);
   assert.ok(audit[0].timestamp > 0);
-  const result = await signIn(functions, 'S. Leah', '0000');
+  const result = await signIn(functions, 'S. Leah', SETUP_PIN);
   assert.equal(result.mustChangePin, true);
   assert.equal(claimsOf(result).roleVersion, 4);
 });
@@ -176,7 +180,10 @@ test('a session ended by a reset cannot reset or change a PIN', async () => {
 test('the shared starting PINs cannot be chosen as a new PIN', async () => {
   const docs = await church();
   const { functions } = loadIndex(docs);
-  for (const pin of ['0000', '2217']) {
+  const retired = Array.from({ length: 10000 }, (_, value) => String(value).padStart(4, '0')).filter(isRetiredPin);
+  assert.equal(retired.length, 2);
+  for (const pin of [...retired, SETUP_PIN]) {
+    await rejectsWith(signIn(functions, 'E. Simon', pin), 'unauthenticated');
     await rejectsWith(functions.changeMemberPin.run({ auth: as('E. Simon'), data: { newPin: pin } }), 'invalid-argument', 'pin-too-common');
   }
   await functions.changeMemberPin.run({ auth: as('E. Simon'), data: { newPin: '9753' } });
@@ -205,7 +212,7 @@ test('a member whose name was fixed before they ever signed in can have their PI
   const audit = Object.entries(docs).filter(([path]) => path.startsWith('audit/')).map(([, entry]) => [entry.action, entry.target]);
   assert.deepEqual(audit.filter(([action]) => action === 'member-pin-reset'), [['member-pin-reset', 'S. Bridgette']]);
 
-  const result = await signIn(functions, 'S. Bridgette', '0000');
+  const result = await signIn(functions, 'S. Bridgette', SETUP_PIN);
   assert.equal(JSON.parse(result.token).uid, 'member:Bridgette');
   assert.equal(result.mustChangePin, true);
   users.add('member:Bridgette'); // the app signs in with the token, which makes the user

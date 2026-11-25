@@ -27,7 +27,7 @@ function fakeDb(docs) {
   return { store, collection: name => collectionRef(name) };
 }
 
-const newAccount = async name => ({ id: name, memberName: name, role: 'member', pinHash: 'default-hash', active: true });
+const newAccount = async name => ({ id: name, memberName: name, role: 'member', pinSetupRequired: true, mustChangePin: true, active: true });
 
 test('a name is fixed everywhere and the member keeps their sign-in', async () => {
   const db = fakeDb({
@@ -58,6 +58,8 @@ test('a name is fixed everywhere and the member keeps their sign-in', async () =
   const account = db.store.get('accounts/S. Bridgette');
   assert.equal(account.authUid, 'member:Bridgette');
   assert.equal(account.pinHash, 'her-own-pin');
+  assert.equal(account.pinSetupRequired, false);
+  assert.equal(account.mustChangePin, false);
   assert.equal(db.store.get('accounts/Bridgette').active, false);
   assert.equal(db.store.get('departments/Usher Sisters/members/member:Bridgette').memberName, 'S. Bridgette');
 });
@@ -104,12 +106,18 @@ test('a fix that stopped part way finishes when run again, and the member list c
     : real(name));
   await assert.rejects(renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 5 }), /deadline/);
   assert.deepEqual(db.store.get('app/members').list, ['Bridgette', 'S. Leah'], 'the list is untouched until the end');
-  assert.equal(db.store.get('accounts/S. Bridgette').active, true);
+  const partiallyRenamed = db.store.get('accounts/S. Bridgette');
+  assert.equal(partiallyRenamed.active, true);
+  Object.assign(partiallyRenamed, {
+    trustedDevices: null, mustChangePin: true, pinSetupRequired: true, pinHash: 'recovery-hash'
+  });
   await renameMember(db, { from: 'Bridgette', to: 'S. Bridgette', newAccount, now: 6 });
   assert.deepEqual(db.store.get('app/members').list, ['S. Bridgette', 'S. Leah']);
   assert.equal(db.store.get('schedule/2026-10-03_morning').assignments['Usher Door'], 'S. Bridgette');
   const account = db.store.get('accounts/S. Bridgette');
-  assert.deepEqual([account.active, account.renamedTo, account.pinHash, account.authUid], [true, undefined, 'her-own-pin', 'member:Bridgette']);
+  assert.deepEqual([account.active, account.renamedTo, account.pinHash, account.authUid], [true, undefined, 'recovery-hash', 'member:Bridgette']);
+  assert.equal(account.trustedDevices, null);
+  assert.equal(account.pinSetupRequired, true);
   assert.equal(db.store.get('accounts/Bridgette').roleVersion, 3, 'the old name\'s sessions end once');
 });
 

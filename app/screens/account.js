@@ -134,7 +134,7 @@ function pinCard() {
         ${pinForm(html`<button type="button" class="ghost" data-act="pin-cancel">Cancel</button>`)}`
       : html`<p class="hint">If you still sign in with the PIN you were first given, change it to one only you know.</p>
         <button type="button" class="ghost" data-act="pin-open">Change your PIN</button>`}
-    <p class="hint small">Forgot your PIN? Your department leader or an administrator can reset it to 0000. You then choose a new one when you sign in.</p>
+    <p class="hint small">Forgot your PIN? Your department leader or an administrator can return your account to PIN setup. You then choose a new one when you sign in.</p>
   </section>`;
 }
 

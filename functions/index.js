@@ -44,6 +44,7 @@ const { createSongIngestEndpoint } = require('./song-ingest-endpoint');
 const { defineSecret } = require('firebase-functions/params');
 
 const SONG_INGEST_TOKEN = defineSecret('SONG_INGEST_TOKEN');
+const MEMBER_SETUP_PIN = defineSecret('MEMBER_SETUP_PIN');
 
 initializeApp();
 const db = getFirestore();
@@ -51,7 +52,7 @@ const REGION = 'us-central1';
 const departmentHandlers = createDepartmentHandlers({ db, now: () => Date.now() });
 const workflowHandlers = createWorkflowHandlers({ db, now: () => Date.now(), logger });
 const membershipHandlers = createMembershipHandlers({ db, now: () => Date.now() });
-const accounts = createAccounts({ db, auth: getAuth(), logger });
+const accounts = createAccounts({ db, auth: getAuth(), logger, setupPin: () => MEMBER_SETUP_PIN.value() });
 const notifier = createNotifier({ db, messaging: getMessaging(), logger });
 const sheetIo = createSheetIo({ db, logger, notifier, createSheets, accountEmail });
 const publicEndpoints = createPublicEndpoints({ db });
@@ -170,8 +171,8 @@ function asHttpsError(error, unavailable) {
    'session' (a current session, also one that must still choose its PIN),
    'member' (a current member with their own PIN) or 'admin' (an
    administrator). Handlers get the verified caller as request.auth. */
-function callable(access, handler, { unavailable = 'The server could not finish that. Try again.', refused } = {}) {
-  return onCall({ region: REGION }, async request => {
+function callable(access, handler, { unavailable = 'The server could not finish that. Try again.', refused, secrets = [] } = {}) {
+  return onCall({ region: REGION, secrets }, async request => {
     try {
       if (access === 'anyone') return await handler(request);
       if (access === 'session') {
@@ -196,10 +197,11 @@ function callable(access, handler, { unavailable = 'The server could not finish 
 /* ---- sign-in, PINs and leaders (accounts.js) ---- */
 
 const SIGN_IN = { unavailable: 'The member authentication service is unavailable.' };
-exports.verifyMemberPin = callable('anyone', accounts.verifyMemberPin, SIGN_IN);
+const PIN_SECRET = { ...SIGN_IN, secrets: [MEMBER_SETUP_PIN] };
+exports.verifyMemberPin = callable('anyone', accounts.verifyMemberPin, PIN_SECRET);
 // Choosing one's own PIN needs a current session, not a changed PIN: this
 // is how a new or reset PIN is replaced.
-exports.changeMemberPin = callable('session', accounts.changeMemberPin, SIGN_IN);
+exports.changeMemberPin = callable('session', accounts.changeMemberPin, PIN_SECRET);
 exports.resetMemberPin = callable('member', accounts.resetMemberPin, SIGN_IN);
 exports.updateRoleConfiguration = callable('member', accounts.updateRoleConfiguration);
 

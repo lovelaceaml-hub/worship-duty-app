@@ -544,7 +544,7 @@ test('a member added by search can take the department\'s duties and opens to be
   await context.close();
 });
 
-test('a leader of two departments has no "All departments" link, resets only a member\'s PIN, and is told the temporary PIN', async () => {
+test('a leader of two departments has no "All departments" link, resets only a member\'s PIN, and returns the member to shared PIN setup', async () => {
   const { context, page, errors } = await as('E. Joseph', { viewport: DESKTOP });
   await tab(page, 'manage');
   await section(page, 'manage-section', 'departments');
@@ -559,7 +559,7 @@ test('a leader of two departments has no "All departments" link, resets only a m
   const asked = new Promise(resolve => page.once('dialog', dialog => { resolve(dialog.message()); dialog.accept(); }));
   await page.locator('#view [data-act="department-reset-pin"]').click();
   assert.match(await asked, /Their phones get no alerts until they sign in again\.$/);
-  await banner(page, 'B. Caleb’s PIN was reset. Tell them to sign in with 0000 and choose a new PIN.');
+  await banner(page, 'B. Caleb can now sign in with the shared setup PIN and choose a personal PIN.');
   assert.equal(await fakeDoc(page, 'tokens/caleb-phone'), undefined, 'their phones get no alerts');
   assert.deepEqual(errors, []);
   await context.close();
