@@ -52,5 +52,8 @@ There is no active multi-section plan.
 - Preserve `song-lib.js` and `song-seed.js` behavior: the external Signal
   ingest depends on them.
 - Keep credentials in provider secret stores, never code, logs or docs.
+- Member sign-in (Anthony, 2026-11-25): use one shared setup PIN for first
+  sign-in. Require each member to choose a personal PIN before using their
+  account. Keep the shared value in Firebase Secret Manager.
 - Preserve unrelated edits. Data deletion, account changes and deployment
   require explicit approval.
