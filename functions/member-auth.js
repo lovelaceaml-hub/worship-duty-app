@@ -6,7 +6,7 @@ const { promisify } = require('node:util');
 const scryptAsync = promisify(crypto.scrypt);
 const pbkdf2Async = promisify(crypto.pbkdf2);
 
-// Deny only. These fingerprints identify previously published PINs.
+// Keep previously published PINs out of personal credentials.
 const RETIRED_PIN_DIGESTS = new Set([
   '9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0',
   '1dffd68e5364ca2371d1627e59141f261264a7539f81c1746000b7320b5ad65b',
@@ -585,7 +585,7 @@ function createMemberAuthService(dependencies = {}) {
 
   function setupPin() {
     const pin = dependencies.setupPin?.();
-    if (!validatePin(pin) || isRetiredPin(pin)) {
+    if (!validatePin(pin)) {
       throw authError('unavailable', 'Member PIN setup is unavailable.');
     }
     return pin;
@@ -627,9 +627,9 @@ function createMemberAuthService(dependencies = {}) {
     // The attempt is counted (and a locked account refused) before the PIN
     // is checked, so a burst of guesses cannot all be tried.
     if (typeof memberStore.beginAttempt === 'function') await memberStore.beginAttempt(member.id, input.deviceKey);
-    const valid = !isRetiredPin(input.pin) && (member.pinSetupRequired === true
+    const valid = member.pinSetupRequired === true
       ? matchesPin(input.pin, setupPin())
-      : storedHash && await verifyPin(input.pin, storedHash));
+      : !isRetiredPin(input.pin) && storedHash && await verifyPin(input.pin, storedHash);
     if (!valid) {
       audit(logger, 'verify', 'denied', null, member);
       throw authError('unauthenticated', GENERIC_LOGIN_MESSAGE);

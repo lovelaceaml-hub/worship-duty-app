@@ -6,6 +6,7 @@ const {
   validatePin,
   hashPin,
   verifyPin,
+  isRetiredPin,
   parsePinHash,
   isPrivileged,
   isSongEditor,
@@ -305,6 +306,20 @@ test('shared PIN cannot be reused once setup is complete or chosen as a personal
   assert.equal(record.pinSetupRequired, false);
   await assert.rejects(login(SETUP_PIN), { code: 'unauthenticated' });
   assert.equal((await login(PERSONAL_PIN)).mustChangePin, false);
+});
+
+test('an explicitly configured legacy PIN works only for setup accounts', async () => {
+  const legacyPin = Array.from({ length: 10000 }, (_, value) => String(value).padStart(4, '0')).find(isRetiredPin);
+  assert.ok(legacyPin);
+  const record = memberRecord({ pinSetupRequired: true, mustChangePin: true });
+  const h = harness(record, true, () => legacyPin);
+  const login = () => h.service.verifyMemberPin({ data: { memberId: record.id, pin: legacyPin } });
+  const { uid, claims } = JSON.parse((await login()).token);
+  await assert.rejects(h.service.changeMemberPin({
+    auth: { uid, token: claims }, data: { newPin: legacyPin }
+  }), error => error.details.reason === 'pin-too-common');
+  Object.assign(record, { pinSetupRequired: false, mustChangePin: false, pinHash: await hashPin(legacyPin) });
+  await assert.rejects(login(), { code: 'unauthenticated' });
 });
 
 test('missing setup configuration fails closed while personal PIN sign-in still works', async () => {
